@@ -126,34 +126,92 @@ void AMySocketClientActor::UpdateOrSpawnCharacter(const FCharacterState& State)
     FString CharacterKey = FString::Printf(TEXT("Character_%d"), State.PlayerID);
 
     // 기존 캐릭터가 있으면 업데이트
-    if (ACharacter* ExistingCharacter = SpawnedCharacters.FindRef(CharacterKey))
+    if (ACharacter* Character = SpawnedCharacters.FindRef(CharacterKey))
     {
-        ExistingCharacter->SetActorLocation(FVector(State.PositionX, State.PositionY, State.PositionZ));
-        ExistingCharacter->SetActorRotation(FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll));
+        Character->SetActorLocation(FVector(State.PositionX, State.PositionY, State.PositionZ));
+        Character->SetActorRotation(FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll));
+
+        // 애니메이션 상태 업데이트 추가
+        if (USkeletalMeshComponent* Mesh = Character->GetMesh())
+        {
+            UAnimInstance* AnimInstance = Mesh->GetAnimInstance();
+            if (AnimInstance)
+            {
+                // ShouldMove 업데이트
+                FProperty* ShouldMoveProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ShouldMove"));
+                if (ShouldMoveProperty && ShouldMoveProperty->IsA<FBoolProperty>())
+                {
+                    bool bShouldMove = (State.AnimationState == EAnimationState::Run);
+                    FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ShouldMoveProperty);
+                    BoolProp->SetPropertyValue_InContainer(AnimInstance, bShouldMove);
+                }
+
+                // Velocity 업데이트
+                FProperty* VelocityProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Velocity"));
+                if (VelocityProperty && VelocityProperty->IsA<FStructProperty>())
+                {
+                    FVector Velocity(State.VelocityX, State.VelocityY, State.VelocityZ);
+                    FStructProperty* StructProp = CastFieldChecked<FStructProperty>(VelocityProperty);
+                    void* StructContainer = StructProp->ContainerPtrToValuePtr<void>(AnimInstance);
+                    if (StructContainer)
+                    {
+                        FMemory::Memcpy(StructContainer, &Velocity, sizeof(FVector));
+                    }
+                }
+
+                // GroundSpeed 업데이트
+                FProperty* GroundSpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("GroundSpeed"));
+                if (GroundSpeedProperty && GroundSpeedProperty->IsA<FDoubleProperty>())
+                {
+                    double GroundSpeed = static_cast<double>(FVector(State.VelocityX, State.VelocityY, 0.0f).Size());
+                    FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(GroundSpeedProperty);
+                    DoubleProp->SetPropertyValue_InContainer(AnimInstance, GroundSpeed);
+                }
+
+                // IsFalling 업데이트
+                FProperty* IsFallingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("IsFalling"));
+                if (IsFallingProperty && IsFallingProperty->IsA<FBoolProperty>())
+                {
+                    FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFallingProperty);
+                    BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsFalling);
+                }
+            }
+        }
+        UE_LOG(LogTemp, Log, TEXT("Animation State: ShouldMove=%s, Velocity=(%f, %f, %f), GroundSpeed=%f, IsFalling=%s"),
+            State.AnimationState == EAnimationState::Run ? TEXT("true") : TEXT("false"),
+            State.VelocityX, State.VelocityY, State.VelocityZ,
+            FVector(State.VelocityX, State.VelocityY, 0.0f).Size(),
+            State.bIsFalling ? TEXT("true") : TEXT("false"));
+
     }
     else
     {
         // 새로운 캐릭터 생성
         FActorSpawnParameters SpawnParams;
         SpawnParams.Owner = this;
-        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+       // SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-        ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
-            ACharacter::StaticClass(),
-            FVector(State.PositionX, State.PositionY, State.PositionZ),
-            FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll),
-            SpawnParams
-        );
+        UClass* BP_ClientCharacter = LoadClass<ACharacter>(
+            nullptr, TEXT("/Game/Characters/Mannequins/Meshes/BP_ClientCharacter.BP_ClientCharacter_C"));
 
-        if (NewCharacter)
+        if (BP_ClientCharacter)
         {
-            SpawnedCharacters.Add(CharacterKey, NewCharacter);
-            UE_LOG(LogTemp, Log, TEXT("Spawned new character for PlayerID=%d at Position=(%f, %f, %f)"),
-                State.PlayerID, State.PositionX, State.PositionY, State.PositionZ);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), State.PlayerID);
+            ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
+                BP_ClientCharacter, 
+                FVector(State.PositionX, State.PositionY, State.PositionZ),
+                FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll),
+                SpawnParams
+            );
+            if (NewCharacter)
+            {
+                SpawnedCharacters.Add(CharacterKey, NewCharacter);
+                UE_LOG(LogTemp, Log, TEXT("Spawned new character for PlayerID=%d at Position=(%f, %f, %f)"),
+                    State.PlayerID, State.PositionX, State.PositionY, State.PositionZ);
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), State.PlayerID);
+            }
         }
     }
 }
