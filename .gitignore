@@ -1,1 +1,19 @@
 /Document/sjm/study/
+
+# Unreal 관련
+*.suo
+*.sln
+*.sdf
+*.ipch
+*.log
+*.tlog
+*.tmp
+*.db
+*.opendb
+*.VC.db
+.vscode/
+DericedDataCache/
+Intermediate/
+Saved/
+Build/
+Binaries/
