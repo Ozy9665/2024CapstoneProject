@@ -4,6 +4,7 @@
 #include "MySocketActor.h"
 #include "Engine/Engine.h"
 #include <GameFramework/Character.h>
+#include "GameFramework/CharacterMovementComponent.h"
 #include <Kismet/GameplayStatics.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -154,39 +155,96 @@ void AMySocketActor::sendData(SOCKET TargetSocket)
         {
             FCharacterState State;
             State.PlayerID = static_cast<int32>(CurrentSocket);
+
+            // 위치 및 회전 설정
             State.PositionX = Character->GetActorLocation().X;
             State.PositionY = Character->GetActorLocation().Y;
             State.PositionZ = Character->GetActorLocation().Z;
             State.RotationPitch = Character->GetActorRotation().Pitch;
             State.RotationYaw = Character->GetActorRotation().Yaw;
             State.RotationRoll = Character->GetActorRotation().Roll;
-            OtherCharacters.Add(State);
 
-            UE_LOG(LogTemp, Log, TEXT("Sending data to socket %d: Position(%.2f, %.2f, %.2f), Rotation(%.2f, %.2f, %.2f)"),
+            // 속도 및 GroundSpeed 계산
+            FVector Velocity = Character->GetVelocity();
+            State.VelocityX = Velocity.X;
+            State.VelocityY = Velocity.Y;
+            State.VelocityZ = Velocity.Z;
+            State.GroundSpeed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
+
+            // IsFalling 상태
+            UCharacterMovementComponent* MovementComp = Character->GetCharacterMovement();
+            State.bIsFalling = MovementComp ? MovementComp->IsFalling() : false;
+
+            // AnimationState 계산
+            float Speed = Velocity.Size();
+            if (Speed < KINDA_SMALL_NUMBER)
+            {
+                State.AnimationState = EAnimationState::Idle; // 정지 상태
+            }
+            else
+            {
+                State.AnimationState = EAnimationState::Running; // 이동 상태
+            }
+
+            // 디버그 출력
+            UE_LOG(LogTemp, Log, TEXT("Sending data to socket %d: Position(%.2f, %.2f, %.2f), Velocity(%.2f, %.2f, %.2f), AnimationState=%d"),
                 TargetSocket, State.PositionX, State.PositionY, State.PositionZ,
-                State.RotationPitch, State.RotationYaw, State.RotationRoll);
+                State.VelocityX, State.VelocityY, State.VelocityZ, static_cast<int32>(State.AnimationState));
+
+            OtherCharacters.Add(State);
         }
+
     }
 
     // 서버 캐릭터 상태 추가
     if (ServerCharacter)
     {
         ServerState.PlayerID = -1;
+
+        // 위치 및 회전 설정
         ServerState.PositionX = ServerCharacter->GetActorLocation().X;
         ServerState.PositionY = ServerCharacter->GetActorLocation().Y;
         ServerState.PositionZ = ServerCharacter->GetActorLocation().Z;
         ServerState.RotationPitch = ServerCharacter->GetActorRotation().Pitch;
         ServerState.RotationYaw = ServerCharacter->GetActorRotation().Yaw;
         ServerState.RotationRoll = ServerCharacter->GetActorRotation().Roll;
+
+        // 속도 및 GroundSpeed 계산
+        FVector Velocity = ServerCharacter->GetVelocity();
+        ServerState.VelocityX = Velocity.X;
+        ServerState.VelocityY = Velocity.Y;
+        ServerState.VelocityZ = Velocity.Z;
+        ServerState.GroundSpeed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
+
+        // IsFalling 상태
+        UCharacterMovementComponent* MovementComp = ServerCharacter->GetCharacterMovement();
+        ServerState.bIsFalling = MovementComp ? MovementComp->IsFalling() : false;
+
+        // AnimationState 계산
+        float Speed = Velocity.Size();
+        if (Speed < KINDA_SMALL_NUMBER)
+        {
+            ServerState.AnimationState = EAnimationState::Idle; // 정지 상태
+        }
+        else
+        {
+            ServerState.AnimationState = EAnimationState::Running; // 이동 상태
+        }
+
+        UE_LOG(LogTemp, Log, TEXT("Server Character: Position(%.2f, %.2f, %.2f), Velocity(%.2f, %.2f, %.2f), AnimationState=%d"),
+            ServerState.PositionX, ServerState.PositionY, ServerState.PositionZ,
+            ServerState.VelocityX, ServerState.VelocityY, ServerState.VelocityZ, static_cast<int32>(ServerState.AnimationState));
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("Server character not initialized!"));
     }
 
+
     UE_LOG(LogTemp, Log, TEXT("Sending server data to socket %d: Position(%.2f, %.2f, %.2f), Rotation(%.2f, %.2f, %.2f)"),
         TargetSocket, ServerState.PositionX, ServerState.PositionY, ServerState.PositionZ,
         ServerState.RotationPitch, ServerState.RotationYaw, ServerState.RotationRoll);
+    UE_LOG(LogTemp, Log, TEXT("AnimationState: %d (Idle=0, Run=1)"), static_cast<int32>(ServerState.AnimationState));
 
     // 데이터를 직렬화하여 전송
     for (const FCharacterState& State : OtherCharacters)
@@ -248,6 +306,7 @@ void AMySocketActor::SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCh
                 // 새로운 클라이언트 캐릭터 생성
                 FActorSpawnParameters SpawnParams;
                 SpawnParams.Owner = this;
+                SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
                 // 각 클라이언트에 대한 고유 위치 생성 (예: 소켓 값을 기반으로 오프셋 계산)
                 FVector SpawnLocation = FVector((ClientSocket % 10) * 200.0f, (ClientSocket / 10) * 200.0f, 100.0f);

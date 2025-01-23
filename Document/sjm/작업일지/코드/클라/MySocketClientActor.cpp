@@ -9,6 +9,8 @@
 #include <Kismet/GameplayStatics.h>
 #include <GameFramework/Character.h>
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
+
 #pragma comment(lib, "ws2_32.lib")
 
 // Sets default values
@@ -189,7 +191,7 @@ void AMySocketClientActor::UpdateOrSpawnCharacter(const FCharacterState& State)
         // 货肺款 某腐磐 积己
         FActorSpawnParameters SpawnParams;
         SpawnParams.Owner = this;
-       // SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
         UClass* BP_ClientCharacter = LoadClass<ACharacter>(
             nullptr, TEXT("/Game/Characters/Mannequins/Meshes/BP_ClientCharacter.BP_ClientCharacter_C"));
