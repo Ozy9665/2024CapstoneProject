@@ -80,32 +80,24 @@ void AMySocketClientActor::ReceiveData()
         {
             while (true)
             {
-                char Buffer[sizeof(FCharacterState)];
-                int32 BytesReceived = recv(ClientSocket, Buffer, sizeof(Buffer), 0);
+                const int32 BufferSize = 1024 * sizeof(FCharacterState); // 예상되는 최대 데이터 크기
+                char Buffer[BufferSize];
+
+                int32 BytesReceived = recv(ClientSocket, Buffer, BufferSize, 0);
 
                 if (BytesReceived > 0)
                 {
-                    if (BytesReceived == sizeof(FCharacterState))
+                    // 수신된 데이터를 개별 FCharacterState로 분리
+                    int32 NumCharacters = BytesReceived / sizeof(FCharacterState);
+                    for (int32 i = 0; i < NumCharacters; ++i)
                     {
-                        // 수신된 데이터를 FCharacterState로 변환
-                        FCharacterState* ReceivedState = reinterpret_cast<FCharacterState*>(Buffer);
+                        FCharacterState* ReceivedState = reinterpret_cast<FCharacterState*>(Buffer + (i * sizeof(FCharacterState)));
 
                         // 게임 스레드에서 캐릭터 업데이트
                         AsyncTask(ENamedThreads::GameThread, [this, ReceivedState]()
                             {
-                                // 서버에서 받은 캐릭터 상태 출력
-                                UE_LOG(LogTemp, Log, TEXT("Received character state: PlayerID=(%d), Position=(%f, %f, %f), Rotation=(%f, %f, %f)"),
-                                ReceivedState->PlayerID,
-                                ReceivedState->PositionX, ReceivedState->PositionY, ReceivedState->PositionZ,
-                                ReceivedState->RotationPitch, ReceivedState->RotationYaw, ReceivedState->RotationRoll);
-
-                        // 캐릭터 업데이트 로직
-                        UpdateOrSpawnCharacter(*ReceivedState);
+                                UpdateOrSpawnCharacter(*ReceivedState);
                             });
-                    }
-                    else
-                    {
-                        UE_LOG(LogTemp, Warning, TEXT("Unexpected data size received: %d"), BytesReceived);
                     }
                 }
                 else if (BytesReceived == 0)
@@ -121,6 +113,7 @@ void AMySocketClientActor::ReceiveData()
             }
         });
 }
+
 
 void AMySocketClientActor::UpdateOrSpawnCharacter(const FCharacterState& State)
 {

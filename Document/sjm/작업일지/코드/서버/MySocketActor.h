@@ -61,6 +61,7 @@ private:
 	TQueue<FCharacterState> ReceivedDataQueue;
 	TArray<SOCKET> ClientSockets;
 	TMap<SOCKET, AClientCharacter*> ClientCharacters;
+	TMap<SOCKET, FCharacterState> ClientStates;
 	FCriticalSection ClientSocketsMutex;
 
 public:	

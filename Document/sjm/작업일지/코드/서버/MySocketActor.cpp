@@ -15,15 +15,15 @@
 // Sets default values
 AMySocketActor::AMySocketActor()
 {
- 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	PrimaryActorTick.bCanEverTick = true;
+    // Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+    PrimaryActorTick.bCanEverTick = true;
     ServerSocket = INVALID_SOCKET;
 }
 
 // Called when the game starts or when spawned
 void AMySocketActor::BeginPlay()
 {
-	Super::BeginPlay();
+    Super::BeginPlay();
     ServerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
     if (!ServerCharacter)
     {
@@ -143,57 +143,22 @@ void AMySocketActor::sendData(SOCKET TargetSocket)
 {
     FScopeLock Lock(&ClientSocketsMutex);
 
-    TArray<FCharacterState> OtherCharacters;
+    TArray<FCharacterState> AllCharacterStates;
 
     // 다른 클라이언트들의 캐릭터 상태 추가
-    for (auto& Entry : ClientCharacters)
+    for (auto& Entry : ClientStates)
     {
         SOCKET CurrentSocket = Entry.Key;
-        AClientCharacter* Character = Entry.Value;
+        FCharacterState& State = Entry.Value;
 
-        if (CurrentSocket != TargetSocket && Character)
+        if (CurrentSocket != TargetSocket)
         {
-            FCharacterState State;
-            State.PlayerID = static_cast<int32>(CurrentSocket);
+            AllCharacterStates.Add(State);
 
-            // 위치 및 회전 설정
-            State.PositionX = Character->GetActorLocation().X;
-            State.PositionY = Character->GetActorLocation().Y;
-            State.PositionZ = Character->GetActorLocation().Z;
-            State.RotationPitch = Character->GetActorRotation().Pitch;
-            State.RotationYaw = Character->GetActorRotation().Yaw;
-            State.RotationRoll = Character->GetActorRotation().Roll;
-
-            // 속도 및 GroundSpeed 계산
-            FVector Velocity = Character->GetVelocity();
-            State.VelocityX = Velocity.X;
-            State.VelocityY = Velocity.Y;
-            State.VelocityZ = Velocity.Z;
-            State.GroundSpeed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
-
-            // IsFalling 상태
-            UCharacterMovementComponent* MovementComp = Character->GetCharacterMovement();
-            State.bIsFalling = MovementComp ? MovementComp->IsFalling() : false;
-
-            // AnimationState 계산
-            float Speed = Velocity.Size();
-            if (Speed < KINDA_SMALL_NUMBER)
-            {
-                State.AnimationState = EAnimationState::Idle; // 정지 상태
-            }
-            else
-            {
-                State.AnimationState = EAnimationState::Running; // 이동 상태
-            }
-
-            // 디버그 출력
-            UE_LOG(LogTemp, Log, TEXT("Sending data to socket %d: Position(%.2f, %.2f, %.2f), Velocity(%.2f, %.2f, %.2f), AnimationState=%d"),
-                TargetSocket, State.PositionX, State.PositionY, State.PositionZ,
+            UE_LOG(LogTemp, Log, TEXT("Forwarding data to socket %d: PlayerID=%d, Position(%.2f, %.2f, %.2f), Velocity(%.2f, %.2f, %.2f), AnimationState=%d"),
+                TargetSocket, State.PlayerID, State.PositionX, State.PositionY, State.PositionZ,
                 State.VelocityX, State.VelocityY, State.VelocityZ, static_cast<int32>(State.AnimationState));
-
-            OtherCharacters.Add(State);
         }
-
     }
 
     // 서버 캐릭터 상태 추가
@@ -231,6 +196,8 @@ void AMySocketActor::sendData(SOCKET TargetSocket)
             ServerState.AnimationState = EAnimationState::Running; // 이동 상태
         }
 
+        AllCharacterStates.Add(ServerState);
+
         UE_LOG(LogTemp, Log, TEXT("Server Character: Position(%.2f, %.2f, %.2f), Velocity(%.2f, %.2f, %.2f), AnimationState=%d"),
             ServerState.PositionX, ServerState.PositionY, ServerState.PositionZ,
             ServerState.VelocityX, ServerState.VelocityY, ServerState.VelocityZ, static_cast<int32>(ServerState.AnimationState));
@@ -240,20 +207,10 @@ void AMySocketActor::sendData(SOCKET TargetSocket)
         UE_LOG(LogTemp, Error, TEXT("Server character not initialized!"));
     }
 
+    int32 TotalBytes = AllCharacterStates.Num() * sizeof(FCharacterState);
+    send(TargetSocket, reinterpret_cast<const char*>(AllCharacterStates.GetData()), TotalBytes, 0);
 
-    UE_LOG(LogTemp, Log, TEXT("Sending server data to socket %d: Position(%.2f, %.2f, %.2f), Rotation(%.2f, %.2f, %.2f)"),
-        TargetSocket, ServerState.PositionX, ServerState.PositionY, ServerState.PositionZ,
-        ServerState.RotationPitch, ServerState.RotationYaw, ServerState.RotationRoll);
-    UE_LOG(LogTemp, Log, TEXT("AnimationState: %d (Idle=0, Run=1)"), static_cast<int32>(ServerState.AnimationState));
-
-    // 데이터를 직렬화하여 전송
-    for (const FCharacterState& State : OtherCharacters)
-    {
-        send(TargetSocket, reinterpret_cast<const char*>(&State), sizeof(FCharacterState), 0);
-    }
-
-    // 서버 상태 전송
-    send(TargetSocket, reinterpret_cast<const char*>(&ServerState), sizeof(FCharacterState), 0);
+    //UE_LOG(LogTemp, Log, TEXT("Sent %d character states to socket %d"), AllCharacterStates.Num(), TargetSocket);
 }
 
 void AMySocketActor::ReceiveData(SOCKET ClientSocket)
@@ -271,10 +228,25 @@ void AMySocketActor::ReceiveData(SOCKET ClientSocket)
 
                     if (BytesReceived == sizeof(FCharacterState))
                     {
-                        FCharacterState* ReceivedState = reinterpret_cast<FCharacterState*>(Buffer);
+                        FCharacterState ReceivedState;
+                        FMemory::Memcpy(&ReceivedState, Buffer, sizeof(FCharacterState));
+                        ReceivedState.PlayerID = static_cast<int32>(ClientSocket);
+                        ClientStates.FindOrAdd(ClientSocket) = ReceivedState;
+                        {
+                            // 데이터를 ClientStates 맵에 저장
+                            FScopeLock Lock(&ClientSocketsMutex);
+                            ClientStates.FindOrAdd(ClientSocket) = ReceivedState;
+
+                            UE_LOG(LogTemp, Log, TEXT("Updated ClientStates for socket %d: PlayerID=%d, Position(%.2f, %.2f, %.2f), Velocity(%.2f, %.2f, %.2f), AnimationState=%d"),
+                                ClientSocket,
+                                ReceivedState.PlayerID,
+                                ReceivedState.PositionX, ReceivedState.PositionY, ReceivedState.PositionZ,
+                                ReceivedState.VelocityX, ReceivedState.VelocityY, ReceivedState.VelocityZ,
+                                static_cast<int32>(ReceivedState.AnimationState));
+                        }
 
                         // 클라이언트 소켓 기반으로 처리
-                        SpawnOrUpdateClientCharacter(ClientSocket, *ReceivedState);
+                        SpawnOrUpdateClientCharacter(ClientSocket, ReceivedState);
                     }
                     else
                     {
@@ -284,12 +256,24 @@ void AMySocketActor::ReceiveData(SOCKET ClientSocket)
                 else if (BytesReceived == 0)
                 {
                     UE_LOG(LogTemp, Log, TEXT("Client disconnected. Socket: %d"), ClientSocket);
+
+                    {
+                        FScopeLock Lock(&ClientSocketsMutex);
+                        ClientStates.Remove(ClientSocket);
+                    }
+
                     CloseClientSocket(ClientSocket);
                     break;
                 }
                 else
                 {
                     UE_LOG(LogTemp, Error, TEXT("recv failed on socket %d with error: %ld"), ClientSocket, WSAGetLastError());
+
+                    {
+                        FScopeLock Lock(&ClientSocketsMutex);
+                        ClientStates.Remove(ClientSocket);
+                    }
+
                     CloseClientSocket(ClientSocket);
                     break;
                 }
@@ -399,7 +383,7 @@ void AMySocketActor::CloseClientSocket(SOCKET ClientSocket)
 // Called every frame
 void AMySocketActor::Tick(float DeltaTime)
 {
-	Super::Tick(DeltaTime);
+    Super::Tick(DeltaTime);
 
     FScopeLock Lock(&ClientSocketsMutex);
     for (SOCKET ClientSocket : ClientSockets)
