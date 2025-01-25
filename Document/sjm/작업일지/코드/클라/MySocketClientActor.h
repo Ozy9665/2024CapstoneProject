@@ -55,14 +55,16 @@ protected:
 private:
 	SOCKET ClientSocket;
 	TMap<FString, ACharacter*> SpawnedCharacters;
+	TMap<FString, FCharacterState> ReceivedCharacterStates;
+	FCriticalSection ReceivedDataMutex;
 
 public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-
 	bool ConnectToServer(const FString& ServerIP, int32 ServerPort);
 	void ReceiveData();
-	void UpdateOrSpawnCharacter(const FCharacterState& State);
+	void SpawnCharacter(const FCharacterState& State);
 	void SendData();
+	void ProcessCharacterUpdates(float DeltaTime);
 };

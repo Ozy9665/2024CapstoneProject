@@ -8,7 +8,6 @@
 #include <Kismet/GameplayStatics.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#include "ClientCharacter.h"
 
 #pragma comment(lib, "ws2_32.lib")  // Winsock 라이브러리 링크
 
@@ -295,11 +294,11 @@ void AMySocketActor::SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCh
                 // 각 클라이언트에 대한 고유 위치 생성 (예: 소켓 값을 기반으로 오프셋 계산)
                 FVector SpawnLocation = FVector((ClientSocket % 10) * 200.0f, (ClientSocket / 10) * 200.0f, 100.0f);
 
-                UClass* BP_ClientCharacter = LoadClass<AClientCharacter>(
+                UClass* BP_ClientCharacter = LoadClass<ACharacter>(
                     nullptr, TEXT("/Game/Characters/Mannequins/Meshes/BP_ClientCharacter.BP_ClientCharacter_C"));
                 if (BP_ClientCharacter)
                 {
-                    AClientCharacter* NewCharacter = GetWorld()->SpawnActor<AClientCharacter>(
+                    ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
                         BP_ClientCharacter, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
                     if (NewCharacter)
                     {
@@ -316,7 +315,7 @@ void AMySocketActor::SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCh
             else if (ClientCharacters.Contains(ClientSocket))
             {
                 // 기존 캐릭터 업데이트
-                AClientCharacter* Character = ClientCharacters[ClientSocket];
+                ACharacter* Character = ClientCharacters[ClientSocket];
                 if (Character)
                 {
                     Character->SetActorLocation(FVector(State.PositionX, State.PositionY, State.PositionZ));
