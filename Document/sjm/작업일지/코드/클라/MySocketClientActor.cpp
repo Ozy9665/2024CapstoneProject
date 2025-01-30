@@ -224,14 +224,26 @@ void AMySocketClientActor::ProcessCharacterUpdates(float DeltaTime)
 
         if (ACharacter* Character = SpawnedCharacters.FindRef(CharacterKey))
         {
-            // 위치 보간
+            // 이전 위치 저장
             FVector CurrentLocation = Character->GetActorLocation();
             FVector TargetLocation(State.PositionX, State.PositionY, State.PositionZ);
-            FVector InterpolatedLocation = FMath::VInterpTo(CurrentLocation, TargetLocation, DeltaTime, 20.0f); // 보간 속도 20
+
+            // 예측 이동
+            static TMap<FString, FVector> LastVelocity;
+            FVector& PreviousVelocity = LastVelocity.FindOrAdd(CharacterKey, FVector::ZeroVector);
+
+            FVector EstimatedLocation = CurrentLocation + (PreviousVelocity * DeltaTime);
+            FVector NewTarget = FMath::Lerp(EstimatedLocation, TargetLocation, 0.75f); // 75% 실제 위치 반영
+
+            // 보간
+            float InterpSpeed = 30.0f; // 보간 속도
+            FVector InterpolatedLocation = FMath::VInterpTo(CurrentLocation, NewTarget, DeltaTime, InterpSpeed);
 
             Character->SetActorLocation(InterpolatedLocation);
-
             Character->SetActorRotation(FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll));
+
+            // 속도 업데이트
+            PreviousVelocity = FVector(State.VelocityX, State.VelocityY, State.VelocityZ);
 
             // 애니메이션 상태 업데이트
             if (USkeletalMeshComponent* Mesh = Character->GetMesh())
@@ -239,11 +251,10 @@ void AMySocketClientActor::ProcessCharacterUpdates(float DeltaTime)
                 UAnimInstance* AnimInstance = Mesh->GetAnimInstance();
                 if (AnimInstance)
                 {
-                    // ShouldMove 업데이트
                     FProperty* ShouldMoveProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ShouldMove"));
                     if (ShouldMoveProperty && ShouldMoveProperty->IsA<FBoolProperty>())
                     {
-                        bool bShouldMove = (State.AnimationState == EAnimationState::Run);
+                        bool bShouldMove = FVector(State.VelocityX, State.VelocityY, 0.0f).Size() > 10.0f;
                         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ShouldMoveProperty);
                         BoolProp->SetPropertyValue_InContainer(AnimInstance, bShouldMove);
                     }
@@ -269,21 +280,8 @@ void AMySocketClientActor::ProcessCharacterUpdates(float DeltaTime)
                         FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(GroundSpeedProperty);
                         DoubleProp->SetPropertyValue_InContainer(AnimInstance, GroundSpeed);
                     }
-
-                    // IsFalling 업데이트
-                    FProperty* IsFallingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("IsFalling"));
-                    if (IsFallingProperty && IsFallingProperty->IsA<FBoolProperty>())
-                    {
-                        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFallingProperty);
-                        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsFalling);
-                    }
                 }
             }
-            UE_LOG(LogTemp, Log, TEXT("Animation State: ShouldMove=%s, Velocity=(%f, %f, %f), GroundSpeed=%f, IsFalling=%s"),
-                State.AnimationState == EAnimationState::Run ? TEXT("true") : TEXT("false"),
-                State.VelocityX, State.VelocityY, State.VelocityZ,
-                FVector(State.VelocityX, State.VelocityY, 0.0f).Size(),
-                State.bIsFalling ? TEXT("true") : TEXT("false"));
         }
         else
         {

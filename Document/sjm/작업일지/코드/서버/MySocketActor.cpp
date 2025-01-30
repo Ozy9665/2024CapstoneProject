@@ -154,9 +154,9 @@ void AMySocketActor::sendData(SOCKET TargetSocket)
         {
             AllCharacterStates.Add(State);
 
-            UE_LOG(LogTemp, Log, TEXT("Forwarding data to socket %d: PlayerID=%d, Position(%.2f, %.2f, %.2f), Velocity(%.2f, %.2f, %.2f), AnimationState=%d"),
+            /*UE_LOG(LogTemp, Log, TEXT("Forwarding data to socket %d: PlayerID=%d, Position(%.2f, %.2f, %.2f), Velocity(%.2f, %.2f, %.2f), AnimationState=%d"),
                 TargetSocket, State.PlayerID, State.PositionX, State.PositionY, State.PositionZ,
-                State.VelocityX, State.VelocityY, State.VelocityZ, static_cast<int32>(State.AnimationState));
+                State.VelocityX, State.VelocityY, State.VelocityZ, static_cast<int32>(State.AnimationState));*/
         }
     }
 
@@ -197,9 +197,9 @@ void AMySocketActor::sendData(SOCKET TargetSocket)
 
         AllCharacterStates.Add(ServerState);
 
-        UE_LOG(LogTemp, Log, TEXT("Server Character: Position(%.2f, %.2f, %.2f), Velocity(%.2f, %.2f, %.2f), AnimationState=%d"),
+        /*UE_LOG(LogTemp, Log, TEXT("Server Character: Position(%.2f, %.2f, %.2f), Velocity(%.2f, %.2f, %.2f), AnimationState=%d"),
             ServerState.PositionX, ServerState.PositionY, ServerState.PositionZ,
-            ServerState.VelocityX, ServerState.VelocityY, ServerState.VelocityZ, static_cast<int32>(ServerState.AnimationState));
+            ServerState.VelocityX, ServerState.VelocityY, ServerState.VelocityZ, static_cast<int32>(ServerState.AnimationState));*/
     }
     else
     {
@@ -223,7 +223,7 @@ void AMySocketActor::ReceiveData(SOCKET ClientSocket)
 
                 if (BytesReceived > 0)
                 {
-                    UE_LOG(LogTemp, Log, TEXT("Data received from socket %d: %d bytes"), ClientSocket, BytesReceived);
+                    // UE_LOG(LogTemp, Log, TEXT("Data received from socket %d: %d bytes"), ClientSocket, BytesReceived);
 
                     if (BytesReceived == sizeof(FCharacterState))
                     {
@@ -280,39 +280,40 @@ void AMySocketActor::ReceiveData(SOCKET ClientSocket)
         });
 }
 
+void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCharacterState& State)
+{
+    // 새로운 클라이언트 캐릭터 생성
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Owner = this;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+    // 각 클라이언트에 대한 고유 위치 생성 (예: 소켓 값을 기반으로 오프셋 계산)
+    FVector SpawnLocation = FVector((ClientSocket % 10) * 200.0f, (ClientSocket / 10) * 200.0f, 100.0f);
+
+    UClass* BP_ClientCharacter = LoadClass<ACharacter>(
+        nullptr, TEXT("/Game/Characters/Mannequins/Meshes/BP_ClientCharacter.BP_ClientCharacter_C"));
+    if (BP_ClientCharacter)
+    {
+        ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
+            BP_ClientCharacter, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
+        if (NewCharacter)
+        {
+            ClientCharacters.Add(ClientSocket, NewCharacter);
+            UE_LOG(LogTemp, Log, TEXT("Client character spawned for socket %d at location %s"),
+                ClientSocket, *SpawnLocation.ToString());
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to spawn client character for socket %d"), ClientSocket);
+        }
+    }
+}
+
 void AMySocketActor::SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCharacterState& State)
 {
     AsyncTask(ENamedThreads::GameThread, [this, ClientSocket, State]()
         {
-            if (!ClientCharacters.Contains(ClientSocket))
-            {
-                // 새로운 클라이언트 캐릭터 생성
-                FActorSpawnParameters SpawnParams;
-                SpawnParams.Owner = this;
-                SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-                // 각 클라이언트에 대한 고유 위치 생성 (예: 소켓 값을 기반으로 오프셋 계산)
-                FVector SpawnLocation = FVector((ClientSocket % 10) * 200.0f, (ClientSocket / 10) * 200.0f, 100.0f);
-
-                UClass* BP_ClientCharacter = LoadClass<ACharacter>(
-                    nullptr, TEXT("/Game/Characters/Mannequins/Meshes/BP_ClientCharacter.BP_ClientCharacter_C"));
-                if (BP_ClientCharacter)
-                {
-                    ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
-                        BP_ClientCharacter, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
-                    if (NewCharacter)
-                    {
-                        ClientCharacters.Add(ClientSocket, NewCharacter);
-                        UE_LOG(LogTemp, Log, TEXT("Client character spawned for socket %d at location %s"),
-                            ClientSocket, *SpawnLocation.ToString());
-                    }
-                    else
-                    {
-                        UE_LOG(LogTemp, Error, TEXT("Failed to spawn client character for socket %d"), ClientSocket);
-                    }
-                }
-            }
-            else if (ClientCharacters.Contains(ClientSocket))
+            if (ClientCharacters.Contains(ClientSocket))
             {
                 // 기존 캐릭터 업데이트
                 ACharacter* Character = ClientCharacters[ClientSocket];
@@ -369,6 +370,9 @@ void AMySocketActor::SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCh
                     }
                 }
             }
+            else {
+                SpawnClientCharacter(ClientSocket, State);
+            }
         });
 }
 
@@ -384,11 +388,16 @@ void AMySocketActor::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
 
-    FScopeLock Lock(&ClientSocketsMutex);
-    for (SOCKET ClientSocket : ClientSockets)
+    static float AccumulatedTime = 0.0f;
+    AccumulatedTime += DeltaTime;
+
+    if (AccumulatedTime >= 0.0166f) // 60FPS
     {
-        UE_LOG(LogTemp, Log, TEXT("Preparing to send data to socket %d"), ClientSocket);
-        sendData(ClientSocket);
+        AccumulatedTime = 0.0f;
+        FScopeLock Lock(&ClientSocketsMutex);
+        for (SOCKET ClientSocket : ClientSockets)
+        {
+            sendData(ClientSocket);
+        }
     }
 }
-

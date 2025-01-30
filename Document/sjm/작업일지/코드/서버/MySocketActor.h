@@ -72,6 +72,7 @@ public:
 	void AcceptClientAsync();
 	void sendData(SOCKET TargetSocket);
 	void ReceiveData(SOCKET ClientSocket);
+	void SpawnClientCharacter(SOCKET ClientSocket, const FCharacterState& State);
 	void SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCharacterState& State);
 	void CloseClientSocket(SOCKET ClientSocket);
 };
