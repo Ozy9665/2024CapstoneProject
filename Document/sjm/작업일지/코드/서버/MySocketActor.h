@@ -63,6 +63,7 @@ private:
 	TMap<SOCKET, ACharacter*> ClientCharacters;
 	TMap<SOCKET, FCharacterState> ClientStates;
 	FCriticalSection ClientSocketsMutex;
+	bool bIsRunning = false;
 
 public:	
 	// Called every frame

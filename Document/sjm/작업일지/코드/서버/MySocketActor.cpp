@@ -43,6 +43,8 @@ void AMySocketActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
     Super::EndPlay(EndPlayReason);
 
+    bIsRunning = false;
+
     // 모든 클라이언트 소켓 닫기
     {
         FScopeLock Lock(&ClientSocketsMutex);
@@ -114,9 +116,11 @@ bool AMySocketActor::InitializeServer(int32 Port)
 
 void AMySocketActor::AcceptClientAsync()
 {
+    bIsRunning = true;
+
     AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this]()
         {
-            while (true)
+            while (bIsRunning)
             {
                 SOCKET NewClientSocket = accept(ServerSocket, nullptr, nullptr);
                 if (NewClientSocket == INVALID_SOCKET)
@@ -143,16 +147,14 @@ void AMySocketActor::sendData(SOCKET TargetSocket)
     FScopeLock Lock(&ClientSocketsMutex);
 
     TArray<FCharacterState> AllCharacterStates;
+    AllCharacterStates.Reserve(ClientStates.Num() + 1); // 메모리 할당 최적화
 
     // 다른 클라이언트들의 캐릭터 상태 추가
     for (auto& Entry : ClientStates)
     {
-        SOCKET CurrentSocket = Entry.Key;
-        FCharacterState& State = Entry.Value;
-
-        if (CurrentSocket != TargetSocket)
+        if (Entry.Key != TargetSocket)
         {
-            AllCharacterStates.Add(State);
+            AllCharacterStates.Add(Entry.Value);
 
             /*UE_LOG(LogTemp, Log, TEXT("Forwarding data to socket %d: PlayerID=%d, Position(%.2f, %.2f, %.2f), Velocity(%.2f, %.2f, %.2f), AnimationState=%d"),
                 TargetSocket, State.PlayerID, State.PositionX, State.PositionY, State.PositionZ,
@@ -230,7 +232,7 @@ void AMySocketActor::ReceiveData(SOCKET ClientSocket)
                         FCharacterState ReceivedState;
                         FMemory::Memcpy(&ReceivedState, Buffer, sizeof(FCharacterState));
                         ReceivedState.PlayerID = static_cast<int32>(ClientSocket);
-                        ClientStates.FindOrAdd(ClientSocket) = ReceivedState;
+
                         {
                             // 데이터를 ClientStates 맵에 저장
                             FScopeLock Lock(&ClientSocketsMutex);
@@ -252,7 +254,7 @@ void AMySocketActor::ReceiveData(SOCKET ClientSocket)
                         UE_LOG(LogTemp, Warning, TEXT("Unexpected data size from socket %d: %d"), ClientSocket, BytesReceived);
                     }
                 }
-                else if (BytesReceived == 0)
+                else if (BytesReceived == 0 || WSAGetLastError() == WSAECONNRESET)
                 {
                     UE_LOG(LogTemp, Log, TEXT("Client disconnected. Socket: %d"), ClientSocket);
 
@@ -319,7 +321,15 @@ void AMySocketActor::SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCh
                 ACharacter* Character = ClientCharacters[ClientSocket];
                 if (Character)
                 {
-                    Character->SetActorLocation(FVector(State.PositionX, State.PositionY, State.PositionZ));
+                    const float InterpSpeed = 30.0f; // 보간 속도 
+                    const float DeltaTime = GetWorld()->GetDeltaSeconds();
+
+                    FVector CurrentLocation = Character->GetActorLocation();
+                    FVector TargetLocation(State.PositionX, State.PositionY, State.PositionZ);
+
+                    FVector NewLocation = FMath::VInterpTo(CurrentLocation, TargetLocation, DeltaTime, InterpSpeed);
+                    Character->SetActorLocation(NewLocation);
+
                     Character->SetActorRotation(FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll));
 
                     // 애니메이션 상태 업데이트 추가
@@ -379,6 +389,15 @@ void AMySocketActor::SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCh
 void AMySocketActor::CloseClientSocket(SOCKET ClientSocket)
 {
     FScopeLock Lock(&ClientSocketsMutex);
+    if (ClientCharacters.Contains(ClientSocket))
+    {
+        ACharacter* Character = ClientCharacters[ClientSocket];
+        if (Character)
+        {
+            Character->Destroy();
+        }
+        ClientCharacters.Remove(ClientSocket);
+    }
     ClientSockets.Remove(ClientSocket);
     closesocket(ClientSocket);
 }
@@ -397,7 +416,10 @@ void AMySocketActor::Tick(float DeltaTime)
         FScopeLock Lock(&ClientSocketsMutex);
         for (SOCKET ClientSocket : ClientSockets)
         {
-            sendData(ClientSocket);
+            if (ClientSocket != INVALID_SOCKET)
+            {
+                sendData(ClientSocket);
+            }
         }
     }
 }
