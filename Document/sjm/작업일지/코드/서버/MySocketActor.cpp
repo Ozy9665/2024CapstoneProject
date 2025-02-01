@@ -28,7 +28,7 @@ void AMySocketActor::BeginPlay()
     {
         UE_LOG(LogTemp, Error, TEXT("Server character not found!"));
     }
-    if (InitializeServer(7777))
+    /*if (InitializeServer(7777))
     {
         UE_LOG(LogTemp, Log, TEXT("Server initialized and waiting for clients..."));
         AcceptClientAsync();
@@ -36,6 +36,14 @@ void AMySocketActor::BeginPlay()
     else
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to initialize server."));
+    }*/
+    if (InitializeUDPSocket(8888)) // UDP 포트 설정
+    {
+        UE_LOG(LogTemp, Log, TEXT("UDP Broadcast initialized successfully."));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to initialize UDP broadcast socket."));
     }
 }
 
@@ -413,13 +421,124 @@ void AMySocketActor::Tick(float DeltaTime)
     if (AccumulatedTime >= 0.0166f) // 60FPS
     {
         AccumulatedTime = 0.0f;
-        FScopeLock Lock(&ClientSocketsMutex);
+        BroadcastData();
+        /*FScopeLock Lock(&ClientSocketsMutex);
         for (SOCKET ClientSocket : ClientSockets)
         {
             if (ClientSocket != INVALID_SOCKET)
             {
                 sendData(ClientSocket);
             }
-        }
+        }*/
+    }
+}
+
+bool AMySocketActor::InitializeUDPSocket(int32 Port)
+{
+    WSADATA WsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &WsaData) != 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("WSAStartup failed"));
+        return false;
+    }
+
+    // UDP 소켓 생성
+    BroadcastSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (BroadcastSocket == INVALID_SOCKET)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to create UDP socket: %ld"), WSAGetLastError());
+        WSACleanup();
+        return false;
+    }
+
+    // 브로드캐스트 활성화 옵션 설정
+    BOOL bBroadcast = TRUE;
+    if (setsockopt(BroadcastSocket, SOL_SOCKET, SO_BROADCAST, (char*)&bBroadcast, sizeof(bBroadcast)) == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to set socket broadcast option: %ld"), WSAGetLastError());
+        closesocket(BroadcastSocket);
+        WSACleanup();
+        return false;
+    }
+
+    sockaddr_in ServerAddr;
+    ServerAddr.sin_family = AF_INET;
+    ServerAddr.sin_addr.s_addr = INADDR_ANY;
+    ServerAddr.sin_port = htons(Port);
+
+    // 소켓 바인딩
+    if (bind(BroadcastSocket, (SOCKADDR*)&ServerAddr, sizeof(ServerAddr)) == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Bind failed with error: %ld"), WSAGetLastError());
+        closesocket(BroadcastSocket);
+        WSACleanup();
+        return false;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("UDP Broadcast Socket Initialized on Port %d"), Port);
+    return true;
+}
+
+void AMySocketActor::BroadcastData()
+{
+    if (BroadcastSocket == INVALID_SOCKET)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Broadcast socket is not initialized!"));
+        return;
+    }
+
+    TArray<FCharacterState> AllCharacterStates;
+    AllCharacterStates.Reserve(ClientStates.Num() + 1);
+
+    for (auto& Entry : ClientStates)
+    {
+        AllCharacterStates.Add(Entry.Value);
+    }
+
+    if (ServerCharacter)
+    {
+        ServerState.PlayerID = -1;
+        FVector Location = ServerCharacter->GetActorLocation();
+        FVector Velocity = ServerCharacter->GetVelocity();
+
+        ServerState.PositionX = Location.X;
+        ServerState.PositionY = Location.Y;
+        ServerState.PositionZ = Location.Z;
+
+        ServerState.VelocityX = Velocity.X;
+        ServerState.VelocityY = Velocity.Y;
+        ServerState.VelocityZ = Velocity.Z;
+
+        UCharacterMovementComponent* MovementComp = ServerCharacter->GetCharacterMovement();
+        ServerState.bIsFalling = MovementComp ? MovementComp->IsFalling() : false;
+
+        float Speed = Velocity.Size();
+        ServerState.AnimationState = (Speed < KINDA_SMALL_NUMBER) ? EAnimationState::Idle : EAnimationState::Running;
+
+        AllCharacterStates.Add(ServerState);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Server character not initialized!"));
+    }
+
+    int32 TotalBytes = AllCharacterStates.Num() * sizeof(FCharacterState);
+    const char* SendBuffer = reinterpret_cast<const char*>(AllCharacterStates.GetData());
+
+    sockaddr_in BroadcastAddr;
+    BroadcastAddr.sin_family = AF_INET;
+    BroadcastAddr.sin_port = htons(7777); // 브로드캐스트 포트
+    BroadcastAddr.sin_addr.s_addr = INADDR_BROADCAST; // 네트워크 브로드캐스트
+
+    int SentBytes = sendto(BroadcastSocket, SendBuffer, TotalBytes, 0,
+        (SOCKADDR*)&BroadcastAddr, sizeof(BroadcastAddr));
+
+    if (SentBytes == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Broadcast send failed: %ld"), WSAGetLastError());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("Broadcasted %d bytes to all clients"), SentBytes);
     }
 }

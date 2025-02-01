@@ -64,6 +64,7 @@ private:
 	TMap<SOCKET, FCharacterState> ClientStates;
 	FCriticalSection ClientSocketsMutex;
 	bool bIsRunning = false;
+	SOCKET BroadcastSocket = INVALID_SOCKET;
 
 public:	
 	// Called every frame
@@ -76,4 +77,6 @@ public:
 	void SpawnClientCharacter(SOCKET ClientSocket, const FCharacterState& State);
 	void SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCharacterState& State);
 	void CloseClientSocket(SOCKET ClientSocket);
+	bool InitializeUDPSocket(int32 Port);
+	void BroadcastData();
 };
