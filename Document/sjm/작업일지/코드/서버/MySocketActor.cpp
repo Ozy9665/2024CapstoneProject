@@ -74,6 +74,13 @@ void AMySocketActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
         ServerSocket = INVALID_SOCKET;
     }
 
+    // UDP 브로드캐스트 소켓 닫기
+    if (BroadcastSocket != INVALID_SOCKET)
+    {
+        closesocket(BroadcastSocket);
+        BroadcastSocket = INVALID_SOCKET;
+    }
+
     // Winsock 해제
     WSACleanup();
 

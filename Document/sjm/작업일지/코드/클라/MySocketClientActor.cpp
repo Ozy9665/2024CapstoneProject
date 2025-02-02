@@ -28,6 +28,7 @@ void AMySocketClientActor::BeginPlay()
 
 	FString ServerIP = TEXT("127.0.0.1");  // 서버 IP
 	int32 ServerPort = 7777;              // 서버 포트
+    int32 UDPPort = 8888;                 // UDP 브로드캐스트 포트
 
     if (ConnectToServer(ServerIP, ServerPort))
     {
@@ -38,6 +39,7 @@ void AMySocketClientActor::BeginPlay()
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to connect to server."));
     }
+    InitializeUDPReceiver(UDPPort);
 }
 
 bool AMySocketClientActor::ConnectToServer(const FString& ServerIP, int32 ServerPort)
@@ -300,6 +302,13 @@ void AMySocketClientActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
         ClientSocket = INVALID_SOCKET;
     }
 
+    bIsReceivingBroadcast = false;
+    if (UDPRecvSocket != INVALID_SOCKET)
+    {
+        closesocket(UDPRecvSocket);
+        UDPRecvSocket = INVALID_SOCKET;
+    }
+
     WSACleanup();
     UE_LOG(LogTemp, Log, TEXT("Client socket closed and cleaned up."));
 }
@@ -310,4 +319,74 @@ void AMySocketClientActor::Tick(float DeltaTime)
     Super::Tick(DeltaTime);
     SendData();
     ProcessCharacterUpdates(DeltaTime);
+}
+
+bool AMySocketClientActor::InitializeUDPReceiver(int32 UDPPort)
+{
+    // UDP 소켓 생성
+    UDPRecvSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (UDPRecvSocket == INVALID_SOCKET)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to create UDP receive socket: %ld"), WSAGetLastError());
+        return false;
+    }
+
+    sockaddr_in RecvAddr;
+    RecvAddr.sin_family = AF_INET;
+    RecvAddr.sin_port = htons(UDPPort);
+    RecvAddr.sin_addr.s_addr = INADDR_ANY;
+
+    // 바인딩
+    if (bind(UDPRecvSocket, (SOCKADDR*)&RecvAddr, sizeof(RecvAddr)) == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("UDP Bind failed with error: %ld"), WSAGetLastError());
+        closesocket(UDPRecvSocket);
+        return false;
+    }
+
+    UE_LOG(LogTemp, Log, TEXT("UDP Broadcast Receiver Initialized on Port %d"), UDPPort);
+
+    // 데이터 수신 시작
+    StartReceivingBroadcast();
+
+    return true;
+}
+
+void AMySocketClientActor::StartReceivingBroadcast()
+{
+    bIsReceivingBroadcast = true;
+
+    AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this]()
+        {
+            while (bIsReceivingBroadcast)
+            {
+                char Buffer[sizeof(FCharacterState) * 1024];
+                sockaddr_in SenderAddr;
+                int SenderAddrSize = sizeof(SenderAddr);
+
+                int BytesReceived = recvfrom(UDPRecvSocket, Buffer, sizeof(Buffer), 0,
+                    (SOCKADDR*)&SenderAddr, &SenderAddrSize);
+
+                if (BytesReceived > 0)
+                {
+                    int32 NumCharacters = BytesReceived / sizeof(FCharacterState);
+                    for (int32 i = 0; i < NumCharacters; ++i)
+                    {
+                        FCharacterState* ReceivedState = reinterpret_cast<FCharacterState*>(Buffer + (i * sizeof(FCharacterState)));
+
+                        // 수신된 상태를 저장
+                        FScopeLock Lock(&ReceivedDataMutex); // 동기화
+                        ReceivedCharacterStates.FindOrAdd(FString::Printf(TEXT("Character_%d"), ReceivedState->PlayerID)) = *ReceivedState;
+                    }
+
+                    UE_LOG(LogTemp, Log, TEXT("Received %d character states via UDP broadcast."), NumCharacters);
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("UDP recvfrom failed: %ld"), WSAGetLastError());
+                }
+            }
+
+            UE_LOG(LogTemp, Log, TEXT("UDP Receiving Thread Stopped."));
+        });
 }
