@@ -7,6 +7,14 @@
       "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\BaseCharacter.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\PoliceCharacter.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\PoliceCharacter.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BaseCharacter.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\BaseCharacter.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     }
@@ -18,20 +26,45 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 1,
+          "SelectedChildIndex": 3,
           "Children": [
             {
               "$type": "Document",
               "DocumentIndex": 1,
+              "Title": "PoliceCharacter.cpp",
+              "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.cpp",
+              "RelativeDocumentMoniker": "Source\\Cult\\PoliceCharacter.cpp",
+              "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.cpp",
+              "RelativeToolTip": "Source\\Cult\\PoliceCharacter.cpp",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAABMAAAApAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-02-02T15:05:16.057Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "PoliceCharacter.h",
+              "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.h",
+              "RelativeDocumentMoniker": "Source\\Cult\\PoliceCharacter.h",
+              "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.h",
+              "RelativeToolTip": "Source\\Cult\\PoliceCharacter.h",
+              "ViewState": "AQIAAAwAAAAAAAAAAAAAACIAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2025-02-02T15:05:15.728Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
               "Title": "BaseCharacter.cpp",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BaseCharacter.cpp",
               "RelativeDocumentMoniker": "Source\\Cult\\BaseCharacter.cpp",
               "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BaseCharacter.cpp",
               "RelativeToolTip": "Source\\Cult\\BaseCharacter.cpp",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAABYAAAAAAAAA",
+              "ViewState": "AQIAABUAAAAAAAAAAAAAAAAAAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-02T14:33:46.352Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-02T14:33:46.352Z"
             },
             {
               "$type": "Document",
@@ -41,7 +74,7 @@
               "RelativeDocumentMoniker": "Source\\Cult\\BaseCharacter.h",
               "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BaseCharacter.h",
               "RelativeToolTip": "Source\\Cult\\BaseCharacter.h",
-              "ViewState": "AQIAABoAAAAAAAAAAADwvy0AAAACAAAA",
+              "ViewState": "AQIAAA8AAAAAAAAAAAAAAAAAAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
               "WhenOpened": "2025-02-02T14:33:45.364Z",
               "EditorCaption": ""
