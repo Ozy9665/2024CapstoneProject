@@ -23,6 +23,23 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
+	// Speed
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
+	float WalkSpeed;
+
+	// Health
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Stats")
+	float Health;
+
+	// Call Whem Character get Hit
+	UFUNCTION(BlueprintCallable, Category="Character")
+	virtual void TakeDamage(float DamageAmount);
+
+	// Play Animation
+	UFUNCTION(BlueprintCallable, BlueprintImplementableEvent, Category="Animation")
+	void PlayHitReactionAnimation();
+
+
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
