@@ -57,8 +57,6 @@ private:
 	TMap<FString, ACharacter*> SpawnedCharacters;
 	TMap<FString, FCharacterState> ReceivedCharacterStates;
 	FCriticalSection ReceivedDataMutex;
-	SOCKET UDPRecvSocket = INVALID_SOCKET; // UDP 수신 소켓
-	bool bIsReceivingBroadcast = false;
 
 public:
 	// Called every frame
@@ -69,6 +67,4 @@ public:
 	void SpawnCharacter(const FCharacterState& State);
 	void SendData();
 	void ProcessCharacterUpdates(float DeltaTime);
-	bool InitializeUDPReceiver(int32 UDPPort);
-	void StartReceivingBroadcast();
 };

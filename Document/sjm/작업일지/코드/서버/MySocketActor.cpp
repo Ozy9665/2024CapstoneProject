@@ -1,6 +1,5 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "MySocketActor.h"
 #include "Engine/Engine.h"
 #include <GameFramework/Character.h>
@@ -28,7 +27,7 @@ void AMySocketActor::BeginPlay()
     {
         UE_LOG(LogTemp, Error, TEXT("Server character not found!"));
     }
-    /*if (InitializeServer(7777))
+    if (InitializeServer(7777))
     {
         UE_LOG(LogTemp, Log, TEXT("Server initialized and waiting for clients..."));
         AcceptClientAsync();
@@ -36,14 +35,6 @@ void AMySocketActor::BeginPlay()
     else
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to initialize server."));
-    }*/
-    if (InitializeUDPSocket(8888)) // UDP 포트 설정
-    {
-        UE_LOG(LogTemp, Log, TEXT("UDP Broadcast initialized successfully."));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("Failed to initialize UDP broadcast socket."));
     }
 }
 
@@ -53,35 +44,9 @@ void AMySocketActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
     bIsRunning = false;
 
-    // 모든 클라이언트 소켓 닫기
-    {
-        FScopeLock Lock(&ClientSocketsMutex);
-        for (SOCKET& ClientSocket : ClientSockets)
-        {
-            if (ClientSocket != INVALID_SOCKET)
-            {
-                closesocket(ClientSocket);
-                ClientSocket = INVALID_SOCKET;
-            }
-        }
-        ClientSockets.Empty();  // 배열 비우기
-    }
+    CloseAllClientSockets();
+    CloseServerSocket();
 
-    // 서버 소켓 닫기
-    if (ServerSocket != INVALID_SOCKET)
-    {
-        closesocket(ServerSocket);
-        ServerSocket = INVALID_SOCKET;
-    }
-
-    // UDP 브로드캐스트 소켓 닫기
-    if (BroadcastSocket != INVALID_SOCKET)
-    {
-        closesocket(BroadcastSocket);
-        BroadcastSocket = INVALID_SOCKET;
-    }
-
-    // Winsock 해제
     WSACleanup();
 
     UE_LOG(LogTemp, Log, TEXT("All sockets closed and cleaned up."));
@@ -100,8 +65,7 @@ bool AMySocketActor::InitializeServer(int32 Port)
     ServerSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (ServerSocket == INVALID_SOCKET)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to create socket: %ld"), WSAGetLastError());
-        WSACleanup();
+        LogAndCleanupSocketError(TEXT("Failed to create socket"));
         return false;
     }
 
@@ -112,21 +76,28 @@ bool AMySocketActor::InitializeServer(int32 Port)
 
     if (bind(ServerSocket, (SOCKADDR*)&ServerAddr, sizeof(ServerAddr)) == SOCKET_ERROR)
     {
-        UE_LOG(LogTemp, Error, TEXT("Bind failed with error: %ld"), WSAGetLastError());
-        closesocket(ServerSocket);
-        WSACleanup();
+        LogAndCleanupSocketError(TEXT("Bind failed"));
         return false;
     }
 
     if (listen(ServerSocket, SOMAXCONN) == SOCKET_ERROR)
     {
-        UE_LOG(LogTemp, Error, TEXT("Listen failed with error: %ld"), WSAGetLastError());
-        closesocket(ServerSocket);
-        WSACleanup();
+        LogAndCleanupSocketError(TEXT("Listen failed"));
         return false;
     }
 
     return true;
+}
+
+void AMySocketActor::LogAndCleanupSocketError(const TCHAR* ErrorMessage)
+{
+    UE_LOG(LogTemp, Error, TEXT("%s with error: %ld"), ErrorMessage, WSAGetLastError());
+    if (ServerSocket != INVALID_SOCKET)
+    {
+        closesocket(ServerSocket);
+        ServerSocket = INVALID_SOCKET;
+    }
+    WSACleanup();
 }
 
 void AMySocketActor::AcceptClientAsync()
@@ -170,53 +141,14 @@ void AMySocketActor::sendData(SOCKET TargetSocket)
         if (Entry.Key != TargetSocket)
         {
             AllCharacterStates.Add(Entry.Value);
-
-            /*UE_LOG(LogTemp, Log, TEXT("Forwarding data to socket %d: PlayerID=%d, Position(%.2f, %.2f, %.2f), Velocity(%.2f, %.2f, %.2f), AnimationState=%d"),
-                TargetSocket, State.PlayerID, State.PositionX, State.PositionY, State.PositionZ,
-                State.VelocityX, State.VelocityY, State.VelocityZ, static_cast<int32>(State.AnimationState));*/
         }
     }
 
     // 서버 캐릭터 상태 추가
     if (ServerCharacter)
     {
-        ServerState.PlayerID = -1;
-
-        // 위치 및 회전 설정
-        ServerState.PositionX = ServerCharacter->GetActorLocation().X;
-        ServerState.PositionY = ServerCharacter->GetActorLocation().Y;
-        ServerState.PositionZ = ServerCharacter->GetActorLocation().Z;
-        ServerState.RotationPitch = ServerCharacter->GetActorRotation().Pitch;
-        ServerState.RotationYaw = ServerCharacter->GetActorRotation().Yaw;
-        ServerState.RotationRoll = ServerCharacter->GetActorRotation().Roll;
-
-        // 속도 및 GroundSpeed 계산
-        FVector Velocity = ServerCharacter->GetVelocity();
-        ServerState.VelocityX = Velocity.X;
-        ServerState.VelocityY = Velocity.Y;
-        ServerState.VelocityZ = Velocity.Z;
-        ServerState.GroundSpeed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
-
-        // IsFalling 상태
-        UCharacterMovementComponent* MovementComp = ServerCharacter->GetCharacterMovement();
-        ServerState.bIsFalling = MovementComp ? MovementComp->IsFalling() : false;
-
-        // AnimationState 계산
-        float Speed = Velocity.Size();
-        if (Speed < KINDA_SMALL_NUMBER)
-        {
-            ServerState.AnimationState = EAnimationState::Idle; // 정지 상태
-        }
-        else
-        {
-            ServerState.AnimationState = EAnimationState::Running; // 이동 상태
-        }
-
+        ServerState = GetServerCharacterState();
         AllCharacterStates.Add(ServerState);
-
-        /*UE_LOG(LogTemp, Log, TEXT("Server Character: Position(%.2f, %.2f, %.2f), Velocity(%.2f, %.2f, %.2f), AnimationState=%d"),
-            ServerState.PositionX, ServerState.PositionY, ServerState.PositionZ,
-            ServerState.VelocityX, ServerState.VelocityY, ServerState.VelocityZ, static_cast<int32>(ServerState.AnimationState));*/
     }
     else
     {
@@ -225,8 +157,44 @@ void AMySocketActor::sendData(SOCKET TargetSocket)
 
     int32 TotalBytes = AllCharacterStates.Num() * sizeof(FCharacterState);
     send(TargetSocket, reinterpret_cast<const char*>(AllCharacterStates.GetData()), TotalBytes, 0);
+}
 
-    //UE_LOG(LogTemp, Log, TEXT("Sent %d character states to socket %d"), AllCharacterStates.Num(), TargetSocket);
+FCharacterState AMySocketActor::GetServerCharacterState()
+{
+    FCharacterState State;
+    State.PlayerID = -1;
+
+    // 위치 및 회전 설정
+    State.PositionX = ServerCharacter->GetActorLocation().X;
+    State.PositionY = ServerCharacter->GetActorLocation().Y;
+    State.PositionZ = ServerCharacter->GetActorLocation().Z;
+    State.RotationPitch = ServerCharacter->GetActorRotation().Pitch;
+    State.RotationYaw = ServerCharacter->GetActorRotation().Yaw;
+    State.RotationRoll = ServerCharacter->GetActorRotation().Roll;
+
+    // 속도 및 GroundSpeed 계산
+    FVector Velocity = ServerCharacter->GetVelocity();
+    State.VelocityX = Velocity.X;
+    State.VelocityY = Velocity.Y;
+    State.VelocityZ = Velocity.Z;
+    State.GroundSpeed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
+
+    // IsFalling 상태
+    UCharacterMovementComponent* MovementComp = ServerCharacter->GetCharacterMovement();
+    State.bIsFalling = MovementComp ? MovementComp->IsFalling() : false;
+
+    // AnimationState 계산
+    float Speed = Velocity.Size();
+    if (Speed < KINDA_SMALL_NUMBER)
+    {
+        State.AnimationState = EAnimationState::Idle; // 정지 상태
+    }
+    else
+    {
+        State.AnimationState = EAnimationState::Running; // 이동 상태
+    }
+
+    return State;
 }
 
 void AMySocketActor::ReceiveData(SOCKET ClientSocket)
@@ -240,8 +208,6 @@ void AMySocketActor::ReceiveData(SOCKET ClientSocket)
 
                 if (BytesReceived > 0)
                 {
-                    // UE_LOG(LogTemp, Log, TEXT("Data received from socket %d: %d bytes"), ClientSocket, BytesReceived);
-
                     if (BytesReceived == sizeof(FCharacterState))
                     {
                         FCharacterState ReceivedState;
@@ -336,69 +302,80 @@ void AMySocketActor::SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCh
                 ACharacter* Character = ClientCharacters[ClientSocket];
                 if (Character)
                 {
-                    const float InterpSpeed = 30.0f; // 보간 속도 
-                    const float DeltaTime = GetWorld()->GetDeltaSeconds();
-
-                    FVector CurrentLocation = Character->GetActorLocation();
-                    FVector TargetLocation(State.PositionX, State.PositionY, State.PositionZ);
-
-                    FVector NewLocation = FMath::VInterpTo(CurrentLocation, TargetLocation, DeltaTime, InterpSpeed);
-                    Character->SetActorLocation(NewLocation);
-
-                    Character->SetActorRotation(FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll));
-
-                    // 애니메이션 상태 업데이트 추가
-                    if (USkeletalMeshComponent* Mesh = Character->GetMesh())
-                    {
-                        UAnimInstance* AnimInstance = Mesh->GetAnimInstance();
-                        if (AnimInstance)
-                        {
-                            // ShouldMove 업데이트
-                            FProperty* ShouldMoveProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ShouldMove"));
-                            if (ShouldMoveProperty && ShouldMoveProperty->IsA<FBoolProperty>())
-                            {
-                                bool bShouldMove = (State.AnimationState == EAnimationState::Running);
-                                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ShouldMoveProperty);
-                                BoolProp->SetPropertyValue_InContainer(AnimInstance, bShouldMove);
-                            }
-
-                            // Velocity 업데이트
-                            FProperty* VelocityProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Velocity"));
-                            if (VelocityProperty && VelocityProperty->IsA<FStructProperty>())
-                            {
-                                FVector Velocity(State.VelocityX, State.VelocityY, State.VelocityZ);
-                                FStructProperty* StructProp = CastFieldChecked<FStructProperty>(VelocityProperty);
-                                void* StructContainer = StructProp->ContainerPtrToValuePtr<void>(AnimInstance);
-                                if (StructContainer)
-                                {
-                                    FMemory::Memcpy(StructContainer, &Velocity, sizeof(FVector));
-                                }
-                            }
-
-                            // GroundSpeed 업데이트
-                            FProperty* GroundSpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("GroundSpeed"));
-                            if (GroundSpeedProperty && GroundSpeedProperty->IsA<FDoubleProperty>())
-                            {
-                                double GroundSpeed = static_cast<double>(FVector(State.VelocityX, State.VelocityY, 0.0f).Size());
-                                FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(GroundSpeedProperty);
-                                DoubleProp->SetPropertyValue_InContainer(AnimInstance, GroundSpeed);
-                            }
-
-                            // IsFalling 업데이트
-                            FProperty* IsFallingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("IsFalling"));
-                            if (IsFallingProperty && IsFallingProperty->IsA<FBoolProperty>())
-                            {
-                                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFallingProperty);
-                                BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsFalling);
-                            }
-                        }
-                    }
+                    UpdateCharacterState(Character, State);
                 }
             }
-            else {
+            else
+            {
                 SpawnClientCharacter(ClientSocket, State);
             }
         });
+}
+
+void AMySocketActor::UpdateCharacterState(ACharacter* Character, const FCharacterState& State)
+{
+    const float InterpSpeed = 30.0f; // 보간 속도 
+    const float DeltaTime = GetWorld()->GetDeltaSeconds();
+
+    FVector CurrentLocation = Character->GetActorLocation();
+    FVector TargetLocation = FVector(State.PositionX, State.PositionY, State.PositionZ);
+
+    FVector NewLocation = FMath::VInterpTo(CurrentLocation, TargetLocation, DeltaTime, InterpSpeed);
+    Character->SetActorLocation(NewLocation);
+
+    Character->SetActorRotation(FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll));
+
+    // 애니메이션 상태 업데이트 추가
+    if (USkeletalMeshComponent* Mesh = Character->GetMesh())
+    {
+        UAnimInstance* AnimInstance = Mesh->GetAnimInstance();
+        if (AnimInstance)
+        {
+            UpdateAnimInstanceProperties(AnimInstance, State);
+        }
+    }
+}
+
+void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCharacterState& State)
+{
+    // ShouldMove 업데이트
+    FProperty* ShouldMoveProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ShouldMove"));
+    if (ShouldMoveProperty && ShouldMoveProperty->IsA<FBoolProperty>())
+    {
+        bool bShouldMove = (State.AnimationState == EAnimationState::Running);
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ShouldMoveProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, bShouldMove);
+    }
+
+    // Velocity 업데이트
+    FProperty* VelocityProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Velocity"));
+    if (VelocityProperty && VelocityProperty->IsA<FStructProperty>())
+    {
+        FVector Velocity(State.VelocityX, State.VelocityY, State.VelocityZ);
+        FStructProperty* StructProp = CastFieldChecked<FStructProperty>(VelocityProperty);
+        void* StructContainer = StructProp->ContainerPtrToValuePtr<void>(AnimInstance);
+        if (StructContainer)
+        {
+            FMemory::Memcpy(StructContainer, &Velocity, sizeof(FVector));
+        }
+    }
+
+    // GroundSpeed 업데이트
+    FProperty* GroundSpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("GroundSpeed"));
+    if (GroundSpeedProperty && GroundSpeedProperty->IsA<FDoubleProperty>())
+    {
+        double GroundSpeed = static_cast<double>(FVector(State.VelocityX, State.VelocityY, 0.0f).Size());
+        FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(GroundSpeedProperty);
+        DoubleProp->SetPropertyValue_InContainer(AnimInstance, GroundSpeed);
+    }
+
+    // IsFalling 업데이트
+    FProperty* IsFallingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("IsFalling"));
+    if (IsFallingProperty && IsFallingProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFallingProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsFalling);
+    }
 }
 
 void AMySocketActor::CloseClientSocket(SOCKET ClientSocket)
@@ -417,6 +394,29 @@ void AMySocketActor::CloseClientSocket(SOCKET ClientSocket)
     closesocket(ClientSocket);
 }
 
+void AMySocketActor::CloseAllClientSockets()
+{
+    FScopeLock Lock(&ClientSocketsMutex);
+    for (SOCKET& ClientSocket : ClientSockets)
+    {
+        if (ClientSocket != INVALID_SOCKET)
+        {
+            closesocket(ClientSocket);
+            ClientSocket = INVALID_SOCKET;
+        }
+    }
+    ClientSockets.Empty();  // 배열 비우기
+}
+
+void AMySocketActor::CloseServerSocket()
+{
+    if (ServerSocket != INVALID_SOCKET)
+    {
+        closesocket(ServerSocket);
+        ServerSocket = INVALID_SOCKET;
+    }
+}
+
 // Called every frame
 void AMySocketActor::Tick(float DeltaTime)
 {
@@ -428,124 +428,13 @@ void AMySocketActor::Tick(float DeltaTime)
     if (AccumulatedTime >= 0.0166f) // 60FPS
     {
         AccumulatedTime = 0.0f;
-        BroadcastData();
-        /*FScopeLock Lock(&ClientSocketsMutex);
+        FScopeLock Lock(&ClientSocketsMutex);
         for (SOCKET ClientSocket : ClientSockets)
         {
             if (ClientSocket != INVALID_SOCKET)
             {
-                sendData(ClientSocket);
+                SendData(ClientSocket);
             }
-        }*/
-    }
-}
-
-bool AMySocketActor::InitializeUDPSocket(int32 Port)
-{
-    WSADATA WsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &WsaData) != 0)
-    {
-        UE_LOG(LogTemp, Error, TEXT("WSAStartup failed"));
-        return false;
-    }
-
-    // UDP 소켓 생성
-    BroadcastSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (BroadcastSocket == INVALID_SOCKET)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Failed to create UDP socket: %ld"), WSAGetLastError());
-        WSACleanup();
-        return false;
-    }
-
-    // 브로드캐스트 활성화 옵션 설정
-    BOOL bBroadcast = TRUE;
-    if (setsockopt(BroadcastSocket, SOL_SOCKET, SO_BROADCAST, (char*)&bBroadcast, sizeof(bBroadcast)) == SOCKET_ERROR)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Failed to set socket broadcast option: %ld"), WSAGetLastError());
-        closesocket(BroadcastSocket);
-        WSACleanup();
-        return false;
-    }
-
-    sockaddr_in ServerAddr;
-    ServerAddr.sin_family = AF_INET;
-    ServerAddr.sin_addr.s_addr = INADDR_ANY;
-    ServerAddr.sin_port = htons(Port);
-
-    // 소켓 바인딩
-    if (bind(BroadcastSocket, (SOCKADDR*)&ServerAddr, sizeof(ServerAddr)) == SOCKET_ERROR)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Bind failed with error: %ld"), WSAGetLastError());
-        closesocket(BroadcastSocket);
-        WSACleanup();
-        return false;
-    }
-
-    UE_LOG(LogTemp, Log, TEXT("UDP Broadcast Socket Initialized on Port %d"), Port);
-    return true;
-}
-
-void AMySocketActor::BroadcastData()
-{
-    if (BroadcastSocket == INVALID_SOCKET)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Broadcast socket is not initialized!"));
-        return;
-    }
-
-    TArray<FCharacterState> AllCharacterStates;
-    AllCharacterStates.Reserve(ClientStates.Num() + 1);
-
-    for (auto& Entry : ClientStates)
-    {
-        AllCharacterStates.Add(Entry.Value);
-    }
-
-    if (ServerCharacter)
-    {
-        ServerState.PlayerID = -1;
-        FVector Location = ServerCharacter->GetActorLocation();
-        FVector Velocity = ServerCharacter->GetVelocity();
-
-        ServerState.PositionX = Location.X;
-        ServerState.PositionY = Location.Y;
-        ServerState.PositionZ = Location.Z;
-
-        ServerState.VelocityX = Velocity.X;
-        ServerState.VelocityY = Velocity.Y;
-        ServerState.VelocityZ = Velocity.Z;
-
-        UCharacterMovementComponent* MovementComp = ServerCharacter->GetCharacterMovement();
-        ServerState.bIsFalling = MovementComp ? MovementComp->IsFalling() : false;
-
-        float Speed = Velocity.Size();
-        ServerState.AnimationState = (Speed < KINDA_SMALL_NUMBER) ? EAnimationState::Idle : EAnimationState::Running;
-
-        AllCharacterStates.Add(ServerState);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("Server character not initialized!"));
-    }
-
-    int32 TotalBytes = AllCharacterStates.Num() * sizeof(FCharacterState);
-    const char* SendBuffer = reinterpret_cast<const char*>(AllCharacterStates.GetData());
-
-    sockaddr_in BroadcastAddr;
-    BroadcastAddr.sin_family = AF_INET;
-    BroadcastAddr.sin_port = htons(7777); // 브로드캐스트 포트
-    BroadcastAddr.sin_addr.s_addr = INADDR_BROADCAST; // 네트워크 브로드캐스트
-
-    int SentBytes = sendto(BroadcastSocket, SendBuffer, TotalBytes, 0,
-        (SOCKADDR*)&BroadcastAddr, sizeof(BroadcastAddr));
-
-    if (SentBytes == SOCKET_ERROR)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Broadcast send failed: %ld"), WSAGetLastError());
-    }
-    else
-    {
-        UE_LOG(LogTemp, Log, TEXT("Broadcasted %d bytes to all clients"), SentBytes);
+        }
     }
 }
