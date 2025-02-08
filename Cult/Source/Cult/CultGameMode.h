@@ -13,5 +13,7 @@ UCLASS()
 class CULT_API ACultGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
-	
+
+public:
+	ACultGameMode();
 };
