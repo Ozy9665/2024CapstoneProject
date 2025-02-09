@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "BaseCharacter.h"
+#include"GameFramework/Character.h"
 #include "PoliceCharacter.generated.h"
 
 UENUM(BlueprintType)
@@ -31,7 +32,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category ="Weapon")
 	EWeaponType CurrentWeapon;
 
+	//  
+	UPROPERTY(EditAnywhere, BlueprintReadwrite, Category="Combat")
+	class UBoxComponent* AttackCollision;
 
+	// 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat")
+	class UAnimMontage* AttackMontage;
+
+	//
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat")
+	float AttackDamage = 20.0f;
 
 
 	// =========Func=========
@@ -39,9 +50,9 @@ public:
 	// Attack
 	UFUNCTION(BlueprintCallable, Category="Combat")	
 	void WeaponAttack();
-	// Arrest
-	/*
-		void ArrestTarget(class ABaseCharacter* Target);
-	*/
+	
+	// Attack 
+	UFUNCTION(BlueprintCallable, Category="Combat")
+	void OnAttackHit();
 	
 };
