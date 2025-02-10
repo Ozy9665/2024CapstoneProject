@@ -3,24 +3,23 @@
 
 #include "CultistCharacter.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "Components/InputComponent.h"
+
 
 ACultistCharacter::ACultistCharacter()
 {
-	WalkSpeed = 600.0f;
-
 	PrimaryActorTick.bCanEverTick = true;
+	WalkSpeed = 600.0f;
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+	bIsPerformingRitual = false;
+	RitualProgress = 0.0f;
+	RitualSpeed = 10.0f; // 초당 증가속도
 }
 
 void ACultistCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-}
-
-void ACultistCharacter::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
 }
 
 void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -50,4 +49,30 @@ void ACultistCharacter::MoveRight(float Value)
 void ACultistCharacter::PerformRitual()
 {
 	UE_LOG(LogTemp, Warning, TEXT("Performing Ritual..."));
+}
+
+//void ACultistCharacter::StartRitual()
+//{
+//
+//}
+//
+//void ACultistCharacter::StopRitual()
+//{
+//
+//}
+
+void ACultistCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	//if (bIsPerformingRitual)
+	//{
+	//	RitualProgress += RitualSpeed * DeltaTime;
+
+	//	if (RitualProgress >= 100.0f) // 의식이 완료되면 중지
+	//	{
+	//		StopRitual();
+	//		UE_LOG(LogTemp, Warning, TEXT("Ritual Completed!"));
+	//	}
+	//}
 }
