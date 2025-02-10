@@ -1,3 +1,5 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -7,22 +9,23 @@
 #include "AMyNetworkManagerActor.generated.h"
 
 UCLASS()
-class YOURGAME_API AMyNetworkManagerActor : public AActor
+class SPAWNACTOR_API AAMyNetworkManagerActor : public AActor
 {
-    GENERATED_BODY()
-
-public:
-    // Sets default values for this actor's properties
-    AMyNetworkManagerActor();
+	GENERATED_BODY()
+	
+public:	
+	// Sets default values for this actor's properties
+	AAMyNetworkManagerActor();
+	~AAMyNetworkManagerActor();
 
 protected:
-    // Called when the game starts or when spawned
-    virtual void BeginPlay() override;
+	// Called when the game starts or when spawned
+	virtual void BeginPlay() override;
+	bool CanConnectToServer(const FString& ServerIP, int32 ServerPort);
+	void CheckAndSpawnActor();
 
-private:
-    // Attempts to connect to the server and returns true if successful
-    bool CanConnectToServer(const FString& ServerIP, int32 ServerPort);
+public:	
+	// Called every frame
+	virtual void Tick(float DeltaTime) override;
 
-    // Spawns the appropriate actor based on server availability
-    void SpawnAppropriateActor();
 };
