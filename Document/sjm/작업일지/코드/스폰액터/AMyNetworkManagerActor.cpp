@@ -39,6 +39,7 @@ void AAMyNetworkManagerActor::BeginPlay()
 void AAMyNetworkManagerActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
 }
 
 bool AAMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32 ServerPort)

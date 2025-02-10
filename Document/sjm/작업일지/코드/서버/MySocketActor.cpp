@@ -128,7 +128,7 @@ void AMySocketActor::AcceptClientAsync()
         });
 }
 
-void AMySocketActor::sendData(SOCKET TargetSocket)
+void AMySocketActor::SendData(SOCKET TargetSocket)
 {
     FScopeLock Lock(&ClientSocketsMutex);
 

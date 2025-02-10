@@ -39,6 +39,20 @@ void AMySocketClientActor::BeginPlay()
     }
 }
 
+void AMySocketClientActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    Super::EndPlay(EndPlayReason);
+
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        closesocket(ClientSocket);
+        ClientSocket = INVALID_SOCKET;
+    }
+
+    WSACleanup();
+    UE_LOG(LogTemp, Log, TEXT("Client socket closed and cleaned up."));
+}
+
 bool AMySocketClientActor::ConnectToServer(const FString& ServerIP, int32 ServerPort)
 {
     WSADATA WsaData;
@@ -226,7 +240,7 @@ FCharacterState AMySocketClientActor::GetCharacterState(ACharacter* PlayerCharac
     }
     else
     {
-        CharacterState.AnimationState = EAnimationState::Run; // 이동 중이면 Run
+        CharacterState.AnimationState = EAnimationState::Running; // 이동 중이면 Run
     }
 
     return CharacterState;
@@ -317,20 +331,6 @@ void AMySocketClientActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInsta
         FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(GroundSpeedProperty);
         DoubleProp->SetPropertyValue_InContainer(AnimInstance, GroundSpeed);
     }
-}
-
-void AMySocketClientActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
-{
-    Super::EndPlay(EndPlayReason);
-
-    if (ClientSocket != INVALID_SOCKET)
-    {
-        closesocket(ClientSocket);
-        ClientSocket = INVALID_SOCKET;
-    }
-
-    WSACleanup();
-    UE_LOG(LogTemp, Log, TEXT("Client socket closed and cleaned up."));
 }
 
 // Called every frame

@@ -5,45 +5,15 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include <winsock2.h>
+#include "MySocketActor.h"
 #include "MySocketClientActor.generated.h"
 
-UENUM(BlueprintType)
-enum class EAnimationState : uint8
-{
-	Idle UMETA(DisplayName = "Idle"),
-	Run UMETA(DisplayName = "Run"),
-	Jump UMETA(DisplayName = "Jump")
-};
-
-USTRUCT(BlueprintType)
-struct FCharacterState
-{
-	GENERATED_BODY()
-	int32 PlayerID;
-	// 위치
-	float PositionX;
-	float PositionY;
-	float PositionZ;
-	// 회전
-	float RotationPitch;
-	float RotationYaw;
-	float RotationRoll;
-	// 속도
-	float VelocityX;
-	float VelocityY;
-	float VelocityZ;
-	float GroundSpeed;
-	bool bIsFalling;
-	// 애니메이션 상태 필드 추가
-	EAnimationState AnimationState;
-};
-
 UCLASS()
-class PROJECT1_API AMySocketClientActor : public AActor
+class SPAWNACTOR_API AMySocketClientActor : public AActor
 {
 	GENERATED_BODY()
-
-public:
+	
+public:	
 	// Sets default values for this actor's properties
 	AMySocketClientActor();
 
@@ -58,13 +28,18 @@ private:
 	TMap<FString, FCharacterState> ReceivedCharacterStates;
 	FCriticalSection ReceivedDataMutex;
 
-public:
+public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
 	bool ConnectToServer(const FString& ServerIP, int32 ServerPort);
+	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);
 	void ReceiveData();
+	void ProcessReceivedData(char* Buffer, int32 BytesReceived);
 	void SpawnCharacter(const FCharacterState& State);
 	void SendData();
+	FCharacterState GetCharacterState(ACharacter* PlayerCharacter);
 	void ProcessCharacterUpdates(float DeltaTime);
+	void UpdateCharacterState(ACharacter* Character, const FCharacterState& State, float DeltaTime);
+	void UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCharacterState& State);
 };

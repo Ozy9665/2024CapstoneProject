@@ -5,7 +5,6 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Containers/Queue.h"
-#include "ClientCharacter.h"
 #include <winsock2.h>
 #include "MySocketActor.generated.h"
 
@@ -41,7 +40,7 @@ struct FCharacterState
 };
 
 UCLASS()
-class PROJECT2_API AMySocketActor : public AActor
+class SPAWNACTOR_API AMySocketActor : public AActor
 {
 	GENERATED_BODY()
 	
@@ -70,10 +69,16 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	bool InitializeServer(int32 Port);  // 서버 초기화 함수
+	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);  // 소켓 에러 로그 출력 및 소켓 정리 함수
 	void AcceptClientAsync();
-	void sendData(SOCKET TargetSocket);
+	void SendData(SOCKET TargetSocket);
+	FCharacterState GetServerCharacterState();
 	void ReceiveData(SOCKET ClientSocket);
 	void SpawnClientCharacter(SOCKET ClientSocket, const FCharacterState& State);
 	void SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCharacterState& State);
+	void UpdateCharacterState(ACharacter* Character, const FCharacterState& State);
+	void UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCharacterState& State);
 	void CloseClientSocket(SOCKET ClientSocket);
+	void CloseAllClientSockets();
+	void CloseServerSocket();
 };
