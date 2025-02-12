@@ -214,21 +214,12 @@ void AMySocketActor::ReceiveData(SOCKET ClientSocket)
                         FMemory::Memcpy(&ReceivedState, Buffer, sizeof(FCharacterState));
                         ReceivedState.PlayerID = static_cast<int32>(ClientSocket);
 
+                        AsyncTask(ENamedThreads::GameThread, [this, ClientSocket, ReceivedState]()
                         {
-                            // 데이터를 ClientStates 맵에 저장
-                            FScopeLock Lock(&ClientSocketsMutex);
-                            ClientStates.FindOrAdd(ClientSocket) = ReceivedState;
-
-                            UE_LOG(LogTemp, Log, TEXT("Updated ClientStates for socket %d: PlayerID=%d, Position(%.2f, %.2f, %.2f), Velocity(%.2f, %.2f, %.2f), AnimationState=%d"),
-                                ClientSocket,
-                                ReceivedState.PlayerID,
-                                ReceivedState.PositionX, ReceivedState.PositionY, ReceivedState.PositionZ,
-                                ReceivedState.VelocityX, ReceivedState.VelocityY, ReceivedState.VelocityZ,
-                                static_cast<int32>(ReceivedState.AnimationState));
-                        }
-
-                        // 클라이언트 소켓 기반으로 처리
-                        SpawnOrUpdateClientCharacter(ClientSocket, ReceivedState);
+                                FScopeLock Lock(&ClientSocketsMutex);
+                                ClientStates.FindOrAdd(ClientSocket) = ReceivedState;
+                                SpawnOrUpdateClientCharacter(ClientSocket, ReceivedState);
+                        });
                     }
                     else
                     {
@@ -380,18 +371,21 @@ void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, c
 
 void AMySocketActor::CloseClientSocket(SOCKET ClientSocket)
 {
-    FScopeLock Lock(&ClientSocketsMutex);
-    if (ClientCharacters.Contains(ClientSocket))
-    {
-        ACharacter* Character = ClientCharacters[ClientSocket];
-        if (Character)
+    AsyncTask(ENamedThreads::GameThread, [this, ClientSocket]()
         {
-            Character->Destroy();
-        }
-        ClientCharacters.Remove(ClientSocket);
-    }
-    ClientSockets.Remove(ClientSocket);
-    closesocket(ClientSocket);
+            FScopeLock Lock(&ClientSocketsMutex);
+            if (ClientCharacters.Contains(ClientSocket))
+            {
+                ACharacter* Character = ClientCharacters[ClientSocket];
+                if (Character)
+                {
+                    Character->Destroy();
+                }
+                ClientCharacters.Remove(ClientSocket);
+            }
+            ClientSockets.Remove(ClientSocket);
+            closesocket(ClientSocket);
+        });
 }
 
 void AMySocketActor::CloseAllClientSockets()
