@@ -27,6 +27,8 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
+	virtual void Tick(float DeltaTime)override;
+	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	
 	//
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category ="Weapon")
@@ -46,13 +48,34 @@ public:
 
 
 	// =========Func=========
+	
+	// Movement
+	void MoveForward(float Value);
+	void MoveRight(float Value);
+	void TurnCamera(float Value);
+	void LookUpCamera(float Value);
+	void TurnCharacter();
 
 	// Attack
 	UFUNCTION(BlueprintCallable, Category="Combat")	
 	void WeaponAttack();
-	
-	// Attack 
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void StartAttack();
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void OnAttackEnd();
+
+
+	// Attack Hit
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	void OnAttackHit();
 	
+
+
+
+	FTimerHandle AttackTimerHandle;
+
+	bool bIsAttacking;
+
+	//UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI")
+	//UAIPerceptionStimuliSourceComponent* StimuliSourceComponent;
 };

@@ -1,8 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
-#include "GameFramework/CharacterMovementComponent.h"
 #include "Cultist_A.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 ACultist_A::ACultist_A()
 {

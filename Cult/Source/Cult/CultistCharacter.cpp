@@ -51,28 +51,44 @@ void ACultistCharacter::PerformRitual()
 	UE_LOG(LogTemp, Warning, TEXT("Performing Ritual..."));
 }
 
-//void ACultistCharacter::StartRitual()
-//{
-//
-//}
-//
-//void ACultistCharacter::StopRitual()
-//{
-//
-//}
+void ACultistCharacter::StartRitual()
+{
+	if (bIsPerformingRitual || !CurrentAltar) return;
+
+	bIsPerformingRitual = true;
+	RitualProgress = 0.0f;
+
+	UE_LOG(LogTemp, Warning, TEXT("Ritual Started"));
+
+	GetCharacterMovement()->DisableMovement();
+
+	// Animation
+}
+
+void ACultistCharacter::StopRitual()
+{
+	if (!bIsPerformingRitual)return;
+
+	bIsPerformingRitual = false;
+
+
+	UE_LOG(LogTemp, Warning, TEXT("Ritual Stopped"));
+
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+}
 
 void ACultistCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	//if (bIsPerformingRitual)
-	//{
-	//	RitualProgress += RitualSpeed * DeltaTime;
+	if (bIsPerformingRitual)
+	{
+		RitualProgress += RitualSpeed * DeltaTime;
 
-	//	if (RitualProgress >= 100.0f) // 의식이 완료되면 중지
-	//	{
-	//		StopRitual();
-	//		UE_LOG(LogTemp, Warning, TEXT("Ritual Completed!"));
-	//	}
-	//}
+		if (RitualProgress >= 100.0f) // 의식이 완료되면 중지
+		{
+			StopRitual();
+			UE_LOG(LogTemp, Warning, TEXT("Ritual Completed!"));
+		}
+	}
 }

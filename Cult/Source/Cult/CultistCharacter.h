@@ -4,9 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
-#include "RitualPerformer.h"
 #include "BaseCharacter.h"
-
+#include "RitualPerformer.h"
 #include "CultistCharacter.generated.h"
 
 
@@ -20,8 +19,10 @@ enum class ESpecialAbility : uint8
 };
 
 
+
+
 UCLASS()
-class CULT_API ACultistCharacter : public ABaseCharacter
+class CULT_API ACultistCharacter : public ABaseCharacter, public RitualPerformer
 {
 	GENERATED_BODY()
 	
@@ -38,8 +39,8 @@ public:
 	void MoveForward(float Value);
 	void MoveRight(float Value);
 
-	// void StartRitual() override;
-	// void StopRitual() override;
+	void StartRitual() override;
+	void StopRitual() override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ritual")
 	bool bIsPerformingRitual;
@@ -53,6 +54,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Abilities")
 	ESpecialAbility SpecialAbility;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ritual")
+	class AAltar* CurrentAltar;
 
 	// ==== Func ====
 	virtual void UseAbility() PURE_VIRTUAL(ACultistCharacter::UseAbility, );
