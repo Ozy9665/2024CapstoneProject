@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Containers/Queue.h"
+#include "ReplicatedPhysicsBlock.h"
 #include <winsock2.h>
 #include "MySocketActor.generated.h"
 
@@ -40,7 +41,7 @@ struct FCharacterState
 };
 
 UCLASS()
-class SPAWNACTOR_API AMySocketActor : public AActor
+class PROJECT2_API AMySocketActor : public AActor
 {
 	GENERATED_BODY()
 	
@@ -61,23 +62,31 @@ private:
 	TArray<SOCKET> ClientSockets;
 	TMap<SOCKET, ACharacter*> ClientCharacters;
 	TMap<SOCKET, FCharacterState> ClientStates;
+	TMap<int32, AReplicatedPhysicsBlock*> BlockMap;
+	TMap<int32, FVector> BlockLocations;
 	FCriticalSection ClientSocketsMutex;
 	bool bIsRunning = false;
+	uint8 playerHeader = 0x00;
+	uint8 objectHeader = 0x01;
 
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	bool InitializeServer(int32 Port);  // 서버 초기화 함수
-	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);  // 소켓 에러 로그 출력 및 소켓 정리 함수
+	bool InitializeServer(int32 Port);
+	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);
 	void AcceptClientAsync();
+	void InitializeBlocks();
 	void SendData(SOCKET TargetSocket);
+	void SendPlayerData(SOCKET TargetSocket);
+	void SendObjectData(SOCKET TargetSocket);
 	FCharacterState GetServerCharacterState();
 	void ReceiveData(SOCKET ClientSocket);
 	void SpawnClientCharacter(SOCKET ClientSocket, const FCharacterState& State);
 	void SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCharacterState& State);
 	void UpdateCharacterState(ACharacter* Character, const FCharacterState& State);
 	void UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCharacterState& State);
+	void UpdateBlockLocation(int32 BlockID, FVector NewLocation);
 	void CloseClientSocket(SOCKET ClientSocket);
 	void CloseAllClientSockets();
 	void CloseServerSocket();

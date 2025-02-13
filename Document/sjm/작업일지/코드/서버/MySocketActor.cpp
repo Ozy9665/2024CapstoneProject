@@ -128,7 +128,32 @@ void AMySocketActor::AcceptClientAsync()
         });
 }
 
-void AMySocketActor::SendData(SOCKET TargetSocket)
+void AMySocketActor::InitializeBlocks()
+{
+    TArray<AActor*> FoundBlocks;
+    UGameplayStatics::GetAllActorsOfClass(GetWorld(), AReplicatedPhysicsBlock::StaticClass(), FoundBlocks);
+
+    int32 BlockIndex = 1;
+    for (AActor* Actor : FoundBlocks)
+    {
+        AReplicatedPhysicsBlock* Block = Cast<AReplicatedPhysicsBlock>(Actor);
+        if (Block)
+        {
+            BlockMap.Add(BlockIndex, Block);
+            UE_LOG(LogTemp, Log, TEXT("블록 등록됨: ID=%d"), BlockIndex);
+            BlockIndex++;
+        }
+    }
+}
+
+
+void AMySocketActor::SendData(SOCKET TargetSocket) 
+{
+    SendPlayerData(TargetSocket);
+    SendObjectData(TargetSocket);
+}
+
+void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
 {
     FScopeLock Lock(&ClientSocketsMutex);
 
@@ -155,8 +180,45 @@ void AMySocketActor::SendData(SOCKET TargetSocket)
         UE_LOG(LogTemp, Error, TEXT("Server character not initialized!"));
     }
 
-    int32 TotalBytes = AllCharacterStates.Num() * sizeof(FCharacterState);
-    send(TargetSocket, reinterpret_cast<const char*>(AllCharacterStates.GetData()), TotalBytes, 0);
+    int32 TotalBytes = sizeof(uint8) + (AllCharacterStates.Num() * sizeof(FCharacterState));
+
+    TArray<uint8> PacketData;
+    PacketData.SetNumUninitialized(TotalBytes);
+
+    memcpy(PacketData.GetData(), &playerHeader, sizeof(uint8));
+    memcpy(PacketData.GetData() + sizeof(uint8), AllCharacterStates.GetData(), AllCharacterStates.Num() * sizeof(FCharacterState));
+
+    send(TargetSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
+}
+
+void AMySocketActor::SendObjectData(SOCKET TargetSocket)
+{
+    FScopeLock Lock(&ClientSocketsMutex);
+
+    if (BlockLocations.Num() == 0)
+    {
+        return; // 전송할 블록이 없으면 종료
+    }
+
+    int32 TotalBytes = sizeof(uint8) + (BlockLocations.Num() * (sizeof(int32) + sizeof(FVector)));
+
+    TArray<uint8> PacketData;
+    PacketData.SetNumUninitialized(TotalBytes);
+
+    memcpy(PacketData.GetData(), &objectHeader, sizeof(uint8));
+
+    int32 Offset = sizeof(uint8);
+    for (auto& Block : BlockLocations)
+    {
+        int32 BlockID = Block.Key;
+        memcpy(PacketData.GetData() + Offset, &BlockID, sizeof(int32));
+        Offset += sizeof(int32);
+
+        memcpy(PacketData.GetData() + Offset, &Block.Value, sizeof(FVector));
+        Offset += sizeof(FVector);
+    }
+
+    send(TargetSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
 }
 
 FCharacterState AMySocketActor::GetServerCharacterState()
@@ -369,6 +431,24 @@ void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, c
     }
 }
 
+void AMySocketActor::UpdateBlockLocation(int32 BlockID, FVector NewLocation)
+{
+    FScopeLock Lock(&ClientSocketsMutex);
+
+    if (AReplicatedPhysicsBlock** BlockPtr = BlockMap.Find(BlockID))
+    {
+        AReplicatedPhysicsBlock* Block = *BlockPtr;
+        Block->SetActorLocation(NewLocation);
+        BlockLocations.FindOrAdd(BlockID) = NewLocation;
+        UE_LOG(LogTemp, Log, TEXT("Update Block: ID=%d -> %s"), BlockID, *NewLocation.ToString());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("No Block ID: %d"), BlockID);
+    }
+}
+
+
 void AMySocketActor::CloseClientSocket(SOCKET ClientSocket)
 {
     AsyncTask(ENamedThreads::GameThread, [this, ClientSocket]()
@@ -431,4 +511,21 @@ void AMySocketActor::Tick(float DeltaTime)
             }
         }
     }
+
+    for (auto& Entry : BlockMap)
+    {
+        int32 BlockID = Entry.Key;
+        TWeakObjectPtr<AReplicatedPhysicsBlock> BlockPtr = Entry.Value;
+
+        if (BlockPtr.IsValid())
+        {
+            AReplicatedPhysicsBlock* Block = BlockPtr.Get();
+            if (Block)
+            {
+                FVector CurrentLocation = Block->GetActorLocation();
+                UpdateBlockLocation(BlockID, CurrentLocation);
+            }
+        }
+    }
+
 }
