@@ -9,7 +9,7 @@
 #include "MySocketClientActor.generated.h"
 
 UCLASS()
-class SPAWNACTOR_API AMySocketClientActor : public AActor
+class PROJECT2_API AMySocketClientActor : public AActor
 {
 	GENERATED_BODY()
 	
@@ -24,15 +24,19 @@ protected:
 
 private:
 	SOCKET ClientSocket;
+	FCriticalSection ReceivedDataMutex;
 	TMap<FString, ACharacter*> SpawnedCharacters;
 	TMap<FString, FCharacterState> ReceivedCharacterStates;
-	FCriticalSection ReceivedDataMutex;
+	TMap<int32, AReplicatedPhysicsBlock*> SyncedBlocks;
+	uint8 playerHeader = 0x00;
+	uint8 objectHeader = 0x01;
 
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
 	bool ConnectToServer(const FString& ServerIP, int32 ServerPort);
+	void InitializeBlocks();
 	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);
 	void ReceiveData();
 	void ProcessReceivedData(char* Buffer, int32 BytesReceived);

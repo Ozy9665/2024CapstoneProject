@@ -27,6 +27,7 @@ void AMySocketActor::BeginPlay()
     {
         UE_LOG(LogTemp, Error, TEXT("Server character not found!"));
     }
+    InitializeBlocks();
     if (InitializeServer(7777))
     {
         UE_LOG(LogTemp, Log, TEXT("Server initialized and waiting for clients..."));
@@ -140,7 +141,7 @@ void AMySocketActor::InitializeBlocks()
         if (Block)
         {
             BlockMap.Add(BlockIndex, Block);
-            UE_LOG(LogTemp, Log, TEXT("ºí·Ï µî·ÏµÊ: ID=%d"), BlockIndex);
+            UE_LOG(LogTemp, Error, TEXT("ºí·Ï µî·ÏµÊ: ID=%d"), BlockIndex);
             BlockIndex++;
         }
     }
@@ -440,7 +441,7 @@ void AMySocketActor::UpdateBlockLocation(int32 BlockID, FVector NewLocation)
         AReplicatedPhysicsBlock* Block = *BlockPtr;
         Block->SetActorLocation(NewLocation);
         BlockLocations.FindOrAdd(BlockID) = NewLocation;
-        UE_LOG(LogTemp, Log, TEXT("Update Block: ID=%d -> %s"), BlockID, *NewLocation.ToString());
+        UE_LOG(LogTemp, Error, TEXT("Update Block: ID=%d -> %s"), BlockID, *NewLocation.ToString());
     }
     else
     {

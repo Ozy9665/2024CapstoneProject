@@ -84,6 +84,24 @@ bool AMySocketClientActor::ConnectToServer(const FString& ServerIP, int32 Server
     return true;
 }
 
+void AMySocketClientActor::InitializeBlocks()
+{
+    TArray<AActor*> FoundBlocks;
+    UGameplayStatics::GetAllActorsOfClass(GetWorld(), AReplicatedPhysicsBlock::StaticClass(), FoundBlocks);
+
+    int32 BlockIndex = 1;
+    for (AActor* Actor : FoundBlocks)
+    {
+        AReplicatedPhysicsBlock* Block = Cast<AReplicatedPhysicsBlock>(Actor);
+        if (Block)
+        {
+            SyncedBlocks.Add(BlockIndex, Block);
+            UE_LOG(LogTemp, Log, TEXT("Block: ID=%d"), BlockIndex);
+            BlockIndex++;
+        }
+    }
+}
+
 void AMySocketClientActor::LogAndCleanupSocketError(const TCHAR* ErrorMessage)
 {
     UE_LOG(LogTemp, Error, TEXT("%s with error: %ld"), ErrorMessage, WSAGetLastError());
@@ -110,7 +128,7 @@ void AMySocketClientActor::ReceiveData()
                 {
                     ProcessReceivedData(Buffer, BytesReceived);
                 }
-                else if (BytesReceived == 0)
+                else if (BytesReceived == 0 || WSAGetLastError() == WSAECONNRESET)
                 {
                     UE_LOG(LogTemp, Log, TEXT("Connection closed by server."));
                     break;
@@ -126,16 +144,70 @@ void AMySocketClientActor::ReceiveData()
 
 void AMySocketClientActor::ProcessReceivedData(char* Buffer, int32 BytesReceived)
 {
-    int32 NumCharacters = BytesReceived / sizeof(FCharacterState);
-    for (int32 i = 0; i < NumCharacters; ++i)
-    {
-        FCharacterState* ReceivedState = reinterpret_cast<FCharacterState*>(Buffer + (i * sizeof(FCharacterState)));
+    int32 Offset = 0;
+    bool bInitializedBlocks = false;
 
-        // 수신된 상태를 저장
-        FScopeLock Lock(&ReceivedDataMutex); // 동기화
-        ReceivedCharacterStates.FindOrAdd(FString::Printf(TEXT("Character_%d"), ReceivedState->PlayerID)) = *ReceivedState;
+    while (Offset < BytesReceived)
+    {
+        uint8 PacketType;
+        memcpy(&PacketType, Buffer + Offset, sizeof(uint8));
+        Offset += sizeof(uint8);
+
+        if (PacketType == playerHeader) // 플레이어 데이터
+        {
+            int32 NumPlayers = (BytesReceived - Offset) / sizeof(FCharacterState);
+            FCharacterState* ReceivedStates = reinterpret_cast<FCharacterState*>(Buffer + Offset);
+
+            for (int32 i = 0; i < NumPlayers; i++)
+            {
+                FCharacterState& State = ReceivedStates[i];
+                FString PlayerID = FString::Printf(TEXT("Player_%d"), State.PlayerID);
+
+                if (ACharacter* Player = SpawnedCharacters.FindRef(PlayerID))
+                {
+                    AsyncTask(ENamedThreads::GameThread, [Player, State]()
+                        {
+                            Player->SetActorLocation(FVector(State.PositionX, State.PositionY, State.PositionZ));
+                            Player->SetActorRotation(FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll));
+                        });
+                }
+            }
+            Offset += NumPlayers * sizeof(FCharacterState);
+        }
+        else if (PacketType == objectHeader) // 블록 데이터
+        {
+            if (!bInitializedBlocks)
+            {
+                InitializeBlocks();
+                bInitializedBlocks = true;
+            }
+            while (Offset < BytesReceived)
+            {
+                int32 BlockID;
+                memcpy(&BlockID, Buffer + Offset, sizeof(int32));
+                Offset += sizeof(int32);
+
+                FVector BlockPos;
+                memcpy(&BlockPos, Buffer + Offset, sizeof(FVector));
+                Offset += sizeof(FVector);
+
+                if (AReplicatedPhysicsBlock* Block = SyncedBlocks.FindRef(BlockID))
+                {
+                    AsyncTask(ENamedThreads::GameThread, [Block, BlockPos]()
+                        {
+                            Block->SetActorLocation(BlockPos);
+                        });
+                }
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
+            break;
+        }
     }
 }
+
 
 void AMySocketClientActor::SpawnCharacter(const FCharacterState& State)
 {
@@ -195,15 +267,6 @@ void AMySocketClientActor::SendData()
             if (BytesSent == SOCKET_ERROR)
             {
                 UE_LOG(LogTemp, Error, TEXT("Send failed with error: %ld"), WSAGetLastError());
-            }
-            else
-            {
-                UE_LOG(LogTemp, Log, TEXT("Sent character state: Position=(%f, %f, %f), Rotation=(%f, %f, %f)"),
-                    CharacterState.PositionX, CharacterState.PositionY, CharacterState.PositionZ,
-                    CharacterState.RotationPitch, CharacterState.RotationYaw, CharacterState.RotationRoll,
-                    CharacterState.VelocityX, CharacterState.VelocityY, CharacterState.VelocityZ,
-                    CharacterState.GroundSpeed,
-                    CharacterState.bIsFalling ? TEXT("true") : TEXT("false"));
             }
         }
         else
