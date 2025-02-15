@@ -2,10 +2,8 @@
 
 
 #include "CultistAIController.h"
-#include"Perception/AIPerceptionComponent.h"
 #include"Perception/AISense_Sight.h"
 #include "BehaviorTree/BlackboardComponent.h"
-#include "Kismet/GameplayStatics.h"
 #include "PoliceCharacter.h"
 
 
@@ -26,27 +24,22 @@ void ACultistAIController::BeginPlay()
 
 	if (AIPerceptionComp)
 	{
-		AIPerceptionComp->OnPerceptionUpdated.AddDynamic(this, &ACultistAIController::OnTargetDetected);
+		AIPerceptionComp->OnTargetPerceptionUpdated.AddDynamic(this, &ACultistAIController::OnTargetDetected);
 	}
-
-	if (!PerceptionComponent)
-	{
-		PerceptionComponent = NewObject<UAIPerceptionComponent>(this);
-		PerceptionComponent->RegisterComponent();
-	}
-
-	FActorPerceptionBlueprintInfo Info;
 }
 
-void ACultistAIController::OnTargetDetected(const TArray<AActor*>& DetectedActors)
+void ACultistAIController::OnTargetDetected(AActor* Actor, FAIStimulus Stimulus)
 {
-	for (AActor* Actor : DetectedActors)
+	if (APoliceCharacter* Police = Cast<APoliceCharacter>(Actor))
 	{
-		APoliceCharacter* Police = Cast<APoliceCharacter>(Actor);
-		if (Police)
+		if (Stimulus.WasSuccessfullySensed())
 		{
 			Blackboard->SetValueAsObject(TEXT("TargetActor"), Police);
-			UE_LOG(LogTemp, Warning, TEXT("PD!"));
+			UE_LOG(LogTemp, Warning, TEXT("Police detected!"));
+		}
+		else {
+			Blackboard->ClearValue(TEXT("TargetActor"));
+			UE_LOG(LogTemp, Warning, TEXT("Police lost!"));
 		}
 	}
 }

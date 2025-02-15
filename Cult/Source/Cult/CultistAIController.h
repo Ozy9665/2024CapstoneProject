@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "AIController.h"
 #include "Perception/AIPerceptionTypes.h"
+#include "Perception/AIPerceptionComponent.h"
 #include "CultistAIController.generated.h"
 
 /**
@@ -29,7 +30,7 @@ private:
 	class UBehaviorTree* BehaviorTree;
 
 	UFUNCTION()
-	void OnTargetDetected(const TArray<AActor*>& DetectedActors);
+	void OnTargetDetected(AActor* Actor, FAIStimulus Stimulus);
 
 	UPROPERTY(VisibleAnywhere, Category="AI")
 	class UAIPerceptionComponent* AIPerceptionComp;
