@@ -147,7 +147,6 @@ void AMySocketActor::InitializeBlocks()
     }
 }
 
-
 void AMySocketActor::SendData(SOCKET TargetSocket) 
 {
     SendPlayerData(TargetSocket);
@@ -441,14 +440,13 @@ void AMySocketActor::UpdateBlockLocation(int32 BlockID, FVector NewLocation)
         AReplicatedPhysicsBlock* Block = *BlockPtr;
         Block->SetActorLocation(NewLocation);
         BlockLocations.FindOrAdd(BlockID) = NewLocation;
-        UE_LOG(LogTemp, Error, TEXT("Update Block: ID=%d -> %s"), BlockID, *NewLocation.ToString());
+        // UE_LOG(LogTemp, Error, TEXT("Update Block: ID=%d -> %s"), BlockID, *NewLocation.ToString());
     }
     else
     {
         UE_LOG(LogTemp, Warning, TEXT("No Block ID: %d"), BlockID);
     }
 }
-
 
 void AMySocketActor::CloseClientSocket(SOCKET ClientSocket)
 {

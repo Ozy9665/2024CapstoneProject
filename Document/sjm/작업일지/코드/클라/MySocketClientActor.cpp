@@ -96,7 +96,7 @@ void AMySocketClientActor::InitializeBlocks()
         if (Block)
         {
             SyncedBlocks.Add(BlockIndex, Block);
-            UE_LOG(LogTemp, Log, TEXT("Block: ID=%d"), BlockIndex);
+            // UE_LOG(LogTemp, Log, TEXT("Block: ID=%d"), BlockIndex);
             BlockIndex++;
         }
     }
@@ -145,7 +145,7 @@ void AMySocketClientActor::ReceiveData()
 void AMySocketClientActor::ProcessReceivedData(char* Buffer, int32 BytesReceived)
 {
     int32 Offset = 0;
-    bool bInitializedBlocks = false;
+    static bool bInitializedBlocks = false;
 
     while (Offset < BytesReceived)
     {
@@ -163,13 +163,9 @@ void AMySocketClientActor::ProcessReceivedData(char* Buffer, int32 BytesReceived
                 FCharacterState& State = ReceivedStates[i];
                 FString PlayerID = FString::Printf(TEXT("Player_%d"), State.PlayerID);
 
-                if (ACharacter* Player = SpawnedCharacters.FindRef(PlayerID))
                 {
-                    AsyncTask(ENamedThreads::GameThread, [Player, State]()
-                        {
-                            Player->SetActorLocation(FVector(State.PositionX, State.PositionY, State.PositionZ));
-                            Player->SetActorRotation(FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll));
-                        });
+                    FScopeLock Lock(&ReceivedDataMutex);
+                    ReceivedCharacterStates.Add(PlayerID, State);
                 }
             }
             Offset += NumPlayers * sizeof(FCharacterState);
@@ -178,7 +174,10 @@ void AMySocketClientActor::ProcessReceivedData(char* Buffer, int32 BytesReceived
         {
             if (!bInitializedBlocks)
             {
-                InitializeBlocks();
+                AsyncTask(ENamedThreads::GameThread, [this]()
+                    {
+                        InitializeBlocks();
+                    });
                 bInitializedBlocks = true;
             }
             while (Offset < BytesReceived)
@@ -207,7 +206,6 @@ void AMySocketClientActor::ProcessReceivedData(char* Buffer, int32 BytesReceived
         }
     }
 }
-
 
 void AMySocketClientActor::SpawnCharacter(const FCharacterState& State)
 {
@@ -247,7 +245,12 @@ void AMySocketClientActor::SpawnCharacter(const FCharacterState& State)
     }
 }
 
-void AMySocketClientActor::SendData()
+void AMySocketClientActor::SendData() {
+    SendPlayerData();
+    SendObjectData();
+}
+
+void AMySocketClientActor::SendPlayerData()
 {
     // 데이터 보내기
     if (ClientSocket != INVALID_SOCKET)
@@ -258,21 +261,57 @@ void AMySocketClientActor::SendData()
         {
             FCharacterState CharacterState = GetCharacterState(PlayerCharacter);
 
-            // 구조체를 바이너리 데이터로 전송
-            char Buffer[sizeof(FCharacterState)];
-            memcpy(Buffer, &CharacterState, sizeof(FCharacterState));
+            TArray<uint8> PacketData;
+            PacketData.SetNumUninitialized(sizeof(uint8) + sizeof(FCharacterState));
 
-            int32 BytesSent = send(ClientSocket, Buffer, sizeof(FCharacterState), 0);
+            uint8 Header = playerHeader;
+            memcpy(PacketData.GetData(), &Header, sizeof(uint8));
+            memcpy(PacketData.GetData() + sizeof(uint8), &CharacterState, sizeof(FCharacterState));
 
+            int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
             if (BytesSent == SOCKET_ERROR)
             {
-                UE_LOG(LogTemp, Error, TEXT("Send failed with error: %ld"), WSAGetLastError());
+                UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
             }
         }
         else
         {
             UE_LOG(LogTemp, Error, TEXT("PlayerCharacter is null."));
         }
+    }
+}
+
+void AMySocketClientActor::SendObjectData()
+{
+    if (ClientSocket == INVALID_SOCKET || SyncedBlocks.Num() == 0)
+    {
+        return;
+    }
+
+    TArray<uint8> PacketData;
+    int32 TotalSize = sizeof(uint8) + (SyncedBlocks.Num() * (sizeof(int32) + sizeof(FVector)));
+    PacketData.SetNumUninitialized(TotalSize);
+
+    uint8 Header = objectHeader;
+    memcpy(PacketData.GetData(), &Header, sizeof(uint8));
+
+    int32 Offset = sizeof(uint8);
+    for (auto& Block : SyncedBlocks)
+    {
+        int32 BlockID = Block.Key;
+        FVector BlockPos = Block.Value->GetActorLocation();
+
+        memcpy(PacketData.GetData() + Offset, &BlockID, sizeof(int32));
+        Offset += sizeof(int32);
+
+        memcpy(PacketData.GetData() + Offset, &BlockPos, sizeof(FVector));
+        Offset += sizeof(FVector);
+    }
+
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
+    if (BytesSent == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("SendBlockData failed with error: %ld"), WSAGetLastError());
     }
 }
 
@@ -310,7 +349,7 @@ FCharacterState AMySocketClientActor::GetCharacterState(ACharacter* PlayerCharac
 }
 
 void AMySocketClientActor::ProcessCharacterUpdates(float DeltaTime)
-{
+{    
     FScopeLock Lock(&ReceivedDataMutex);
 
     for (auto& Pair : ReceivedCharacterStates)
