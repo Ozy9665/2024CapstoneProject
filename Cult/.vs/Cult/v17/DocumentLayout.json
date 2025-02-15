@@ -118,8 +118,7 @@
               "RelativeToolTip": "Source\\Cult\\BTTask_MoveToAltar.cpp",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAABYAAAAvAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-11T10:13:55.864Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-11T10:13:55.864Z"
             },
             {
               "$type": "Document",
@@ -131,8 +130,7 @@
               "RelativeToolTip": "Source\\Cult\\BTTask_MoveToAltar.h",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAABQAAABoAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-11T10:13:55.44Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-11T10:13:55.44Z"
             },
             {
               "$type": "Document",
@@ -144,8 +142,7 @@
               "RelativeToolTip": "Source\\Cult\\BTTask_RunFromPolice.cpp",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAABsAAAAwAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-11T09:40:58.164Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-11T09:40:58.164Z"
             },
             {
               "$type": "Document",
@@ -157,8 +154,7 @@
               "RelativeToolTip": "Source\\Cult\\BTTask_RunFromPolice.h",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAAAsAAAADAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-11T09:40:58.04Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-11T09:40:58.04Z"
             },
             {
               "$type": "Document",
@@ -170,8 +166,7 @@
               "RelativeToolTip": "Source\\Cult\\CultistAIController.h",
               "ViewState": "AQIAAAwAAAAAAAAAAAAAACIAAAAwAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-11T08:38:16.085Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-11T08:38:16.085Z"
             },
             {
               "$type": "Document",
@@ -181,7 +176,7 @@
               "RelativeDocumentMoniker": "Source\\Cult\\PoliceCharacter.cpp",
               "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.cpp",
               "RelativeToolTip": "Source\\Cult\\PoliceCharacter.cpp",
-              "ViewState": "AQIAABYAAAAAAAAAAAAmwCAAAABUAAAA",
+              "ViewState": "AQIAAIIAAAAAAAAAAAAmwJAAAAA/AAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
               "WhenOpened": "2025-02-08T14:34:09.292Z",
               "EditorCaption": ""
@@ -196,8 +191,7 @@
               "RelativeToolTip": "Source\\Cult\\PoliceCharacter.h",
               "ViewState": "AQIAAD8AAAAAAAAAAAAAAEgAAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-08T14:34:08.508Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-08T14:34:08.508Z"
             },
             {
               "$type": "Document",
@@ -209,8 +203,7 @@
               "RelativeToolTip": "Source\\Cult\\CultistCharacter.cpp",
               "ViewState": "AQIAAD8AAAAAAAAAAAAAAFUAAAAsAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-02T15:27:50.987Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-02T15:27:50.987Z"
             },
             {
               "$type": "Document",
@@ -222,8 +215,7 @@
               "RelativeToolTip": "Source\\Cult\\CultistCharacter.h",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAACwAAAA/AAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-02T15:27:50.859Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-02T15:27:50.859Z"
             },
             {
               "$type": "Document",
@@ -235,8 +227,7 @@
               "RelativeToolTip": "Source\\Cult\\BaseCharacter.h",
               "ViewState": "AQIAABsAAAAAAAAAAAAAAC4AAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-02T14:33:45.364Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-02T14:33:45.364Z"
             },
             {
               "$type": "Document",
@@ -248,8 +239,7 @@
               "RelativeToolTip": "Source\\Cult\\CultistAIController.cpp",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAABwAAABiAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-11T08:38:16.452Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-11T08:38:16.452Z"
             },
             {
               "$type": "Document",
@@ -261,8 +251,7 @@
               "RelativeToolTip": "Source\\Cult\\Altar.cpp",
               "ViewState": "AQIAAAwAAAAAAAAAAAAAACoAAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-10T15:19:07.823Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-10T15:19:07.823Z"
             },
             {
               "$type": "Document",
@@ -274,8 +263,7 @@
               "RelativeToolTip": "Source\\Cult\\CultGameMode.cpp",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAAA4AAAABAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-08T14:05:52.385Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-08T14:05:52.385Z"
             },
             {
               "$type": "Document",
@@ -287,8 +275,7 @@
               "RelativeToolTip": "Source\\Cult\\Cultist_C.cpp",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAAA0AAAAdAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-02T16:20:42.447Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-02T16:20:42.447Z"
             },
             {
               "$type": "Document",
@@ -300,8 +287,7 @@
               "RelativeToolTip": "Source\\Cult\\Cultist_C.h",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAAA0AAAABAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-02T16:20:42.37Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-02T16:20:42.37Z"
             },
             {
               "$type": "Document",
@@ -313,8 +299,7 @@
               "RelativeToolTip": "Source\\Cult\\Cultist_B.cpp",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAAA8AAAAsAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-02T16:13:02.694Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-02T16:13:02.694Z"
             },
             {
               "$type": "Document",
@@ -326,8 +311,7 @@
               "RelativeToolTip": "Source\\Cult\\RitualPerformer.cpp",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAAAYAAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-10T14:40:46.938Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-10T14:40:46.938Z"
             },
             {
               "$type": "Document",
@@ -339,8 +323,7 @@
               "RelativeToolTip": "Source\\Cult\\Altar.h",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAABUAAABGAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-10T15:19:07.569Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-10T15:19:07.569Z"
             },
             {
               "$type": "Document",
@@ -352,8 +335,7 @@
               "RelativeToolTip": "Source\\Cult\\Cultist_A.cpp",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAABAAAAABAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-02T15:54:56.148Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-02T15:54:56.148Z"
             },
             {
               "$type": "Document",
@@ -365,8 +347,7 @@
               "RelativeToolTip": "Source\\Cult\\RitualPerformer.h",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAAAkAAAAfAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-10T14:40:46.858Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-10T14:40:46.858Z"
             },
             {
               "$type": "Document",
@@ -378,8 +359,7 @@
               "RelativeToolTip": "Source\\Cult\\Cultist_B.h",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAABAAAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-02T16:13:02.51Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-02T16:13:02.51Z"
             },
             {
               "$type": "Document",
@@ -391,8 +371,7 @@
               "RelativeToolTip": "Source\\Cult\\Cultist_A.h",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAAAYAAAAgAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-02T15:54:55.855Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-02T15:54:55.855Z"
             },
             {
               "$type": "Document",
@@ -404,8 +383,7 @@
               "RelativeToolTip": "Source\\Cult\\BaseCharacter.cpp",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAABwAAAABAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-02T14:33:46.352Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-02T14:33:46.352Z"
             },
             {
               "$type": "Document",
@@ -417,8 +395,7 @@
               "RelativeToolTip": "Source\\Cult\\CultGameMode.h",
               "ViewState": "AQIAAAAAAAAAAAAAAAAAABMAAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-08T14:05:52.206Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-08T14:05:52.206Z"
             }
           ]
         }
