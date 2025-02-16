@@ -23,14 +23,15 @@ APoliceCharacter::APoliceCharacter()
 	AttackCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("AttackCollision"));
 	AttackCollision->SetupAttachment(GetMesh(), TEXT("WeaponSocket")); // 소켓에 위치
 	AttackCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	StimulusComponent = CreateDefaultSubobject<UAIPerceptionStimuliSourceComponent>(TEXT("StimuliSourceComponent"));
+	StimulusComponent->RegisterForSense(TSubclassOf<UAISense>(UAISense_Sight::StaticClass()));
+	StimulusComponent->RegisterWithPerceptionSystem();
 }
 
 void APoliceCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	//StimuliSourceComponent = CreateDefaultSubobject<UAIPerceptionStimuliSourceComponent>(TEXT("StimuliSourceComponent"));
-	//StimuliSourceComponent->RegisterComponent();	// 감지되도록
-	//StimuliSourceComponent->RegisterForSense(UAISense_Sight::StaticClass());	// Sight
 }
 
 void APoliceCharacter::Tick(float DeltaTime)

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "BaseCharacter.h"
 #include"GameFramework/Character.h"
+#include "Perception/AIPerceptionStimuliSourceComponent.h"
 #include "PoliceCharacter.generated.h"
 
 UENUM(BlueprintType)
@@ -76,6 +77,6 @@ public:
 
 	bool bIsAttacking;
 
-	//UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI")
-	//UAIPerceptionStimuliSourceComponent* StimuliSourceComponent;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI")
+	UAIPerceptionStimuliSourceComponent* StimulusComponent;
 };
