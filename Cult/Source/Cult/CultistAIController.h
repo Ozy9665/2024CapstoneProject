@@ -6,6 +6,7 @@
 #include "AIController.h"
 #include "Perception/AIPerceptionTypes.h"
 #include "Perception/AIPerceptionComponent.h"
+#include "Perception/AISenseConfig_Sight.h"
 #include "CultistAIController.generated.h"
 
 /**
@@ -21,8 +22,8 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
-
-	void MoveToTarget(AActor* Target);
+	virtual void OnPossess(APawn* InPawn) override;
+	//void MoveToTarget(AActor* Target);
 
 
 private:
@@ -30,8 +31,11 @@ private:
 	class UBehaviorTree* BehaviorTree;
 
 	UFUNCTION()
-	void OnTargetDetected(AActor* Actor, FAIStimulus Stimulus);
+	void OnTargetDetected(const TArray<AActor*>& DetectedActors);
 
 	UPROPERTY(VisibleAnywhere, Category="AI")
 	class UAIPerceptionComponent* AIPerceptionComp;
+
+	UPROPERTY()
+	UAISenseConfig_Sight* SightConfig;
 };
