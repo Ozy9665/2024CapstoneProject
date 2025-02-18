@@ -25,6 +25,8 @@ ACultistAIController::ACultistAIController()
 	AIPerceptionComp->SetDominantSense(*SightConfig->GetSenseImplementation());
 	AIPerceptionComp->OnPerceptionUpdated.AddDynamic(this, &ACultistAIController::OnTargetDetected);
 
+	bIsTargetVisible = false;
+
 	UAIPerceptionComponent* PerceptionComp = FindComponentByClass<UAIPerceptionComponent>();
 	if (!PerceptionComp)
 	{
@@ -49,16 +51,40 @@ void ACultistAIController::OnPossess(APawn* InPawn)
 
 void ACultistAIController::OnTargetDetected(const TArray<AActor*>& DetectedActors)
 {
+	bool bDetected = false;
+
+
 	for (AActor* Actor : DetectedActors)
 	{
 		if (APoliceCharacter* Police = Cast<APoliceCharacter>(Actor))
 		{
 			Blackboard->SetValueAsObject(TEXT("TargetActor"), Police);
 			UE_LOG(LogTemp, Warning, TEXT("Police detected!"));
-			return;
+
+			GetWorldTimerManager().ClearTimer(ClearTargetHandle);
+
+			bIsTargetVisible = true;
+			bDetected = true;
+			break;
 		}
 	}
+	if (!bDetected && bIsTargetVisible)
+	{
+		OnTargetLost();
+	}
+}
 
+void ACultistAIController::OnTargetLost()
+{
+	UE_LOG(LogTemp, Warning, TEXT("Police Lost, Target will be cleared in 3 seconds.."));
+
+	bIsTargetVisible = false;
+
+	GetWorldTimerManager().SetTimer(ClearTargetHandle, this, &ACultistAIController::ClearTargetActor, 3.0f, false);
+}
+
+void ACultistAIController::ClearTargetActor()
+{
 	Blackboard->ClearValue(TEXT("TargetActor"));
 	UE_LOG(LogTemp, Warning, TEXT("Police lost!"));
 }

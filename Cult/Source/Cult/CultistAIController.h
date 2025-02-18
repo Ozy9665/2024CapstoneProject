@@ -33,9 +33,19 @@ private:
 	UFUNCTION()
 	void OnTargetDetected(const TArray<AActor*>& DetectedActors);
 
+	UFUNCTION()
+	void OnTargetLost();
+
 	UPROPERTY(VisibleAnywhere, Category="AI")
 	class UAIPerceptionComponent* AIPerceptionComp;
 
 	UPROPERTY()
 	UAISenseConfig_Sight* SightConfig;
+
+	// Timer & ClearTarget
+	UFUNCTION()
+	void ClearTargetActor();
+	FTimerHandle ClearTargetHandle;
+
+	bool bIsTargetVisible;
 };
