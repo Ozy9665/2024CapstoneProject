@@ -40,6 +40,7 @@ EBTNodeResult::Type UBTTask_RunFromPolice::ExecuteTask(UBehaviorTreeComponent& O
 		if (NavSys->GetRandomPointInNavigableRadius(RunLocation, 300.0f, NavLocation))
 		{
 			AIController->MoveToLocation(NavLocation.Location);
+			return EBTNodeResult::Succeeded;
 		}
 	}
 

@@ -30,12 +30,18 @@ private:
 	UPROPERTY(EditAnywhere, Category="AI")
 	class UBehaviorTree* BehaviorTree;
 
+	/*
 	UFUNCTION()
 	void OnTargetDetected(const TArray<AActor*>& DetectedActors);
+	*/
 
 	UFUNCTION()
-	void OnTargetLost();
+	void OnTargetDetected(AActor* Actor, FAIStimulus Stimulus);
 
+	/*
+	UFUNCTION()
+	void OnTargetLost();
+	*/
 	UPROPERTY(VisibleAnywhere, Category="AI")
 	class UAIPerceptionComponent* AIPerceptionComp;
 
@@ -48,4 +54,8 @@ private:
 	FTimerHandle ClearTargetHandle;
 
 	bool bIsTargetVisible;
+
+	// find altar
+	UFUNCTION()
+	void FindAndSetNearestAltar();
 };

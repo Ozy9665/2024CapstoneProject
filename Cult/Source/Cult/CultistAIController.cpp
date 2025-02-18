@@ -2,8 +2,10 @@
 
 
 #include "CultistAIController.h"
+#include "Perception/AIPerceptionComponent.h"
 #include"Perception/AISense_Sight.h"
 #include "BehaviorTree/BlackboardComponent.h"
+#include "Altar.h"
 #include "Kismet/GameplayStatics.h"
 #include "PoliceCharacter.h"
 
@@ -23,7 +25,8 @@ ACultistAIController::ACultistAIController()
 
 	AIPerceptionComp->ConfigureSense(*SightConfig);
 	AIPerceptionComp->SetDominantSense(*SightConfig->GetSenseImplementation());
-	AIPerceptionComp->OnPerceptionUpdated.AddDynamic(this, &ACultistAIController::OnTargetDetected);
+	//AIPerceptionComp->OnPerceptionUpdated.AddDynamic(this, &ACultistAIController::OnTargetDetected);
+	AIPerceptionComp->OnTargetPerceptionUpdated.AddDynamic(this, &ACultistAIController::OnTargetDetected);
 
 	bIsTargetVisible = false;
 
@@ -42,6 +45,7 @@ void ACultistAIController::BeginPlay()
 {
 	Super::BeginPlay();
 	RunBehaviorTree(BehaviorTree);
+	FindAndSetNearestAltar();
 }
 
 void ACultistAIController::OnPossess(APawn* InPawn)
@@ -49,6 +53,7 @@ void ACultistAIController::OnPossess(APawn* InPawn)
 	Super::OnPossess(InPawn);
 }
 
+/*
 void ACultistAIController::OnTargetDetected(const TArray<AActor*>& DetectedActors)
 {
 	bool bDetected = false;
@@ -73,7 +78,28 @@ void ACultistAIController::OnTargetDetected(const TArray<AActor*>& DetectedActor
 		OnTargetLost();
 	}
 }
+*/
 
+void ACultistAIController::OnTargetDetected(AActor* Actor, FAIStimulus Stimulus)
+{
+	APoliceCharacter* Police = Cast<APoliceCharacter>(Actor);
+	if (!Police) return;
+
+	if (Stimulus.WasSuccessfullySensed()) // °æÂûÀÌ °¨ÁöµÊ
+	{
+		Blackboard->SetValueAsObject(TEXT("TargetActor"), Police);
+		UE_LOG(LogTemp, Warning, TEXT("Police detected!"));
+
+		// ±âÁ¸ Å¸ÀÌ¸Ó Á¦°Å
+		GetWorldTimerManager().ClearTimer(ClearTargetHandle);
+	}
+	else // °æÂûÀÌ »ç¶óÁü
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Police lost! Clearing target in 3 seconds..."));
+		GetWorldTimerManager().SetTimer(ClearTargetHandle, this, &ACultistAIController::ClearTargetActor, 3.0f, false);
+	}
+}
+/*
 void ACultistAIController::OnTargetLost()
 {
 	UE_LOG(LogTemp, Warning, TEXT("Police Lost, Target will be cleared in 3 seconds.."));
@@ -82,9 +108,47 @@ void ACultistAIController::OnTargetLost()
 
 	GetWorldTimerManager().SetTimer(ClearTargetHandle, this, &ACultistAIController::ClearTargetActor, 3.0f, false);
 }
+*/
 
 void ACultistAIController::ClearTargetActor()
 {
 	Blackboard->ClearValue(TEXT("TargetActor"));
 	UE_LOG(LogTemp, Warning, TEXT("Police lost!"));
+}
+
+void ACultistAIController::FindAndSetNearestAltar()
+{
+	TArray<AActor*> FoundAltars;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AAltar::StaticClass(), FoundAltars);
+
+	if (FoundAltars.Num() == 0)
+	{
+		UE_LOG(LogTemp, Error, TEXT("No Altar found in the level"));
+		return;
+	}
+
+	AActor* NearestAltar = nullptr;
+	float NearestDistance = FLT_MAX;
+	FVector AI_Location = GetPawn()->GetActorLocation();
+
+
+	for (AActor* Altar : FoundAltars)
+	{
+		float Distance = FVector::Dist(AI_Location, Altar->GetActorLocation());
+
+		if (Distance < NearestDistance)
+		{
+			NearestDistance = Distance;
+			NearestAltar = Altar;
+		}
+	}
+
+	if (NearestAltar)
+	{
+		FVector AltarLocation = NearestAltar->GetActorLocation();
+		Blackboard->SetValueAsVector(TEXT("AltarLocation"), AltarLocation);
+
+		UE_LOG(LogTemp, Warning, TEXT("Nearest AltarLocation Set: X=%f, Y=%f, Z=%f"),
+			AltarLocation.X, AltarLocation.Y, AltarLocation.Z);
+	}
 }
