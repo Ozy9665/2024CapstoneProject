@@ -197,7 +197,7 @@ void AMySocketClientActor::ProcessReceivedData(char* Buffer, int32 BytesReceived
                             Block->SetActorLocation(BlockPos);
                         });
                 }
-            }
+            }  
         }
         else
         {
@@ -247,7 +247,7 @@ void AMySocketClientActor::SpawnCharacter(const FCharacterState& State)
 
 void AMySocketClientActor::SendData() {
     SendPlayerData();
-    SendObjectData();
+    //SendObjectData();
 }
 
 void AMySocketClientActor::SendPlayerData()
@@ -349,7 +349,7 @@ FCharacterState AMySocketClientActor::GetCharacterState(ACharacter* PlayerCharac
 }
 
 void AMySocketClientActor::ProcessCharacterUpdates(float DeltaTime)
-{    
+{
     FScopeLock Lock(&ReceivedDataMutex);
 
     for (auto& Pair : ReceivedCharacterStates)

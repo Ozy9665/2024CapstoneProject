@@ -141,16 +141,17 @@ void AMySocketActor::InitializeBlocks()
         if (Block)
         {
             BlockMap.Add(BlockIndex, Block);
-            UE_LOG(LogTemp, Error, TEXT("블록 등록됨: ID=%d"), BlockIndex);
+            BlockLocations.Add(BlockIndex, Block->GetActorLocation());
+            UE_LOG(LogTemp, Error, TEXT("Added Block: ID=%d"), BlockIndex);
             BlockIndex++;
         }
     }
 }
 
-void AMySocketActor::SendData(SOCKET TargetSocket) 
+void AMySocketActor::SendData(SOCKET TargetSocket)
 {
     SendPlayerData(TargetSocket);
-    SendObjectData(TargetSocket);
+    //SendObjectData(TargetSocket);
 }
 
 void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
@@ -197,6 +198,7 @@ void AMySocketActor::SendObjectData(SOCKET TargetSocket)
 
     if (BlockLocations.Num() == 0)
     {
+        UE_LOG(LogTemp, Log, TEXT("send object returned"));
         return; // 전송할 블록이 없으면 종료
     }
 
@@ -219,6 +221,15 @@ void AMySocketActor::SendObjectData(SOCKET TargetSocket)
     }
 
     send(TargetSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
+
+    for (const auto& Block : BlockLocations)
+    {
+        int32 BlockID = Block.Key;
+        FVector Location = Block.Value;
+
+        UE_LOG(LogTemp, Log, TEXT("BlockID=%d, Location=(%.2f, %.2f, %.2f)"),
+            BlockID, Location.X, Location.Y, Location.Z);
+    }
 }
 
 FCharacterState AMySocketActor::GetServerCharacterState()
@@ -265,55 +276,88 @@ void AMySocketActor::ReceiveData(SOCKET ClientSocket)
         {
             while (true)
             {
-                char Buffer[sizeof(FCharacterState)];
-                int32 BytesReceived = recv(ClientSocket, Buffer, sizeof(Buffer), 0);
+                const int32 BufferSize = 1024 * sizeof(FCharacterState);
+                char Buffer[BufferSize];
+
+                int32 BytesReceived = recv(ClientSocket, Buffer, BufferSize, 0);
 
                 if (BytesReceived > 0)
                 {
-                    if (BytesReceived == sizeof(FCharacterState))
-                    {
-                        FCharacterState ReceivedState;
-                        FMemory::Memcpy(&ReceivedState, Buffer, sizeof(FCharacterState));
-                        ReceivedState.PlayerID = static_cast<int32>(ClientSocket);
-
-                        AsyncTask(ENamedThreads::GameThread, [this, ClientSocket, ReceivedState]()
-                        {
-                                FScopeLock Lock(&ClientSocketsMutex);
-                                ClientStates.FindOrAdd(ClientSocket) = ReceivedState;
-                                SpawnOrUpdateClientCharacter(ClientSocket, ReceivedState);
-                        });
-                    }
-                    else
-                    {
-                        UE_LOG(LogTemp, Warning, TEXT("Unexpected data size from socket %d: %d"), ClientSocket, BytesReceived);
-                    }
+                    ProcessReceiveData(ClientSocket, Buffer, BytesReceived);
                 }
                 else if (BytesReceived == 0 || WSAGetLastError() == WSAECONNRESET)
                 {
-                    UE_LOG(LogTemp, Log, TEXT("Client disconnected. Socket: %d"), ClientSocket);
-
-                    {
-                        FScopeLock Lock(&ClientSocketsMutex);
-                        ClientStates.Remove(ClientSocket);
-                    }
-
-                    CloseClientSocket(ClientSocket);
+                    UE_LOG(LogTemp, Log, TEXT("Connection closed by server."));
                     break;
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Error, TEXT("recv failed on socket %d with error: %ld"), ClientSocket, WSAGetLastError());
-
-                    {
-                        FScopeLock Lock(&ClientSocketsMutex);
-                        ClientStates.Remove(ClientSocket);
-                    }
-
-                    CloseClientSocket(ClientSocket);
+                    UE_LOG(LogTemp, Error, TEXT("recv failed with error: %ld"), WSAGetLastError());
                     break;
                 }
             }
         });
+}
+
+void AMySocketActor::ProcessReceiveData(SOCKET ClientSocket, char* Buffer, int32 BytesReceived)
+{
+    int32 Offset = 0;
+    while (Offset < BytesReceived) {
+        uint8 PacketType;
+        memcpy(&PacketType, Buffer + Offset, sizeof(uint8));
+        Offset += sizeof(uint8);
+
+        if (PacketType == playerHeader) // 플레이어 데이터
+        {
+            if (Offset + sizeof(FCharacterState) > BytesReceived) {
+                UE_LOG(LogTemp, Warning, TEXT("Unexpected player data size from socket for player %d: %d"), ClientSocket, BytesReceived);
+                break;
+            }
+
+            FCharacterState ReceivedState;
+            memcpy(&ReceivedState, Buffer + Offset, sizeof(FCharacterState));
+            Offset += sizeof(FCharacterState);
+
+            ReceivedState.PlayerID = static_cast<int32>(ClientSocket);
+
+            AsyncTask(ENamedThreads::GameThread, [this, ClientSocket, ReceivedState]()
+                {
+                    FScopeLock Lock(&ClientSocketsMutex);
+                    ClientStates.FindOrAdd(ClientSocket) = ReceivedState;
+                    SpawnOrUpdateClientCharacter(ClientSocket, ReceivedState);
+                });            
+        }
+
+        else if (PacketType == objectHeader)
+        {
+            if (Offset + sizeof(int32) + sizeof(FVector) > BytesReceived) {
+                UE_LOG(LogTemp, Warning, TEXT("Unexpected player data size from socket for object %d: %d"), ClientSocket, BytesReceived);
+                break;
+            }
+
+            int32 BlockID;
+            memcpy(&BlockID, Buffer + Offset, sizeof(int32));
+            Offset += sizeof(int32);
+
+            FVector BlockPos;
+            memcpy(&BlockPos, Buffer + Offset, sizeof(FVector));
+            Offset += sizeof(FVector);
+
+            // 블록 위치 업데이트
+            if (AReplicatedPhysicsBlock* Block = BlockMap.FindRef(BlockID))
+            {
+                AsyncTask(ENamedThreads::GameThread, [this, BlockID, Block, BlockPos]()
+                    {
+                        Block->SetActorLocation(BlockPos);
+                        BlockLocations.FindOrAdd(BlockID) = BlockPos;
+                    });
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
+        }
+    }
 }
 
 void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCharacterState& State)
@@ -431,23 +475,6 @@ void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, c
     }
 }
 
-void AMySocketActor::UpdateBlockLocation(int32 BlockID, FVector NewLocation)
-{
-    FScopeLock Lock(&ClientSocketsMutex);
-
-    if (AReplicatedPhysicsBlock** BlockPtr = BlockMap.Find(BlockID))
-    {
-        AReplicatedPhysicsBlock* Block = *BlockPtr;
-        Block->SetActorLocation(NewLocation);
-        BlockLocations.FindOrAdd(BlockID) = NewLocation;
-        // UE_LOG(LogTemp, Error, TEXT("Update Block: ID=%d -> %s"), BlockID, *NewLocation.ToString());
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("No Block ID: %d"), BlockID);
-    }
-}
-
 void AMySocketActor::CloseClientSocket(SOCKET ClientSocket)
 {
     AsyncTask(ENamedThreads::GameThread, [this, ClientSocket]()
@@ -510,21 +537,4 @@ void AMySocketActor::Tick(float DeltaTime)
             }
         }
     }
-
-    for (auto& Entry : BlockMap)
-    {
-        int32 BlockID = Entry.Key;
-        TWeakObjectPtr<AReplicatedPhysicsBlock> BlockPtr = Entry.Value;
-
-        if (BlockPtr.IsValid())
-        {
-            AReplicatedPhysicsBlock* Block = BlockPtr.Get();
-            if (Block)
-            {
-                FVector CurrentLocation = Block->GetActorLocation();
-                UpdateBlockLocation(BlockID, CurrentLocation);
-            }
-        }
-    }
-
 }

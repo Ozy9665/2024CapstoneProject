@@ -9,7 +9,7 @@
 #include "MySocketClientActor.generated.h"
 
 UCLASS()
-class PROJECT2_API AMySocketClientActor : public AActor
+class SPAWNACTOR_API AMySocketClientActor : public AActor
 {
 	GENERATED_BODY()
 	
