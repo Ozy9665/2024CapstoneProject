@@ -39,7 +39,8 @@ public:
 	void InitializeBlocks();
 	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);
 	void ReceiveData();
-	void ProcessReceivedData(char* Buffer, int32 BytesReceived);
+	void ProcessPlayerData(char* Buffer, int32 BytesReceived);
+	void ProcessObjectData(char* Buffer, int32 BytesReceived);
 	void SpawnCharacter(const FCharacterState& State);
 	void SendData();
 	void SendPlayerData();

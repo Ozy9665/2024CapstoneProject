@@ -151,7 +151,7 @@ void AMySocketActor::InitializeBlocks()
 void AMySocketActor::SendData(SOCKET TargetSocket)
 {
     SendPlayerData(TargetSocket);
-    //SendObjectData(TargetSocket);
+    SendObjectData(TargetSocket);
 }
 
 void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
@@ -207,29 +207,22 @@ void AMySocketActor::SendObjectData(SOCKET TargetSocket)
     TArray<uint8> PacketData;
     PacketData.SetNumUninitialized(TotalBytes);
 
+    uint8 Header = objectHeader;
     memcpy(PacketData.GetData(), &objectHeader, sizeof(uint8));
 
     int32 Offset = sizeof(uint8);
     for (auto& Block : BlockLocations)
     {
         int32 BlockID = Block.Key;
-        memcpy(PacketData.GetData() + Offset, &BlockID, sizeof(int32));
+        memcpy(PacketData.GetData() + Offset, &Block.Key, sizeof(int32));
         Offset += sizeof(int32);
 
-        memcpy(PacketData.GetData() + Offset, &Block.Value, sizeof(FVector));
+        FVector Location = Block.Value;
+        memcpy(PacketData.GetData() + Offset, &Location, sizeof(FVector));
         Offset += sizeof(FVector);
     }
 
     send(TargetSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
-
-    for (const auto& Block : BlockLocations)
-    {
-        int32 BlockID = Block.Key;
-        FVector Location = Block.Value;
-
-        UE_LOG(LogTemp, Log, TEXT("BlockID=%d, Location=(%.2f, %.2f, %.2f)"),
-            BlockID, Location.X, Location.Y, Location.Z);
-    }
 }
 
 FCharacterState AMySocketActor::GetServerCharacterState()
@@ -276,14 +269,29 @@ void AMySocketActor::ReceiveData(SOCKET ClientSocket)
         {
             while (true)
             {
-                const int32 BufferSize = 1024 * sizeof(FCharacterState);
+                const int32 BufferSize = 1024; // 충분한 버퍼 크기 설정
                 char Buffer[BufferSize];
 
                 int32 BytesReceived = recv(ClientSocket, Buffer, BufferSize, 0);
 
                 if (BytesReceived > 0)
                 {
-                    ProcessReceiveData(ClientSocket, Buffer, BytesReceived);
+                    // 패킷의 첫 바이트는 헤더, 이후는 데이터
+                    uint8 PacketType;
+                    memcpy(&PacketType, Buffer, sizeof(uint8));
+
+                    if (PacketType == playerHeader)
+                    {
+                        ProcessPlayerData(ClientSocket, Buffer, BytesReceived);
+                    }
+                    else if (PacketType == objectHeader)
+                    {
+                        ProcessObjectData(ClientSocket, Buffer, BytesReceived);
+                    }
+                    else
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
+                    }
                 }
                 else if (BytesReceived == 0 || WSAGetLastError() == WSAECONNRESET)
                 {
@@ -299,66 +307,63 @@ void AMySocketActor::ReceiveData(SOCKET ClientSocket)
         });
 }
 
-void AMySocketActor::ProcessReceiveData(SOCKET ClientSocket, char* Buffer, int32 BytesReceived)
+void AMySocketActor::ProcessPlayerData(SOCKET ClientSocket, char* Buffer, int32 BytesReceived)
 {
-    int32 Offset = 0;
-    while (Offset < BytesReceived) {
-        uint8 PacketType;
-        memcpy(&PacketType, Buffer + Offset, sizeof(uint8));
-        Offset += sizeof(uint8);
+    if (BytesReceived < sizeof(uint8) + sizeof(FCharacterState))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Received player data packet size mismatch."));
+        return;
+    }    
 
-        if (PacketType == playerHeader) // 플레이어 데이터
+    FCharacterState ReceivedState;
+    FMemory::Memcpy(&ReceivedState, Buffer + sizeof(uint8), sizeof(FCharacterState));
+
+    ReceivedState.PlayerID = static_cast<int32>(ClientSocket);
+
+    AsyncTask(ENamedThreads::GameThread, [this, ClientSocket, ReceivedState]()
         {
-            if (Offset + sizeof(FCharacterState) > BytesReceived) {
-                UE_LOG(LogTemp, Warning, TEXT("Unexpected player data size from socket for player %d: %d"), ClientSocket, BytesReceived);
-                break;
-            }
+            FScopeLock Lock(&ClientSocketsMutex);
+            ClientStates.FindOrAdd(ClientSocket) = ReceivedState;
+            SpawnOrUpdateClientCharacter(ClientSocket, ReceivedState);
+        });
+}
 
-            FCharacterState ReceivedState;
-            memcpy(&ReceivedState, Buffer + Offset, sizeof(FCharacterState));
-            Offset += sizeof(FCharacterState);
+void AMySocketActor::ProcessObjectData(SOCKET ClientSocket, char* Buffer, int32 BytesReceived) {
+    int32 Offset = sizeof(uint8);
 
-            ReceivedState.PlayerID = static_cast<int32>(ClientSocket);
+    while (Offset + sizeof(int32) + sizeof(FVector) <= BytesReceived) // 안전 체크
+    {
+        int32 BlockID;
+        memcpy(&BlockID, Buffer + Offset, sizeof(int32));
+        Offset += sizeof(int32);
 
-            AsyncTask(ENamedThreads::GameThread, [this, ClientSocket, ReceivedState]()
+        FVector BlockPos;
+        memcpy(&BlockPos, Buffer + Offset, sizeof(FVector));
+        Offset += sizeof(FVector);
+
+        if (AReplicatedPhysicsBlock* Block = BlockMap.FindRef(BlockID))
+        {
+            AsyncTask(ENamedThreads::GameThread, [this, BlockID, Block, BlockPos]()
                 {
-                    FScopeLock Lock(&ClientSocketsMutex);
-                    ClientStates.FindOrAdd(ClientSocket) = ReceivedState;
-                    SpawnOrUpdateClientCharacter(ClientSocket, ReceivedState);
-                });            
-        }
+                    Block->SetActorLocation(BlockPos);
 
-        else if (PacketType == objectHeader)
-        {
-            if (Offset + sizeof(int32) + sizeof(FVector) > BytesReceived) {
-                UE_LOG(LogTemp, Warning, TEXT("Unexpected player data size from socket for object %d: %d"), ClientSocket, BytesReceived);
-                break;
-            }
-
-            int32 BlockID;
-            memcpy(&BlockID, Buffer + Offset, sizeof(int32));
-            Offset += sizeof(int32);
-
-            FVector BlockPos;
-            memcpy(&BlockPos, Buffer + Offset, sizeof(FVector));
-            Offset += sizeof(FVector);
-
-            // 블록 위치 업데이트
-            if (AReplicatedPhysicsBlock* Block = BlockMap.FindRef(BlockID))
-            {
-                AsyncTask(ENamedThreads::GameThread, [this, BlockID, Block, BlockPos]()
+                    // **BlockLocations 갱신**
                     {
-                        Block->SetActorLocation(BlockPos);
+                        FScopeLock Lock(&ClientSocketsMutex);
                         BlockLocations.FindOrAdd(BlockID) = BlockPos;
-                    });
-            }
+                    }
+
+                    UE_LOG(LogTemp, Log, TEXT("Updated Block: ID=%d, New Location=(%.2f, %.2f, %.2f)"),
+                        BlockID, BlockPos.X, BlockPos.Y, BlockPos.Z);
+                });
         }
         else
         {
-            UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
+            UE_LOG(LogTemp, Warning, TEXT("Block ID not found: %d"), BlockID);
         }
     }
 }
+
 
 void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCharacterState& State)
 {

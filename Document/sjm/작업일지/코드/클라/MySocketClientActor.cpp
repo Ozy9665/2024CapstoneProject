@@ -96,7 +96,9 @@ void AMySocketClientActor::InitializeBlocks()
         if (Block)
         {
             SyncedBlocks.Add(BlockIndex, Block);
-            // UE_LOG(LogTemp, Log, TEXT("Block: ID=%d"), BlockIndex);
+            FVector BlockLocation = Block->GetActorLocation();
+            UE_LOG(LogTemp, Log, TEXT("Block: ID=%d, Location=(%.2f, %.2f, %.2f)"),
+                BlockIndex, BlockLocation.X, BlockLocation.Y, BlockLocation.Z);
             BlockIndex++;
         }
     }
@@ -119,19 +121,34 @@ void AMySocketClientActor::ReceiveData()
         {
             while (true)
             {
-                const int32 BufferSize = 1024 * sizeof(FCharacterState);
+                const int32 BufferSize = 1024;
                 char Buffer[BufferSize];
 
                 int32 BytesReceived = recv(ClientSocket, Buffer, BufferSize, 0);
 
                 if (BytesReceived > 0)
                 {
-                    ProcessReceivedData(Buffer, BytesReceived);
+                    // 패킷의 첫 바이트는 헤더, 이후는 데이터
+                    uint8 PacketType;
+                    memcpy(&PacketType, Buffer, sizeof(uint8));
+
+                    if (PacketType == playerHeader)
+                    {
+                        ProcessPlayerData(Buffer, BytesReceived);
+                    }
+                    else if (PacketType == objectHeader)
+                    {
+                        ProcessObjectData(Buffer, BytesReceived);
+                    }
+                    else
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
+                    }
                 }
                 else if (BytesReceived == 0 || WSAGetLastError() == WSAECONNRESET)
                 {
                     UE_LOG(LogTemp, Log, TEXT("Connection closed by server."));
-                    break;
+                    break;  
                 }
                 else
                 {
@@ -142,112 +159,67 @@ void AMySocketClientActor::ReceiveData()
         });
 }
 
-void AMySocketClientActor::ProcessReceivedData(char* Buffer, int32 BytesReceived)
+void AMySocketClientActor::ProcessPlayerData(char* Buffer, int32 BytesReceived)
 {
-    int32 Offset = 0;
-    static bool bInitializedBlocks = false;
+    int32 Offset = sizeof(uint8); // 첫 바이트(헤더) 이후 데이터 처리
 
-    while (Offset < BytesReceived)
+    while (Offset + sizeof(FCharacterState) <= BytesReceived) // 안전 체크
     {
-        uint8 PacketType;
-        memcpy(&PacketType, Buffer + Offset, sizeof(uint8));
-        Offset += sizeof(uint8);
+        FCharacterState ReceivedState;
+        memcpy(&ReceivedState, Buffer + Offset, sizeof(FCharacterState));
 
-        if (PacketType == playerHeader) // 플레이어 데이터
+        FString PlayerID = FString::Printf(TEXT("Character_%d"), ReceivedState.PlayerID);
+
         {
-            int32 NumPlayers = (BytesReceived - Offset) / sizeof(FCharacterState);
-            FCharacterState* ReceivedStates = reinterpret_cast<FCharacterState*>(Buffer + Offset);
-
-            for (int32 i = 0; i < NumPlayers; i++)
-            {
-                FCharacterState& State = ReceivedStates[i];
-                FString PlayerID = FString::Printf(TEXT("Player_%d"), State.PlayerID);
-
-                {
-                    FScopeLock Lock(&ReceivedDataMutex);
-                    ReceivedCharacterStates.Add(PlayerID, State);
-                }
-            }
-            Offset += NumPlayers * sizeof(FCharacterState);
+            FScopeLock Lock(&ReceivedDataMutex);
+            ReceivedCharacterStates.Add(PlayerID, ReceivedState);
         }
-        else if (PacketType == objectHeader) // 블록 데이터
-        {
-            if (!bInitializedBlocks)
-            {
-                AsyncTask(ENamedThreads::GameThread, [this]()
-                    {
-                        InitializeBlocks();
-                    });
-                bInitializedBlocks = true;
-            }
-            while (Offset < BytesReceived)
-            {
-                int32 BlockID;
-                memcpy(&BlockID, Buffer + Offset, sizeof(int32));
-                Offset += sizeof(int32);
 
-                FVector BlockPos;
-                memcpy(&BlockPos, Buffer + Offset, sizeof(FVector));
-                Offset += sizeof(FVector);
-
-                if (AReplicatedPhysicsBlock* Block = SyncedBlocks.FindRef(BlockID))
-                {
-                    AsyncTask(ENamedThreads::GameThread, [Block, BlockPos]()
-                        {
-                            Block->SetActorLocation(BlockPos);
-                        });
-                }
-            }  
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
-            break;
-        }
+        Offset += sizeof(FCharacterState);
     }
 }
 
-void AMySocketClientActor::SpawnCharacter(const FCharacterState& State)
-{
-    // PlayerID를 기반으로 고유 키 생성
-    FString CharacterKey = FString::Printf(TEXT("Character_%d"), State.PlayerID);
+void AMySocketClientActor::ProcessObjectData(char* Buffer, int32 BytesReceived) {
+    static bool bInitializedBlocks = false;
 
-    // 이미 캐릭터가 존재하면 아무 작업도 하지 않음
-    if (SpawnedCharacters.Contains(CharacterKey))
+    if (!bInitializedBlocks)
     {
+        AsyncTask(ENamedThreads::GameThread, [this]()
+            {
+                InitializeBlocks();
+            });
+        bInitializedBlocks = true;
         return;
     }
-    FActorSpawnParameters SpawnParams;
-    SpawnParams.Owner = this;
-    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-    UClass* BP_ClientCharacter = LoadClass<ACharacter>(
-        nullptr, TEXT("/Game/Characters/Mannequins/Meshes/BP_ClientCharacter.BP_ClientCharacter_C"));
-
-    if (BP_ClientCharacter)
+    int32 Offset = sizeof(uint8);
+    while (Offset < BytesReceived)
     {
-        ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
-            BP_ClientCharacter,
-            FVector(State.PositionX, State.PositionY, State.PositionZ),
-            FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll),
-            SpawnParams
-        );
-        if (NewCharacter)
+        
+        while (Offset < BytesReceived)
         {
-            SpawnedCharacters.Add(CharacterKey, NewCharacter);
-            UE_LOG(LogTemp, Log, TEXT("Spawned new character for PlayerID=%d at Position=(%f, %f, %f)"),
-                State.PlayerID, State.PositionX, State.PositionY, State.PositionZ);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), State.PlayerID);
+            int32 BlockID;
+            memcpy(&BlockID, Buffer + Offset, sizeof(int32));
+            Offset += sizeof(int32);
+
+            FVector BlockPos;
+            memcpy(&BlockPos, Buffer + Offset, sizeof(FVector));
+            Offset += sizeof(FVector);
+
+            if (AReplicatedPhysicsBlock* Block = SyncedBlocks.FindRef(BlockID))
+            {
+                AsyncTask(ENamedThreads::GameThread, [Block, BlockPos]()
+                    {
+                        Block->SetActorLocation(BlockPos);
+                    });
+            }
         }
     }
 }
 
 void AMySocketClientActor::SendData() {
     SendPlayerData();
-    //SendObjectData();
+    SendObjectData();
 }
 
 void AMySocketClientActor::SendPlayerData()
@@ -283,13 +255,15 @@ void AMySocketClientActor::SendPlayerData()
 
 void AMySocketClientActor::SendObjectData()
 {
-    if (ClientSocket == INVALID_SOCKET || SyncedBlocks.Num() == 0)
+    if (SyncedBlocks.Num() == 0)
     {
+        UE_LOG(LogTemp, Log, TEXT("send object returned"));
         return;
     }
 
-    TArray<uint8> PacketData;
     int32 TotalSize = sizeof(uint8) + (SyncedBlocks.Num() * (sizeof(int32) + sizeof(FVector)));
+
+    TArray<uint8> PacketData;
     PacketData.SetNumUninitialized(TotalSize);
 
     uint8 Header = objectHeader;
@@ -299,20 +273,15 @@ void AMySocketClientActor::SendObjectData()
     for (auto& Block : SyncedBlocks)
     {
         int32 BlockID = Block.Key;
-        FVector BlockPos = Block.Value->GetActorLocation();
-
         memcpy(PacketData.GetData() + Offset, &BlockID, sizeof(int32));
         Offset += sizeof(int32);
 
+        FVector BlockPos = Block.Value->GetActorLocation();
         memcpy(PacketData.GetData() + Offset, &BlockPos, sizeof(FVector));
         Offset += sizeof(FVector);
     }
 
     int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
-    if (BytesSent == SOCKET_ERROR)
-    {
-        UE_LOG(LogTemp, Error, TEXT("SendBlockData failed with error: %ld"), WSAGetLastError());
-    }
 }
 
 FCharacterState AMySocketClientActor::GetCharacterState(ACharacter* PlayerCharacter)
@@ -354,7 +323,7 @@ void AMySocketClientActor::ProcessCharacterUpdates(float DeltaTime)
 
     for (auto& Pair : ReceivedCharacterStates)
     {
-        const FString& CharacterKey = Pair.Key;
+        const FString& CharacterKey = FString::Printf(TEXT("Character_%d"), Pair.Value.PlayerID);
         const FCharacterState& State = Pair.Value;
 
         if (ACharacter* Character = SpawnedCharacters.FindRef(CharacterKey))
@@ -432,6 +401,45 @@ void AMySocketClientActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInsta
         double GroundSpeed = static_cast<double>(FVector(State.VelocityX, State.VelocityY, 0.0f).Size());
         FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(GroundSpeedProperty);
         DoubleProp->SetPropertyValue_InContainer(AnimInstance, GroundSpeed);
+    }
+}
+
+void AMySocketClientActor::SpawnCharacter(const FCharacterState& State)
+{
+    // PlayerID를 기반으로 고유 키 생성
+    FString CharacterKey = FString::Printf(TEXT("Character_%d"), State.PlayerID);
+
+    // 이미 캐릭터가 존재하면 아무 작업도 하지 않음
+    if (SpawnedCharacters.Contains(CharacterKey))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Character already exists: %s"), *CharacterKey);
+        return;
+    }
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Owner = this;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+    UClass* BP_ClientCharacter = LoadClass<ACharacter>(
+        nullptr, TEXT("/Game/Characters/Mannequins/Meshes/BP_ClientCharacter.BP_ClientCharacter_C"));
+
+    if (BP_ClientCharacter)
+    {
+        ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
+            BP_ClientCharacter,
+            FVector(State.PositionX, State.PositionY, State.PositionZ),
+            FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll),
+            SpawnParams
+        );
+        if (NewCharacter)
+        {
+            SpawnedCharacters.Add(CharacterKey, NewCharacter);
+            UE_LOG(LogTemp, Log, TEXT("Spawned new character for PlayerID=%d at Position=(%f, %f, %f)"),
+                State.PlayerID, State.PositionX, State.PositionY, State.PositionZ);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), State.PlayerID);
+        }
     }
 }
 
