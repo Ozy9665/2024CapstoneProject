@@ -38,10 +38,12 @@ void AAltar::BeginPlay()
 void AAltar::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
-	
-	if (ACultistCharacter* Cultist = Cast<ACultistCharacter>(OtherActor))
+	ACultistCharacter* Cultist = Cast<ACultistCharacter>(OtherActor);
+	if (Cultist)
 	{
+		Cultist->SetCurrentAltar(this);
 		bPlayerInRange = true;
+		UE_LOG(LogTemp, Warning, TEXT("Cultist entered the altar area"));
 	}
 }
 
@@ -50,9 +52,12 @@ void AAltar::OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherActo
 {
 
 	// ¶°³¯ ¶§
-	if (ACultistCharacter* Cultist = Cast<ACultistCharacter>(OtherActor))
+	ACultistCharacter* Cultist = Cast<ACultistCharacter>(OtherActor);
+	if (Cultist)
 	{
+		Cultist->SetCurrentAltar(nullptr);
 		bPlayerInRange = false;
+		UE_LOG(LogTemp, Warning, TEXT("Cultist left the altar area"));
 	}
 }
 

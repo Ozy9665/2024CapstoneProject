@@ -27,7 +27,8 @@ void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
 	PlayerInputComponent->BindAxis("MoveForward", this, &ACultistCharacter::MoveForward);
-	PlayerInputComponent->BindAxis("MoveForward", this, &ACultistCharacter::MoveRight);
+	PlayerInputComponent->BindAxis("MoveRight", this, &ACultistCharacter::MoveRight);
+	PlayerInputComponent->BindAction("PerformRitual", IE_Pressed, this, &ACultistCharacter::StartRitual);
 }
 
 void ACultistCharacter::MoveForward(float Value)
@@ -48,16 +49,30 @@ void ACultistCharacter::MoveRight(float Value)
 
 void ACultistCharacter::PerformRitual()
 {
+	if (!bIsPerformingRitual) return;
+	RitualProgress += RitualSpeed;
+
 	UE_LOG(LogTemp, Warning, TEXT("Performing Ritual..."));
+
+	// Check 100%
+	if (RitualProgress >= 100.0f)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Ritual Completed!"));
+	}
+	StopRitual();
 }
 
 void ACultistCharacter::StartRitual()
 {
-	if (bIsPerformingRitual || !CurrentAltar) return;
+	if (bIsPerformingRitual || !CurrentAltar) { 
+		UE_LOG(LogTemp, Warning, TEXT("No altar Here!"));
+		return;
+	}
 
 	bIsPerformingRitual = true;
-	RitualProgress = 0.0f;
 
+	
+	GetWorld()->GetTimerManager().SetTimer(RitualTimerHandle, this, &ACultistCharacter::PerformRitual, 1.0f, true);
 	UE_LOG(LogTemp, Warning, TEXT("Ritual Started"));
 
 	GetCharacterMovement()->DisableMovement();
@@ -70,6 +85,7 @@ void ACultistCharacter::StopRitual()
 	if (!bIsPerformingRitual)return;
 
 	bIsPerformingRitual = false;
+	GetWorld()->GetTimerManager().ClearTimer(RitualTimerHandle);
 
 
 	UE_LOG(LogTemp, Warning, TEXT("Ritual Stopped"));
@@ -80,15 +96,24 @@ void ACultistCharacter::StopRitual()
 void ACultistCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
-	if (bIsPerformingRitual)
-	{
-		RitualProgress += RitualSpeed * DeltaTime;
-
-		if (RitualProgress >= 100.0f) // 의식이 완료되면 중지
-		{
-			StopRitual();
-			UE_LOG(LogTemp, Warning, TEXT("Ritual Completed!"));
-		}
-	}
 }
+
+void ACultistCharacter::SetCurrentAltar(AAltar* Altar)
+{
+	CurrentAltar = Altar;
+}
+
+void ACultistCharacter::TakeDamage(float DamageAmount)
+{
+	StopRitual();
+	UE_LOG(LogTemp, Warning, TEXT("You've Been Hit. Ritual Stopped"));
+}
+
+
+
+// 이동 시 중단 but 이동불가로 설정
+/*
+void ACultistCharacter::MoveForward(float Value)
+{
+	if (Value != 0.0f) StopRitual();
+}*/

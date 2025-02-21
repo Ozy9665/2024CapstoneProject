@@ -42,21 +42,27 @@ public:
 	void StartRitual() override;
 	void StopRitual() override;
 
+	// 의식중 여부
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ritual")
-	bool bIsPerformingRitual;
+	bool bIsPerformingRitual = false;
+	
+	// 현재 제단
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual")
+	class AAltar* CurrentAltar = nullptr;
+
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual")
-	float RitualProgress;
+	float RitualProgress = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual")
-	float RitualSpeed;
+	float RitualSpeed = 10.0f;
+
 
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Abilities")
 	ESpecialAbility SpecialAbility;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ritual")
-	class AAltar* CurrentAltar;
+	FTimerHandle RitualTimerHandle;
 
 	// ==== Func ====
 	virtual void UseAbility() PURE_VIRTUAL(ACultistCharacter::UseAbility, );
@@ -64,4 +70,9 @@ public:
 	// Gauge Up
 	UFUNCTION(BlueprintCallable, Category="Ritual")
 	void PerformRitual();
+
+	void SetCurrentAltar(AAltar* Altar);	// 현재 제단 설정
+	
+	// 데미지 처리
+	virtual void TakeDamage(float DamageAmount) override;
 };
