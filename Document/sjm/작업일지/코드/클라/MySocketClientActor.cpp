@@ -32,6 +32,7 @@ void AMySocketClientActor::BeginPlay()
     {
         UE_LOG(LogTemp, Log, TEXT("Connected to server!"));
         ReceiveData();  // 데이터 수신 시작
+        InitializeBlocks();
     }
     else
     {
@@ -180,46 +181,25 @@ void AMySocketClientActor::ProcessPlayerData(char* Buffer, int32 BytesReceived)
 }
 
 void AMySocketClientActor::ProcessObjectData(char* Buffer, int32 BytesReceived) {
-    static bool bInitializedBlocks = false;
-
-    if (!bInitializedBlocks)
-    {
-        AsyncTask(ENamedThreads::GameThread, [this]()
-            {
-                InitializeBlocks();
-            });
-        bInitializedBlocks = true;
-        return;
-    }
-
     int32 Offset = sizeof(uint8);
-    while (Offset < BytesReceived)
+    int32 BlockID;
+    FVector NewLocation;
+
+    memcpy(&BlockID, Buffer + Offset, sizeof(int32));
+    Offset += sizeof(int32);
+    memcpy(&NewLocation, Buffer + Offset, sizeof(FVector));
+
+    if (AReplicatedPhysicsBlock* Block = SyncedBlocks.FindRef(BlockID))
     {
-        
-        while (Offset < BytesReceived)
-        {
-            int32 BlockID;
-            memcpy(&BlockID, Buffer + Offset, sizeof(int32));
-            Offset += sizeof(int32);
-
-            FVector BlockPos;
-            memcpy(&BlockPos, Buffer + Offset, sizeof(FVector));
-            Offset += sizeof(FVector);
-
-            if (AReplicatedPhysicsBlock* Block = SyncedBlocks.FindRef(BlockID))
+        AsyncTask(ENamedThreads::GameThread, [this, Block, NewLocation]()
             {
-                AsyncTask(ENamedThreads::GameThread, [Block, BlockPos]()
-                    {
-                        Block->SetActorLocation(BlockPos);
-                    });
-            }
-        }
-    }
-}
+                FVector InterpolatedLocation = FMath::VInterpTo(Block->GetActorLocation(), NewLocation, GetWorld()->GetDeltaSeconds(), 5.0f);
+                Block->SetActorLocation(InterpolatedLocation);
+            });
 
-void AMySocketClientActor::SendData() {
-    SendPlayerData();
-    SendObjectData();
+        UE_LOG(LogTemp, Log, TEXT("Client updated BlockID=%d, InterpolatedLocation=(%.2f, %.2f, %.2f)"),
+            BlockID, NewLocation.X, NewLocation.Y, NewLocation.Z);
+    }
 }
 
 void AMySocketClientActor::SendPlayerData()
@@ -253,35 +233,27 @@ void AMySocketClientActor::SendPlayerData()
     }
 }
 
-void AMySocketClientActor::SendObjectData()
+void AMySocketClientActor::SendObjectData(int32 BlockID, FVector NewLocation)
 {
-    if (SyncedBlocks.Num() == 0)
+    if (ClientSocket != INVALID_SOCKET)
     {
-        UE_LOG(LogTemp, Log, TEXT("send object returned"));
-        return;
+        struct FObjectMoveRequestPacket
+        {
+            uint8 Header;
+            int32 BlockID;
+            FVector Location;
+        };
+
+        FObjectMoveRequestPacket Packet;
+        Packet.Header = objectHeader; // 새로운 패킷 타입 추가
+        Packet.BlockID = BlockID;
+        Packet.Location = NewLocation;
+
+        send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(FObjectMoveRequestPacket), 0);
+
+        UE_LOG(LogTemp, Log, TEXT("Sent move request for BlockID=%d, NewLocation=(%.2f, %.2f, %.2f)"),
+            BlockID, NewLocation.X, NewLocation.Y, NewLocation.Z);
     }
-
-    int32 TotalSize = sizeof(uint8) + (SyncedBlocks.Num() * (sizeof(int32) + sizeof(FVector)));
-
-    TArray<uint8> PacketData;
-    PacketData.SetNumUninitialized(TotalSize);
-
-    uint8 Header = objectHeader;
-    memcpy(PacketData.GetData(), &Header, sizeof(uint8));
-
-    int32 Offset = sizeof(uint8);
-    for (auto& Block : SyncedBlocks)
-    {
-        int32 BlockID = Block.Key;
-        memcpy(PacketData.GetData() + Offset, &BlockID, sizeof(int32));
-        Offset += sizeof(int32);
-
-        FVector BlockPos = Block.Value->GetActorLocation();
-        memcpy(PacketData.GetData() + Offset, &BlockPos, sizeof(FVector));
-        Offset += sizeof(FVector);
-    }
-
-    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
 }
 
 FCharacterState AMySocketClientActor::GetCharacterState(ACharacter* PlayerCharacter)
@@ -447,6 +419,6 @@ void AMySocketClientActor::SpawnCharacter(const FCharacterState& State)
 void AMySocketClientActor::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
-    SendData();
+    SendPlayerData();
     ProcessCharacterUpdates(DeltaTime);
 }

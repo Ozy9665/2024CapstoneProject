@@ -77,9 +77,8 @@ public:
 	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);
 	void AcceptClientAsync();
 	void InitializeBlocks();
-	void SendData(SOCKET TargetSocket);
 	void SendPlayerData(SOCKET TargetSocket);
-	void SendObjectData(SOCKET TargetSocket);
+	void SendObjectData(int32 BlockID, FVector NewLocation);
 	FCharacterState GetServerCharacterState();
 	void ReceiveData(SOCKET ClientSocket);
 	void ProcessPlayerData(SOCKET ClientSocket, char* Buffer, int32 BytesReceived);
@@ -91,4 +90,7 @@ public:
 	void CloseClientSocket(SOCKET ClientSocket);
 	void CloseAllClientSockets();
 	void CloseServerSocket();
+
+	UPROPERTY()
+	bool bIsServer = true;
 };

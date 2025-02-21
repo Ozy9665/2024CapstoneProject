@@ -140,18 +140,14 @@ void AMySocketActor::InitializeBlocks()
         AReplicatedPhysicsBlock* Block = Cast<AReplicatedPhysicsBlock>(Actor);
         if (Block)
         {
+            Block->SetOwner(this);
+            Block->SetBlockID(BlockIndex);
             BlockMap.Add(BlockIndex, Block);
             BlockLocations.Add(BlockIndex, Block->GetActorLocation());
             UE_LOG(LogTemp, Error, TEXT("Added Block: ID=%d"), BlockIndex);
             BlockIndex++;
         }
     }
-}
-
-void AMySocketActor::SendData(SOCKET TargetSocket)
-{
-    SendPlayerData(TargetSocket);
-    SendObjectData(TargetSocket);
 }
 
 void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
@@ -192,37 +188,30 @@ void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
     send(TargetSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
 }
 
-void AMySocketActor::SendObjectData(SOCKET TargetSocket)
+void AMySocketActor::SendObjectData(int32 BlockID, FVector NewLocation)
 {
     FScopeLock Lock(&ClientSocketsMutex);
 
-    if (BlockLocations.Num() == 0)
+    if (BlockMap.Contains(BlockID)) // 유효한 블록인지 확인
     {
-        UE_LOG(LogTemp, Log, TEXT("send object returned"));
-        return; // 전송할 블록이 없으면 종료
+        int32 TotalBytes = sizeof(uint8) + sizeof(int32) + sizeof(FVector);
+        TArray<uint8> PacketData;
+        PacketData.SetNumUninitialized(TotalBytes);
+
+        memcpy(PacketData.GetData(), &objectHeader, sizeof(uint8));
+        memcpy(PacketData.GetData() + sizeof(uint8), &BlockID, sizeof(int32));
+        memcpy(PacketData.GetData() + sizeof(uint8) + sizeof(int32), &NewLocation, sizeof(FVector));
+
+        for (SOCKET ClientSocket : ClientSockets)
+        {
+            if (ClientSocket != INVALID_SOCKET)
+            {
+                send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
+            }
+        }
+        UE_LOG(LogTemp, Log, TEXT("send BlockID=%d, NewLocation=(%.2f, %.2f, %.2f)"),
+            BlockID, NewLocation.X, NewLocation.Y, NewLocation.Z);
     }
-
-    int32 TotalBytes = sizeof(uint8) + (BlockLocations.Num() * (sizeof(int32) + sizeof(FVector)));
-
-    TArray<uint8> PacketData;
-    PacketData.SetNumUninitialized(TotalBytes);
-
-    uint8 Header = objectHeader;
-    memcpy(PacketData.GetData(), &objectHeader, sizeof(uint8));
-
-    int32 Offset = sizeof(uint8);
-    for (auto& Block : BlockLocations)
-    {
-        int32 BlockID = Block.Key;
-        memcpy(PacketData.GetData() + Offset, &Block.Key, sizeof(int32));
-        Offset += sizeof(int32);
-
-        FVector Location = Block.Value;
-        memcpy(PacketData.GetData() + Offset, &Location, sizeof(FVector));
-        Offset += sizeof(FVector);
-    }
-
-    send(TargetSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
 }
 
 FCharacterState AMySocketActor::GetServerCharacterState()
@@ -329,41 +318,34 @@ void AMySocketActor::ProcessPlayerData(SOCKET ClientSocket, char* Buffer, int32 
 }
 
 void AMySocketActor::ProcessObjectData(SOCKET ClientSocket, char* Buffer, int32 BytesReceived) {
-    int32 Offset = sizeof(uint8);
-
-    while (Offset + sizeof(int32) + sizeof(FVector) <= BytesReceived) // 안전 체크
+    if (BytesReceived != sizeof(uint8) + sizeof(int32) + sizeof(FVector))
     {
-        int32 BlockID;
-        memcpy(&BlockID, Buffer + Offset, sizeof(int32));
-        Offset += sizeof(int32);
+        UE_LOG(LogTemp, Warning, TEXT("Invalid move request packet size."));
+        return;
+    }
+    
+    int32 Offset = sizeof(uint8);
+    int32 BlockID;
+    FVector NewLocation;
+    
+    memcpy(&BlockID, Buffer + Offset, sizeof(int32));
+    Offset += sizeof(int32);
+    memcpy(&NewLocation, Buffer + Offset, sizeof(FVector));
 
-        FVector BlockPos;
-        memcpy(&BlockPos, Buffer + Offset, sizeof(FVector));
-        Offset += sizeof(FVector);
+    if (AReplicatedPhysicsBlock* Block = BlockMap.FindRef(BlockID))
+    {
+        AsyncTask(ENamedThreads::GameThread, [this, BlockID, Block, NewLocation]()
+            {
+                Block->SetActorLocation(NewLocation); // **서버에서 위치를 변경**
+                BlockLocations.FindOrAdd(BlockID) = NewLocation;
 
-        if (AReplicatedPhysicsBlock* Block = BlockMap.FindRef(BlockID))
-        {
-            AsyncTask(ENamedThreads::GameThread, [this, BlockID, Block, BlockPos]()
-                {
-                    Block->SetActorLocation(BlockPos);
+                UE_LOG(LogTemp, Log, TEXT("Server updated BlockID=%d, NewLocation=(%.2f, %.2f, %.2f)"),
+                    BlockID, NewLocation.X, NewLocation.Y, NewLocation.Z);
 
-                    // **BlockLocations 갱신**
-                    {
-                        FScopeLock Lock(&ClientSocketsMutex);
-                        BlockLocations.FindOrAdd(BlockID) = BlockPos;
-                    }
-
-                    UE_LOG(LogTemp, Log, TEXT("Updated Block: ID=%d, New Location=(%.2f, %.2f, %.2f)"),
-                        BlockID, BlockPos.X, BlockPos.Y, BlockPos.Z);
-                });
-        }
-        else
-        {
-            UE_LOG(LogTemp, Warning, TEXT("Block ID not found: %d"), BlockID);
-        }
+                SendObjectData(BlockID, NewLocation);
+            });
     }
 }
-
 
 void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCharacterState& State)
 {
@@ -538,7 +520,7 @@ void AMySocketActor::Tick(float DeltaTime)
         {
             if (ClientSocket != INVALID_SOCKET)
             {
-                SendData(ClientSocket);
+                SendPlayerData(ClientSocket);
             }
         }
     }
