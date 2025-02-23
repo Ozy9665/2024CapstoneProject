@@ -30,19 +30,32 @@ EBTNodeResult::Type UBTTask_RunFromPolice::ExecuteTask(UBehaviorTreeComponent& O
 	// Run
 	FVector PoliceLocation = PoliceActor->GetActorLocation();
 	FVector CultistLocation = Cultist->GetActorLocation();						
+	
+	// 이전 도망 위치
+	static FVector LastRunLocation = FVector::ZeroVector;	
+
 	FVector RunDirection = (CultistLocation - PoliceLocation).GetSafeNormal();	// GetSafe(Opposite)
 	FVector RunLocation = CultistLocation + (RunDirection * 500.0f);			// 500 back
 
-	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
-	if (NavSys)
-	{
-		FNavLocation NavLocation;
-		if (NavSys->GetRandomPointInNavigableRadius(RunLocation, 300.0f, NavLocation))
-		{
-			AIController->MoveToLocation(NavLocation.Location);
-			return EBTNodeResult::Succeeded;
-		}
-	}
 
+	// 네비게이션 시스템 가져오기
+	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	
+	if (FVector::Dist(LastRunLocation, RunLocation) > 300.0f)
+	{
+		LastRunLocation = RunLocation;
+		if (NavSys)
+		{
+			FNavLocation NavLocation;
+			// 막히지 않는 RunLocation 근처 300.0f 반경 위치 찾기
+			if (NavSys->GetRandomPointInNavigableRadius(RunLocation, 300.0f, NavLocation))
+			{
+				AIController->MoveToLocation(NavLocation.Location);
+				return EBTNodeResult::Succeeded;
+			}
+		}
+
+	}
+	
 	return EBTNodeResult::Succeeded;
 }

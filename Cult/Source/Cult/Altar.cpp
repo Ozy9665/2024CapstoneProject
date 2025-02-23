@@ -4,6 +4,7 @@
 #include "Altar.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/BoxComponent.h"
+#include "UObject/ConstructorHelpers.h"
 #include "CultistCharacter.h"
 
 // Sets default values
@@ -25,6 +26,14 @@ AAltar::AAltar()
 	CollisionComp->OnComponentBeginOverlap.AddDynamic(this, &AAltar::OnOverlapBegin);
 	CollisionComp->OnComponentEndOverlap.AddDynamic(this, &AAltar::OnOverlapEnd);
 
+	// 메쉬 설정
+	//static ConstructorHelpers::FObjectFinder<UStaticMesh> AltarMesh(TEXT("StaticMesh'/Game/Cult_Custom/Modeling/altar5.altar5'"));
+	//if (AltarMesh.Succeeded())
+	//{
+	//	MeshComp->SetStaticMesh(AltarMesh.Object);
+	//}
+
+
 	bPlayerInRange = false;
 }
 
@@ -33,6 +42,16 @@ void AAltar::BeginPlay()
 {
 	Super::BeginPlay();
 	
+	UStaticMesh* MeshAsset = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), nullptr, TEXT("StaticMesh'/Game/Cult_Custom/Modeling/altar5.altar5'")));
+	if (MeshAsset)
+	{
+		MeshComp->SetStaticMesh(MeshAsset);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("StaticLoadObject failed to load StaticMesh!"));
+	}
+
 }
 
 void AAltar::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
