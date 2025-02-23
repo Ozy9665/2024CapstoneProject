@@ -143,7 +143,7 @@ void AMySocketActor::InitializeBlocks()
             Block->SetOwner(this);
             Block->SetBlockID(BlockIndex);
             BlockMap.Add(BlockIndex, Block);
-            BlockLocations.Add(BlockIndex, Block->GetActorLocation());
+            BlockTransforms.Add(BlockIndex, Block->GetActorTransform());
             UE_LOG(LogTemp, Error, TEXT("Added Block: ID=%d"), BlockIndex);
             BlockIndex++;
         }
@@ -188,19 +188,19 @@ void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
     send(TargetSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
 }
 
-void AMySocketActor::SendObjectData(int32 BlockID, FVector NewLocation)
+void AMySocketActor::SendObjectData(int32 BlockID, FTransform NewTransform)
 {
     FScopeLock Lock(&ClientSocketsMutex);
 
     if (BlockMap.Contains(BlockID)) // 유효한 블록인지 확인
     {
-        int32 TotalBytes = sizeof(uint8) + sizeof(int32) + sizeof(FVector);
+        int32 TotalBytes = sizeof(uint8) + sizeof(int32) + sizeof(FTransform);
         TArray<uint8> PacketData;
         PacketData.SetNumUninitialized(TotalBytes);
 
         memcpy(PacketData.GetData(), &objectHeader, sizeof(uint8));
         memcpy(PacketData.GetData() + sizeof(uint8), &BlockID, sizeof(int32));
-        memcpy(PacketData.GetData() + sizeof(uint8) + sizeof(int32), &NewLocation, sizeof(FVector));
+        memcpy(PacketData.GetData() + sizeof(uint8) + sizeof(int32), &NewTransform, sizeof(FTransform));
 
         for (SOCKET ClientSocket : ClientSockets)
         {
@@ -209,8 +209,11 @@ void AMySocketActor::SendObjectData(int32 BlockID, FVector NewLocation)
                 send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
             }
         }
-        UE_LOG(LogTemp, Log, TEXT("send BlockID=%d, NewLocation=(%.2f, %.2f, %.2f)"),
-            BlockID, NewLocation.X, NewLocation.Y, NewLocation.Z);
+        UE_LOG(LogTemp, Log, TEXT("send BlockID=%d, NewTransform=(%.2f, %.2f, %.2f), Rotation=(%.2f, %.2f, %.2f)"),
+            BlockID, NewTransform.GetLocation().X, NewTransform.GetLocation().Y, NewTransform.GetLocation().Z,
+            NewTransform.GetRotation().Rotator().Pitch,
+            NewTransform.GetRotation().Rotator().Yaw,
+            NewTransform.GetRotation().Rotator().Roll);
     }
 }
 
@@ -273,10 +276,6 @@ void AMySocketActor::ReceiveData(SOCKET ClientSocket)
                     {
                         ProcessPlayerData(ClientSocket, Buffer, BytesReceived);
                     }
-                    else if (PacketType == objectHeader)
-                    {
-                        ProcessObjectData(ClientSocket, Buffer, BytesReceived);
-                    }
                     else
                     {
                         UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
@@ -318,7 +317,7 @@ void AMySocketActor::ProcessPlayerData(SOCKET ClientSocket, char* Buffer, int32 
 }
 
 void AMySocketActor::ProcessObjectData(SOCKET ClientSocket, char* Buffer, int32 BytesReceived) {
-    if (BytesReceived != sizeof(uint8) + sizeof(int32) + sizeof(FVector))
+    if (BytesReceived != sizeof(uint8) + sizeof(int32) + sizeof(FTransform))
     {
         UE_LOG(LogTemp, Warning, TEXT("Invalid move request packet size."));
         return;
@@ -326,23 +325,27 @@ void AMySocketActor::ProcessObjectData(SOCKET ClientSocket, char* Buffer, int32 
     
     int32 Offset = sizeof(uint8);
     int32 BlockID;
-    FVector NewLocation;
+    FTransform NewTransform;
     
     memcpy(&BlockID, Buffer + Offset, sizeof(int32));
     Offset += sizeof(int32);
-    memcpy(&NewLocation, Buffer + Offset, sizeof(FVector));
+    memcpy(&NewTransform, Buffer + Offset, sizeof(FTransform));
 
     if (AReplicatedPhysicsBlock* Block = BlockMap.FindRef(BlockID))
     {
-        AsyncTask(ENamedThreads::GameThread, [this, BlockID, Block, NewLocation]()
+        AsyncTask(ENamedThreads::GameThread, [this, BlockID, Block, NewTransform]()
             {
-                Block->SetActorLocation(NewLocation); // **서버에서 위치를 변경**
-                BlockLocations.FindOrAdd(BlockID) = NewLocation;
+                Block->SetActorTransform(NewTransform); // **서버에서 위치를 변경**
+                BlockTransforms.FindOrAdd(BlockID) = NewTransform;
 
-                UE_LOG(LogTemp, Log, TEXT("Server updated BlockID=%d, NewLocation=(%.2f, %.2f, %.2f)"),
-                    BlockID, NewLocation.X, NewLocation.Y, NewLocation.Z);
+                UE_LOG(LogTemp, Log, TEXT("Server updated BlockID=%d, NewLocation=(%.2f, %.2f, %.2f), Rotation=(%.2f, %.2f, %.2f)"),
+                    BlockID,
+                    NewTransform.GetLocation().X, NewTransform.GetLocation().Y, NewTransform.GetLocation().Z,
+                    NewTransform.GetRotation().Rotator().Pitch,
+                    NewTransform.GetRotation().Rotator().Yaw,
+                    NewTransform.GetRotation().Rotator().Roll);
 
-                SendObjectData(BlockID, NewLocation);
+                SendObjectData(BlockID, NewTransform);
             });
     }
 }

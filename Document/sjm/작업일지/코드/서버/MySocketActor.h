@@ -63,7 +63,7 @@ private:
 	TMap<SOCKET, ACharacter*> ClientCharacters;
 	TMap<SOCKET, FCharacterState> ClientStates;
 	TMap<int32, AReplicatedPhysicsBlock*> BlockMap;
-	TMap<int32, FVector> BlockLocations;
+	TMap<int32, FTransform> BlockTransforms;
 	FCriticalSection ClientSocketsMutex;
 	bool bIsRunning = false;
 	uint8 playerHeader = 0x00;
@@ -78,7 +78,7 @@ public:
 	void AcceptClientAsync();
 	void InitializeBlocks();
 	void SendPlayerData(SOCKET TargetSocket);
-	void SendObjectData(int32 BlockID, FVector NewLocation);
+	void SendObjectData(int32 BlockID, FTransform NewTransform);
 	FCharacterState GetServerCharacterState();
 	void ReceiveData(SOCKET ClientSocket);
 	void ProcessPlayerData(SOCKET ClientSocket, char* Buffer, int32 BytesReceived);

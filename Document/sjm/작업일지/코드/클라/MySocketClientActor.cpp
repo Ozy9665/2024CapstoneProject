@@ -97,9 +97,15 @@ void AMySocketClientActor::InitializeBlocks()
         if (Block)
         {
             SyncedBlocks.Add(BlockIndex, Block);
-            FVector BlockLocation = Block->GetActorLocation();
-            UE_LOG(LogTemp, Log, TEXT("Block: ID=%d, Location=(%.2f, %.2f, %.2f)"),
-                BlockIndex, BlockLocation.X, BlockLocation.Y, BlockLocation.Z);
+            FTransform BlockTransform = Block->GetActorTransform();
+            
+            UE_LOG(LogTemp, Log, TEXT("Block: ID=%d, Location=(%.2f, %.2f, %.2f), Rotation=(%.2f, %.2f, %.2f)"),
+                BlockIndex,
+                BlockTransform.GetLocation().X, BlockTransform.GetLocation().Y, BlockTransform.GetLocation().Z,
+                BlockTransform.GetRotation().Rotator().Pitch,
+                BlockTransform.GetRotation().Rotator().Yaw,
+                BlockTransform.GetRotation().Rotator().Roll);
+
             BlockIndex++;
         }
     }
@@ -182,23 +188,43 @@ void AMySocketClientActor::ProcessPlayerData(char* Buffer, int32 BytesReceived)
 
 void AMySocketClientActor::ProcessObjectData(char* Buffer, int32 BytesReceived) {
     int32 Offset = sizeof(uint8);
+
+    if (BytesReceived < Offset + sizeof(int32) + sizeof(FTransform)) {
+        UE_LOG(LogTemp, Error, TEXT("Invalid object data packet received."));
+        return;
+    }
+
     int32 BlockID;
-    FVector NewLocation;
+    FTransform NewTransform;
 
     memcpy(&BlockID, Buffer + Offset, sizeof(int32));
     Offset += sizeof(int32);
-    memcpy(&NewLocation, Buffer + Offset, sizeof(FVector));
+    memcpy(&NewTransform, Buffer + Offset, sizeof(FTransform));
 
     if (AReplicatedPhysicsBlock* Block = SyncedBlocks.FindRef(BlockID))
     {
-        AsyncTask(ENamedThreads::GameThread, [this, Block, NewLocation]()
+        AsyncTask(ENamedThreads::GameThread, [this, Block, NewTransform]()
             {
-                FVector InterpolatedLocation = FMath::VInterpTo(Block->GetActorLocation(), NewLocation, GetWorld()->GetDeltaSeconds(), 5.0f);
+                FVector InterpolatedLocation = FMath::VInterpTo(
+                    Block->GetActorLocation(), NewTransform.GetLocation(), GetWorld()->GetDeltaSeconds(), 5.0f);
+
+                FRotator InterpolatedRotation = FMath::RInterpTo(
+                    Block->GetActorRotation(), NewTransform.GetRotation().Rotator(), GetWorld()->GetDeltaSeconds(), 5.0f);
+
                 Block->SetActorLocation(InterpolatedLocation);
+                Block->SetActorRotation(InterpolatedRotation);
             });
 
-        UE_LOG(LogTemp, Log, TEXT("Client updated BlockID=%d, InterpolatedLocation=(%.2f, %.2f, %.2f)"),
-            BlockID, NewLocation.X, NewLocation.Y, NewLocation.Z);
+        UE_LOG(LogTemp, Log, TEXT("Client updated BlockID=%d, InterpolatedLocation=(%.2f, %.2f, %.2f), InterpolatedRotation=(%.2f, %.2f, %.2f)"),
+            BlockID,
+            NewTransform.GetLocation().X, NewTransform.GetLocation().Y, NewTransform.GetLocation().Z,
+            NewTransform.GetRotation().Rotator().Pitch,
+            NewTransform.GetRotation().Rotator().Yaw,
+            NewTransform.GetRotation().Rotator().Roll);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("BlockID %d not found in SyncedBlocks."), BlockID);
     }
 }
 
@@ -230,29 +256,6 @@ void AMySocketClientActor::SendPlayerData()
         {
             UE_LOG(LogTemp, Error, TEXT("PlayerCharacter is null."));
         }
-    }
-}
-
-void AMySocketClientActor::SendObjectData(int32 BlockID, FVector NewLocation)
-{
-    if (ClientSocket != INVALID_SOCKET)
-    {
-        struct FObjectMoveRequestPacket
-        {
-            uint8 Header;
-            int32 BlockID;
-            FVector Location;
-        };
-
-        FObjectMoveRequestPacket Packet;
-        Packet.Header = objectHeader; // 새로운 패킷 타입 추가
-        Packet.BlockID = BlockID;
-        Packet.Location = NewLocation;
-
-        send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(FObjectMoveRequestPacket), 0);
-
-        UE_LOG(LogTemp, Log, TEXT("Sent move request for BlockID=%d, NewLocation=(%.2f, %.2f, %.2f)"),
-            BlockID, NewLocation.X, NewLocation.Y, NewLocation.Z);
     }
 }
 

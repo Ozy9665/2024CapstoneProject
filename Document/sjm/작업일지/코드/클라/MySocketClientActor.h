@@ -43,7 +43,6 @@ public:
 	void ProcessObjectData(char* Buffer, int32 BytesReceived);
 	void SpawnCharacter(const FCharacterState& State);
 	void SendPlayerData();
-	void SendObjectData(int32 BlockID, FVector NewLocation);
 	FCharacterState GetCharacterState(ACharacter* PlayerCharacter);
 	void ProcessCharacterUpdates(float DeltaTime);
 	void UpdateCharacterState(ACharacter* Character, const FCharacterState& State, float DeltaTime);

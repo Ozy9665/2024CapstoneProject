@@ -43,4 +43,5 @@ public:
 private:
     // **마지막으로 전송된 위치 (서버에서 위치 변화를 감지)**
     FVector LastSentLocation = FVector::ZeroVector;
+    FRotator LastSentRotation = FRotator::ZeroRotator;
 };

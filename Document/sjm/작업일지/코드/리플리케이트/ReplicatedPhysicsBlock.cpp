@@ -39,12 +39,13 @@ void AReplicatedPhysicsBlock::Tick(float DeltaTime)
 
     if (ServerActor && ServerActor->bIsServer) // 서버에서만 실행
     {
-        FVector CurrentLocation = GetActorLocation();
-        if (!CurrentLocation.Equals(LastSentLocation, 1.0f)) // 일정 거리 이상 움직였을 때만 전송
+        FTransform CurrentTransform = GetActorTransform();
+        if ((!CurrentTransform.GetLocation().Equals(LastSentLocation, 1.0f) ||
+            !CurrentTransform.GetRotation().Rotator().Equals(LastSentRotation, 1.0f)) && BlockID != -1)
         {
-            UE_LOG(LogTemp, Log, TEXT("Moving detected!"));
-            LastSentLocation = CurrentLocation;
-            ServerActor->SendObjectData(BlockID, CurrentLocation);
+            LastSentLocation = CurrentTransform.GetLocation();
+            LastSentRotation = CurrentTransform.GetRotation().Rotator();
+            ServerActor->SendObjectData(BlockID, CurrentTransform);
         }
     }
 }
