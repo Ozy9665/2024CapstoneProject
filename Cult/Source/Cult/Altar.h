@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CultGameMode.h"
 #include "GameFramework/Actor.h"
 #include "Altar.generated.h"
 
@@ -35,7 +36,10 @@ public:
 	// 영역 안 체크
 	bool bPlayerInRange;
 	
-	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Ritual")
+	int NumCultistsInRange = 0;
+
+
 
 	// 충돌처리
  
@@ -58,6 +62,19 @@ public:
 
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
+
+
+
+	// 의식
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ritual")
+	float RitualGauge = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ritual")
+	float BaseGainRate = 5.0f;
+
+
+	UFUNCTION(BlueprintCallable, Category="Ritual")
+	void IncreaseRitualGauge();
 
 
 };

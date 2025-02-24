@@ -52,13 +52,16 @@ void ACultistCharacter::PerformRitual()
 	if (!bIsPerformingRitual) return;
 	RitualProgress += RitualSpeed;
 
+	
 	UE_LOG(LogTemp, Warning, TEXT("Performing Ritual..."));
 
 	// Check 100%
-	if (RitualProgress >= 100.0f)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Ritual Completed!"));
-	}
+	//if (RitualProgress >= 100.0f)
+	//{
+	//	UE_LOG(LogTemp, Warning, TEXT("Ritual Completed!"));
+	//}
+
+	CurrentAltar->IncreaseRitualGauge();
 	StopRitual();
 }
 

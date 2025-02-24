@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "BaseCharacter.h"
+#include "Altar.h"
 #include "RitualPerformer.h"
 #include "CultistCharacter.generated.h"
 

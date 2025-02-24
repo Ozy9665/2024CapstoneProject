@@ -61,7 +61,8 @@ void AAltar::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherAc
 	if (Cultist)
 	{
 		Cultist->SetCurrentAltar(this);
-		bPlayerInRange = true;
+		NumCultistsInRange++;
+		//bPlayerInRange = true;
 		UE_LOG(LogTemp, Warning, TEXT("Cultist entered the altar area"));
 	}
 }
@@ -75,7 +76,8 @@ void AAltar::OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherActo
 	if (Cultist)
 	{
 		Cultist->SetCurrentAltar(nullptr);
-		bPlayerInRange = false;
+		NumCultistsInRange = FMath::Max(0, NumCultistsInRange - 1);	// 최소 0
+		//bPlayerInRange = false;
 		UE_LOG(LogTemp, Warning, TEXT("Cultist left the altar area"));
 	}
 }
@@ -87,3 +89,27 @@ void AAltar::Tick(float DeltaTime)
 
 }
 
+
+void AAltar::IncreaseRitualGauge()
+{
+	if (NumCultistsInRange > 0)
+	{
+		float GainRate = BaseGainRate * NumCultistsInRange;
+		RitualGauge += GainRate;
+		RitualGauge = FMath::Clamp(RitualGauge, 0.0f, 100.0f);
+		
+		UE_LOG(LogTemp, Warning, TEXT("Ritual Progress: %f"), RitualGauge);
+
+		//if (RitualGauge >= 100.0f)
+		//{
+		//	UE_LOG(LogTemp, Warning, TEXT("Ritual Complete"))
+		//}
+
+		// 게임모드에서 100 넘었는지 체크하고, 넘었으면 레벨 재시작 
+		ACultGameMode* GameMode = Cast<ACultGameMode>(GetWorld()->GetAuthGameMode());
+		if (GameMode)
+		{
+			GameMode->CheckRitualComlete(RitualGauge);
+		}
+	}
+}

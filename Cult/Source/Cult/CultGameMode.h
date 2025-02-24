@@ -16,4 +16,10 @@ class CULT_API ACultGameMode : public AGameModeBase
 
 public:
 	ACultGameMode();
+
+	// 의식 게이지 업데이트
+	void CheckRitualComlete(float CurrentRitualGauge);
+
+	// 게임 종료 처리
+	void EndGame();
 };
