@@ -26,6 +26,12 @@ AAltar::AAltar()
 	CollisionComp->OnComponentBeginOverlap.AddDynamic(this, &AAltar::OnOverlapBegin);
 	CollisionComp->OnComponentEndOverlap.AddDynamic(this, &AAltar::OnOverlapEnd);
 
+	if (!CollisionComp->OnComponentBeginOverlap.IsBound())
+	{
+		CollisionComp->OnComponentBeginOverlap.AddDynamic(this, &AAltar::OnOverlapBegin);
+		UE_LOG(LogTemp, Warning, TEXT("OnOverlapBegin manually bound!"));
+	}
+
 	// 메쉬 설정
 	//static ConstructorHelpers::FObjectFinder<UStaticMesh> AltarMesh(TEXT("StaticMesh'/Game/Cult_Custom/Modeling/altar5.altar5'"));
 	//if (AltarMesh.Succeeded())
@@ -42,6 +48,8 @@ void AAltar::BeginPlay()
 {
 	Super::BeginPlay();
 	
+
+
 	UStaticMesh* MeshAsset = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), nullptr, TEXT("StaticMesh'/Game/Cult_Custom/Modeling/altar5.altar5'")));
 	if (MeshAsset)
 	{
@@ -57,6 +65,7 @@ void AAltar::BeginPlay()
 void AAltar::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
+	
 	ACultistCharacter* Cultist = Cast<ACultistCharacter>(OtherActor);
 	if (Cultist)
 	{
@@ -64,6 +73,10 @@ void AAltar::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherAc
 		NumCultistsInRange++;
 		//bPlayerInRange = true;
 		UE_LOG(LogTemp, Warning, TEXT("Cultist entered the altar area"));
+	}
+	if (OtherActor)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Overlap with %s"), *OtherActor->GetName());
 	}
 }
 
@@ -86,6 +99,10 @@ void AAltar::OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherActo
 void AAltar::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	if (!CollisionComp) return;
+
+	UE_LOG(LogTemp, Warning, TEXT("CollisionComp GenerateOverlapEvents: %s"), CollisionComp->GetGenerateOverlapEvents() ? TEXT("True") : TEXT("False"));
 
 }
 

@@ -39,6 +39,8 @@ public:
 
 	void MoveForward(float Value);
 	void MoveRight(float Value);
+	void TurnCamera(float Value);
+	void LookUpCamera(float Value);
 
 	void StartRitual() override;
 	void StopRitual() override;

@@ -15,11 +15,16 @@ ACultistCharacter::ACultistCharacter()
 	bIsPerformingRitual = false;
 	RitualProgress = 0.0f;
 	RitualSpeed = 10.0f; // 초당 증가속도
+
+
 }
 
 void ACultistCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+
+
 }
 
 void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -29,6 +34,8 @@ void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAxis("MoveForward", this, &ACultistCharacter::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight", this, &ACultistCharacter::MoveRight);
 	PlayerInputComponent->BindAction("PerformRitual", IE_Pressed, this, &ACultistCharacter::StartRitual);
+	PlayerInputComponent->BindAxis("Turn", this, &ACultistCharacter::TurnCamera);
+	PlayerInputComponent->BindAxis("LookUp", this, &ACultistCharacter::LookUpCamera);
 }
 
 void ACultistCharacter::MoveForward(float Value)
@@ -67,7 +74,12 @@ void ACultistCharacter::PerformRitual()
 
 void ACultistCharacter::StartRitual()
 {
-	if (bIsPerformingRitual || !CurrentAltar) { 
+	if (bIsPerformingRitual)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Already Performing.."));
+		return;
+	}
+	if (!CurrentAltar) { 
 		UE_LOG(LogTemp, Warning, TEXT("No altar Here!"));
 		return;
 	}
@@ -120,3 +132,13 @@ void ACultistCharacter::MoveForward(float Value)
 {
 	if (Value != 0.0f) StopRitual();
 }*/
+
+
+void ACultistCharacter::TurnCamera(float Value)
+{
+	AddControllerYawInput(Value);
+}
+void ACultistCharacter::LookUpCamera(float Value)
+{
+	AddControllerPitchInput(Value);
+}

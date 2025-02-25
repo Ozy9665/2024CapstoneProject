@@ -32,6 +32,7 @@ APoliceCharacter::APoliceCharacter()
 void APoliceCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
 }
 
 void APoliceCharacter::Tick(float DeltaTime)
