@@ -28,6 +28,7 @@ private:
 	TMap<FString, ACharacter*> SpawnedCharacters;
 	TMap<FString, FCharacterState> ReceivedCharacterStates;
 	TMap<int32, AReplicatedPhysicsBlock*> SyncedBlocks;
+	TMap<int32, FTransform> LastReceivedTransform;
 	uint8 playerHeader = 0x00;
 	uint8 objectHeader = 0x01;
 
@@ -47,4 +48,5 @@ public:
 	void ProcessCharacterUpdates(float DeltaTime);
 	void UpdateCharacterState(ACharacter* Character, const FCharacterState& State, float DeltaTime);
 	void UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCharacterState& State);
+	void ProcessObjectUpdates(float DeltaTime);
 };

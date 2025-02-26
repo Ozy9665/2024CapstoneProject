@@ -209,11 +209,6 @@ void AMySocketActor::SendObjectData(int32 BlockID, FTransform NewTransform)
                 send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
             }
         }
-        UE_LOG(LogTemp, Log, TEXT("send BlockID=%d, NewTransform=(%.2f, %.2f, %.2f), Rotation=(%.2f, %.2f, %.2f)"),
-            BlockID, NewTransform.GetLocation().X, NewTransform.GetLocation().Y, NewTransform.GetLocation().Z,
-            NewTransform.GetRotation().Rotator().Pitch,
-            NewTransform.GetRotation().Rotator().Yaw,
-            NewTransform.GetRotation().Rotator().Roll);
     }
 }
 
@@ -314,40 +309,6 @@ void AMySocketActor::ProcessPlayerData(SOCKET ClientSocket, char* Buffer, int32 
             ClientStates.FindOrAdd(ClientSocket) = ReceivedState;
             SpawnOrUpdateClientCharacter(ClientSocket, ReceivedState);
         });
-}
-
-void AMySocketActor::ProcessObjectData(SOCKET ClientSocket, char* Buffer, int32 BytesReceived) {
-    if (BytesReceived != sizeof(uint8) + sizeof(int32) + sizeof(FTransform))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Invalid move request packet size."));
-        return;
-    }
-    
-    int32 Offset = sizeof(uint8);
-    int32 BlockID;
-    FTransform NewTransform;
-    
-    memcpy(&BlockID, Buffer + Offset, sizeof(int32));
-    Offset += sizeof(int32);
-    memcpy(&NewTransform, Buffer + Offset, sizeof(FTransform));
-
-    if (AReplicatedPhysicsBlock* Block = BlockMap.FindRef(BlockID))
-    {
-        AsyncTask(ENamedThreads::GameThread, [this, BlockID, Block, NewTransform]()
-            {
-                Block->SetActorTransform(NewTransform); // **서버에서 위치를 변경**
-                BlockTransforms.FindOrAdd(BlockID) = NewTransform;
-
-                UE_LOG(LogTemp, Log, TEXT("Server updated BlockID=%d, NewLocation=(%.2f, %.2f, %.2f), Rotation=(%.2f, %.2f, %.2f)"),
-                    BlockID,
-                    NewTransform.GetLocation().X, NewTransform.GetLocation().Y, NewTransform.GetLocation().Z,
-                    NewTransform.GetRotation().Rotator().Pitch,
-                    NewTransform.GetRotation().Rotator().Yaw,
-                    NewTransform.GetRotation().Rotator().Roll);
-
-                SendObjectData(BlockID, NewTransform);
-            });
-    }
 }
 
 void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCharacterState& State)
