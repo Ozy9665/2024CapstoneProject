@@ -5,6 +5,12 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Kismet/GameplayStatics.h"
 #include "PoliceCharacter.h"
+// Gamemode - camera
+#include "Camera/PlayerCameraManager.h"
+#include "Kismet/GameplayStatics.h"
+#include "GameFramework/PlayerController.h"
+#include "TimerManager.h"
+#include "MyLegacyCameraShake.h"
 
 ACultGameMode::ACultGameMode()
 {
@@ -30,6 +36,18 @@ void ACultGameMode::EndGame()
 {
 	UE_LOG(LogTemp, Warning, TEXT("Game Over."));
 
+	APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	if (PC) // 실행
+	{
+		PC->ClientStartCameraShake(UMyLegacyCameraShake::StaticClass());
+	}
+
 	// 게임 재시작
-	UGameplayStatics::OpenLevel(this, FName(TEXT("NewWorld")));
+	FTimerHandle RestartTimerHandle;
+	GetWorld()->GetTimerManager().SetTimer(RestartTimerHandle, this, &ACultGameMode::RestartGame, 5.0f, false);
+}
+
+void ACultGameMode::RestartGame()
+{
+	UGameplayStatics::OpenLevel(this, FName(*GetWorld()->GetName()), false);
 }

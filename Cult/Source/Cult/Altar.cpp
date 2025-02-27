@@ -7,6 +7,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "CultistCharacter.h"
 
+
 // Sets default values
 AAltar::AAltar()
 {
@@ -17,20 +18,13 @@ AAltar::AAltar()
 	MeshComp = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComp"));
 	RootComponent = MeshComp;
 
-	// 콜리전 생성
-	CollisionComp = CreateDefaultSubobject<UBoxComponent>(TEXT("CollisionComp"));
-	CollisionComp->SetupAttachment(MeshComp);
-	CollisionComp->SetBoxExtent(FVector(100.0f, 100.0f, 100.0f));
 
-	// 충돌 이벤트 바인드
-	CollisionComp->OnComponentBeginOverlap.AddDynamic(this, &AAltar::OnOverlapBegin);
-	CollisionComp->OnComponentEndOverlap.AddDynamic(this, &AAltar::OnOverlapEnd);
 
-	if (!CollisionComp->OnComponentBeginOverlap.IsBound())
-	{
-		CollisionComp->OnComponentBeginOverlap.AddDynamic(this, &AAltar::OnOverlapBegin);
-		UE_LOG(LogTemp, Warning, TEXT("OnOverlapBegin manually bound!"));
-	}
+	//if (!CollisionComp->OnComponentBeginOverlap.IsBound())
+	//{
+	//	CollisionComp->OnComponentBeginOverlap.AddDynamic(this, &AAltar::OnOverlapBegin);
+	//	UE_LOG(LogTemp, Warning, TEXT("OnOverlapBegin manually bound!"));
+	//}
 
 	// 메쉬 설정
 	//static ConstructorHelpers::FObjectFinder<UStaticMesh> AltarMesh(TEXT("StaticMesh'/Game/Cult_Custom/Modeling/altar5.altar5'"));
@@ -59,6 +53,22 @@ void AAltar::BeginPlay()
 	{
 		UE_LOG(LogTemp, Error, TEXT("StaticLoadObject failed to load StaticMesh!"));
 	}
+
+	CollisionComp = Cast<UBoxComponent>(GetDefaultSubobjectByName(TEXT("CollisionComp2")));
+	if (CollisionComp)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CollisionComp On"));
+
+		CollisionComp->OnComponentBeginOverlap.AddDynamic(this, &AAltar::OnOverlapBegin);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("Check Collision!"));
+	}
+
+	// 충돌 이벤트 바인드
+	CollisionComp->OnComponentBeginOverlap.AddDynamic(this, &AAltar::OnOverlapBegin);
+	CollisionComp->OnComponentEndOverlap.AddDynamic(this, &AAltar::OnOverlapEnd);
 
 }
 
@@ -99,11 +109,6 @@ void AAltar::OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherActo
 void AAltar::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
-	if (!CollisionComp) return;
-
-	UE_LOG(LogTemp, Warning, TEXT("CollisionComp GenerateOverlapEvents: %s"), CollisionComp->GetGenerateOverlapEvents() ? TEXT("True") : TEXT("False"));
-
 }
 
 
@@ -117,11 +122,6 @@ void AAltar::IncreaseRitualGauge()
 		
 		UE_LOG(LogTemp, Warning, TEXT("Ritual Progress: %f"), RitualGauge);
 
-		//if (RitualGauge >= 100.0f)
-		//{
-		//	UE_LOG(LogTemp, Warning, TEXT("Ritual Complete"))
-		//}
-
 		// 게임모드에서 100 넘었는지 체크하고, 넘었으면 레벨 재시작 
 		ACultGameMode* GameMode = Cast<ACultGameMode>(GetWorld()->GetAuthGameMode());
 		if (GameMode)
@@ -130,3 +130,4 @@ void AAltar::IncreaseRitualGauge()
 		}
 	}
 }
+

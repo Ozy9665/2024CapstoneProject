@@ -75,4 +75,6 @@ public:
 	void IncreaseRitualGauge();
 
 
+	//UPROPERTY(EditDefaultsOnly, Category="Effects")
+	//TSubclassOf<class UMatineeCameraShake> EarthquakeEffect;
 };
