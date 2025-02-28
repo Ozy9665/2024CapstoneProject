@@ -98,13 +98,6 @@ void AMySocketClientActor::InitializeBlocks()
         {
             SyncedBlocks.Add(BlockIndex, Block);
             FTransform BlockTransform = Block->GetActorTransform();
-            
-            UE_LOG(LogTemp, Log, TEXT("Block: ID=%d, Location=(%.2f, %.2f, %.2f), Rotation=(%.2f, %.2f, %.2f)"),
-                BlockIndex,
-                BlockTransform.GetLocation().X, BlockTransform.GetLocation().Y, BlockTransform.GetLocation().Z,
-                BlockTransform.GetRotation().Rotator().Pitch,
-                BlockTransform.GetRotation().Rotator().Yaw,
-                BlockTransform.GetRotation().Rotator().Roll);
 
             BlockIndex++;
         }
@@ -201,31 +194,7 @@ void AMySocketClientActor::ProcessObjectData(char* Buffer, int32 BytesReceived) 
     Offset += sizeof(int32);
     memcpy(&NewTransform, Buffer + Offset, sizeof(FTransform));
 
-    if (AReplicatedPhysicsBlock* Block = SyncedBlocks.FindRef(BlockID))
-    {
-        AsyncTask(ENamedThreads::GameThread, [this, Block, NewTransform]()
-            {
-                FVector InterpolatedLocation = FMath::VInterpTo(
-                    Block->GetActorLocation(), NewTransform.GetLocation(), GetWorld()->GetDeltaSeconds(), 5.0f);
-
-                FRotator InterpolatedRotation = FMath::RInterpTo(
-                    Block->GetActorRotation(), NewTransform.GetRotation().Rotator(), GetWorld()->GetDeltaSeconds(), 5.0f);
-
-                Block->SetActorLocation(InterpolatedLocation);
-                Block->SetActorRotation(InterpolatedRotation);
-            });
-
-        UE_LOG(LogTemp, Log, TEXT("Client updated BlockID=%d, InterpolatedLocation=(%.2f, %.2f, %.2f), InterpolatedRotation=(%.2f, %.2f, %.2f)"),
-            BlockID,
-            NewTransform.GetLocation().X, NewTransform.GetLocation().Y, NewTransform.GetLocation().Z,
-            NewTransform.GetRotation().Rotator().Pitch,
-            NewTransform.GetRotation().Rotator().Yaw,
-            NewTransform.GetRotation().Rotator().Roll);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("BlockID %d not found in SyncedBlocks."), BlockID);
-    }
+    LastReceivedTransform.FindOrAdd(BlockID) = NewTransform;
 }
 
 void AMySocketClientActor::SendPlayerData()
@@ -418,10 +387,37 @@ void AMySocketClientActor::SpawnCharacter(const FCharacterState& State)
     }
 }
 
+void AMySocketClientActor::ProcessObjectUpdates(float DeltaTime)
+{
+    for (auto& Pair : LastReceivedTransform)
+    {
+        int32 BlockID = Pair.Key;
+        FTransform TargetTransform = Pair.Value;
+
+        if (AReplicatedPhysicsBlock* Block = SyncedBlocks.FindRef(BlockID))
+        {
+            FVector InterpolatedLocation = FMath::VInterpTo(
+                Block->GetActorLocation(), TargetTransform.GetLocation(), DeltaTime, 5.0f);
+
+            FRotator InterpolatedRotation = FMath::RInterpTo(
+                Block->GetActorRotation(), TargetTransform.GetRotation().Rotator(), DeltaTime, 5.0f);
+
+            Block->SetActorLocation(InterpolatedLocation);
+            Block->SetActorRotation(InterpolatedRotation);
+
+            UE_LOG(LogTemp, Log, TEXT("Tick Updated BlockID=%d, Location=(%.2f, %.2f, %.2f), Rotation=(%.2f, %.2f, %.2f)"),
+                BlockID,
+                InterpolatedLocation.X, InterpolatedLocation.Y, InterpolatedLocation.Z,
+                InterpolatedRotation.Pitch, InterpolatedRotation.Yaw, InterpolatedRotation.Roll);
+        }
+    }
+}
+
 // Called every frame
 void AMySocketClientActor::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
     SendPlayerData();
     ProcessCharacterUpdates(DeltaTime);
+    ProcessObjectUpdates(DeltaTime);
 }

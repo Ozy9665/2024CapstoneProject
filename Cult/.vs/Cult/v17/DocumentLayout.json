@@ -7,6 +7,10 @@
       "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\Altar.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Altar.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\Altar.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultistCharacter.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\CultistCharacter.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
@@ -15,56 +19,56 @@
       "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\CultGameMode.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Altar.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\Altar.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultistCharacter.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\CultistCharacter.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultGameMode.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\CultGameMode.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultistAIController.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\CultistAIController.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultistAIController.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\CultistAIController.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BTTask_RunFromPolice.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\BTTask_RunFromPolice.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BTTask_RunFromPolice.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\BTTask_RunFromPolice.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BaseCharacter.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\BaseCharacter.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BaseCharacter.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\BaseCharacter.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BTTask_MoveToAltar.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\BTTask_MoveToAltar.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
-      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BTTask_MoveToAltar.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\BTTask_MoveToAltar.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\MyLegacyCameraShake.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\MyLegacyCameraShake.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\PoliceCharacter.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultGameMode.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\CultGameMode.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\MyLegacyCameraShake.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\MyLegacyCameraShake.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BTTask_MoveToAltar.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\BTTask_MoveToAltar.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\PoliceCharacter.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultistCharacter.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\CultistCharacter.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BTTask_RunFromPolice.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\BTTask_RunFromPolice.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BTTask_MoveToAltar.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\BTTask_MoveToAltar.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultistAIController.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\CultistAIController.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BTTask_RunFromPolice.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\BTTask_RunFromPolice.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultistAIController.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\CultistAIController.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BaseCharacter.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\BaseCharacter.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Cultist_C.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
@@ -91,12 +95,16 @@
       "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\RitualPerformer.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Cultist_B.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\Cultist_B.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
       "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Cultist_A.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\Cultist_A.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Cultist_B.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\Cultist_B.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+      "AbsoluteMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BaseCharacter.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{4832F1A8-A225-339F-9F3D-7426E7833AB2}|Intermediate\\ProjectFiles\\Cult.vcxproj|solutionrelative:Source\\Cult\\BaseCharacter.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     }
   ],
   "DocumentGroupContainers": [
@@ -106,47 +114,59 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 8,
+          "SelectedChildIndex": 20,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 12,
+              "DocumentIndex": 7,
+              "Title": "MyLegacyCameraShake.h",
+              "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\MyLegacyCameraShake.h",
+              "RelativeDocumentMoniker": "Source\\Cult\\MyLegacyCameraShake.h",
+              "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\MyLegacyCameraShake.h",
+              "RelativeToolTip": "Source\\Cult\\MyLegacyCameraShake.h",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAkAAAADAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2025-02-27T13:04:19.651Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
               "Title": "BTTask_MoveToAltar.cpp",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BTTask_MoveToAltar.cpp",
               "RelativeDocumentMoniker": "Source\\Cult\\BTTask_MoveToAltar.cpp",
               "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BTTask_MoveToAltar.cpp",
               "RelativeToolTip": "Source\\Cult\\BTTask_MoveToAltar.cpp",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAB0AAAABAAAA",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAABUAAABHAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
               "WhenOpened": "2025-02-11T10:13:55.864Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 13,
+              "DocumentIndex": 12,
               "Title": "BTTask_MoveToAltar.h",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BTTask_MoveToAltar.h",
               "RelativeDocumentMoniker": "Source\\Cult\\BTTask_MoveToAltar.h",
               "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BTTask_MoveToAltar.h",
               "RelativeToolTip": "Source\\Cult\\BTTask_MoveToAltar.h",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAABYAAAAAAAAA",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAcAAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
               "WhenOpened": "2025-02-11T10:13:55.44Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 8,
+              "DocumentIndex": 11,
               "Title": "BTTask_RunFromPolice.cpp",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BTTask_RunFromPolice.cpp",
               "RelativeDocumentMoniker": "Source\\Cult\\BTTask_RunFromPolice.cpp",
               "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BTTask_RunFromPolice.cpp",
               "RelativeToolTip": "Source\\Cult\\BTTask_RunFromPolice.cpp",
-              "ViewState": "AQIAACQAAAAAAAAAAAAAACsAAAA6AAAA",
+              "ViewState": "AQIAABgAAAAAAAAAAAAAADEAAAArAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
               "WhenOpened": "2025-02-11T09:40:58.164Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 9,
+              "DocumentIndex": 14,
               "Title": "BTTask_RunFromPolice.h",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BTTask_RunFromPolice.h",
               "RelativeDocumentMoniker": "Source\\Cult\\BTTask_RunFromPolice.h",
@@ -158,109 +178,56 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 15,
-              "Title": "PoliceCharacter.h",
-              "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.h",
-              "RelativeDocumentMoniker": "Source\\Cult\\PoliceCharacter.h",
-              "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.h",
-              "RelativeToolTip": "Source\\Cult\\PoliceCharacter.h",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAgAAAAmAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-08T14:34:08.508Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 2,
               "Title": "CultistCharacter.cpp",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultistCharacter.cpp",
               "RelativeDocumentMoniker": "Source\\Cult\\CultistCharacter.cpp",
               "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultistCharacter.cpp",
               "RelativeToolTip": "Source\\Cult\\CultistCharacter.cpp",
-              "ViewState": "AQIAAFYAAAAAAAAAAAAmwG0AAAABAAAA",
+              "ViewState": "AQIAAFQAAAAAAAAAAAAAAFcAAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
               "WhenOpened": "2025-02-02T15:27:50.987Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 10,
               "Title": "CultistCharacter.h",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultistCharacter.h",
               "RelativeDocumentMoniker": "Source\\Cult\\CultistCharacter.h",
               "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultistCharacter.h",
               "RelativeToolTip": "Source\\Cult\\CultistCharacter.h",
-              "ViewState": "AQIAAAkAAAAAAAAAAAAAAE8AAAAAAAAA",
+              "ViewState": "AQIAAB4AAAAAAAAAAAAAACoAAAAgAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-02T15:27:50.859Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-02T15:27:50.859Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 3,
-              "Title": "Altar.h",
-              "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Altar.h",
-              "RelativeDocumentMoniker": "Source\\Cult\\Altar.h",
-              "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Altar.h",
-              "RelativeToolTip": "Source\\Cult\\Altar.h",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAUAAAAZAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-10T15:19:07.569Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "Altar.cpp",
-              "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Altar.cpp",
-              "RelativeDocumentMoniker": "Source\\Cult\\Altar.cpp",
-              "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Altar.cpp",
-              "RelativeToolTip": "Source\\Cult\\Altar.cpp",
-              "ViewState": "AQIAAE4AAAAAAAAAAAAmwFkAAAABAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-10T15:19:07.823Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 14,
-              "Title": "PoliceCharacter.cpp",
-              "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.cpp",
-              "RelativeDocumentMoniker": "Source\\Cult\\PoliceCharacter.cpp",
-              "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.cpp",
-              "RelativeToolTip": "Source\\Cult\\PoliceCharacter.cpp",
-              "ViewState": "AQIAAAwAAAAAAAAAAAAAACAAAAABAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-08T14:34:09.292Z"
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 7,
+              "DocumentIndex": 13,
               "Title": "CultistAIController.h",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultistAIController.h",
               "RelativeDocumentMoniker": "Source\\Cult\\CultistAIController.h",
               "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultistAIController.h",
               "RelativeToolTip": "Source\\Cult\\CultistAIController.h",
-              "ViewState": "AQIAAAYAAAAAAAAAAAAAADUAAAAgAAAA",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAB0AAAAnAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-11T08:38:16.085Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-11T08:38:16.085Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 6,
+              "DocumentIndex": 15,
               "Title": "CultistAIController.cpp",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultistAIController.cpp",
               "RelativeDocumentMoniker": "Source\\Cult\\CultistAIController.cpp",
               "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultistAIController.cpp",
               "RelativeToolTip": "Source\\Cult\\CultistAIController.cpp",
-              "ViewState": "AQIAABUAAAAAAAAAAAAmwHwAAAACAAAA",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAIUAAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-11T08:38:16.452Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-02-11T08:38:16.452Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 10,
+              "DocumentIndex": 16,
               "Title": "BaseCharacter.h",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BaseCharacter.h",
               "RelativeDocumentMoniker": "Source\\Cult\\BaseCharacter.h",
@@ -272,20 +239,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
-              "Title": "CultGameMode.cpp",
-              "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultGameMode.cpp",
-              "RelativeDocumentMoniker": "Source\\Cult\\CultGameMode.cpp",
-              "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultGameMode.cpp",
-              "RelativeToolTip": "Source\\Cult\\CultGameMode.cpp",
-              "ViewState": "AQIAAAMAAAAAAAAAAAAAAB0AAAABAAAA",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2025-02-08T14:05:52.385Z",
-              "EditorCaption": ""
-            },
-            {
-              "$type": "Document",
-              "DocumentIndex": 16,
+              "DocumentIndex": 17,
               "Title": "Cultist_C.cpp",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Cultist_C.cpp",
               "RelativeDocumentMoniker": "Source\\Cult\\Cultist_C.cpp",
@@ -297,7 +251,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 17,
+              "DocumentIndex": 18,
               "Title": "Cultist_C.h",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Cultist_C.h",
               "RelativeDocumentMoniker": "Source\\Cult\\Cultist_C.h",
@@ -309,7 +263,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 18,
+              "DocumentIndex": 19,
               "Title": "Cultist_B.cpp",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Cultist_B.cpp",
               "RelativeDocumentMoniker": "Source\\Cult\\Cultist_B.cpp",
@@ -321,7 +275,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 19,
+              "DocumentIndex": 20,
               "Title": "RitualPerformer.cpp",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\RitualPerformer.cpp",
               "RelativeDocumentMoniker": "Source\\Cult\\RitualPerformer.cpp",
@@ -333,7 +287,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 20,
+              "DocumentIndex": 21,
               "Title": "Cultist_A.cpp",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Cultist_A.cpp",
               "RelativeDocumentMoniker": "Source\\Cult\\Cultist_A.cpp",
@@ -345,7 +299,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 21,
+              "DocumentIndex": 22,
               "Title": "RitualPerformer.h",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\RitualPerformer.h",
               "RelativeDocumentMoniker": "Source\\Cult\\RitualPerformer.h",
@@ -369,7 +323,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 22,
+              "DocumentIndex": 24,
               "Title": "Cultist_A.h",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Cultist_A.h",
               "RelativeDocumentMoniker": "Source\\Cult\\Cultist_A.h",
@@ -381,7 +335,7 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 11,
+              "DocumentIndex": 25,
               "Title": "BaseCharacter.cpp",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\BaseCharacter.cpp",
               "RelativeDocumentMoniker": "Source\\Cult\\BaseCharacter.cpp",
@@ -393,16 +347,95 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 5,
+              "DocumentIndex": 6,
               "Title": "CultGameMode.h",
               "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultGameMode.h",
               "RelativeDocumentMoniker": "Source\\Cult\\CultGameMode.h",
               "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultGameMode.h",
               "RelativeToolTip": "Source\\Cult\\CultGameMode.h",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAABMAAAAPAAAA",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAABsAAAACAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
-              "WhenOpened": "2025-02-08T14:05:52.206Z",
+              "WhenOpened": "2025-02-08T14:05:52.206Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Altar.h",
+              "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Altar.h",
+              "RelativeDocumentMoniker": "Source\\Cult\\Altar.h",
+              "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Altar.h",
+              "RelativeToolTip": "Source\\Cult\\Altar.h",
+              "ViewState": "AQIAABgAAAAAAAAAAAAAAEAAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2025-02-10T15:19:07.569Z",
               "EditorCaption": ""
+            }
+          ]
+        },
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 3,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "CultGameMode.cpp",
+              "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultGameMode.cpp",
+              "RelativeDocumentMoniker": "Source\\Cult\\CultGameMode.cpp",
+              "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\CultGameMode.cpp",
+              "RelativeToolTip": "Source\\Cult\\CultGameMode.cpp",
+              "ViewState": "AQIAAAMAAAAAAAAAAAAAAA0AAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-02-08T14:05:52.385Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "PoliceCharacter.h",
+              "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.h",
+              "RelativeDocumentMoniker": "Source\\Cult\\PoliceCharacter.h",
+              "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.h",
+              "RelativeToolTip": "Source\\Cult\\PoliceCharacter.h",
+              "ViewState": "AQIAAAMAAAAAAAAAAAAAADoAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
+              "WhenOpened": "2025-02-08T14:34:08.508Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "PoliceCharacter.cpp",
+              "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.cpp",
+              "RelativeDocumentMoniker": "Source\\Cult\\PoliceCharacter.cpp",
+              "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\PoliceCharacter.cpp",
+              "RelativeToolTip": "Source\\Cult\\PoliceCharacter.cpp",
+              "ViewState": "AQIAACoAAAAAAAAAAAAAADkAAAAkAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-02-08T14:34:09.292Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Altar.cpp",
+              "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Altar.cpp",
+              "RelativeDocumentMoniker": "Source\\Cult\\Altar.cpp",
+              "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\Altar.cpp",
+              "RelativeToolTip": "Source\\Cult\\Altar.cpp",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAkAAAAdAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-02-10T15:19:07.823Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "MyLegacyCameraShake.cpp",
+              "DocumentMoniker": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\MyLegacyCameraShake.cpp",
+              "RelativeDocumentMoniker": "Source\\Cult\\MyLegacyCameraShake.cpp",
+              "ToolTip": "E:\\2024-2\\2024CapstoneProject\\Cult\\Source\\Cult\\MyLegacyCameraShake.cpp",
+              "RelativeToolTip": "Source\\Cult\\MyLegacyCameraShake.cpp",
+              "ViewState": "AQIAAAAAAAAAAAAAAAAAAA8AAAAhAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
+              "WhenOpened": "2025-02-27T13:04:19.947Z"
             }
           ]
         }

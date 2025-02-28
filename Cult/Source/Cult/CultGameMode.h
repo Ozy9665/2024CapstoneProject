@@ -20,6 +20,9 @@ public:
 	// 의식 게이지 업데이트
 	void CheckRitualComlete(float CurrentRitualGauge);
 
+	// 게임 재시작
+	void RestartGame();
+
 	// 게임 종료 처리
 	void EndGame();
 };
