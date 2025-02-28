@@ -42,9 +42,9 @@ void ACultGameMode::EndGame()
 		PC->ClientStartCameraShake(UMyLegacyCameraShake::StaticClass());
 	}
 
-	// 게임 재시작
+	// 게임 재시작	(3seconds)
 	FTimerHandle RestartTimerHandle;
-	GetWorld()->GetTimerManager().SetTimer(RestartTimerHandle, this, &ACultGameMode::RestartGame, 5.0f, false);
+	GetWorld()->GetTimerManager().SetTimer(RestartTimerHandle, this, &ACultGameMode::RestartGame, 3.0f, false);
 }
 
 void ACultGameMode::RestartGame()

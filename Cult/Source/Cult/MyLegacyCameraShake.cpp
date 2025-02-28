@@ -5,13 +5,13 @@
 
 UMyLegacyCameraShake::UMyLegacyCameraShake()
 {
-	OscillationDuration = 0.5f;
+	OscillationDuration = 2.5f;
 	OscillationBlendInTime = 0.1f;
 	OscillationBlendOutTime = 0.1f;
 
 	RotOscillation.Pitch.Amplitude = 5.0f;
-	RotOscillation.Pitch.Frequency = 10.0f;
+	RotOscillation.Pitch.Frequency = 50.0f;
 
 	RotOscillation.Yaw.Amplitude = 5.0f;
-	RotOscillation.Yaw.Frequency = 10.0f;
+	RotOscillation.Yaw.Frequency = 50.0f;
 }

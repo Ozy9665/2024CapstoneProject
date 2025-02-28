@@ -7,6 +7,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "CultistCharacter.h"
 
+TSet<AActor*> PlayersInAltar;
 
 // Sets default values
 AAltar::AAltar()
@@ -32,7 +33,7 @@ AAltar::AAltar()
 	//{
 	//	MeshComp->SetStaticMesh(AltarMesh.Object);
 	//}
-
+	NumCultistsInRange = 0;
 
 	bPlayerInRange = false;
 }
@@ -42,6 +43,7 @@ void AAltar::BeginPlay()
 {
 	Super::BeginPlay();
 	
+	PlayersInAltar.Empty();
 
 
 	UStaticMesh* MeshAsset = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), nullptr, TEXT("StaticMesh'/Game/Cult_Custom/Modeling/altar5.altar5'")));
@@ -72,6 +74,7 @@ void AAltar::BeginPlay()
 
 }
 
+
 void AAltar::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
@@ -79,9 +82,13 @@ void AAltar::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherAc
 	ACultistCharacter* Cultist = Cast<ACultistCharacter>(OtherActor);
 	if (Cultist)
 	{
+		if (!PlayersInAltar.Contains(Cultist))
+		{
+			PlayersInAltar.Add(Cultist);
+			NumCultistsInRange = PlayersInAltar.Num();
+		}
 		Cultist->SetCurrentAltar(this);
-		NumCultistsInRange++;
-		//bPlayerInRange = true;
+		//NumCultistsInRange++;
 		UE_LOG(LogTemp, Warning, TEXT("Cultist entered the altar area"));
 	}
 	if (OtherActor)
@@ -98,9 +105,10 @@ void AAltar::OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherActo
 	ACultistCharacter* Cultist = Cast<ACultistCharacter>(OtherActor);
 	if (Cultist)
 	{
+		PlayersInAltar.Remove(Cultist);
+		NumCultistsInRange = PlayersInAltar.Num();
 		Cultist->SetCurrentAltar(nullptr);
-		NumCultistsInRange = FMath::Max(0, NumCultistsInRange - 1);	// 置社 0
-		//bPlayerInRange = false;
+		//NumCultistsInRange = FMath::Max(0, NumCultistsInRange - 1);	// 置社 0
 		UE_LOG(LogTemp, Warning, TEXT("Cultist left the altar area"));
 	}
 }
