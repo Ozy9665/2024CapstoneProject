@@ -158,11 +158,19 @@ void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
     AllCharacterStates.Reserve(ClientStates.Num() + 1); // 메모리 할당 최적화
 
     // 다른 클라이언트들의 캐릭터 상태 추가
+    FString LogData; // 로그를 위한 문자열 선언
     for (auto& Entry : ClientStates)
     {
         if (Entry.Key != TargetSocket)
         {
             AllCharacterStates.Add(Entry.Value);
+            LogData += FString::Printf(TEXT("PlayerID: %d, Pos: (%f, %f, %f), Rot: (%f, %f, %f), Vel: (%f, %f, %f), Falling: %s, State: %d\n"),
+                Entry.Value.PlayerID,
+                Entry.Value.PositionX, Entry.Value.PositionY, Entry.Value.PositionZ,
+                Entry.Value.RotationPitch, Entry.Value.RotationYaw, Entry.Value.RotationRoll,
+                Entry.Value.VelocityX, Entry.Value.VelocityY, Entry.Value.VelocityZ,
+                Entry.Value.bIsFalling ? TEXT("True") : TEXT("False"),
+                static_cast<int32>(Entry.Value.AnimationState));
         }
     }
 
@@ -171,6 +179,13 @@ void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
     {
         ServerState = GetServerCharacterState();
         AllCharacterStates.Add(ServerState);
+        LogData += FString::Printf(TEXT("Server PlayerID: %d, Pos: (%f, %f, %f), Rot: (%f, %f, %f), Vel: (%f, %f, %f), Falling: %s, State: %d\n"),
+            ServerState.PlayerID,
+            ServerState.PositionX, ServerState.PositionY, ServerState.PositionZ,
+            ServerState.RotationPitch, ServerState.RotationYaw, ServerState.RotationRoll,
+            ServerState.VelocityX, ServerState.VelocityY, ServerState.VelocityZ,
+            ServerState.bIsFalling ? TEXT("True") : TEXT("False"),
+            static_cast<int32>(ServerState.AnimationState));
     }
     else
     {
@@ -178,15 +193,25 @@ void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
     }
 
     int32 TotalBytes = sizeof(uint8) + (AllCharacterStates.Num() * sizeof(FCharacterState));
-
     TArray<uint8> PacketData;
     PacketData.SetNumUninitialized(TotalBytes);
 
     memcpy(PacketData.GetData(), &playerHeader, sizeof(uint8));
     memcpy(PacketData.GetData() + sizeof(uint8), AllCharacterStates.GetData(), AllCharacterStates.Num() * sizeof(FCharacterState));
 
-    send(TargetSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
+    int BytesSent = send(TargetSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
+
+    // 로그 추가
+    if (BytesSent == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with WSAGetLastError: %ld"), WSAGetLastError());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Sent Player Data: \n%s"), *LogData);
+    }
 }
+
 
 void AMySocketActor::SendObjectData(int32 BlockID, FTransform NewTransform)
 {
@@ -225,12 +250,12 @@ FCharacterState AMySocketActor::GetServerCharacterState()
     State.RotationYaw = ServerCharacter->GetActorRotation().Yaw;
     State.RotationRoll = ServerCharacter->GetActorRotation().Roll;
 
-    // 속도 및 GroundSpeed 계산
+    // 속도 및 Speed 계산
     FVector Velocity = ServerCharacter->GetVelocity();
     State.VelocityX = Velocity.X;
     State.VelocityY = Velocity.Y;
     State.VelocityZ = Velocity.Z;
-    State.GroundSpeed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
+    State.Speed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
 
     // IsFalling 상태
     UCharacterMovementComponent* MovementComp = ServerCharacter->GetCharacterMovement();
@@ -322,7 +347,7 @@ void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCharacterS
     FVector SpawnLocation = FVector((ClientSocket % 10) * 200.0f, (ClientSocket / 10) * 200.0f, 100.0f);
 
     UClass* BP_ClientCharacter = LoadClass<ACharacter>(
-        nullptr, TEXT("/Game/Characters/Mannequins/Meshes/BP_ClientCharacter.BP_ClientCharacter_C"));
+        nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A.BP_Cultist_A_C"));
     if (BP_ClientCharacter)
     {
         ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
@@ -337,6 +362,10 @@ void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCharacterS
         {
             UE_LOG(LogTemp, Error, TEXT("Failed to spawn client character for socket %d"), ClientSocket);
         }
+	}
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to load BP_ClientCharacter class."));
     }
 }
 
@@ -408,13 +437,13 @@ void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, c
         }
     }
 
-    // GroundSpeed 업데이트
-    FProperty* GroundSpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("GroundSpeed"));
-    if (GroundSpeedProperty && GroundSpeedProperty->IsA<FDoubleProperty>())
+    // Speed 업데이트
+    FProperty* SpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Speed"));
+    if (SpeedProperty && SpeedProperty->IsA<FDoubleProperty>())
     {
-        double GroundSpeed = static_cast<double>(FVector(State.VelocityX, State.VelocityY, 0.0f).Size());
-        FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(GroundSpeedProperty);
-        DoubleProp->SetPropertyValue_InContainer(AnimInstance, GroundSpeed);
+        double Speed = static_cast<double>(FVector(State.VelocityX, State.VelocityY, 0.0f).Size());
+        FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(SpeedProperty);
+        DoubleProp->SetPropertyValue_InContainer(AnimInstance, Speed);
     }
 
     // IsFalling 업데이트

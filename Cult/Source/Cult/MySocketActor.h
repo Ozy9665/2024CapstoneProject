@@ -32,7 +32,7 @@ struct FCharacterState
 	float VelocityX;
 	float VelocityY;
 	float VelocityZ;
-	float GroundSpeed;
+	float Speed;
 	bool bIsFalling;
 	// 애니메이션 상태 필드 추가
 	EAnimationState AnimationState;

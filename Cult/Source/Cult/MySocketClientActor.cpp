@@ -243,7 +243,7 @@ FCharacterState AMySocketClientActor::GetCharacterState(ACharacter* PlayerCharac
     CharacterState.VelocityX = Velocity.X;
     CharacterState.VelocityY = Velocity.Y;
     CharacterState.VelocityZ = Velocity.Z;
-    CharacterState.GroundSpeed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
+    CharacterState.Speed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
 
     UCharacterMovementComponent* MovementComp = PlayerCharacter->GetCharacterMovement();
     CharacterState.bIsFalling = MovementComp ? MovementComp->IsFalling() : false;
@@ -338,13 +338,13 @@ void AMySocketClientActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInsta
         }
     }
 
-    // GroundSpeed 업데이트
-    FProperty* GroundSpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("GroundSpeed"));
-    if (GroundSpeedProperty && GroundSpeedProperty->IsA<FDoubleProperty>())
+    // Speed 업데이트
+    FProperty* SpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Speed"));
+    if (SpeedProperty && SpeedProperty->IsA<FDoubleProperty>())
     {
-        double GroundSpeed = static_cast<double>(FVector(State.VelocityX, State.VelocityY, 0.0f).Size());
-        FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(GroundSpeedProperty);
-        DoubleProp->SetPropertyValue_InContainer(AnimInstance, GroundSpeed);
+        double Speed = static_cast<double>(FVector(State.VelocityX, State.VelocityY, 0.0f).Size());
+        FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(SpeedProperty);
+        DoubleProp->SetPropertyValue_InContainer(AnimInstance, Speed);
     }
 }
 
@@ -364,7 +364,7 @@ void AMySocketClientActor::SpawnCharacter(const FCharacterState& State)
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
     UClass* BP_ClientCharacter = LoadClass<ACharacter>(
-        nullptr, TEXT("/Game/Characters/Mannequins/Meshes/BP_ClientCharacter.BP_ClientCharacter_C"));
+        nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A.BP_Cultist_A_C"));
 
     if (BP_ClientCharacter)
     {
