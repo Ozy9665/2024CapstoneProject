@@ -28,16 +28,16 @@ APoliceCharacter::APoliceCharacter()
 	StimulusComponent->RegisterForSense(TSubclassOf<UAISense>(UAISense_Sight::StaticClass()));
 	StimulusComponent->RegisterWithPerceptionSystem();
 
-	bUseControllerRotationYaw = false;
 
-	GetCharacterMovement()->bOrientRotationToMovement = true;
-	GetCharacterMovement()->RotationRate = FRotator(0.0f, 720.0f, 0.0f);
 }
 
 void APoliceCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	bUseControllerRotationYaw = false;
 
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->RotationRate = FRotator(0.0f, 720.0f, 0.0f);
 }
 
 void APoliceCharacter::Tick(float DeltaTime)
