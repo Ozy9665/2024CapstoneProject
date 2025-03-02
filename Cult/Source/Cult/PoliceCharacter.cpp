@@ -27,6 +27,11 @@ APoliceCharacter::APoliceCharacter()
 	StimulusComponent = CreateDefaultSubobject<UAIPerceptionStimuliSourceComponent>(TEXT("StimuliSourceComponent"));
 	StimulusComponent->RegisterForSense(TSubclassOf<UAISense>(UAISense_Sight::StaticClass()));
 	StimulusComponent->RegisterWithPerceptionSystem();
+
+	bUseControllerRotationYaw = false;
+
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->RotationRate = FRotator(0.0f, 720.0f, 0.0f);
 }
 
 void APoliceCharacter::BeginPlay()
@@ -48,8 +53,8 @@ void APoliceCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 
 	PlayerInputComponent->BindAxis("MoveForward", this, &APoliceCharacter::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight", this, &APoliceCharacter::MoveRight);
-	PlayerInputComponent->BindAxis("Turn", this, &APoliceCharacter::TurnCamera);
-	PlayerInputComponent->BindAxis("LookUp", this, &APoliceCharacter::LookUpCamera);
+	PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
+	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
 
 	PlayerInputComponent->BindAction("Attack", IE_Pressed, this, &APoliceCharacter::StartAttack);
 }
@@ -144,26 +149,24 @@ void APoliceCharacter::MoveForward(float Value)
 {
 	if (Controller && Value != 0.0f)
 	{
-		/*const FRotator Rotation = Controller->GetControlRotation();
-		const FVector Direction = FRotationMatrix(Rotation).GetUnitAxis(EAxis::X);
+		FRotator ControlRotation = GetControlRotation();
+		FRotator YawRotation(0, ControlRotation.Yaw, 0);
 
-		AddMovementInput(Direction, Value);*/
-		AddMovementInput(GetActorForwardVector(), Value);
+		FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+		AddMovementInput(Direction, Value);
 	}
-	TurnCharacter();
 }
 void APoliceCharacter::MoveRight(float Value)
 {
 	if (Controller && Value != 0.0f)
 	{
-		//const FRotator Rotation = Controller->GetControlRotation();
-		//const FVector Direction = FRotationMatrix(Rotation).GetUnitAxis(EAxis::Y);
+		FRotator ControlRotation = GetControlRotation();
+		FRotator YawRotation(0, ControlRotation.Yaw, 9);
 
-		//AddMovementInput(Direction, Value);
-		AddMovementInput(GetActorRightVector(), Value);
+		FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+		AddMovementInput(Direction, Value);
 
 	}
-	TurnCharacter();
 }
 void APoliceCharacter::TurnCamera(float Value)
 {
