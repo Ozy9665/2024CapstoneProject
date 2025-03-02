@@ -80,7 +80,6 @@ public:
 	FCharacterState GetServerCharacterState();
 	void ReceiveData(SOCKET ClientSocket);
 	void ProcessPlayerData(SOCKET ClientSocket, char* Buffer, int32 BytesReceived);
-	void ProcessObjectData(SOCKET ClientSocket, char* Buffer, int32 BytesReceived);
 	void SpawnClientCharacter(SOCKET ClientSocket, const FCharacterState& State);
 	void SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCharacterState& State);
 	void UpdateCharacterState(ACharacter* Character, const FCharacterState& State);

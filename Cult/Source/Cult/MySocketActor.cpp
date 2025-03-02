@@ -37,6 +37,40 @@ void AMySocketActor::BeginPlay()
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to initialize server."));
     }
+
+    ServerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
+    if (ServerCharacter)
+    {
+        UE_LOG(LogTemp, Error, TEXT("SERVER: Initial Character is %s"), *GetNameSafe(ServerCharacter));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("SERVER: No PlayerCharacter found!"));
+    }
+
+    APlayerController* ServerPC = UGameplayStatics::GetPlayerController(this, 0);
+    if (ServerPC)
+    {
+        APawn* ControlledPawn = ServerPC->GetPawn();
+        UE_LOG(LogTemp, Error, TEXT("SERVER: PlayerController 0 is controlling (before Possess): %s"), *GetNameSafe(ControlledPawn));
+
+        // 서버 캐릭터 Possess
+        ServerPC->Possess(ServerCharacter);
+
+        ControlledPawn = ServerPC->GetPawn();
+        UE_LOG(LogTemp, Error, TEXT("SERVER: PlayerController 0 is controlling (after Possess): %s"), *GetNameSafe(ControlledPawn));
+
+        // 서버 카메라가 A0을 따라가도록 강제 설정
+        ServerPC->SetViewTarget(ServerCharacter);
+
+        // CameraManager를 강제로 A0을 바라보게 설정
+        APlayerCameraManager* CameraManager = ServerPC->PlayerCameraManager;
+        if (CameraManager)
+        {
+            CameraManager->SetViewTarget(ServerCharacter);
+            UE_LOG(LogTemp, Error, TEXT("SERVER: CameraManager view target set to %s"), *GetNameSafe(ServerCharacter));
+        }
+    }
 }
 
 void AMySocketActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -204,14 +238,14 @@ void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
     // 로그 추가
     if (BytesSent == SOCKET_ERROR)
     {
-        UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with WSAGetLastError: %ld"), WSAGetLastError());
+        UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with WSAGetLastError %ld during send to %d"), WSAGetLastError(), TargetSocket);
+        CloseClientSocket(TargetSocket);
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("Sent Player Data: \n%s"), *LogData);
+        // UE_LOG(LogTemp, Error, TEXT("Sent Player Data to %d: \n%s"), TargetSocket, *LogData);
     }
 }
-
 
 void AMySocketActor::SendObjectData(int32 BlockID, FTransform NewTransform)
 {
@@ -231,7 +265,18 @@ void AMySocketActor::SendObjectData(int32 BlockID, FTransform NewTransform)
         {
             if (ClientSocket != INVALID_SOCKET)
             {
-                send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
+                int BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
+
+                // 오류 확인 및 로그 추가
+                if (BytesSent == SOCKET_ERROR)
+                {
+                    UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with WSAGetLastError %ld during send to %d"), WSAGetLastError(), ClientSocket);
+                    CloseClientSocket(ClientSocket);
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Log, TEXT("Sent Player Data to %d"), ClientSocket);
+                }
             }
         }
     }
@@ -338,16 +383,25 @@ void AMySocketActor::ProcessPlayerData(SOCKET ClientSocket, char* Buffer, int32 
 
 void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCharacterState& State)
 {
+    int32 AssignedPlayerID = ClientCharacters.Num() + 1; // 기존 클라이언트 수를 기반으로 ID 할당
+
+    UE_LOG(LogTemp, Error, TEXT("Spawning Character for PlayerID: %d (Socket: %d)"), AssignedPlayerID, ClientSocket);
+
+    if (ClientCharacters.Contains(ClientSocket))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Character already exists for Socket: %d"), ClientSocket);
+        return;
+    }
+
     // 새로운 클라이언트 캐릭터 생성
     FActorSpawnParameters SpawnParams;
     SpawnParams.Owner = this;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-    // 각 클라이언트에 대한 고유 위치 생성 (예: 소켓 값을 기반으로 오프셋 계산)
-    FVector SpawnLocation = FVector((ClientSocket % 10) * 200.0f, (ClientSocket / 10) * 200.0f, 100.0f);
+    // 각 클라이언트에 대한 고유 위치 생성
+    FVector SpawnLocation = FVector((AssignedPlayerID % 10) * 200.0f, (AssignedPlayerID / 10) * 200.0f, 100.0f);
 
-    UClass* BP_ClientCharacter = LoadClass<ACharacter>(
-        nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A.BP_Cultist_A_C"));
+    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A.BP_Cultist_A_C"));
     if (BP_ClientCharacter)
     {
         ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
@@ -355,14 +409,14 @@ void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCharacterS
         if (NewCharacter)
         {
             ClientCharacters.Add(ClientSocket, NewCharacter);
-            UE_LOG(LogTemp, Log, TEXT("Client character spawned for socket %d at location %s"),
-                ClientSocket, *SpawnLocation.ToString());
+            UE_LOG(LogTemp, Log, TEXT("Client character spawned for PlayerID=%d at location %s"),
+                AssignedPlayerID, *SpawnLocation.ToString());
         }
         else
         {
             UE_LOG(LogTemp, Error, TEXT("Failed to spawn client character for socket %d"), ClientSocket);
         }
-	}
+    }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to load BP_ClientCharacter class."));
@@ -469,8 +523,12 @@ void AMySocketActor::CloseClientSocket(SOCKET ClientSocket)
                 }
                 ClientCharacters.Remove(ClientSocket);
             }
-            ClientSockets.Remove(ClientSocket);
-            closesocket(ClientSocket);
+            if (ClientSockets.Contains(ClientSocket))
+            {
+                ClientSockets.Remove(ClientSocket);
+                closesocket(ClientSocket);
+            }
+            UE_LOG(LogTemp, Error, TEXT("Closed client socket: %d"), ClientSocket);
         });
 }
 
@@ -514,6 +572,30 @@ void AMySocketActor::Tick(float DeltaTime)
             if (ClientSocket != INVALID_SOCKET)
             {
                 SendPlayerData(ClientSocket);
+            }
+        }
+    }
+
+    APlayerController* ServerPC = UGameplayStatics::GetPlayerController(this, 0);
+    if (ServerPC)
+    {
+        APawn* ControlledPawn = ServerPC->GetPawn();
+        UE_LOG(LogTemp, Error, TEXT("SERVER TICK: PlayerController 0 is controlling: %s"), *GetNameSafe(ControlledPawn));
+
+        AActor* ViewTarget = ServerPC->GetViewTarget();
+        UE_LOG(LogTemp, Error, TEXT("SERVER TICK: Camera is looking at: %s"), *GetNameSafe(ViewTarget));
+
+        APlayerCameraManager* CameraManager = ServerPC->PlayerCameraManager;
+        if (CameraManager)
+        {
+            AActor* CameraViewTarget = CameraManager->GetViewTarget();
+            UE_LOG(LogTemp, Error, TEXT("SERVER TICK: CameraManager is looking at: %s"), *GetNameSafe(CameraViewTarget));
+
+            // 만약 CameraManager가 잘못된 캐릭터를 보고 있으면 강제로 수정
+            if (CameraViewTarget != ServerCharacter)
+            {
+                CameraManager->SetViewTarget(ServerCharacter);
+                UE_LOG(LogTemp, Warning, TEXT("SERVER TICK: Fixing CameraManager view target to %s"), *GetNameSafe(ServerCharacter));
             }
         }
     }

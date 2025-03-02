@@ -25,6 +25,7 @@ void AMySocketClientActor::BeginPlay()
 {
     Super::BeginPlay();
 
+
     FString ServerIP = TEXT("127.0.0.1");  // 서버 IP
     int32 ServerPort = 7777;              // 서버 포트
 
@@ -33,6 +34,36 @@ void AMySocketClientActor::BeginPlay()
         UE_LOG(LogTemp, Log, TEXT("Connected to server!"));
         ReceiveData();  // 데이터 수신 시작
         InitializeBlocks();
+        APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+        if (PC)
+        {
+            APawn* ControlledPawn = PC->GetPawn();
+            UE_LOG(LogTemp, Error, TEXT("CLIENT: PlayerController 0 is controlling: %s"), *GetNameSafe(ControlledPawn));
+
+            if (!ControlledPawn)
+            {
+                UE_LOG(LogTemp, Error, TEXT("CLIENT: PlayerController 0 has no character assigned!"));
+                
+                // 현재 레벨에서 모든 캐릭터를 검색하여 자신이 소유할 캐릭터를 찾기
+                TArray<AActor*> FoundCharacters;
+                UGameplayStatics::GetAllActorsOfClass(GetWorld(), ACharacter::StaticClass(), FoundCharacters);
+
+                for (AActor* Actor : FoundCharacters)
+                {
+                    ACharacter* PossibleCharacter = Cast<ACharacter>(Actor);
+                    if (PossibleCharacter && PossibleCharacter->IsLocallyControlled())
+                    {
+                        PC->Possess(PossibleCharacter);
+                        UE_LOG(LogTemp, Error, TEXT("CLIENT: Possessing character: %s"), *PossibleCharacter->GetName());
+                        break;  
+                    }
+                }
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("CLIENT: PlayerController not found!"));
+        }
     }
     else
     {
@@ -405,10 +436,10 @@ void AMySocketClientActor::ProcessObjectUpdates(float DeltaTime)
             Block->SetActorLocation(InterpolatedLocation);
             Block->SetActorRotation(InterpolatedRotation);
 
-            UE_LOG(LogTemp, Log, TEXT("Tick Updated BlockID=%d, Location=(%.2f, %.2f, %.2f), Rotation=(%.2f, %.2f, %.2f)"),
+           /* UE_LOG(LogTemp, Log, TEXT("Tick Updated BlockID=%d, Location=(%.2f, %.2f, %.2f), Rotation=(%.2f, %.2f, %.2f)"),
                 BlockID,
                 InterpolatedLocation.X, InterpolatedLocation.Y, InterpolatedLocation.Z,
-                InterpolatedRotation.Pitch, InterpolatedRotation.Yaw, InterpolatedRotation.Roll);
+                InterpolatedRotation.Pitch, InterpolatedRotation.Yaw, InterpolatedRotation.Roll);*/
         }
     }
 }
