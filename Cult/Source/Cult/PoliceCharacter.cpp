@@ -168,6 +168,8 @@ void APoliceCharacter::MoveRight(float Value)
 
 	}
 }
+
+
 void APoliceCharacter::TurnCamera(float Value)
 {
 	AddControllerYawInput(Value);
