@@ -12,15 +12,11 @@ ACultistCharacter::ACultistCharacter()
 	PrimaryActorTick.bCanEverTick = true;
 	WalkSpeed = 600.0f;
 	
-	// 컨트롤러 yaw 회전 false
-	bUseControllerRotationYaw = false;
+
 	
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 	
-	// 입력 방향으로 회전
-	GetCharacterMovement()->bOrientRotationToMovement = true;
-	// 회전속도
-	GetCharacterMovement()->RotationRate = FRotator(0.0f, 720.0f, 0.0f);
+
 	bIsPerformingRitual = false;
 	RitualProgress = 0.0f;
 	RitualSpeed = 10.0f; // 초당 증가속도
@@ -31,8 +27,12 @@ ACultistCharacter::ACultistCharacter()
 void ACultistCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-
-
+	// 컨트롤러 yaw 회전 false
+	bUseControllerRotationYaw = false;
+	// 입력 방향으로 회전
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	// 회전속도
+	GetCharacterMovement()->RotationRate = FRotator(0.0f, 720.0f, 0.0f);
 
 }
 

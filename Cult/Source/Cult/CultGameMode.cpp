@@ -11,6 +11,9 @@
 #include "GameFramework/PlayerController.h"
 #include "TimerManager.h"
 #include "MyLegacyCameraShake.h"
+// SpawnAltar
+#include "Engine/World.h"
+
 
 ACultGameMode::ACultGameMode()
 {
@@ -21,6 +24,12 @@ ACultGameMode::ACultGameMode()
 	}
 
 
+}
+
+void ACultGameMode::BeginPlay()
+{
+	Super::BeginPlay();
+	SpawnAltars();
 }
 
 void ACultGameMode::CheckRitualComlete(float CurrentRitualGauge)
@@ -50,4 +59,34 @@ void ACultGameMode::EndGame()
 void ACultGameMode::RestartGame()
 {
 	UGameplayStatics::OpenLevel(this, FName(*GetWorld()->GetName()), false);
+}
+
+void ACultGameMode::SpawnAltars()
+{
+	if (!AltarClass) return;
+
+	int32 Index1 = FMath::RandRange(0, 3);	// 현재는 n 개중 랜덤 조절
+	int32 Index2;
+
+	do {
+		Index2 = FMath::RandRange(0, 3);
+	} while (Index1 == Index2);		// 중복 방지
+
+	// 두 인덱스에 스폰
+	FVector SpawnLocation1 = AltarSpawnLocations[Index1];
+	FVector SpawnLocation2 = AltarSpawnLocations[Index2];
+
+	FRotator SpawnRotation = FRotator::ZeroRotator;
+
+	AActor* SpawnedAltar1 = GetWorld()->SpawnActor<AActor>(AltarClass, SpawnLocation1, SpawnRotation);
+	AActor* SpawnedAltar2 = GetWorld()->SpawnActor<AActor>(AltarClass, SpawnLocation2, SpawnRotation);
+
+	// 스케일
+	if (SpawnedAltar1) {
+		SpawnedAltar1->SetActorScale3D(FVector(5.0f));
+	}
+	if (SpawnedAltar2)
+	{
+		SpawnedAltar2->SetActorScale3D(FVector(5.0f));
+	}
 }

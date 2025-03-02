@@ -14,8 +14,13 @@ class CULT_API ACultGameMode : public AGameModeBase
 {
 	GENERATED_BODY()
 
+protected:
+	virtual void BeginPlay() override;
+
 public:
 	ACultGameMode();
+
+	
 
 	// 의식 게이지 업데이트
 	void CheckRitualComlete(float CurrentRitualGauge);
@@ -25,4 +30,12 @@ public:
 
 	// 게임 종료 처리
 	void EndGame();
+
+	// 제단 생성
+	UPROPERTY(EditAnywhere, Category = "Altar Spawn")
+	TArray<FVector> AltarSpawnLocations;
+
+	UPROPERTY(EditAnywhere, Category = "Altar Spawn")
+	TSubclassOf<AActor>AltarClass;
+	void SpawnAltars();
 };
