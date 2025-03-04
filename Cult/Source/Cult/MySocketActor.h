@@ -10,9 +10,9 @@
 UENUM(BlueprintType)
 enum class EAnimationState : uint8
 {
-	Idle UMETA(DisplayName = "Idle"),
-	Running UMETA(DisplayName = "Run"),
-	Jumping UMETA(DisplayName = "Jump")
+	Idle UMETA(DisplayName = "IDLE"),
+	Walk UMETA(DisplayName = "Walk"),
+	//Jump UMETA(DisplayName = "Jump")
 };
 
 USTRUCT(BlueprintType)
@@ -33,7 +33,7 @@ struct FCharacterState
 	float VelocityY;
 	float VelocityZ;
 	float Speed;
-	bool bIsFalling;
+	// bool bIsFalling;
 	// 애니메이션 상태 필드 추가
 	EAnimationState AnimationState;
 };

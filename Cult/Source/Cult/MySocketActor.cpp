@@ -37,40 +37,6 @@ void AMySocketActor::BeginPlay()
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to initialize server."));
     }
-
-    ServerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
-    if (ServerCharacter)
-    {
-        UE_LOG(LogTemp, Error, TEXT("SERVER: Initial Character is %s"), *GetNameSafe(ServerCharacter));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("SERVER: No PlayerCharacter found!"));
-    }
-
-    APlayerController* ServerPC = UGameplayStatics::GetPlayerController(this, 0);
-    if (ServerPC)
-    {
-        APawn* ControlledPawn = ServerPC->GetPawn();
-        UE_LOG(LogTemp, Error, TEXT("SERVER: PlayerController 0 is controlling (before Possess): %s"), *GetNameSafe(ControlledPawn));
-
-        // 서버 캐릭터 Possess
-        ServerPC->Possess(ServerCharacter);
-
-        ControlledPawn = ServerPC->GetPawn();
-        UE_LOG(LogTemp, Error, TEXT("SERVER: PlayerController 0 is controlling (after Possess): %s"), *GetNameSafe(ControlledPawn));
-
-        // 서버 카메라가 A0을 따라가도록 강제 설정
-        ServerPC->SetViewTarget(ServerCharacter);
-
-        // CameraManager를 강제로 A0을 바라보게 설정
-        APlayerCameraManager* CameraManager = ServerPC->PlayerCameraManager;
-        if (CameraManager)
-        {
-            CameraManager->SetViewTarget(ServerCharacter);
-            UE_LOG(LogTemp, Error, TEXT("SERVER: CameraManager view target set to %s"), *GetNameSafe(ServerCharacter));
-        }
-    }
 }
 
 void AMySocketActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -198,12 +164,11 @@ void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
         if (Entry.Key != TargetSocket)
         {
             AllCharacterStates.Add(Entry.Value);
-            LogData += FString::Printf(TEXT("PlayerID: %d, Pos: (%f, %f, %f), Rot: (%f, %f, %f), Vel: (%f, %f, %f), Falling: %s, State: %d\n"),
+            LogData += FString::Printf(TEXT("PlayerID: %d, Pos: (%f, %f, %f), Rot: (%f, %f, %f), Vel: (%f, %f, %f), State: %d\n"),
                 Entry.Value.PlayerID,
                 Entry.Value.PositionX, Entry.Value.PositionY, Entry.Value.PositionZ,
                 Entry.Value.RotationPitch, Entry.Value.RotationYaw, Entry.Value.RotationRoll,
                 Entry.Value.VelocityX, Entry.Value.VelocityY, Entry.Value.VelocityZ,
-                Entry.Value.bIsFalling ? TEXT("True") : TEXT("False"),
                 static_cast<int32>(Entry.Value.AnimationState));
         }
     }
@@ -213,12 +178,11 @@ void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
     {
         ServerState = GetServerCharacterState();
         AllCharacterStates.Add(ServerState);
-        LogData += FString::Printf(TEXT("Server PlayerID: %d, Pos: (%f, %f, %f), Rot: (%f, %f, %f), Vel: (%f, %f, %f), Falling: %s, State: %d\n"),
+        LogData += FString::Printf(TEXT("Server PlayerID: %d, Pos: (%f, %f, %f), Rot: (%f, %f, %f), Vel: (%f, %f, %f), State: %d\n"),
             ServerState.PlayerID,
             ServerState.PositionX, ServerState.PositionY, ServerState.PositionZ,
             ServerState.RotationPitch, ServerState.RotationYaw, ServerState.RotationRoll,
             ServerState.VelocityX, ServerState.VelocityY, ServerState.VelocityZ,
-            ServerState.bIsFalling ? TEXT("True") : TEXT("False"),
             static_cast<int32>(ServerState.AnimationState));
     }
     else
@@ -303,8 +267,8 @@ FCharacterState AMySocketActor::GetServerCharacterState()
     State.Speed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
 
     // IsFalling 상태
-    UCharacterMovementComponent* MovementComp = ServerCharacter->GetCharacterMovement();
-    State.bIsFalling = MovementComp ? MovementComp->IsFalling() : false;
+    // UCharacterMovementComponent* MovementComp = ServerCharacter->GetCharacterMovement();
+    // State.bIsFalling = MovementComp ? MovementComp->IsFalling() : false;
 
     // AnimationState 계산
     float Speed = Velocity.Size();
@@ -314,7 +278,7 @@ FCharacterState AMySocketActor::GetServerCharacterState()
     }
     else
     {
-        State.AnimationState = EAnimationState::Running; // 이동 상태
+        State.AnimationState = EAnimationState::Walk; // 이동 상태
     }
 
     return State;
@@ -401,7 +365,7 @@ void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCharacterS
     // 각 클라이언트에 대한 고유 위치 생성
     FVector SpawnLocation = FVector((AssignedPlayerID % 10) * 200.0f, (AssignedPlayerID / 10) * 200.0f, 100.0f);
 
-    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A.BP_Cultist_A_C"));
+    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A_Client.BP_Cultist_A_Client_C"));
     if (BP_ClientCharacter)
     {
         ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
@@ -473,7 +437,7 @@ void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, c
     FProperty* ShouldMoveProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ShouldMove"));
     if (ShouldMoveProperty && ShouldMoveProperty->IsA<FBoolProperty>())
     {
-        bool bShouldMove = (State.AnimationState == EAnimationState::Running);
+        bool bShouldMove = (State.AnimationState == EAnimationState::Walk);
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ShouldMoveProperty);
         BoolProp->SetPropertyValue_InContainer(AnimInstance, bShouldMove);
     }
@@ -501,12 +465,12 @@ void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, c
     }
 
     // IsFalling 업데이트
-    FProperty* IsFallingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("IsFalling"));
+    /*FProperty* IsFallingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("IsFalling"));
     if (IsFallingProperty && IsFallingProperty->IsA<FBoolProperty>())
     {
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFallingProperty);
         BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsFalling);
-    }
+    }*/
 }
 
 void AMySocketActor::CloseClientSocket(SOCKET ClientSocket)
@@ -572,30 +536,6 @@ void AMySocketActor::Tick(float DeltaTime)
             if (ClientSocket != INVALID_SOCKET)
             {
                 SendPlayerData(ClientSocket);
-            }
-        }
-    }
-
-    APlayerController* ServerPC = UGameplayStatics::GetPlayerController(this, 0);
-    if (ServerPC)
-    {
-        APawn* ControlledPawn = ServerPC->GetPawn();
-        UE_LOG(LogTemp, Error, TEXT("SERVER TICK: PlayerController 0 is controlling: %s"), *GetNameSafe(ControlledPawn));
-
-        AActor* ViewTarget = ServerPC->GetViewTarget();
-        UE_LOG(LogTemp, Error, TEXT("SERVER TICK: Camera is looking at: %s"), *GetNameSafe(ViewTarget));
-
-        APlayerCameraManager* CameraManager = ServerPC->PlayerCameraManager;
-        if (CameraManager)
-        {
-            AActor* CameraViewTarget = CameraManager->GetViewTarget();
-            UE_LOG(LogTemp, Error, TEXT("SERVER TICK: CameraManager is looking at: %s"), *GetNameSafe(CameraViewTarget));
-
-            // 만약 CameraManager가 잘못된 캐릭터를 보고 있으면 강제로 수정
-            if (CameraViewTarget != ServerCharacter)
-            {
-                CameraManager->SetViewTarget(ServerCharacter);
-                UE_LOG(LogTemp, Warning, TEXT("SERVER TICK: Fixing CameraManager view target to %s"), *GetNameSafe(ServerCharacter));
             }
         }
     }

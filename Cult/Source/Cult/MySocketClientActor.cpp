@@ -34,36 +34,6 @@ void AMySocketClientActor::BeginPlay()
         UE_LOG(LogTemp, Log, TEXT("Connected to server!"));
         ReceiveData();  // 데이터 수신 시작
         InitializeBlocks();
-        APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-        if (PC)
-        {
-            APawn* ControlledPawn = PC->GetPawn();
-            UE_LOG(LogTemp, Error, TEXT("CLIENT: PlayerController 0 is controlling: %s"), *GetNameSafe(ControlledPawn));
-
-            if (!ControlledPawn)
-            {
-                UE_LOG(LogTemp, Error, TEXT("CLIENT: PlayerController 0 has no character assigned!"));
-                
-                // 현재 레벨에서 모든 캐릭터를 검색하여 자신이 소유할 캐릭터를 찾기
-                TArray<AActor*> FoundCharacters;
-                UGameplayStatics::GetAllActorsOfClass(GetWorld(), ACharacter::StaticClass(), FoundCharacters);
-
-                for (AActor* Actor : FoundCharacters)
-                {
-                    ACharacter* PossibleCharacter = Cast<ACharacter>(Actor);
-                    if (PossibleCharacter && PossibleCharacter->IsLocallyControlled())
-                    {
-                        PC->Possess(PossibleCharacter);
-                        UE_LOG(LogTemp, Error, TEXT("CLIENT: Possessing character: %s"), *PossibleCharacter->GetName());
-                        break;  
-                    }
-                }
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("CLIENT: PlayerController not found!"));
-        }
     }
     else
     {
@@ -276,8 +246,8 @@ FCharacterState AMySocketClientActor::GetCharacterState(ACharacter* PlayerCharac
     CharacterState.VelocityZ = Velocity.Z;
     CharacterState.Speed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
 
-    UCharacterMovementComponent* MovementComp = PlayerCharacter->GetCharacterMovement();
-    CharacterState.bIsFalling = MovementComp ? MovementComp->IsFalling() : false;
+    // UCharacterMovementComponent* MovementComp = PlayerCharacter->GetCharacterMovement();
+    // CharacterState.bIsFalling = MovementComp ? MovementComp->IsFalling() : false;
 
     float Speed = Velocity.Size();
     if (Speed < KINDA_SMALL_NUMBER)
@@ -286,7 +256,7 @@ FCharacterState AMySocketClientActor::GetCharacterState(ACharacter* PlayerCharac
     }
     else
     {
-        CharacterState.AnimationState = EAnimationState::Running; // 이동 중이면 Run
+        CharacterState.AnimationState = EAnimationState::Walk; // 이동 중이면 Run
     }
 
     return CharacterState;
@@ -377,6 +347,14 @@ void AMySocketClientActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInsta
         FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(SpeedProperty);
         DoubleProp->SetPropertyValue_InContainer(AnimInstance, Speed);
     }
+
+    // IsFalling 업데이트
+    /*FProperty* IsFallingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("IsFalling"));
+    if (IsFallingProperty && IsFallingProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFallingProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsFalling);
+    }*/
 }
 
 void AMySocketClientActor::SpawnCharacter(const FCharacterState& State)
@@ -395,7 +373,7 @@ void AMySocketClientActor::SpawnCharacter(const FCharacterState& State)
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
     UClass* BP_ClientCharacter = LoadClass<ACharacter>(
-        nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A.BP_Cultist_A_C"));
+        nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A_Client.BP_Cultist_A_Client_C"));
 
     if (BP_ClientCharacter)
     {
@@ -435,11 +413,6 @@ void AMySocketClientActor::ProcessObjectUpdates(float DeltaTime)
 
             Block->SetActorLocation(InterpolatedLocation);
             Block->SetActorRotation(InterpolatedRotation);
-
-           /* UE_LOG(LogTemp, Log, TEXT("Tick Updated BlockID=%d, Location=(%.2f, %.2f, %.2f), Rotation=(%.2f, %.2f, %.2f)"),
-                BlockID,
-                InterpolatedLocation.X, InterpolatedLocation.Y, InterpolatedLocation.Z,
-                InterpolatedRotation.Pitch, InterpolatedRotation.Yaw, InterpolatedRotation.Roll);*/
         }
     }
 }

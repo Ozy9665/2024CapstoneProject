@@ -29,6 +29,7 @@ private:
 	TMap<int32, FTransform> LastReceivedTransform;
 	uint8 playerHeader = 0x00;
 	uint8 objectHeader = 0x01;
+	ACharacter* MyCharacter;
 
 public:	
 	// Called every frame
