@@ -67,6 +67,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Abilities")
 	ESpecialAbility SpecialAbility;
 
+
+
+
+
+
 	FTimerHandle RitualTimerHandle;
 
 	// ==== Func ====

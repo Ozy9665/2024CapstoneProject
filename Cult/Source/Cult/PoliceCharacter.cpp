@@ -2,8 +2,12 @@
 
 
 #include "PoliceCharacter.h"
+#include "GameFramework/Actor.h"
 #include"Components/BoxComponent.h"
 #include"Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
+#include "Kismet/KismetSystemLibrary.h"
+#include "GameFramework/PlayerController.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include"Perception/AIPerceptionComponent.h"
 #include "AIController.h"
@@ -19,7 +23,7 @@ APoliceCharacter::APoliceCharacter()
 	//
 	CurrentWeapon = EWeaponType::Baton;	
 	WalkSpeed = 650.0f;	// more faster than cultist
-	//
+	// melee 콜리전 설정
 	AttackCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("AttackCollision"));
 	AttackCollision->SetupAttachment(GetMesh(), TEXT("WeaponSocket")); // 소켓에 위치
 	AttackCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -48,6 +52,18 @@ void APoliceCharacter::BeginPlay()
 	}
 	else {
 		UE_LOG(LogTemp, Warning, TEXT("SpringArm null"));
+		SpringArmComp = NewObject<USpringArmComponent>(this);
+		if (SpringArmComp)
+		{
+			SpringArmComp->AttachToComponent(RootComponent, FAttachmentTransformRules::KeepRelativeTransform);
+			SpringArmComp->RegisterComponent();
+			SpringArmComp->TargetArmLength = 300.0f;
+			SpringArmComp->SetRelativeLocation(FVector(0.0f, 0.0f, 70.0f));
+			UE_LOG(LogTemp, Warning, TEXT("So make SpringArm"));
+		}
+		else {
+			UE_LOG(LogTemp, Error, TEXT("Still Null SpringArm"));
+		}
 	}
 }
 
@@ -75,26 +91,28 @@ void APoliceCharacter::StartAttack()
 {
 	if (bIsAttacking || !AttackMontage) return; 
 
-	UE_LOG(LogTemp, Warning, TEXT("StartAttack Started!"));
-
 	bIsAttacking = true; 
-
-	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
-	if (AnimInstance)
+	if (CurrentWeapon == EWeaponType::Baton)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("Baton Attack"));
 
-		AnimInstance->Montage_Play(AttackMontage);
-		float MontageDuration = AttackMontage->GetPlayLength();
+		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+		if (AnimInstance && BatonAttackMontage)
+		{
 
-		GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::OnAttackEnd, MontageDuration, false);
+			AnimInstance->Montage_Play(AttackMontage);
+
+			// 판정
+			GetWorldTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::CheckBatonAttack, 0.3f, false);
+
+			// 애니메이션 끝나고 공격종료
+			float MontageDuration = AttackMontage->GetPlayLength();
+
+			GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, MontageDuration, false);
+		}
 	}
-}
 
-void APoliceCharacter::OnAttackEnd()
-{
-	bIsAttacking = false;  
 }
-
 
 
 
@@ -124,6 +142,29 @@ void APoliceCharacter::WeaponAttack()
 			PlayAnimMontage(AttackMontage);
 		}
 	}
+}
+
+void APoliceCharacter::CheckBatonAttack()
+{
+	AttackCollision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+
+	TArray<AActor*> HitActors;
+	AttackCollision->GetOverlappingActors(HitActors);
+
+	for (AActor* Actor : HitActors)
+	{
+		if (Actor != this)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Hit : %s"), *Actor->GetName());
+			UGameplayStatics::ApplyDamage(Actor, AttackDamage, GetController(), this, UDamageType::StaticClass());
+		}
+	}
+	AttackCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+}
+
+void APoliceCharacter::EndAttack()
+{
+	bIsAttacking = false;
 }
 
 void APoliceCharacter::OnAttackHit()

@@ -32,6 +32,14 @@ public:
 	virtual void Tick(float DeltaTime)override;
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	
+
+
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	float AttackRange = 150.0f;
+
+
+
+
 	//
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category ="Weapon")
 	EWeaponType CurrentWeapon;
@@ -51,6 +59,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 	class USpringArmComponent* SpringArmComp;
 
+
+
 	// =========Func=========
 	
 	// Movement
@@ -64,10 +74,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Combat")	
 	void WeaponAttack();
 	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void CheckBatonAttack();
+	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void StartAttack();
 	UFUNCTION(BlueprintCallable, Category = "Combat")
-	void OnAttackEnd();
-
+	void EndAttack();
+	
+	UPROPERTY(EditAnywhere, Category = "Combat")
+	class UAnimMontage* BatonAttackMontage;
 
 	// Attack Hit
 	UFUNCTION(BlueprintCallable, Category="Combat")

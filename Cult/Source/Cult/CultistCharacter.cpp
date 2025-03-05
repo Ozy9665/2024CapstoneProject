@@ -57,6 +57,7 @@ void ACultistCharacter::BeginPlay()
 		}
 	}
 
+
 }
 
 void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -184,3 +185,4 @@ void ACultistCharacter::LookUpCamera(float Value)
 {
 	AddControllerPitchInput(Value);
 }
+
