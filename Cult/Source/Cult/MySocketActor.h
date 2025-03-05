@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/SpringArmComponent.h"
 #include "Containers/Queue.h"
 #include "ReplicatedPhysicsBlock.h"
 #include <winsock2.h>

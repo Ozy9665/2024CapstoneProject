@@ -318,14 +318,6 @@ void AMySocketClientActor::UpdateCharacterState(ACharacter* Character, const FCh
 
 void AMySocketClientActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCharacterState& State)
 {
-    FProperty* ShouldMoveProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ShouldMove"));
-    if (ShouldMoveProperty && ShouldMoveProperty->IsA<FBoolProperty>())
-    {
-        bool bShouldMove = FVector(State.VelocityX, State.VelocityY, 0.0f).Size() > 10.0f;
-        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ShouldMoveProperty);
-        BoolProp->SetPropertyValue_InContainer(AnimInstance, bShouldMove);
-    }
-
     // Velocity 업데이트
     FProperty* VelocityProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Velocity"));
     if (VelocityProperty && VelocityProperty->IsA<FStructProperty>())
@@ -339,13 +331,12 @@ void AMySocketClientActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInsta
         }
     }
 
-    // Speed 업데이트
-    FProperty* SpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Speed"));
-    if (SpeedProperty && SpeedProperty->IsA<FDoubleProperty>())
+    FProperty* ShouldMoveProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ShouldMove"));
+    if (ShouldMoveProperty && ShouldMoveProperty->IsA<FBoolProperty>())
     {
-        double Speed = static_cast<double>(FVector(State.VelocityX, State.VelocityY, 0.0f).Size());
-        FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(SpeedProperty);
-        DoubleProp->SetPropertyValue_InContainer(AnimInstance, Speed);
+        bool bShouldMove = (State.AnimationState == EAnimationState::Walk);
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ShouldMoveProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, bShouldMove);
     }
 
     // IsFalling 업데이트

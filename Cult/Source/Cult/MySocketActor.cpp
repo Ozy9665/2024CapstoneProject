@@ -373,7 +373,16 @@ void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCharacterS
         if (NewCharacter)
         {
             ClientCharacters.Add(ClientSocket, NewCharacter);
-            UE_LOG(LogTemp, Log, TEXT("Client character spawned for PlayerID=%d at location %s"),
+            USpringArmComponent* SpringArmComp = NewObject<USpringArmComponent>(NewCharacter, USpringArmComponent::StaticClass());
+            if (SpringArmComp)
+            {
+                SpringArmComp->AttachToComponent(NewCharacter->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+                SpringArmComp->TargetArmLength = 300.0f; // 스프링 암 길이 설정
+                SpringArmComp->SetRelativeLocation(FVector(0.0f, 0.0f, 70.0f)); // 위치 조정
+                SpringArmComp->RegisterComponent(); // 컴포넌트 등록
+            }
+
+            UE_LOG(LogTemp, Log, TEXT("Client character spawned for PlayerID=%d at location %s, SpringArm attached."),
                 AssignedPlayerID, *SpawnLocation.ToString());
         }
         else
@@ -433,15 +442,6 @@ void AMySocketActor::UpdateCharacterState(ACharacter* Character, const FCharacte
 
 void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCharacterState& State)
 {
-    // ShouldMove 업데이트
-    FProperty* ShouldMoveProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ShouldMove"));
-    if (ShouldMoveProperty && ShouldMoveProperty->IsA<FBoolProperty>())
-    {
-        bool bShouldMove = (State.AnimationState == EAnimationState::Walk);
-        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ShouldMoveProperty);
-        BoolProp->SetPropertyValue_InContainer(AnimInstance, bShouldMove);
-    }
-
     // Velocity 업데이트
     FProperty* VelocityProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Velocity"));
     if (VelocityProperty && VelocityProperty->IsA<FStructProperty>())
@@ -455,15 +455,13 @@ void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, c
         }
     }
 
-    // Speed 업데이트
-    FProperty* SpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Speed"));
-    if (SpeedProperty && SpeedProperty->IsA<FDoubleProperty>())
+    FProperty* ShouldMoveProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ShouldMove"));
+    if (ShouldMoveProperty && ShouldMoveProperty->IsA<FBoolProperty>())
     {
-        double Speed = static_cast<double>(FVector(State.VelocityX, State.VelocityY, 0.0f).Size());
-        FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(SpeedProperty);
-        DoubleProp->SetPropertyValue_InContainer(AnimInstance, Speed);
+        bool bShouldMove = (State.AnimationState == EAnimationState::Walk);
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ShouldMoveProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, bShouldMove);
     }
-
     // IsFalling 업데이트
     /*FProperty* IsFallingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("IsFalling"));
     if (IsFallingProperty && IsFallingProperty->IsA<FBoolProperty>())
