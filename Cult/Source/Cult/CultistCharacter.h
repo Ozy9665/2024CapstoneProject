@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include"GameFramework/SpringArmComponent.h"
 #include "BaseCharacter.h"
 #include "Altar.h"
 #include "RitualPerformer.h"
@@ -60,7 +61,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual")
 	float RitualSpeed = 10.0f;
 
-
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
+	class USpringArmComponent* SpringArmComp;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Abilities")
 	ESpecialAbility SpecialAbility;

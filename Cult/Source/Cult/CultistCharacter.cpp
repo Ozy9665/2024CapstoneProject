@@ -34,6 +34,29 @@ void ACultistCharacter::BeginPlay()
 	// 회전속도
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 720.0f, 0.0f);
 
+	SpringArmComp = FindComponentByClass<USpringArmComponent>();
+	if (SpringArmComp)
+	{
+		SpringArmComp->TargetArmLength = 300.0f;
+		SpringArmComp->SetRelativeLocation(FVector(0.0f, 0.0f, 70.0f));
+		UE_LOG(LogTemp, Warning, TEXT("Set SpringArm"));
+	}
+	else {
+		UE_LOG(LogTemp, Warning, TEXT("SpringArm null"));
+		SpringArmComp = NewObject<USpringArmComponent>(this);
+		if (SpringArmComp)
+		{
+			SpringArmComp->AttachToComponent(RootComponent, FAttachmentTransformRules::KeepRelativeTransform);
+			SpringArmComp->RegisterComponent();
+			SpringArmComp->TargetArmLength = 300.0f;
+			SpringArmComp->SetRelativeLocation(FVector(0.0f, 0.0f, 70.0f));
+			UE_LOG(LogTemp, Warning, TEXT("So make SpringArm"));
+		}
+		else {
+			UE_LOG(LogTemp, Error, TEXT("Still Null SpringArm"));
+		}
+	}
+
 }
 
 void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
