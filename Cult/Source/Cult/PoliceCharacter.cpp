@@ -35,7 +35,7 @@ APoliceCharacter::APoliceCharacter()
 
 }
 
-void APoliceCharacter::BeginPlay()
+void APoliceCharacter::BeginPlay()	// 초기화
 {
 	Super::BeginPlay();
 	bUseControllerRotationYaw = false;
@@ -65,6 +65,28 @@ void APoliceCharacter::BeginPlay()
 			UE_LOG(LogTemp, Error, TEXT("Still Null SpringArm"));
 		}
 	}
+
+	CurrentWeapon = EWeaponType::Baton;
+	bIsAttacking = false;
+
+	// 공격 몽타주 확인
+	if (!AttackMontage)
+	{
+		static ConstructorHelpers::FObjectFinder<UAnimMontage> MontageAsset(TEXT("AnimMontage'/Game/Cult_Custom/Characters/Police/Animation/AttackMontage.AttackMontage'"));
+		if (MontageAsset.Succeeded())
+		{
+			AttackMontage = MontageAsset.Object;
+			UE_LOG(LogTemp, Warning, TEXT("AttackMontage Load"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("AttackMontage Load Fail"));
+		}
+	}
+	else {
+		UE_LOG(LogTemp, Warning, TEXT(" AttackMontage is already"));
+	}
+
 }
 
 void APoliceCharacter::Tick(float DeltaTime)
@@ -89,7 +111,10 @@ void APoliceCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 
 void APoliceCharacter::StartAttack()
 {
-	if (bIsAttacking || !AttackMontage) return; 
+	if (bIsAttacking || !AttackMontage) {
+		UE_LOG(LogTemp, Warning, TEXT("Already or NULL"));
+		return;
+	};
 
 	bIsAttacking = true; 
 	if (CurrentWeapon == EWeaponType::Baton)
@@ -97,11 +122,29 @@ void APoliceCharacter::StartAttack()
 		UE_LOG(LogTemp, Warning, TEXT("Baton Attack"));
 
 		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
-		if (AnimInstance && BatonAttackMontage)
+
+		if (!AnimInstance)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("AnimaInstance NULL"));
+		}
+
+		if (AttackMontage)
 		{
 
 			AnimInstance->Montage_Play(AttackMontage);
+			UE_LOG(LogTemp, Warning, TEXT("Play Montage"));
+			if (AnimInstance->Montage_IsPlaying(AttackMontage))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Montage is Playing"));
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("Montage failed to play"));
+			}
 
+			// 이동불가
+			// 
+			// 
 			// 판정
 			GetWorldTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::CheckBatonAttack, 0.3f, false);
 
@@ -110,39 +153,16 @@ void APoliceCharacter::StartAttack()
 
 			GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, MontageDuration, false);
 		}
+		else {
+			UE_LOG(LogTemp, Error, TEXT("Animation is NULL"));
+		}
 	}
 
 }
 
 
 
-void APoliceCharacter::WeaponAttack()
-{
-	if (CurrentWeapon == EWeaponType::Baton)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Attack with Baton"));
-		if (AttackMontage)
-		{
-			PlayAnimMontage(AttackMontage);
-		}
-	}
-	else if (CurrentWeapon == EWeaponType::Pistol)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Attack with Pistol"));
-		if (AttackMontage)
-		{
-			PlayAnimMontage(AttackMontage);
-		}
-	}
-	if (CurrentWeapon == EWeaponType::Taser)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Attack with Taser"));
-		if (AttackMontage)
-		{
-			PlayAnimMontage(AttackMontage);
-		}
-	}
-}
+
 
 void APoliceCharacter::CheckBatonAttack()
 {
@@ -165,6 +185,8 @@ void APoliceCharacter::CheckBatonAttack()
 void APoliceCharacter::EndAttack()
 {
 	bIsAttacking = false;
+
+	// 이동 가능
 }
 
 void APoliceCharacter::OnAttackHit()
@@ -244,3 +266,32 @@ void APoliceCharacter::TurnCharacter()
 		SetActorRotation(SmoothRotation);
 	}
 }
+/*
+void APoliceCharacter::WeaponAttack()
+{
+	if (CurrentWeapon == EWeaponType::Baton)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Attack with Baton"));
+		if (AttackMontage)
+		{
+			PlayAnimMontage(AttackMontage);
+		}
+	}
+	else if (CurrentWeapon == EWeaponType::Pistol)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Attack with Pistol"));
+		if (AttackMontage)
+		{
+			PlayAnimMontage(AttackMontage);
+		}
+	}
+	if (CurrentWeapon == EWeaponType::Taser)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Attack with Taser"));
+		if (AttackMontage)
+		{
+			PlayAnimMontage(AttackMontage);
+		}
+	}
+}
+*/

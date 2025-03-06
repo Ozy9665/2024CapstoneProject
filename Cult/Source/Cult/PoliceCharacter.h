@@ -71,8 +71,8 @@ public:
 	void TurnCharacter();
 
 	// Attack
-	UFUNCTION(BlueprintCallable, Category="Combat")	
-	void WeaponAttack();
+	//UFUNCTION(BlueprintCallable, Category="Combat")	
+	//void WeaponAttack();
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void CheckBatonAttack();
 	UFUNCTION(BlueprintCallable, Category = "Combat")
