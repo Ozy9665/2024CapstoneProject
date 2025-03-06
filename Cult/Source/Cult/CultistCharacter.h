@@ -40,6 +40,13 @@ public:
 
 	void MoveForward(float Value);
 	void MoveRight(float Value);
+	
+	void StartJump();    // 점프 시작
+	void StopJump();     // 점프 해제
+
+	bool bIsCrouching = false;
+	void ToggleCrouch();
+
 	void TurnCamera(float Value);
 	void LookUpCamera(float Value);
 
