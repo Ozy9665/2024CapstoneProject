@@ -72,9 +72,6 @@ void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
 	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
 
-	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACultistCharacter::StartJump);
-	PlayerInputComponent->BindAction("Jump", IE_Released, this, &ACultistCharacter::StopJump);
-
 	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &ACultistCharacter::ToggleCrouch);
 }
 
@@ -102,19 +99,9 @@ void ACultistCharacter::MoveRight(float Value)
 	}
 }
 
-void ACultistCharacter::StartJump()
-{
-	Jump();
-}
-
-void ACultistCharacter::StopJump()
-{
-	StopJumping();
-}
-
 void ACultistCharacter::ToggleCrouch()
 {
-	if (bIsCrouching)
+	if (bIsCrouched)
 	{
 		UnCrouch();
 	}
@@ -122,8 +109,6 @@ void ACultistCharacter::ToggleCrouch()
 	{
 		Crouch();
 	}
-
-	bIsCrouching = !bIsCrouching;
 }
 
 void ACultistCharacter::PerformRitual()

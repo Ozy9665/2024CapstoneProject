@@ -158,18 +158,18 @@ void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
     AllCharacterStates.Reserve(ClientStates.Num() + 1); // 메모리 할당 최적화
 
     // 다른 클라이언트들의 캐릭터 상태 추가
-    FString LogData; // 로그를 위한 문자열 선언
+    // FString LogData; // 로그를 위한 문자열 선언
     for (auto& Entry : ClientStates)
     {
         if (Entry.Key != TargetSocket)
         {
             AllCharacterStates.Add(Entry.Value);
-            LogData += FString::Printf(TEXT("PlayerID: %d, Pos: (%f, %f, %f), Rot: (%f, %f, %f), Vel: (%f, %f, %f), State: %d\n"),
+            /*LogData += FString::Printf(TEXT("PlayerID: %d, Pos: (%f, %f, %f), Rot: (%f, %f, %f), Vel: (%f, %f, %f), State: %d\n"),
                 Entry.Value.PlayerID,
                 Entry.Value.PositionX, Entry.Value.PositionY, Entry.Value.PositionZ,
                 Entry.Value.RotationPitch, Entry.Value.RotationYaw, Entry.Value.RotationRoll,
                 Entry.Value.VelocityX, Entry.Value.VelocityY, Entry.Value.VelocityZ,
-                static_cast<int32>(Entry.Value.AnimationState));
+                static_cast<int32>(Entry.Value.AnimationState));*/
         }
     }
 
@@ -178,12 +178,12 @@ void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
     {
         ServerState = GetServerCharacterState();
         AllCharacterStates.Add(ServerState);
-        LogData += FString::Printf(TEXT("Server PlayerID: %d, Pos: (%f, %f, %f), Rot: (%f, %f, %f), Vel: (%f, %f, %f), State: %d\n"),
+       /*LogData += FString::Printf(TEXT("Server PlayerID: %d, Pos: (%f, %f, %f), Rot: (%f, %f, %f), Vel: (%f, %f, %f), State: %d\n"),
             ServerState.PlayerID,
             ServerState.PositionX, ServerState.PositionY, ServerState.PositionZ,
             ServerState.RotationPitch, ServerState.RotationYaw, ServerState.RotationRoll,
             ServerState.VelocityX, ServerState.VelocityY, ServerState.VelocityZ,
-            static_cast<int32>(ServerState.AnimationState));
+            static_cast<int32>(ServerState.AnimationState));*/
     }
     else
     {
@@ -205,10 +205,10 @@ void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
         UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with WSAGetLastError %ld during send to %d"), WSAGetLastError(), TargetSocket);
         CloseClientSocket(TargetSocket);
     }
-    else
+    /*else
     {
-        // UE_LOG(LogTemp, Error, TEXT("Sent Player Data to %d: \n%s"), TargetSocket, *LogData);
-    }
+         UE_LOG(LogTemp, Error, TEXT("Sent Player Data to %d: \n%s"), TargetSocket, *LogData);
+    }*/
 }
 
 void AMySocketActor::SendObjectData(int32 BlockID, FTransform NewTransform)
@@ -266,19 +266,21 @@ FCharacterState AMySocketActor::GetServerCharacterState()
     State.VelocityZ = Velocity.Z;
     State.Speed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
 
-    // IsFalling 상태
-    // UCharacterMovementComponent* MovementComp = ServerCharacter->GetCharacterMovement();
-    // State.bIsFalling = MovementComp ? MovementComp->IsFalling() : false;
+    // Crouch 상태
+    State.bIsCrouching = ServerCharacter->bIsCrouched;
 
     // AnimationState 계산
-    float Speed = Velocity.Size();
-    if (Speed < KINDA_SMALL_NUMBER)
+    if (ServerCharacter->bIsCrouched)
     {
-        State.AnimationState = EAnimationState::Idle; // 정지 상태
+        State.AnimationState = EAnimationState::Crouch;
+    }
+    else if (State.Speed < KINDA_SMALL_NUMBER)
+    {
+        State.AnimationState = EAnimationState::Idle;
     }
     else
     {
-        State.AnimationState = EAnimationState::Walk; // 이동 상태
+        State.AnimationState = EAnimationState::Walk;
     }
 
     return State;
@@ -373,17 +375,8 @@ void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCharacterS
         if (NewCharacter)
         {
             ClientCharacters.Add(ClientSocket, NewCharacter);
-            USpringArmComponent* SpringArmComp = NewObject<USpringArmComponent>(NewCharacter, USpringArmComponent::StaticClass());
-            if (SpringArmComp)
-            {
-                SpringArmComp->AttachToComponent(NewCharacter->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
-                SpringArmComp->TargetArmLength = 300.0f; // 스프링 암 길이 설정
-                SpringArmComp->SetRelativeLocation(FVector(0.0f, 0.0f, 70.0f)); // 위치 조정
-                SpringArmComp->RegisterComponent(); // 컴포넌트 등록
-            }
 
-            UE_LOG(LogTemp, Log, TEXT("Client character spawned for PlayerID=%d at location %s, SpringArm attached."),
-                AssignedPlayerID, *SpawnLocation.ToString());
+            UE_LOG(LogTemp, Log, TEXT("Client character spawned for PlayerID=%d at location."), AssignedPlayerID);
         }
         else
         {
@@ -462,13 +455,14 @@ void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, c
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ShouldMoveProperty);
         BoolProp->SetPropertyValue_InContainer(AnimInstance, bShouldMove);
     }
-    // IsFalling 업데이트
-    /*FProperty* IsFallingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("IsFalling"));
-    if (IsFallingProperty && IsFallingProperty->IsA<FBoolProperty>())
+
+    // IsCrouching 업데이트
+    FProperty* IsCrouchingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Crouch"));
+    if (IsCrouchingProperty && IsCrouchingProperty->IsA<FBoolProperty>())
     {
-        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFallingProperty);
-        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsFalling);
-    }*/
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsCrouchingProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsCrouching);
+    }
 }
 
 void AMySocketActor::CloseClientSocket(SOCKET ClientSocket)

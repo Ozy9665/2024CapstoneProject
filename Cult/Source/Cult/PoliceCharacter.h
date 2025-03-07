@@ -68,6 +68,7 @@ public:
 	void MoveRight(float Value);
 	void TurnCamera(float Value);
 	void LookUpCamera(float Value);
+	void ToggleCrouch();
 	void TurnCharacter();
 
 	// Attack

@@ -13,7 +13,7 @@ enum class EAnimationState : uint8
 {
 	Idle UMETA(DisplayName = "IDLE"),
 	Walk UMETA(DisplayName = "Walk"),
-	//Jump UMETA(DisplayName = "Jump")
+	Crouch UMETA(DisplayName = "Crouch")
 };
 
 USTRUCT(BlueprintType)
@@ -34,7 +34,8 @@ struct FCharacterState
 	float VelocityY;
 	float VelocityZ;
 	float Speed;
-	// bool bIsFalling;
+
+	bool bIsCrouching;
 	// 애니메이션 상태 필드 추가
 	EAnimationState AnimationState;
 };

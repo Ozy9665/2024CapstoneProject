@@ -245,18 +245,22 @@ FCharacterState AMySocketClientActor::GetCharacterState(ACharacter* PlayerCharac
     CharacterState.VelocityY = Velocity.Y;
     CharacterState.VelocityZ = Velocity.Z;
     CharacterState.Speed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
+    
+    // Crouch 상태
+    CharacterState.bIsCrouching = PlayerCharacter->bIsCrouched;
 
-    // UCharacterMovementComponent* MovementComp = PlayerCharacter->GetCharacterMovement();
-    // CharacterState.bIsFalling = MovementComp ? MovementComp->IsFalling() : false;
-
-    float Speed = Velocity.Size();
-    if (Speed < KINDA_SMALL_NUMBER)
+    // AnimationState 계산
+    if (PlayerCharacter->bIsCrouched)
     {
-        CharacterState.AnimationState = EAnimationState::Idle; // 속도가 거의 0이면 Idle
+        CharacterState.AnimationState = EAnimationState::Crouch;
+    }
+    else if (CharacterState.Speed < KINDA_SMALL_NUMBER)
+    {
+        CharacterState.AnimationState = EAnimationState::Idle;
     }
     else
     {
-        CharacterState.AnimationState = EAnimationState::Walk; // 이동 중이면 Run
+        CharacterState.AnimationState = EAnimationState::Walk;
     }
 
     return CharacterState;
@@ -339,13 +343,13 @@ void AMySocketClientActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInsta
         BoolProp->SetPropertyValue_InContainer(AnimInstance, bShouldMove);
     }
 
-    // IsFalling 업데이트
-    /*FProperty* IsFallingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("IsFalling"));
-    if (IsFallingProperty && IsFallingProperty->IsA<FBoolProperty>())
+    // IsCrouching 업데이트
+    FProperty* IsCrouchingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Crouch"));
+    if (IsCrouchingProperty && IsCrouchingProperty->IsA<FBoolProperty>())
     {
-        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFallingProperty);
-        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsFalling);
-    }*/
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsCrouchingProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsCrouching);
+    }
 }
 
 void AMySocketClientActor::SpawnCharacter(const FCharacterState& State)
