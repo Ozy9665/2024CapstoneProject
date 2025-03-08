@@ -21,18 +21,29 @@ APoliceCharacter::APoliceCharacter()
 	PrimaryActorTick.bCanEverTick = true;
 	bIsAttacking = false;
 	//
-	CurrentWeapon = EWeaponType::Baton;	
 	WalkSpeed = 650.0f;	// more faster than cultist
-	// melee 콜리전 설정
-	AttackCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("AttackCollision"));
-	AttackCollision->SetupAttachment(GetMesh(), TEXT("WeaponSocket")); // 소켓에 위치
-	AttackCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	CurrentWeapon = EWeaponType::Baton;
+
 
 	StimulusComponent = CreateDefaultSubobject<UAIPerceptionStimuliSourceComponent>(TEXT("StimuliSourceComponent"));
 	StimulusComponent->RegisterForSense(TSubclassOf<UAISense>(UAISense_Sight::StaticClass()));
 	StimulusComponent->RegisterWithPerceptionSystem();
 
 
+	// 무기 초기화
+	BatonMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BatonMesh"));
+	BatonMesh->SetupAttachment(GetMesh(), TEXT("hand_r"));
+
+	PistolMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PistolMesh"));
+	PistolMesh->SetupAttachment(GetMesh(), TEXT("hand_r"));
+
+	TaserMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("TaserMesh"));
+	TaserMesh->SetupAttachment(GetMesh(), TEXT("hand_r"));
+
+	// 공격 콜리전
+	AttackCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("AttackCollision"));
+	AttackCollision->SetupAttachment(BatonMesh);	// 공격콜리전->무기
+	AttackCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 void APoliceCharacter::BeginPlay()	// 초기화
@@ -43,8 +54,13 @@ void APoliceCharacter::BeginPlay()	// 초기화
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 720.0f, 0.0f);
 
+	// 무기
 	CurrentWeapon = EWeaponType::Baton;
+
+
 	bIsAttacking = false;
+
+
 
 	// 공격 몽타주 확인
 	if (!AttackMontage)
@@ -63,6 +79,12 @@ void APoliceCharacter::BeginPlay()	// 초기화
 	else {
 		UE_LOG(LogTemp, Warning, TEXT(" AttackMontage is already"));
 	}
+
+
+	// melee 콜리전 설정
+	CurrentWeapon = EWeaponType::Baton;
+
+	UpdateWeaponVisibility();	// 기본 : 바톤
 
 }
 
@@ -83,6 +105,7 @@ void APoliceCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
 
 	PlayerInputComponent->BindAction("Attack", IE_Pressed, this, &APoliceCharacter::StartAttack);
+	PlayerInputComponent->BindAction("SwitchWeapon", IE_Pressed, this, &APoliceCharacter::SwitchWeapon);
 
 	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &APoliceCharacter::ToggleCrouch);
 }
@@ -101,51 +124,42 @@ void APoliceCharacter::ToggleCrouch()
 
 void APoliceCharacter::StartAttack()
 {
-	if (bIsAttacking || !AttackMontage) {
-		UE_LOG(LogTemp, Warning, TEXT("Already or NULL"));
-		return;
-	};
-
+	if (bIsAttacking)return;
 	bIsAttacking = true; 
-	if (CurrentWeapon == EWeaponType::Baton)
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (!AnimInstance)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Baton Attack"));
-
-		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
-
-		if (!AnimInstance)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("AnimaInstance NULL"));
-		}
-
+		UE_LOG(LogTemp, Warning, TEXT("AnimaInstance NULL"));
+	}
+	// 애니메이션 길이 - 끝나고 EndAttack 부를 수 있도록
+	float BatonMontageDuration = AttackMontage->GetPlayLength();
+	switch (CurrentWeapon)
+	{
+	case EWeaponType::Baton:
 		if (AttackMontage)
 		{
-
+			UE_LOG(LogTemp, Warning, TEXT("Baton Attack"));
 			AnimInstance->Montage_Play(AttackMontage);
-			UE_LOG(LogTemp, Warning, TEXT("Play Montage"));
-			if (AnimInstance->Montage_IsPlaying(AttackMontage))
-			{
-				UE_LOG(LogTemp, Warning, TEXT("Montage is Playing"));
-			}
-			else
-			{
-				UE_LOG(LogTemp, Error, TEXT("Montage failed to play"));
-			}
-
+			
 			// 이동불가
-			// 
-			// 
-			// 판정
+
+
 			GetWorldTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::CheckBatonAttack, 0.3f, false);
-
-			// 애니메이션 끝나고 공격종료
-			float MontageDuration = AttackMontage->GetPlayLength();
-
-			GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, MontageDuration, false);
+			UE_LOG(LogTemp, Warning, TEXT("SetTimer for CheckBatonAttack"));
+			GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, BatonMontageDuration, false);
 		}
-		else {
-			UE_LOG(LogTemp, Error, TEXT("Animation is NULL"));
-		}
+		break;
+
+	case EWeaponType::Pistol:
+		UE_LOG(LogTemp, Warning, TEXT("Shoot Pistol"));
+		// 임시 1.0f 초
+		GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
+		break;
+	case EWeaponType::Taser:
+		UE_LOG(LogTemp, Warning, TEXT("Shoot Taser"));
+		GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
+		break;
 	}
 
 }
@@ -156,6 +170,7 @@ void APoliceCharacter::StartAttack()
 
 void APoliceCharacter::CheckBatonAttack()
 {
+	UE_LOG(LogTemp, Warning, TEXT("CheckBaton"));
 	AttackCollision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 
 	TArray<AActor*> HitActors;
@@ -198,6 +213,26 @@ void APoliceCharacter::OnAttackHit()
 	AttackCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
+
+
+void APoliceCharacter::SwitchWeapon()
+{
+	if (CurrentWeapon == EWeaponType::Baton)
+		CurrentWeapon = EWeaponType::Pistol;
+	else if (CurrentWeapon == EWeaponType::Pistol)
+		CurrentWeapon = EWeaponType::Taser;
+	else
+		CurrentWeapon = EWeaponType::Baton;
+
+	UpdateWeaponVisibility();
+}
+
+void APoliceCharacter::UpdateWeaponVisibility()
+{
+	BatonMesh->SetVisibility(CurrentWeapon == EWeaponType::Baton);
+	PistolMesh->SetVisibility(CurrentWeapon == EWeaponType::Pistol);
+	TaserMesh->SetVisibility(CurrentWeapon == EWeaponType::Taser);
+}
 
 
 

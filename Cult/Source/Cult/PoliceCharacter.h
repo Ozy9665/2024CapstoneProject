@@ -40,21 +40,23 @@ public:
 
 
 
-	//
+	// Combat
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category ="Weapon")
-	EWeaponType CurrentWeapon;
-
-	//  
+	EWeaponType CurrentWeapon;  
 	UPROPERTY(EditAnywhere, BlueprintReadwrite, Category="Combat")
 	class UBoxComponent* AttackCollision;
-
-	// 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat")
 	class UAnimMontage* AttackMontage;
-
-	//
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat")
 	float AttackDamage = 20.0f;
+	//	- Mesh
+	UPROPERTY(VisibleAnywhere, Category="Weapon")
+	UStaticMeshComponent* BatonMesh;
+	UPROPERTY(VisibleAnywhere, Category = "Weapon")
+	UStaticMeshComponent* PistolMesh;
+	UPROPERTY(VisibleAnywhere, Category = "Weapon")
+	UStaticMeshComponent* TaserMesh;
+
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 	class USpringArmComponent* SpringArmComp;
@@ -80,7 +82,10 @@ public:
 	void StartAttack();
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void EndAttack();
-	
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void SwitchWeapon();
+	void UpdateWeaponVisibility();
+
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	class UAnimMontage* BatonAttackMontage;
 
