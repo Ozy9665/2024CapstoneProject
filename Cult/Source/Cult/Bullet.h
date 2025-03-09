@@ -30,8 +30,7 @@ private:
 	class UProjectileMovementComponent* BulletMovementComponent;
 
 	UFUNCTION()
-	void OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
-
+	void OnHit(AActor* HitActor, UPrimitiveComponent* HitComponent, FVector NormalImpulse, const FHitResult& Hit);
 	UPROPERTY(EditAnywhere)
 	float Damage = 50.f;
 

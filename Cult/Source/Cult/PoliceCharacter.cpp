@@ -3,6 +3,7 @@
 
 #include "PoliceCharacter.h"
 #include "GameFramework/Actor.h"
+#include "Camera/CameraComponent.h"
 #include"Components/BoxComponent.h"
 #include"Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
@@ -44,6 +45,13 @@ APoliceCharacter::APoliceCharacter()
 	AttackCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("AttackCollision"));
 	AttackCollision->SetupAttachment(BatonMesh);	// 공격콜리전->무기
 	AttackCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	CameraComp = FindComponentByClass<UCameraComponent>();
+
+	if (CameraComp)
+	{
+		DefaultFOV = CameraComp->FieldOfView;
+	}
 }
 
 void APoliceCharacter::BeginPlay()	// 초기화
@@ -86,6 +94,11 @@ void APoliceCharacter::BeginPlay()	// 초기화
 
 	UpdateWeaponVisibility();	// 기본 : 바톤
 
+	// 
+	if (CameraComp)
+	{
+		DefaultFOV = CameraComp->FieldOfView; // 기본 FOV 저장
+	}
 }
 
 void APoliceCharacter::Tick(float DeltaTime)
@@ -165,6 +178,38 @@ void APoliceCharacter::StartAttack()
 }
 
 
+void APoliceCharacter::ShootPistol()
+{
+	if (!BulletClass)return;
+	if (!bIsAiming)return;
+
+	UWorld* World = GetWorld();
+	if (!World)return;
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	FVector MuzzlePos = MuzzleLocation->GetComponentLocation();
+	FRotator MuzzleRot = CameraComp->GetComponentRotation();
+
+	if (CurrentWeapon == EWeaponType::Pistol)
+	{
+		World->SpawnActor<ABullet>(BulletClass, MuzzlePos, MuzzleRot, SpawnParams);
+	}
+	else if (CurrentWeapon == EWeaponType::Taser)
+	{
+		World->SpawnActor<ABullet>(TaserProjectileClass, MuzzlePos, MuzzleRot, SpawnParams);
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("Shoot with %s"), (CurrentWeapon == EWeaponType::Pistol) ? TEXT("Pistol") : TEXT("Taser"));
+	
+	//FVector MuzzleLocation = GetMesh()->GetSocketLocation(TEXT("hand_r"));
+	//FRotator MuzzleRotation = GetControlRotation();
+
+	//// 총알 생성
+	//AActor* Bullet = GetWorld()->SpawnActor<AActor>(BulletClass, MuzzleLocation, MuzzleRotation);
+
+}
 
 
 
@@ -235,8 +280,25 @@ void APoliceCharacter::UpdateWeaponVisibility()
 }
 
 
+void APoliceCharacter::StartAiming()
+{
+	bIsAiming = true;
 
+	if (CameraComp)
+	{
+		CameraComp->SetFieldOfView(AimFOV);
+	}
+}
 
+void APoliceCharacter::StopAiming()
+{
+	bIsAiming = false;
+
+	if (CameraComp)
+	{
+		CameraComp->SetFieldOfView(DefaultFOV);
+	}
+}
 
 
 
@@ -291,32 +353,3 @@ void APoliceCharacter::TurnCharacter()
 		SetActorRotation(SmoothRotation);
 	}
 }
-/*
-void APoliceCharacter::WeaponAttack()
-{
-	if (CurrentWeapon == EWeaponType::Baton)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Attack with Baton"));
-		if (AttackMontage)
-		{
-			PlayAnimMontage(AttackMontage);
-		}
-	}
-	else if (CurrentWeapon == EWeaponType::Pistol)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Attack with Pistol"));
-		if (AttackMontage)
-		{
-			PlayAnimMontage(AttackMontage);
-		}
-	}
-	if (CurrentWeapon == EWeaponType::Taser)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Attack with Taser"));
-		if (AttackMontage)
-		{
-			PlayAnimMontage(AttackMontage);
-		}
-	}
-}
-*/

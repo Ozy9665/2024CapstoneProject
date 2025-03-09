@@ -2,6 +2,9 @@
 
 
 #include "Bullet.h"
+#include "GameFramework/ProjectileMovementComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 // Sets default values
 ABullet::ABullet()
@@ -9,6 +12,16 @@ ABullet::ABullet()
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = false;
 
+	BulletMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BulletMesh"));
+	RootComponent = BulletMesh;
+	BulletMesh->SetSimulatePhysics(true);
+	//BulletMesh->OnComponentHit.AddDynamic(this, &ABullet::OnHit);
+
+	BulletMovementComponent = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("BulletMovement"));
+	BulletMovementComponent->InitialSpeed = 3000.f;
+	BulletMovementComponent->MaxSpeed = 3000.f;
+	BulletMovementComponent->bRotationFollowsVelocity = true;
+	BulletMovementComponent->bShouldBounce = false;
 }
 
 // Called when the game starts or when spawned
@@ -25,7 +38,7 @@ void ABullet::Tick(float DeltaTime)
 
 }
 
-void ABullet::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
+void ABullet::OnHit(AActor* HitActor, UPrimitiveComponent* HitComponent, FVector NormalImpulse, const FHitResult& Hit)
 {
 	AActor* MyOwner = GetOwner();
 	if (MyOwner == nullptr)

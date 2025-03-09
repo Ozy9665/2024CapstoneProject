@@ -4,10 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "BaseCharacter.h"
+#include "Bullet.h"
 #include"GameFramework/Character.h"
 #include"GameFramework/SpringArmComponent.h"
 #include "Perception/AIPerceptionStimuliSourceComponent.h"
 #include "PoliceCharacter.generated.h"
+
 
 UENUM(BlueprintType)
 enum class EWeaponType : uint8
@@ -16,6 +18,7 @@ enum class EWeaponType : uint8
 	Pistol UMETA(DisplayName="Pistol"),
 	Taser UMETA(DisplayName="Taser")
 };
+
 
 UCLASS()
 class CULT_API APoliceCharacter : public ABaseCharacter
@@ -49,6 +52,13 @@ public:
 	class UAnimMontage* AttackMontage;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat")
 	float AttackDamage = 20.0f;
+	UPROPERTY(EditDefaultsOnly, Category="Camera")
+	float AimFOV = 60.0f;
+	UPROPERTY(EditDefaultsOnly, Category = "Camera")
+	float DefaultFOV = 90.0f;
+	bool bIsAiming = false;
+
+
 	//	- Mesh
 	UPROPERTY(VisibleAnywhere, Category="Weapon")
 	UStaticMeshComponent* BatonMesh;
@@ -56,7 +66,17 @@ public:
 	UStaticMeshComponent* PistolMesh;
 	UPROPERTY(VisibleAnywhere, Category = "Weapon")
 	UStaticMeshComponent* TaserMesh;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weapon")
+	TSubclassOf<class ABullet> BulletClass;
+	UPROPERTY(EditDefaultsOnly, Category="Weapon")
+	TSubclassOf<class ABullet> TaserProjectileClass;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weapon")
+	bool bIsUsingTaser = false;
+	UPROPERTY(EditDefaultsOnly, Category="Weapon")
+	USceneComponent* MuzzleLocation;
 
+	UPROPERTY()
+	class UCameraComponent* CameraComp;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 	class USpringArmComponent* SpringArmComp;
@@ -73,6 +93,10 @@ public:
 	void ToggleCrouch();
 	void TurnCharacter();
 
+	void StartAiming();
+	void StopAiming();
+	void Shoot();
+
 	// Attack
 	//UFUNCTION(BlueprintCallable, Category="Combat")	
 	//void WeaponAttack();
@@ -84,6 +108,10 @@ public:
 	void EndAttack();
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SwitchWeapon();
+	
+	
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void ShootPistol();
 	void UpdateWeaponVisibility();
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
