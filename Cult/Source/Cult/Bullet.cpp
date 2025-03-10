@@ -4,6 +4,8 @@
 #include "Bullet.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SphereComponent.h"
+#include"GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
 
 // Sets default values
@@ -11,16 +13,19 @@ ABullet::ABullet()
 {
 	PrimaryActorTick.bCanEverTick = false;
 
-	BulletMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BulletMesh"));
-	RootComponent = BulletMesh;
-	BulletMesh->SetSimulatePhysics(true);
-	//BulletMesh->OnComponentHit.AddDynamic(this, &ABullet::OnHit);
+	CollisionComp = CreateDefaultSubobject<USphereComponent>(TEXT("SphereComp"));
+	CollisionComp->InitSphereRadius(5.0f);
+	CollisionComp->SetCollisionProfileName(TEXT("BlockAll"));
+	CollisionComp->OnComponentHit.AddDynamic(this, &ABullet::OnHit);
+	RootComponent = CollisionComp;
 
-	BulletMovementComponent = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("BulletMovement"));
-	BulletMovementComponent->InitialSpeed = 3000.f;
-	BulletMovementComponent->MaxSpeed = 3000.f;
-	BulletMovementComponent->bRotationFollowsVelocity = true;
-	BulletMovementComponent->bShouldBounce = false;
+	ProjectileMovement = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileMovement"));
+	ProjectileMovement->InitialSpeed = BulletSpeed;
+	ProjectileMovement->MaxSpeed = BulletSpeed;
+	ProjectileMovement->bRotationFollowsVelocity = true;
+	ProjectileMovement->bShouldBounce = false;
+
+
 }
 
 // Called when the game starts or when spawned
@@ -37,20 +42,20 @@ void ABullet::Tick(float DeltaTime)
 
 }
 
-void ABullet::OnHit(AActor* HitActor, UPrimitiveComponent* HitComponent, FVector NormalImpulse, const FHitResult& Hit)
+void ABullet::SetDirection(const FVector& NewDirection)
 {
-	AActor* MyOwner = GetOwner();
-	if (MyOwner == nullptr)
+	Direction = NewDirection;
+	ProjectileMovement->Velocity = Direction * BulletSpeed;
+}
+
+void ABullet ::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
+{
+	if (OtherActor && OtherActor != this)
 	{
+		// 총알이 적중하면 데미지 처리 (필요 시)
+		UGameplayStatics::ApplyDamage(OtherActor, 10.0f, GetInstigatorController(), this, UDamageType::StaticClass());
+
+		// 총알 제거
 		Destroy();
-		return;
 	}
-
-
-
-
-
-
-	// 파괴
-	Destroy();
 }

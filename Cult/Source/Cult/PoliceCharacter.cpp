@@ -17,7 +17,7 @@
 #include "Perception/AIPerceptionStimuliSourceComponent.h"
 #include "Kismet/GameplayStatics.h"
 
-APoliceCharacter::APoliceCharacter()
+APoliceCharacter::APoliceCharacter(const FObjectInitializer& ObjectInitializer)
 {
 	PrimaryActorTick.bCanEverTick = true;
 	bIsAttacking = false;
@@ -46,7 +46,12 @@ APoliceCharacter::APoliceCharacter()
 	AttackCollision->SetupAttachment(BatonMesh);	// 공격콜리전->무기
 	AttackCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	CameraComp = FindComponentByClass<UCameraComponent>();
+	// 총구
+	MuzzleLocation = CreateDefaultSubobject<USceneComponent>(TEXT("MuzzleLocation"));
+	MuzzleLocation->SetupAttachment(GetMesh(), TEXT("MuzzleSocket"));
+
+	CameraComp = ObjectInitializer.CreateDefaultSubobject<UCameraComponent>(this, TEXT("CameraComp"));
+	CameraComp->SetupAttachment(RootComponent);
 
 	if (CameraComp)
 	{
@@ -95,9 +100,16 @@ void APoliceCharacter::BeginPlay()	// 초기화
 	UpdateWeaponVisibility();	// 기본 : 바톤
 
 	// 
+	CameraComp = FindComponentByClass<UCameraComponent>();
 	if (CameraComp)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("SetDefaultFOV"));
 		DefaultFOV = CameraComp->FieldOfView; // 기본 FOV 저장
+	}
+	else {
+		UE_LOG(LogTemp, Warning, TEXT("CCNUll"));
+		CameraComp = CreateDefaultSubobject<UCameraComponent>(TEXT("CameraComp"));
+		CameraComp->SetupAttachment(RootComponent);
 	}
 }
 
@@ -121,6 +133,9 @@ void APoliceCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	PlayerInputComponent->BindAction("SwitchWeapon", IE_Pressed, this, &APoliceCharacter::SwitchWeapon);
 
 	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &APoliceCharacter::ToggleCrouch);
+	PlayerInputComponent->BindAction("Aim", IE_Pressed, this, &APoliceCharacter::StartAiming);
+	PlayerInputComponent->BindAction("Aim", IE_Released, this, &APoliceCharacter::StopAiming);
+
 }
 
 void APoliceCharacter::ToggleCrouch()
@@ -166,12 +181,13 @@ void APoliceCharacter::StartAttack()
 
 	case EWeaponType::Pistol:
 		UE_LOG(LogTemp, Warning, TEXT("Shoot Pistol"));
-		// 임시 1.0f 초
-		GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
+		ShootPistol();
+		//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
 		break;
 	case EWeaponType::Taser:
 		UE_LOG(LogTemp, Warning, TEXT("Shoot Taser"));
-		GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
+		ShootPistol();
+		//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
 		break;
 	}
 
@@ -180,35 +196,32 @@ void APoliceCharacter::StartAttack()
 
 void APoliceCharacter::ShootPistol()
 {
-	if (!BulletClass)return;
-	if (!bIsAiming)return;
-
-	UWorld* World = GetWorld();
-	if (!World)return;
-
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-	FVector MuzzlePos = MuzzleLocation->GetComponentLocation();
-	FRotator MuzzleRot = CameraComp->GetComponentRotation();
-
-	if (CurrentWeapon == EWeaponType::Pistol)
+	if (BulletClass)
 	{
-		World->SpawnActor<ABullet>(BulletClass, MuzzlePos, MuzzleRot, SpawnParams);
+		// 현재 카메라 방향을 가져옴
+		APlayerController* PC = Cast<APlayerController>(GetController());
+		if (PC)
+		{
+			FVector CameraLocation;
+			FRotator CameraRotation;
+			PC->GetPlayerViewPoint(CameraLocation, CameraRotation);
+
+			// 총구 위치
+			FVector MuzzlePosition = MuzzleLocation->GetComponentLocation();
+			FRotator MuzzleRotation = CameraRotation;
+
+			// 총알 생성
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+			ABullet* Bullet = GetWorld()->SpawnActor<ABullet>(BulletClass, MuzzlePosition, MuzzleRotation, SpawnParams);
+			if (Bullet)
+			{
+				Bullet->SetDirection(MuzzleRotation.Vector()); // 총알 방향 설정
+			}
+		}
 	}
-	else if (CurrentWeapon == EWeaponType::Taser)
-	{
-		World->SpawnActor<ABullet>(TaserProjectileClass, MuzzlePos, MuzzleRot, SpawnParams);
-	}
-
-	UE_LOG(LogTemp, Warning, TEXT("Shoot with %s"), (CurrentWeapon == EWeaponType::Pistol) ? TEXT("Pistol") : TEXT("Taser"));
-	
-	//FVector MuzzleLocation = GetMesh()->GetSocketLocation(TEXT("hand_r"));
-	//FRotator MuzzleRotation = GetControlRotation();
-
-	//// 총알 생성
-	//AActor* Bullet = GetWorld()->SpawnActor<AActor>(BulletClass, MuzzleLocation, MuzzleRotation);
-
+	EndAttack();
 }
 
 
@@ -283,20 +296,45 @@ void APoliceCharacter::UpdateWeaponVisibility()
 void APoliceCharacter::StartAiming()
 {
 	bIsAiming = true;
+	//if (APlayerController* PC = Cast<APlayerController>(GetController()))
+ //   {
+ //       if (PC->GetViewTarget() == this)
+ //       {
+ //           UE_LOG(LogTemp, Warning, TEXT("StartAiming, AimFOV is %f"), AimFOV);
 
-	if (CameraComp)
-	{
-		CameraComp->SetFieldOfView(AimFOV);
-	}
+ //           // ChildActor에서 실제 카메라 액터 가져오기
+ //           AActor* CameraActor = PlayerCameraChild->GetChildActor();
+ //           if (CameraActor)
+ //           {
+ //               // 블루프린트 기반 카메라 액터에서 UCameraComponent 찾기
+ //               UCameraComponent* CameraComp = CameraActor->FindComponentByClass<UCameraComponent>();
+ //               if (CameraComp)
+ //               {
+ //                   CameraComp->SetFieldOfView(AimFOV);
+ //                   UE_LOG(LogTemp, Warning, TEXT("Aiming..FOV now : %f"), CameraComp->FieldOfView);
+ //               }
+ //               else
+ //               {
+ //                   UE_LOG(LogTemp, Error, TEXT("CameraComp not found on BP_PlayerCamera!"));
+ //               }
+ //           }
+ //           else
+ //           {
+ //               UE_LOG(LogTemp, Error, TEXT("PlayerCameraChild has no valid ChildActor!"));
+ //           }
+ //       }
+ //   }
 }
 
 void APoliceCharacter::StopAiming()
 {
 	bIsAiming = false;
+	UE_LOG(LogTemp, Warning, TEXT("StopAiming"));
 
 	if (CameraComp)
 	{
 		CameraComp->SetFieldOfView(DefaultFOV);
+		UE_LOG(LogTemp, Warning, TEXT("SetFOV"));
 	}
 }
 
