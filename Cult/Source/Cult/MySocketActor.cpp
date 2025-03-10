@@ -448,12 +448,15 @@ void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, c
         }
     }
 
-    FProperty* ShouldMoveProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ShouldMove"));
-    if (ShouldMoveProperty && ShouldMoveProperty->IsA<FBoolProperty>())
+    // Speed 업데이트
     {
-        bool bShouldMove = (State.AnimationState == EAnimationState::Walk);
-        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ShouldMoveProperty);
-        BoolProp->SetPropertyValue_InContainer(AnimInstance, bShouldMove);
+        FProperty* SpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Speed"));
+        if (SpeedProperty && SpeedProperty->IsA<FDoubleProperty>())
+        {
+            double ComputedSpeed = FVector(State.VelocityX, State.VelocityY, 0.0f).Size();
+            FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(SpeedProperty);
+            DoubleProp->SetPropertyValue_InContainer(AnimInstance, ComputedSpeed);
+        }
     }
 
     // IsCrouching 업데이트
