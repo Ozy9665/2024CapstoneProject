@@ -23,6 +23,10 @@ protected:
 	virtual void BeginPlay() override;
 
 private:
+	
+
+public:	
+	// Called every frame
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")
 	UStaticMeshComponent* BulletMesh;
 
@@ -30,9 +34,19 @@ private:
 	class UProjectileMovementComponent* BulletMovementComponent;
 
 	UFUNCTION()
-	void OnHit(AActor* HitActor, UPrimitiveComponent* HitComponent, FVector NormalImpulse, const FHitResult& Hit);
+	void OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 	UPROPERTY(EditAnywhere)
 	float Damage = 50.f;
+
+	UPROPERTY(EditAnywhere, Category = "Bullet")
+	float BulletSpeed = 2000.0f;
+	FVector Direction;
+
+	UPROPERTY(VisibleAnywhere, Category = "Bullet")
+	class USphereComponent* CollisionComp;
+
+	UPROPERTY(VisibleAnywhere, Category = "Bullet")
+	class UProjectileMovementComponent* ProjectileMovement;
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	class UParticleSystem* HitParticles;
@@ -48,9 +62,6 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	TSubclassOf<class UCameraShakeBase> HitCameraShakeClass;
-
-public:	
-	// Called every frame
 	virtual void Tick(float DeltaTime) override;
-
+	void SetDirection(const FVector& NewDirection);
 };

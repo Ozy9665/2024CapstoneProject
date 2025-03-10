@@ -26,7 +26,7 @@ class CULT_API APoliceCharacter : public ABaseCharacter
 	GENERATED_BODY()
 	
 public:
-	APoliceCharacter();
+	APoliceCharacter(const FObjectInitializer& ObjectInitializer);
 
 protected:
 	virtual void BeginPlay() override;
@@ -56,8 +56,8 @@ public:
 	float AimFOV = 60.0f;
 	UPROPERTY(EditDefaultsOnly, Category = "Camera")
 	float DefaultFOV = 90.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
 	bool bIsAiming = false;
-
 
 	//	- Mesh
 	UPROPERTY(VisibleAnywhere, Category="Weapon")
@@ -68,12 +68,13 @@ public:
 	UStaticMeshComponent* TaserMesh;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weapon")
 	TSubclassOf<class ABullet> BulletClass;
-	UPROPERTY(EditDefaultsOnly, Category="Weapon")
+	UPROPERTY(EditAnywhere, Category="Weapon")
 	TSubclassOf<class ABullet> TaserProjectileClass;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weapon")
 	bool bIsUsingTaser = false;
 	UPROPERTY(EditDefaultsOnly, Category="Weapon")
 	USceneComponent* MuzzleLocation;
+
 
 	UPROPERTY()
 	class UCameraComponent* CameraComp;
@@ -95,7 +96,7 @@ public:
 
 	void StartAiming();
 	void StopAiming();
-	void Shoot();
+	//void Shoot();
 
 	// Attack
 	//UFUNCTION(BlueprintCallable, Category="Combat")	
