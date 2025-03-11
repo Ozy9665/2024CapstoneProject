@@ -269,20 +269,6 @@ FCharacterState AMySocketActor::GetServerCharacterState()
     // Crouch 상태
     State.bIsCrouching = ServerCharacter->bIsCrouched;
 
-    // AnimationState 계산
-    if (ServerCharacter->bIsCrouched)
-    {
-        State.AnimationState = EAnimationState::Crouch;
-    }
-    else if (State.Speed < KINDA_SMALL_NUMBER)
-    {
-        State.AnimationState = EAnimationState::Idle;
-    }
-    else
-    {
-        State.AnimationState = EAnimationState::Walk;
-    }
-
     return State;
 }
 
@@ -417,9 +403,13 @@ void AMySocketActor::UpdateCharacterState(ACharacter* Character, const FCharacte
     FVector CurrentLocation = Character->GetActorLocation();
     FVector TargetLocation = FVector(State.PositionX, State.PositionY, State.PositionZ);
 
+    if (State.bIsCrouching)
+    {
+        TargetLocation.Z += 50.0f;
+    }
+
     FVector NewLocation = FMath::VInterpTo(CurrentLocation, TargetLocation, DeltaTime, InterpSpeed);
     Character->SetActorLocation(NewLocation);
-
     Character->SetActorRotation(FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll));
 
     // 애니메이션 상태 업데이트 추가
@@ -449,14 +439,11 @@ void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, c
     }
 
     // Speed 업데이트
+    FProperty* SpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Speed"));
+    if (SpeedProperty && SpeedProperty->IsA<FDoubleProperty>())
     {
-        FProperty* SpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Speed"));
-        if (SpeedProperty && SpeedProperty->IsA<FDoubleProperty>())
-        {
-            double ComputedSpeed = FVector(State.VelocityX, State.VelocityY, 0.0f).Size();
-            FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(SpeedProperty);
-            DoubleProp->SetPropertyValue_InContainer(AnimInstance, ComputedSpeed);
-        }
+        FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(SpeedProperty);
+        DoubleProp->SetPropertyValue_InContainer(AnimInstance, State.Speed);
     }
 
     // IsCrouching 업데이트

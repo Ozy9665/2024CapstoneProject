@@ -36,8 +36,6 @@ struct FCharacterState
 	float Speed;
 
 	bool bIsCrouching;
-	// 애니메이션 상태 필드 추가
-	EAnimationState AnimationState;
 };
 
 UCLASS()

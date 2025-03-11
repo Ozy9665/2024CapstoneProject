@@ -249,20 +249,6 @@ FCharacterState AMySocketClientActor::GetCharacterState(ACharacter* PlayerCharac
     // Crouch 상태
     CharacterState.bIsCrouching = PlayerCharacter->bIsCrouched;
 
-    // AnimationState 계산
-    if (PlayerCharacter->bIsCrouched)
-    {
-        CharacterState.AnimationState = EAnimationState::Crouch;
-    }
-    else if (CharacterState.Speed < KINDA_SMALL_NUMBER)
-    {
-        CharacterState.AnimationState = EAnimationState::Idle;
-    }
-    else
-    {
-        CharacterState.AnimationState = EAnimationState::Walk;
-    }
-
     return CharacterState;
 }
 
@@ -288,26 +274,19 @@ void AMySocketClientActor::ProcessCharacterUpdates(float DeltaTime)
 
 void AMySocketClientActor::UpdateCharacterState(ACharacter* Character, const FCharacterState& State, float DeltaTime)
 {
-    // 이전 위치 저장
+    float InterpSpeed = 30.0f; // 보간 속도
+
     FVector CurrentLocation = Character->GetActorLocation();
     FVector TargetLocation(State.PositionX, State.PositionY, State.PositionZ);
 
-    // 예측 이동
-    static TMap<FString, FVector> LastVelocity;
-    FVector& PreviousVelocity = LastVelocity.FindOrAdd(Character->GetName(), FVector::ZeroVector);
+    if (State.bIsCrouching)
+    {
+        TargetLocation.Z += 50.0f;
+    }
 
-    FVector EstimatedLocation = CurrentLocation + (PreviousVelocity * DeltaTime);
-    FVector NewTarget = FMath::Lerp(EstimatedLocation, TargetLocation, 0.75f); // 75% 실제 위치 반영
-
-    // 보간
-    float InterpSpeed = 30.0f; // 보간 속도
-    FVector InterpolatedLocation = FMath::VInterpTo(CurrentLocation, NewTarget, DeltaTime, InterpSpeed);
-
-    Character->SetActorLocation(InterpolatedLocation);
+    FVector NewLocation = FMath::VInterpTo(CurrentLocation, TargetLocation, DeltaTime, InterpSpeed);
+    Character->SetActorLocation(NewLocation);
     Character->SetActorRotation(FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll));
-
-    // 속도 업데이트
-    PreviousVelocity = FVector(State.VelocityX, State.VelocityY, State.VelocityZ);
 
     // 애니메이션 상태 업데이트
     if (USkeletalMeshComponent* Mesh = Character->GetMesh())
@@ -340,9 +319,8 @@ void AMySocketClientActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInsta
         FProperty* SpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Speed"));
         if (SpeedProperty && SpeedProperty->IsA<FDoubleProperty>())
         {
-            double ComputedSpeed = FVector(State.VelocityX, State.VelocityY, 0.0f).Size();
             FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(SpeedProperty);
-            DoubleProp->SetPropertyValue_InContainer(AnimInstance, ComputedSpeed);
+            DoubleProp->SetPropertyValue_InContainer(AnimInstance, State.Speed);
         }
     }
 
