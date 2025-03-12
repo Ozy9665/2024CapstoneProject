@@ -58,6 +58,8 @@ public:
 	float DefaultFOV = 90.0f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
 	bool bIsAiming = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat")
+	float AttackPushForce = 1200.0f;
 
 	//	- Mesh
 	UPROPERTY(VisibleAnywhere, Category="Weapon")
@@ -102,7 +104,7 @@ public:
 	//UFUNCTION(BlueprintCallable, Category="Combat")	
 	//void WeaponAttack();
 	UFUNCTION(BlueprintCallable, Category = "Combat")
-	void CheckBatonAttack();
+	void BatonAttack();
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void StartAttack();
 	UFUNCTION(BlueprintCallable, Category = "Combat")

@@ -168,12 +168,24 @@ void APoliceCharacter::StartAttack()
 		if (AttackMontage)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Baton Attack"));
-			AnimInstance->Montage_Play(AttackMontage);
 			
 			// 이동불가
+			//GetCharacterMovement()->DisableMovement();
+			//GetCharacterMovement()->SetMovementMode(MOVE_Falling);
+			GetCharacterMovement()->MaxWalkSpeed = 0.0f;
+			GetCharacterMovement()->GroundFriction = 0.1f; // 마찰율줄이기
+
+			//
+			AnimInstance->Montage_Play(AttackMontage);
 
 
-			GetWorldTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::CheckBatonAttack, 0.3f, false);
+			// 앞으로 이동
+			FVector ForwardImpulse = GetActorForwardVector() * AttackPushForce;
+			LaunchCharacter(ForwardImpulse, true, false);
+			//FVector ForwardDirection = GetActorForwardVector();
+			//AddMovementInput(ForwardDirection, AttackPushForce);
+
+			GetWorldTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::BatonAttack, 0.3f, false);
 			UE_LOG(LogTemp, Warning, TEXT("SetTimer for CheckBatonAttack"));
 			GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, BatonMontageDuration, false);
 		}
@@ -226,7 +238,7 @@ void APoliceCharacter::ShootPistol()
 
 
 
-void APoliceCharacter::CheckBatonAttack()
+void APoliceCharacter::BatonAttack()
 {
 	UE_LOG(LogTemp, Warning, TEXT("CheckBaton"));
 	AttackCollision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
@@ -250,6 +262,9 @@ void APoliceCharacter::EndAttack()
 	bIsAttacking = false;
 
 	// 이동 가능
+	//GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	GetCharacterMovement()->MaxWalkSpeed = 650.0f;
+	GetCharacterMovement()->GroundFriction = 8.0f; // 마찰율 복구
 }
 
 void APoliceCharacter::OnAttackHit()
