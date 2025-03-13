@@ -129,6 +129,7 @@ public:
 
 	FTimerHandle AttackTimerHandle;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat")
 	bool bIsAttacking;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI")

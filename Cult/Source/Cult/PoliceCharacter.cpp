@@ -152,7 +152,7 @@ void APoliceCharacter::ToggleCrouch()
 
 void APoliceCharacter::StartAttack()
 {
-	if (bIsAttacking)return;
+	if (bIsAttacking )return;
 	bIsAttacking = true; 
 
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
@@ -169,14 +169,12 @@ void APoliceCharacter::StartAttack()
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Baton Attack"));
 			
-			// 이동불가
+			// 이동불가 + 회전 불가
 			//GetCharacterMovement()->DisableMovement();
 			//GetCharacterMovement()->SetMovementMode(MOVE_Falling);
 			GetCharacterMovement()->MaxWalkSpeed = 0.0f;
 			GetCharacterMovement()->GroundFriction = 0.1f; // 마찰율줄이기
-
-			//
-			AnimInstance->Montage_Play(AttackMontage);
+			GetCharacterMovement()->bOrientRotationToMovement = false;
 
 
 			// 앞으로 이동
@@ -265,6 +263,9 @@ void APoliceCharacter::EndAttack()
 	//GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 	GetCharacterMovement()->MaxWalkSpeed = 650.0f;
 	GetCharacterMovement()->GroundFriction = 8.0f; // 마찰율 복구
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+
+
 }
 
 void APoliceCharacter::OnAttackHit()
