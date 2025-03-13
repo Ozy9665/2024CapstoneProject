@@ -9,6 +9,7 @@
 #include <GameFramework/Character.h>
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "PoliceCharacter.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -249,6 +250,20 @@ FCharacterState AMySocketClientActor::GetCharacterState(ACharacter* PlayerCharac
     // Crouch 상태
     CharacterState.bIsCrouching = PlayerCharacter->bIsCrouched;
 
+    // Aiming 상태
+    APoliceCharacter* PoliceCharacter = Cast<APoliceCharacter>(PlayerCharacter);
+    if (PoliceCharacter)
+    {
+        CharacterState.bIsAiming = PoliceCharacter->bIsAiming;
+        UE_LOG(LogTemp, Log, TEXT("Get Character.bIsAiming: %d"), CharacterState.bIsAiming);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("PoliceCasting Failed"));
+        CharacterState.bIsAiming = false;
+    }
+
+
     return CharacterState;
 }
 
@@ -331,6 +346,14 @@ void AMySocketClientActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInsta
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsCrouchingProperty);
         BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsCrouching);
     }
+
+    // ABP_IsAiming 업데이트
+    FProperty* ABP_IsAimingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsAiming"));
+    if (ABP_IsAimingProperty && ABP_IsAimingProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ABP_IsAimingProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsAiming);
+    }
 }
 
 void AMySocketClientActor::SpawnCharacter(const FCharacterState& State)
@@ -349,7 +372,7 @@ void AMySocketClientActor::SpawnCharacter(const FCharacterState& State)
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
     //UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A_Client.BP_Cultist_A_Client_C"));
-    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter.BP_PoliceCharacter_C"));
+    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter_Client.BP_PoliceCharacter_Client_C"));
 
     if (BP_ClientCharacter)
     {

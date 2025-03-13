@@ -36,6 +36,7 @@ struct FCharacterState
 	float Speed;
 
 	bool bIsCrouching;
+	bool bIsAiming;
 };
 
 UCLASS()

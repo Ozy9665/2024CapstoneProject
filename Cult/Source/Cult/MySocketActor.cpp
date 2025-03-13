@@ -7,6 +7,7 @@
 #include <Kismet/GameplayStatics.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include "PoliceCharacter.h"
 
 #pragma comment(lib, "ws2_32.lib")  // Winsock 라이브러리 링크
 
@@ -269,6 +270,19 @@ FCharacterState AMySocketActor::GetServerCharacterState()
     // Crouch 상태
     State.bIsCrouching = ServerCharacter->bIsCrouched;
 
+    // Aiming 상태
+    APoliceCharacter* PoliceCharacter = Cast<APoliceCharacter>(ServerCharacter);
+    if (PoliceCharacter)
+    {
+        State.bIsAiming = PoliceCharacter->bIsAiming;
+        UE_LOG(LogTemp, Log, TEXT("Get Character.bIsAiming: %d"), State.bIsAiming);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("PoliceCasting Failed"));
+        State.bIsAiming = false;
+    }
+
     return State;
 }
 
@@ -354,7 +368,7 @@ void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCharacterS
     FVector SpawnLocation = FVector((AssignedPlayerID % 10) * 200.0f, (AssignedPlayerID / 10) * 200.0f, 100.0f);
 
     //UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A_Client.BP_Cultist_A_Client_C"));
-    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter.BP_PoliceCharacter_C"));
+    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter_Client.BP_PoliceCharacter_Client_C"));
     if (BP_ClientCharacter)
     {
         ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
@@ -453,6 +467,14 @@ void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, c
     {
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsCrouchingProperty);
         BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsCrouching);
+    }
+
+    // ABP_IsAiming 업데이트
+    FProperty* ABP_IsAimingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsAiming"));
+    if (ABP_IsAimingProperty && ABP_IsAimingProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ABP_IsAimingProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsAiming);
     }
 }
 
