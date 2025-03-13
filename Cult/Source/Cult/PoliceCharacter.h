@@ -112,6 +112,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SwitchWeapon();
 	
+	void SetCoolTimeDone();
 	
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void ShootPistol();
@@ -131,6 +132,8 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat")
 	bool bIsAttacking;
+	float fCoolTime = 1.5f;
+	bool bIsCoolTime = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI")
 	UAIPerceptionStimuliSourceComponent* StimulusComponent;

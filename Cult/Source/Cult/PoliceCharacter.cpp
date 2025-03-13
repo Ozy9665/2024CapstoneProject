@@ -152,7 +152,8 @@ void APoliceCharacter::ToggleCrouch()
 
 void APoliceCharacter::StartAttack()
 {
-	if (bIsAttacking )return;
+	if (bIsAttacking || bIsCoolTime)return;
+
 	bIsAttacking = true; 
 
 	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
@@ -169,6 +170,8 @@ void APoliceCharacter::StartAttack()
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Baton Attack"));
 			
+			bIsCoolTime = true;
+
 			// 이동불가 + 회전 불가
 			//GetCharacterMovement()->DisableMovement();
 			//GetCharacterMovement()->SetMovementMode(MOVE_Falling);
@@ -257,7 +260,6 @@ void APoliceCharacter::BatonAttack()
 
 void APoliceCharacter::EndAttack()
 {
-	bIsAttacking = false;
 
 	// 이동 가능
 	//GetCharacterMovement()->SetMovementMode(MOVE_Walking);
@@ -265,7 +267,15 @@ void APoliceCharacter::EndAttack()
 	GetCharacterMovement()->GroundFriction = 8.0f; // 마찰율 복구
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 
+	bIsAttacking = false;
+	UE_LOG(LogTemp, Warning, TEXT("EndAttack"));
+	GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::SetCoolTimeDone, fCoolTime, false);
 
+}
+
+void APoliceCharacter::SetCoolTimeDone()
+{
+	bIsCoolTime = false;
 }
 
 void APoliceCharacter::OnAttackHit()
