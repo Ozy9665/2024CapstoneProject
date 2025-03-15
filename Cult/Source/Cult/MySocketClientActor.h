@@ -29,7 +29,6 @@ private:
 	TMap<int32, FTransform> LastReceivedTransform;
 	uint8 playerHeader = 0x00;
 	uint8 objectHeader = 0x01;
-	ACharacter* MyCharacter;
 
 public:	
 	// Called every frame
@@ -43,7 +42,7 @@ public:
 	void ProcessObjectData(char* Buffer, int32 BytesReceived);
 	void SpawnCharacter(const FCharacterState& State);
 	void SendPlayerData();
-	FCharacterState GetCharacterState(ACharacter* PlayerCharacter);
+	FCharacterState GetCharacterState(APoliceCharacter* PlayerCharacter);
 	void ProcessCharacterUpdates(float DeltaTime);
 	void UpdateCharacterState(ACharacter* Character, const FCharacterState& State, float DeltaTime);
 	void UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCharacterState& State);

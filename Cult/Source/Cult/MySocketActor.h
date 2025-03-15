@@ -5,6 +5,7 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "Containers/Queue.h"
 #include "ReplicatedPhysicsBlock.h"
+#include "PoliceCharacter.h"
 #include <winsock2.h>
 #include "MySocketActor.generated.h"
 
@@ -37,6 +38,8 @@ struct FCharacterState
 
 	bool bIsCrouching;
 	bool bIsAiming;
+	bool bIsAttacking;
+	EWeaponType CurrentWeapon;
 };
 
 UCLASS()
@@ -56,7 +59,8 @@ protected:
 private:
 	SOCKET ServerSocket;
 	FCharacterState ServerState;
-	ACharacter* ServerCharacter;
+	APoliceCharacter* ServerCharacter;
+	//ACharacter* ServerCharacter;
 	TQueue<FCharacterState> ReceivedDataQueue;
 	TArray<SOCKET> ClientSockets;
 	TMap<SOCKET, ACharacter*> ClientCharacters;

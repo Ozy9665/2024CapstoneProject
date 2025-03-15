@@ -135,7 +135,6 @@ void APoliceCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &APoliceCharacter::ToggleCrouch);
 	PlayerInputComponent->BindAction("Aim", IE_Pressed, this, &APoliceCharacter::StartAiming);
 	PlayerInputComponent->BindAction("Aim", IE_Released, this, &APoliceCharacter::StopAiming);
-
 }
 
 void APoliceCharacter::ToggleCrouch()
@@ -321,6 +320,7 @@ void APoliceCharacter::UpdateWeaponVisibility()
 
 void APoliceCharacter::StartAiming()
 {
+	UE_LOG(LogTemp, Warning, TEXT("StartAiming"));
 	bIsAiming = true;
 	//if (APlayerController* PC = Cast<APlayerController>(GetController()))
  //   {
