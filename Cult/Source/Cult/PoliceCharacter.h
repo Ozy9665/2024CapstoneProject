@@ -96,7 +96,11 @@ public:
 	void ToggleCrouch();
 	void TurnCharacter();
 
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void OnAimPressed();
+	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void StartAiming();
+	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void StopAiming();
 	//void Shoot();
 

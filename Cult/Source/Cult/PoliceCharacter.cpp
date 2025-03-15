@@ -111,6 +111,17 @@ void APoliceCharacter::BeginPlay()	// 초기화
 		CameraComp = CreateDefaultSubobject<UCameraComponent>(TEXT("CameraComp"));
 		CameraComp->SetupAttachment(RootComponent);
 	}
+
+	// 컨트롤러 체크
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (PC)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("valid PlayerController"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("NO PlayerController"));
+	}
 }
 
 void APoliceCharacter::Tick(float DeltaTime)
@@ -133,7 +144,8 @@ void APoliceCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	PlayerInputComponent->BindAction("SwitchWeapon", IE_Pressed, this, &APoliceCharacter::SwitchWeapon);
 
 	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &APoliceCharacter::ToggleCrouch);
-	PlayerInputComponent->BindAction("Aim", IE_Pressed, this, &APoliceCharacter::StartAiming);
+	UE_LOG(LogTemp, Warning, TEXT("Binding Aim input"));
+	PlayerInputComponent->BindAction("Aim", IE_Pressed, this, &APoliceCharacter::OnAimPressed);
 	PlayerInputComponent->BindAction("Aim", IE_Released, this, &APoliceCharacter::StopAiming);
 }
 
@@ -317,52 +329,33 @@ void APoliceCharacter::UpdateWeaponVisibility()
 	TaserMesh->SetVisibility(CurrentWeapon == EWeaponType::Taser);
 }
 
+void APoliceCharacter::OnAimPressed()
+{
+	UE_LOG(LogTemp, Warning, TEXT("OnAimPressed"));
+	StartAiming();
+}
 
 void APoliceCharacter::StartAiming()
 {
 	UE_LOG(LogTemp, Warning, TEXT("StartAiming"));
-	bIsAiming = true;
-	//if (APlayerController* PC = Cast<APlayerController>(GetController()))
- //   {
- //       if (PC->GetViewTarget() == this)
- //       {
- //           UE_LOG(LogTemp, Warning, TEXT("StartAiming, AimFOV is %f"), AimFOV);
 
- //           // ChildActor에서 실제 카메라 액터 가져오기
- //           AActor* CameraActor = PlayerCameraChild->GetChildActor();
- //           if (CameraActor)
- //           {
- //               // 블루프린트 기반 카메라 액터에서 UCameraComponent 찾기
- //               UCameraComponent* CameraComp = CameraActor->FindComponentByClass<UCameraComponent>();
- //               if (CameraComp)
- //               {
- //                   CameraComp->SetFieldOfView(AimFOV);
- //                   UE_LOG(LogTemp, Warning, TEXT("Aiming..FOV now : %f"), CameraComp->FieldOfView);
- //               }
- //               else
- //               {
- //                   UE_LOG(LogTemp, Error, TEXT("CameraComp not found on BP_PlayerCamera!"));
- //               }
- //           }
- //           else
- //           {
- //               UE_LOG(LogTemp, Error, TEXT("PlayerCameraChild has no valid ChildActor!"));
- //           }
- //       }
- //   }
+	bIsAiming = true;
+	UE_LOG(LogTemp, Warning, TEXT("StartAiming, bIsAiming is %s"), (bIsAiming ? TEXT("true"): TEXT("false")));
+
+
 }
 
 void APoliceCharacter::StopAiming()
 {
 	bIsAiming = false;
-	UE_LOG(LogTemp, Warning, TEXT("StopAiming"));
+	UE_LOG(LogTemp, Warning, TEXT("StopAiming, bIsAiming is %s"), (bIsAiming ? TEXT("true") : TEXT("false")));
 
 	if (CameraComp)
 	{
 		CameraComp->SetFieldOfView(DefaultFOV);
-		UE_LOG(LogTemp, Warning, TEXT("SetFOV"));
 	}
 }
+
 
 
 
