@@ -431,6 +431,14 @@ void AMySocketActor::UpdateCharacterState(ACharacter* Character, const FCharacte
             UpdateAnimInstanceProperties(AnimInstance, State);
         }
     }
+
+    // 무기 상태 업데이트
+    APoliceCharacter* PoliceChar = Cast<APoliceCharacter>(Character);
+    if (PoliceChar)
+    {
+        PoliceChar->CurrentWeapon = State.CurrentWeapon; // 네트워크에서 받은 무기 타입으로 업데이트
+        PoliceChar->UpdateWeaponVisibility();
+    }
 }
 
 void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCharacterState& State)

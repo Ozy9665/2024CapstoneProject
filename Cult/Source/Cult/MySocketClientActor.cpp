@@ -271,9 +271,16 @@ void AMySocketClientActor::ProcessCharacterUpdates(float DeltaTime)
         const FString& CharacterKey = FString::Printf(TEXT("Character_%d"), Pair.Value.PlayerID);
         const FCharacterState& State = Pair.Value;
 
-        if (ACharacter* Character = SpawnedCharacters.FindRef(CharacterKey))
+        if (ACharacter* FoundChar = SpawnedCharacters.FindRef(CharacterKey))
         {
-            UpdateCharacterState(Character, State, DeltaTime);
+            if (APoliceCharacter* PoliceChar = Cast<APoliceCharacter>(FoundChar))
+            {
+                UpdateCharacterState(PoliceChar, State, DeltaTime);
+            }
+            else
+            {
+                UpdateCharacterState(FoundChar, State, DeltaTime);
+            }
         }
         else
         {
@@ -306,6 +313,14 @@ void AMySocketClientActor::UpdateCharacterState(ACharacter* Character, const FCh
         {
             UpdateAnimInstanceProperties(AnimInstance, State);
         }
+    }
+
+    // 무기 상태 업데이트
+    APoliceCharacter* PoliceChar = Cast<APoliceCharacter>(Character);
+    if (PoliceChar)
+    {
+        PoliceChar->CurrentWeapon = State.CurrentWeapon; // 네트워크에서 받은 무기 타입으로 업데이트
+        PoliceChar->UpdateWeaponVisibility();
     }
 }
 
@@ -465,7 +480,7 @@ void AMySocketClientActor::SpawnCharacter(const FCharacterState& State)
 
     if (BP_ClientCharacter)
     {
-        ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
+        APoliceCharacter* NewCharacter = GetWorld()->SpawnActor<APoliceCharacter>(
             BP_ClientCharacter,
             FVector(State.PositionX, State.PositionY, State.PositionZ),
             FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll),
