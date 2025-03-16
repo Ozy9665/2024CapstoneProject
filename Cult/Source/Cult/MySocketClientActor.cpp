@@ -252,7 +252,9 @@ FCharacterState AMySocketClientActor::GetCharacterState(APoliceCharacter* Player
 
     // Aiming 상태
     State.bIsAiming = PlayerCharacter->bIsAiming;
-    UE_LOG(LogTemp, Log, TEXT("Get Character.bIsAiming: %d"), State.bIsAiming);
+
+    // IsAttacking 상태
+    State.bIsAttacking = PlayerCharacter->bIsAttacking;
 
     // 무기
     State.CurrentWeapon = PlayerCharacter->CurrentWeapon;
