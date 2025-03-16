@@ -20,6 +20,16 @@ enum class EWeaponType : uint8
 };
 
 
+UENUM(BlueprintType)
+enum class EVaultingType : uint8
+{
+	OneHandVault UMETA(DisplayName = "OneHandVault"),
+	TwoHandVault UMETA(DisplayName = "TwoHandVault"),
+	FrontFlip UMETA(DisplayName = "FrontFlip")
+};
+
+
+
 UCLASS()
 class CULT_API APoliceCharacter : public ABaseCharacter
 {
@@ -103,6 +113,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void StopAiming();
 	//void Shoot();
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	EVaultingType CurrentVaultType;
+
 
 	// Attack
 	//UFUNCTION(BlueprintCallable, Category="Combat")	
@@ -129,6 +142,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	void OnAttackHit();
 	
+
+	UFUNCTION(BlueprintCallable, Category = "Movement")
+	void VaultStart();
+	UFUNCTION(BlueprintCallable, Category = "Movement")
+	void VaultEnd();
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	bool IsPakour = false;
 
 
 

@@ -410,3 +410,12 @@ void APoliceCharacter::TurnCharacter()
 		SetActorRotation(SmoothRotation);
 	}
 }
+
+void APoliceCharacter::VaultStart()
+{
+	IsPakour = true;
+}
+void APoliceCharacter::VaultEnd()
+{
+	IsPakour = false;
+}
