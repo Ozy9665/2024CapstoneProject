@@ -199,7 +199,7 @@ void APoliceCharacter::StartAttack()
 
 			GetWorldTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::BatonAttack, 0.3f, false);
 			UE_LOG(LogTemp, Warning, TEXT("SetTimer for CheckBatonAttack"));
-			GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, BatonMontageDuration, false);
+			GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, BatonMontageDuration-0.7f, false);
 		}
 		break;
 
