@@ -259,6 +259,10 @@ FCharacterState AMySocketClientActor::GetCharacterState(APoliceCharacter* Player
     // 무기
     State.CurrentWeapon = PlayerCharacter->CurrentWeapon;
 
+    // 파쿠르
+    State.bIsPakour = PlayerCharacter->IsPakour;
+    State.CurrentVaultType = PlayerCharacter->CurrentVaultType;
+
     return State;
 }
 
@@ -366,10 +370,10 @@ void AMySocketClientActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInsta
     }
 
     // IsAttacking 업데이트
-    FProperty* ABP_IsAttackingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("IsAttacking"));
-    if (ABP_IsAttackingProperty && ABP_IsAttackingProperty->IsA<FBoolProperty>())
+    FProperty* IsAttackingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("IsAttacking"));
+    if (IsAttackingProperty && IsAttackingProperty->IsA<FBoolProperty>())
     {
-        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ABP_IsAttackingProperty);
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsAttackingProperty);
         BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsAttacking);
     }
 
@@ -454,6 +458,100 @@ void AMySocketClientActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInsta
             if (IsTaserProp && IsTaserProp->IsA<FBoolProperty>())
             {
                 FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTaserProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
+            }
+        }
+    }
+
+    // ABP_IsPakour 업데이트
+    FProperty* ABP_IsPakourProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsPakour"));
+    if (ABP_IsPakourProperty && ABP_IsPakourProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ABP_IsPakourProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsPakour);
+    }
+
+    // EVaultingType 업데이트
+    if (State.CurrentVaultType == EVaultingType::OneHandVault)
+    {
+        // IsOneHand = true, 나머지 = false
+        {
+            FProperty* IsOneHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsOneHand"));
+            if (IsOneHandProp && IsOneHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsOneHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
+            }
+        }
+        {
+            FProperty* IsTwoHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsTwoHand"));
+            if (IsTwoHandProp && IsTwoHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTwoHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsFlipProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsFlip"));
+            if (IsFlipProp && IsFlipProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFlipProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+    }
+    else if (State.CurrentVaultType == EVaultingType::TwoHandVault)
+    {
+        // IsTwoHand = true, 나머지 = false
+        {
+            FProperty* IsOneHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsOneHand"));
+            if (IsOneHandProp && IsOneHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsOneHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsTwoHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsTwoHand"));
+            if (IsTwoHandProp && IsTwoHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTwoHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
+            }
+        }
+        {
+            FProperty* IsFlipProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsFlip"));
+            if (IsFlipProp && IsFlipProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFlipProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+    }
+    else if (State.CurrentVaultType == EVaultingType::FrontFlip)
+    {
+        // IsFlip = true, 나머지 = false
+        {
+            FProperty* IsOneHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsOneHand"));
+            if (IsOneHandProp && IsOneHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsOneHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsTwoHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsTwoHand"));
+            if (IsTwoHandProp && IsTwoHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTwoHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsFlipProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsFlip"));
+            if (IsFlipProp && IsFlipProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFlipProp);
                 BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
             }
         }

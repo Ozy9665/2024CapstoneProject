@@ -40,6 +40,11 @@ struct FCharacterState
 	bool bIsAiming;
 	bool bIsAttacking;
 	EWeaponType CurrentWeapon;
+	bool bIsPakour;
+	EVaultingType CurrentVaultType;
+	bool bIsOneHand;
+	bool bIsTwoHand;
+	bool bIsFlip;
 };
 
 UCLASS()
