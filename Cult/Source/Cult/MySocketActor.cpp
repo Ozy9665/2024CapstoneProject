@@ -22,6 +22,7 @@ AMySocketActor::AMySocketActor()
 void AMySocketActor::BeginPlay()
 {
     Super::BeginPlay();
+
     ServerCharacter = Cast<APoliceCharacter>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
     if (!ServerCharacter)
     {
@@ -354,8 +355,8 @@ void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCharacterS
     // 각 클라이언트에 대한 고유 위치 생성
     FVector SpawnLocation = FVector((AssignedPlayerID % 10) * 200.0f, (AssignedPlayerID / 10) * 200.0f, 100.0f);
 
-    //UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A_Client.BP_Cultist_A_Client_C"));
-    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter_Client.BP_PoliceCharacter_Client_C"));
+    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A_Client.BP_Cultist_A_Client_C"));
+    //UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter_Client.BP_PoliceCharacter_Client_C"));
     if (BP_ClientCharacter)
     {
         ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(

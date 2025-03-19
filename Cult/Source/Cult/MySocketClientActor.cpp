@@ -25,8 +25,8 @@ AMySocketClientActor::AMySocketClientActor()
 void AMySocketClientActor::BeginPlay()
 {
     Super::BeginPlay();
-
-
+  
+    // 서버 연결
     FString ServerIP = TEXT("127.0.0.1");  // 서버 IP
     int32 ServerPort = 7777;              // 서버 포트
 
@@ -205,7 +205,7 @@ void AMySocketClientActor::SendPlayerData()
     if (ClientSocket != INVALID_SOCKET)
     {
         // 캐릭터 상태 가져오기
-        APoliceCharacter* PlayerCharacter = Cast<APoliceCharacter>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
+        ACharacter* PlayerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
         if (PlayerCharacter)
         {
             FCharacterState CharacterState = GetCharacterState(PlayerCharacter);
@@ -230,7 +230,7 @@ void AMySocketClientActor::SendPlayerData()
     }
 }
 
-FCharacterState AMySocketClientActor::GetCharacterState(APoliceCharacter* PlayerCharacter)
+FCharacterState AMySocketClientActor::GetCharacterState(ACharacter* PlayerCharacter)
 {
     FCharacterState State;
     State.PositionX = PlayerCharacter->GetActorLocation().X;
@@ -251,17 +251,17 @@ FCharacterState AMySocketClientActor::GetCharacterState(APoliceCharacter* Player
     State.bIsCrouching = PlayerCharacter->bIsCrouched;
 
     // Aiming 상태
-    State.bIsAiming = PlayerCharacter->bIsAiming;
+    // State.bIsAiming = PlayerCharacter->bIsAiming;
 
     // IsAttacking 상태
-    State.bIsAttacking = PlayerCharacter->bIsAttacking;
+    // State.bIsAttacking = PlayerCharacter->bIsAttacking;
 
     // 무기
-    State.CurrentWeapon = PlayerCharacter->CurrentWeapon;
+    // State.CurrentWeapon = PlayerCharacter->CurrentWeapon;
 
     // 파쿠르
-    State.bIsPakour = PlayerCharacter->IsPakour;
-    State.CurrentVaultType = PlayerCharacter->CurrentVaultType;
+    // State.bIsPakour = PlayerCharacter->IsPakour;
+    // State.CurrentVaultType = PlayerCharacter->CurrentVaultType;
 
     return State;
 }
