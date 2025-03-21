@@ -151,14 +151,15 @@ void AMySocketActor::InitializeBlocks()
     }
 }
 
-void AMySocketActor::SendCultistData(SOCKET TargetSocket)
+void AMySocketActor::SendPlayerData(SOCKET TargetSocket)
 {
     FScopeLock Lock(&ClientSocketsMutex);
 
-    TArray<FCultistCharacterState> AllCharacterStates;
-    AllCharacterStates.Reserve(ClientStates.Num());
+    TArray<FCharacterState> AllCharacterStates;
+    AllCharacterStates.Reserve(ClientStates.Num() + 1); // 메모리 할당 최적화
 
     // 다른 클라이언트들의 캐릭터 상태 추가
+    // FString LogData; // 로그를 위한 문자열 선언
     for (auto& Entry : ClientStates)
     {
         if (Entry.Key != TargetSocket)
@@ -167,44 +168,36 @@ void AMySocketActor::SendCultistData(SOCKET TargetSocket)
         }
     }
 
-    int32 TotalBytes = sizeof(uint8) + (AllCharacterStates.Num() * sizeof(FCultistCharacterState));
+    // 서버 캐릭터 상태 추가
+    if (ServerCharacter)
+    {
+        ServerState = GetServerCharacterState();
+        AllCharacterStates.Add(ServerState);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Server character not initialized!"));
+    }
+
+    int32 TotalBytes = sizeof(uint8) + (AllCharacterStates.Num() * sizeof(FCharacterState));
     TArray<uint8> PacketData;
     PacketData.SetNumUninitialized(TotalBytes);
 
-    memcpy(PacketData.GetData(), &cultistHeader, sizeof(uint8));
-    memcpy(PacketData.GetData() + sizeof(uint8), AllCharacterStates.GetData(), AllCharacterStates.Num() * sizeof(FCultistCharacterState));
+    memcpy(PacketData.GetData(), &playerHeader, sizeof(uint8));
+    memcpy(PacketData.GetData() + sizeof(uint8), AllCharacterStates.GetData(), AllCharacterStates.Num() * sizeof(FCharacterState));
 
     int BytesSent = send(TargetSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
 
     // 로그 추가
     if (BytesSent == SOCKET_ERROR)
     {
-        UE_LOG(LogTemp, Error, TEXT("SendCultistData failed with WSAGetLastError %ld during send to %d"), WSAGetLastError(), TargetSocket);
+        UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with WSAGetLastError %ld during send to %d"), WSAGetLastError(), TargetSocket);
         CloseClientSocket(TargetSocket);
     }
-}
-
-void AMySocketActor::SendPoliceData(SOCKET TargetSocket)
-{
-    FScopeLock Lock(&ClientSocketsMutex);
-
-    FPoliceCharacterState PoliceState = GetServerCharacterState();
-
-    int32 TotalBytes = sizeof(uint8) + sizeof(FPoliceCharacterState);
-    TArray<uint8> PacketData;
-    PacketData.SetNumUninitialized(TotalBytes);
-
-    memcpy(PacketData.GetData(), &policeHeader, sizeof(uint8));
-    memcpy(PacketData.GetData() + sizeof(uint8), &PoliceState, sizeof(FPoliceCharacterState));
-
-    int BytesSent = send(TargetSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
-
-    // 로그 추가
-    if (BytesSent == SOCKET_ERROR)
+    /*else
     {
-        UE_LOG(LogTemp, Error, TEXT("SendPoliceData failed with WSAGetLastError %ld during send to %d"), WSAGetLastError(), TargetSocket);
-        CloseClientSocket(TargetSocket);
-    }
+         UE_LOG(LogTemp, Error, TEXT("Sent Player Data to %d: \n%s"), TargetSocket, *LogData);
+    }*/
 }
 
 void AMySocketActor::SendObjectData(int32 BlockID, FTransform NewTransform)
@@ -242,9 +235,9 @@ void AMySocketActor::SendObjectData(int32 BlockID, FTransform NewTransform)
     }
 }
 
-FPoliceCharacterState AMySocketActor::GetServerCharacterState()
+FCharacterState AMySocketActor::GetServerCharacterState()
 {
-    FPoliceCharacterState State;
+    FCharacterState State;
     State.PlayerID = -1;
 
     // 위치 및 회전 설정
@@ -323,14 +316,14 @@ void AMySocketActor::ReceiveData(SOCKET ClientSocket)
 
 void AMySocketActor::ProcessPlayerData(SOCKET ClientSocket, char* Buffer, int32 BytesReceived)
 {
-    if (BytesReceived < sizeof(uint8) + sizeof(FCultistCharacterState))
+    if (BytesReceived < sizeof(uint8) + sizeof(FCharacterState))
     {
         UE_LOG(LogTemp, Warning, TEXT("Received player data packet size mismatch."));
         return;
     }
 
-    FCultistCharacterState ReceivedState;
-    FMemory::Memcpy(&ReceivedState, Buffer + sizeof(uint8), sizeof(FCultistCharacterState));
+    FCharacterState ReceivedState;
+    FMemory::Memcpy(&ReceivedState, Buffer + sizeof(uint8), sizeof(FCharacterState));
 
     ReceivedState.PlayerID = static_cast<int32>(ClientSocket);
 
@@ -342,7 +335,7 @@ void AMySocketActor::ProcessPlayerData(SOCKET ClientSocket, char* Buffer, int32 
         });
 }
 
-void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCultistCharacterState& State)
+void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCharacterState& State)
 {
     int32 AssignedPlayerID = ClientCharacters.Num() + 1; // 기존 클라이언트 수를 기반으로 ID 할당
 
@@ -363,6 +356,7 @@ void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCultistCha
     FVector SpawnLocation = FVector((AssignedPlayerID % 10) * 200.0f, (AssignedPlayerID / 10) * 200.0f, 100.0f);
 
     UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A_Client.BP_Cultist_A_Client_C"));
+    //UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter_Client.BP_PoliceCharacter_Client_C"));
     if (BP_ClientCharacter)
     {
         ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
@@ -384,7 +378,7 @@ void AMySocketActor::SpawnClientCharacter(SOCKET ClientSocket, const FCultistCha
     }
 }
 
-void AMySocketActor::SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCultistCharacterState& State)
+void AMySocketActor::SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCharacterState& State)
 {
     AsyncTask(ENamedThreads::GameThread, [this, ClientSocket, State]()
         {
@@ -404,7 +398,7 @@ void AMySocketActor::SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCu
         });
 }
 
-void AMySocketActor::UpdateCharacterState(ACharacter* Character, const FCultistCharacterState& State)
+void AMySocketActor::UpdateCharacterState(ACharacter* Character, const FCharacterState& State)
 {
     const float InterpSpeed = 30.0f; // 보간 속도 
     const float DeltaTime = GetWorld()->GetDeltaSeconds();
@@ -430,9 +424,17 @@ void AMySocketActor::UpdateCharacterState(ACharacter* Character, const FCultistC
             UpdateAnimInstanceProperties(AnimInstance, State);
         }
     }
+
+    // 무기 상태 업데이트
+    APoliceCharacter* PoliceChar = Cast<APoliceCharacter>(Character);
+    if (PoliceChar)
+    {
+        PoliceChar->CurrentWeapon = State.CurrentWeapon; // 네트워크에서 받은 무기 타입으로 업데이트
+        PoliceChar->UpdateWeaponVisibility();
+    }
 }
 
-void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCultistCharacterState& State)
+void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCharacterState& State)
 {
     // Velocity 업데이트
     FProperty* VelocityProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Velocity"));
@@ -461,6 +463,202 @@ void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, c
     {
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsCrouchingProperty);
         BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsCrouching);
+    }
+
+    // ABP_IsAiming 업데이트
+    FProperty* ABP_IsAimingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsAiming"));
+    if (ABP_IsAimingProperty && ABP_IsAimingProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ABP_IsAimingProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsAiming);
+    }
+
+    // IsAttacking 업데이트
+    FProperty* IsAttackingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("IsAttacking"));
+    if (IsAttackingProperty && IsAttackingProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsAttackingProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsAttacking);
+    }
+
+    // EWeaponType 업데이트
+    if (State.CurrentWeapon == EWeaponType::Baton)
+    {
+        // IsBaton = true, 나머지 = false
+        {
+            FProperty* IsBatonProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsBaton"));
+            if (IsBatonProp && IsBatonProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsBatonProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
+            }
+        }
+        {
+            FProperty* IsPistolProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsPistol"));
+            if (IsPistolProp && IsPistolProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsPistolProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsTaserProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsTaser"));
+            if (IsTaserProp && IsTaserProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTaserProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+    }
+    else if (State.CurrentWeapon == EWeaponType::Pistol)
+    {
+        // IsPistol = true, 나머지 = false
+        {
+            FProperty* IsBatonProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsBaton"));
+            if (IsBatonProp && IsBatonProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsBatonProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsPistolProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsPistol"));
+            if (IsPistolProp && IsPistolProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsPistolProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
+            }
+        }
+        {
+            FProperty* IsTaserProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsTaser"));
+            if (IsTaserProp && IsTaserProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTaserProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+    }
+    else if (State.CurrentWeapon == EWeaponType::Taser)
+    {
+        // IsTaser = true, 나머지 = false
+        {
+            FProperty* IsBatonProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsBaton"));
+            if (IsBatonProp && IsBatonProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsBatonProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsPistolProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsPistol"));
+            if (IsPistolProp && IsPistolProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsPistolProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsTaserProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsTaser"));
+            if (IsTaserProp && IsTaserProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTaserProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
+            }
+        }
+    }
+
+    // ABP_IsPakour 업데이트
+    FProperty* ABP_IsPakourProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsPakour"));
+    if (ABP_IsPakourProperty && ABP_IsPakourProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ABP_IsPakourProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsPakour);
+    }
+
+    // EVaultingType 업데이트
+    if (State.CurrentVaultType == EVaultingType::OneHandVault)
+    {
+        // IsOneHand = true, 나머지 = false
+        {
+            FProperty* IsOneHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsOneHand"));
+            if (IsOneHandProp && IsOneHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsOneHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
+            }
+        }
+        {
+            FProperty* IsTwoHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsTwoHand"));
+            if (IsTwoHandProp && IsTwoHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTwoHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsFlipProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsFlip"));
+            if (IsFlipProp && IsFlipProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFlipProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+    }
+    else if (State.CurrentVaultType == EVaultingType::TwoHandVault)
+    {
+        // IsTwoHand = true, 나머지 = false
+        {
+            FProperty* IsOneHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsOneHand"));
+            if (IsOneHandProp && IsOneHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsOneHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsTwoHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsTwoHand"));
+            if (IsTwoHandProp && IsTwoHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTwoHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
+            }
+        }
+        {
+            FProperty* IsFlipProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsFlip"));
+            if (IsFlipProp && IsFlipProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFlipProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+    }
+    else if (State.CurrentVaultType == EVaultingType::FrontFlip)
+    {
+        // IsFlip = true, 나머지 = false
+        {
+            FProperty* IsOneHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsOneHand"));
+            if (IsOneHandProp && IsOneHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsOneHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsTwoHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsTwoHand"));
+            if (IsTwoHandProp && IsTwoHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTwoHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsFlipProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsFlip"));
+            if (IsFlipProp && IsFlipProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFlipProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
+            }
+        }
     }
 }
 
@@ -526,8 +724,7 @@ void AMySocketActor::Tick(float DeltaTime)
         {
             if (ClientSocket != INVALID_SOCKET)
             {
-                SendCultistData(ClientSocket);
-                SendPoliceData(ClientSocket);
+                SendPlayerData(ClientSocket);
             }
         }
     }
