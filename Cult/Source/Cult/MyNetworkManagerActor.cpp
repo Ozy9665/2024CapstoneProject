@@ -131,7 +131,7 @@ void AMyNetworkManagerActor::CheckAndSpawnActor()
             APawn* DefaultPawn = PC->GetPawn();
             if (DefaultPawn)
             {
-                // 클라이언트라면 Cultist 폰으로 교체
+                // 서버면 Police 폰으로 교체
                 UClass* PoliceClass = LoadClass<APawn>(nullptr,
                     TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter.BP_PoliceCharacter_C"));
                 if (PoliceClass)
