@@ -204,13 +204,21 @@ void APoliceCharacter::StartAttack()
 		break;
 
 	case EWeaponType::Pistol:
-		UE_LOG(LogTemp, Warning, TEXT("Shoot Pistol"));
-		ShootPistol();
+		if (bIsAiming)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Shoot Pistol"));
+			ShootPistol();
+		}
+
 		//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
 		break;
 	case EWeaponType::Taser:
-		UE_LOG(LogTemp, Warning, TEXT("Shoot Taser"));
-		ShootPistol();
+		if (bIsAiming)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Shoot Taser"));
+			ShootPistol();
+		}
+
 		//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
 		break;
 	}
@@ -220,30 +228,19 @@ void APoliceCharacter::StartAttack()
 
 void APoliceCharacter::ShootPistol()
 {
-	if (BulletClass)
+	FHitResult HitResult;
+	FVector Start = MuzzleLocation->GetComponentLocation();
+	FVector ForwardVector = MuzzleLocation->GetForwardVector();
+	FVector End = Start + (ForwardVector * 10000.0f);
+
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(this);
+
+	bool bHit = GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, QueryParams);
+	if (bHit)
 	{
-		// 현재 카메라 방향을 가져옴
-		APlayerController* PC = Cast<APlayerController>(GetController());
-		if (PC)
-		{
-			FVector CameraLocation;
-			FRotator CameraRotation;
-			PC->GetPlayerViewPoint(CameraLocation, CameraRotation);
-
-			// 총구 위치
-			FVector MuzzlePosition = MuzzleLocation->GetComponentLocation();
-			FRotator MuzzleRotation = CameraRotation;
-
-			// 총알 생성
-			FActorSpawnParameters SpawnParams;
-			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-			ABullet* Bullet = GetWorld()->SpawnActor<ABullet>(BulletClass, MuzzlePosition, MuzzleRotation, SpawnParams);
-			if (Bullet)
-			{
-				Bullet->SetDirection(MuzzleRotation.Vector()); // 총알 방향 설정
-			}
-		}
+		UE_LOG(LogTemp, Warning, TEXT("Particle Effect!"));
+		SpawnImpactEffect(HitResult.ImpactPoint);
 	}
 	EndAttack();
 }
@@ -276,8 +273,10 @@ void APoliceCharacter::EndAttack()
 	//GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 	GetCharacterMovement()->MaxWalkSpeed = 650.0f;
 	GetCharacterMovement()->GroundFriction = 8.0f; // 마찰율 복구
-	GetCharacterMovement()->bOrientRotationToMovement = true;
-
+	if (!bIsAiming)
+	{
+		GetCharacterMovement()->bOrientRotationToMovement = true;
+	}
 	bIsAttacking = false;
 	UE_LOG(LogTemp, Warning, TEXT("EndAttack"));
 	GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::SetCoolTimeDone, fCoolTime, false);
@@ -354,8 +353,19 @@ void APoliceCharacter::StopAiming()
 	{
 		CameraComp->SetFieldOfView(DefaultFOV);
 	}
+	if (!GetCharacterMovement()->bOrientRotationToMovement)
+	{
+		GetCharacterMovement()->bOrientRotationToMovement = true;
+	}
 }
 
+void APoliceCharacter::SpawnImpactEffect(FVector ImpactLocation)
+{
+	if (ImpactParticle)
+	{
+		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ImpactParticle, ImpactLocation, FRotator::ZeroRotator);
+	}
+}
 
 
 
