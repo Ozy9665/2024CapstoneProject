@@ -142,6 +142,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	void OnAttackHit();
 	
+	UPROPERTY(EditDefaultsOnly, Category = "Effects")
+	UParticleSystem* ImpactParticle;
+	void SpawnImpactEffect(FVector ImpactLocation);
 
 	UFUNCTION(BlueprintCallable, Category = "Movement")
 	void VaultStart();
