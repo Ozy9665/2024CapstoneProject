@@ -73,10 +73,11 @@ void AMyNetworkManagerActor::CheckAndSpawnActor()
     FString ServerIP = TEXT("127.0.0.1");  // 서버 IP 주소
     int32 ServerPort = 7777;               // 포트 번호
 
+    APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+
     // 서버 연결 가능 여부 체크
     if (CanConnectToServer(ServerIP, ServerPort))
     {
-        APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
         if (PC)
         {
             APawn* DefaultPawn = PC->GetPawn();
@@ -125,48 +126,47 @@ void AMyNetworkManagerActor::CheckAndSpawnActor()
     }
     else
     {
-        APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-        if (PC)
-        {
-            APawn* DefaultPawn = PC->GetPawn();
-            if (DefaultPawn)
-            {
-                // 서버면 Police 폰으로 교체
-                UClass* PoliceClass = LoadClass<APawn>(nullptr,
-                    TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter.BP_PoliceCharacter_C"));
-                if (PoliceClass)
-                {
-                    FActorSpawnParameters SpawnParams;
-                    SpawnParams.Owner = this;
-                    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-                    FVector SpawnLocation = DefaultPawn->GetActorLocation();
-                    FRotator SpawnRotation = DefaultPawn->GetActorRotation();
-                    APawn* PolicePawn = GetWorld()->SpawnActor<APawn>(PoliceClass, SpawnLocation, SpawnRotation, SpawnParams);
-                    if (PolicePawn)
-                    {
-                        PC->Possess(PolicePawn);
-                        DefaultPawn->Destroy();
-                        UE_LOG(LogTemp, Log, TEXT("Spawned Police pawn and possessed it, default pawn destroyed."));
-                    }
-                    else
-                    {
-                        UE_LOG(LogTemp, Error, TEXT("Failed to spawn Police pawn."));
-                    }
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Error, TEXT("Failed to load BP_Police class! Check path."));
-                }
-            }
-            else
-            {
-                UE_LOG(LogTemp, Log, TEXT("Default pawn is not a Police pawn or is null."));
-            }
-        }
-        else
-        {
-            UE_LOG(LogTemp, Log, TEXT("GetPlayerController Failed."));
-        }
+        //if (PC)
+        //{
+        //    APawn* DefaultPawn = PC->GetPawn();
+        //    if (DefaultPawn)
+        //    {
+        //        // 서버면 Police 폰으로 교체
+        //        UClass* PoliceClass = LoadClass<APawn>(nullptr,
+        //            TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter.BP_PoliceCharacter_C"));
+        //        if (PoliceClass)
+        //        {
+        //            FActorSpawnParameters SpawnParams;
+        //            SpawnParams.Owner = this;
+        //            SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        //            FVector SpawnLocation = DefaultPawn->GetActorLocation();
+        //            FRotator SpawnRotation = DefaultPawn->GetActorRotation();
+        //            APawn* PolicePawn = GetWorld()->SpawnActor<APawn>(PoliceClass, SpawnLocation, SpawnRotation, SpawnParams);
+        //            if (PolicePawn)
+        //            {
+        //                PC->Possess(PolicePawn);
+        //                DefaultPawn->Destroy();
+        //                UE_LOG(LogTemp, Log, TEXT("Spawned Police pawn and possessed it, default pawn destroyed."));
+        //            }
+        //            else
+        //            {
+        //                UE_LOG(LogTemp, Error, TEXT("Failed to spawn Police pawn."));
+        //            }
+        //        }
+        //        else
+        //        {
+        //            UE_LOG(LogTemp, Error, TEXT("Failed to load BP_Police class! Check path."));
+        //        }
+        //    }
+        //    else
+        //    {
+        //        UE_LOG(LogTemp, Log, TEXT("Default pawn is not a Police pawn or is null."));
+        //    }
+        //}
+        //else
+        //{
+        //    UE_LOG(LogTemp, Log, TEXT("GetPlayerController Failed."));
+        //}
 
         // 서버 액터 스폰
         GetWorld()->SpawnActor<AMySocketActor>(AMySocketActor::StaticClass(), GetActorLocation(), GetActorRotation());
