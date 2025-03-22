@@ -24,11 +24,13 @@ private:
 	SOCKET ClientSocket;
 	FCriticalSection ReceivedDataMutex;
 	TMap<FString, ACharacter*> SpawnedCharacters;
-	TMap<FString, FCharacterState> ReceivedCharacterStates;
+	TMap<FString, FCultistCharacterState> ReceivedCultistStates;
+	TMap<FString, FPoliceCharacterState> ReceivedPoliceStates;
 	TMap<int32, AReplicatedPhysicsBlock*> SyncedBlocks;
 	TMap<int32, FTransform> LastReceivedTransform;
-	uint8 playerHeader = 0x00;
+	uint8 cultistHeader = 0x00;
 	uint8 objectHeader = 0x01;
+	uint8 policeHeader = 0x10;
 
 public:	
 	// Called every frame
@@ -40,12 +42,15 @@ public:
 	void ReceiveData();
 	void ProcessPlayerData(char* Buffer, int32 BytesReceived);
 	void ProcessObjectData(char* Buffer, int32 BytesReceived);
-	void SpawnCharacter(const FCharacterState& State);
+	void SpawnCultistCharacter(const FCultistCharacterState& State);
+	void SpawnPoliceCharacter(const FPoliceCharacterState& State);
 	void SendPlayerData();
-	FCharacterState GetCharacterState(ACharacter* PlayerCharacter);
+	FCultistCharacterState GetCharacterState(ACharacter* PlayerCharacter);
 	void ProcessCharacterUpdates(float DeltaTime);
-	void UpdateCharacterState(ACharacter* Character, const FCharacterState& State, float DeltaTime);
-	void UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCharacterState& State);
+	void UpdateCultistState(ACharacter* Character, const FCultistCharacterState& State, float DeltaTime);
+	void UpdatePoliceState(ACharacter* Character, const FPoliceCharacterState& State, float DeltaTime);
+	void UpdateCultistAnimInstanceProperties(UAnimInstance* AnimInstance, const FCultistCharacterState& State);
+	void UpdatePoliceAnimInstanceProperties(UAnimInstance* AnimInstance, const FPoliceCharacterState& State);
 	void ProcessObjectUpdates(float DeltaTime);
 
 };

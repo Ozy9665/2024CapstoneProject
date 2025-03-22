@@ -18,7 +18,7 @@ enum class EAnimationState : uint8
 };
 
 USTRUCT(BlueprintType)
-struct FCharacterState
+struct FPoliceCharacterState
 {
 	GENERATED_BODY()
 	int32 PlayerID;
@@ -47,6 +47,28 @@ struct FCharacterState
 	bool bIsFlip;
 };
 
+USTRUCT(BlueprintType)
+struct FCultistCharacterState
+{
+	GENERATED_BODY()
+	int32 PlayerID;
+	// 위치
+	float PositionX;
+	float PositionY;
+	float PositionZ;
+	// 회전
+	float RotationPitch;
+	float RotationYaw;
+	float RotationRoll;
+	// 속도
+	float VelocityX;
+	float VelocityY;
+	float VelocityZ;
+	float Speed;
+
+	bool bIsCrouching;
+};
+
 UCLASS()
 class CULT_API AMySocketActor : public AActor
 {
@@ -63,19 +85,19 @@ protected:
 
 private:
 	SOCKET ServerSocket;
-	FCharacterState ServerState;
+	FPoliceCharacterState ServerState;
 	APoliceCharacter* ServerCharacter;
-	//ACharacter* ServerCharacter;
-	TQueue<FCharacterState> ReceivedDataQueue;
+	TQueue<FCultistCharacterState> ReceivedDataQueue;
 	TArray<SOCKET> ClientSockets;
 	TMap<SOCKET, ACharacter*> ClientCharacters;
-	TMap<SOCKET, FCharacterState> ClientStates;
+	TMap<SOCKET, FCultistCharacterState> ClientStates;
 	TMap<int32, AReplicatedPhysicsBlock*> BlockMap;
 	TMap<int32, FTransform> BlockTransforms;
 	FCriticalSection ClientSocketsMutex;
 	bool bIsRunning = false;
-	uint8 playerHeader = 0x00;
+	uint8 cultistHeader = 0x00;
 	uint8 objectHeader = 0x01;
+	uint8 policeHeader = 0x10;
 
 public:	
 	// Called every frame
@@ -85,15 +107,16 @@ public:
 	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);
 	void AcceptClientAsync();
 	void InitializeBlocks();
-	void SendPlayerData(SOCKET TargetSocket);
+	void SendCultistData(SOCKET TargetSocket);
+	void SendPoliceData(SOCKET TargetSocket);
 	void SendObjectData(int32 BlockID, FTransform NewTransform);
-	FCharacterState GetServerCharacterState();
+	FPoliceCharacterState GetServerCharacterState();
 	void ReceiveData(SOCKET ClientSocket);
 	void ProcessPlayerData(SOCKET ClientSocket, char* Buffer, int32 BytesReceived);
-	void SpawnClientCharacter(SOCKET ClientSocket, const FCharacterState& State);
-	void SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCharacterState& State);
-	void UpdateCharacterState(ACharacter* Character, const FCharacterState& State);
-	void UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCharacterState& State);
+	void SpawnClientCharacter(SOCKET ClientSocket, const FCultistCharacterState& State);
+	void SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCultistCharacterState& State);
+	void UpdateCharacterState(ACharacter* Character, const FCultistCharacterState& State);
+	void UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCultistCharacterState& State);
 	void CloseClientSocket(SOCKET ClientSocket);
 	void CloseAllClientSockets();
 	void CloseServerSocket();
