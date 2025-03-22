@@ -149,7 +149,8 @@ public:
 	void VaultEnd();
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	bool IsPakour = false;
-
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	bool bIsNearEnoughToPakour = false;
 
 
 	FTimerHandle AttackTimerHandle;
