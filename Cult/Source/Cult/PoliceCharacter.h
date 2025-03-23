@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "BaseCharacter.h"
 #include "Bullet.h"
+#include "Particles/ParticleSystemComponent.h"
 #include"GameFramework/Character.h"
 #include"GameFramework/SpringArmComponent.h"
 #include "Perception/AIPerceptionStimuliSourceComponent.h"
@@ -70,6 +71,8 @@ public:
 	bool bIsAiming = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat")
 	float AttackPushForce = 1200.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weapon")
+	bool bIsShooting = false;
 
 	//	- Mesh
 	UPROPERTY(VisibleAnywhere, Category="Weapon")
@@ -127,6 +130,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void EndAttack();
 	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void EndPistolShoot();
+	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SwitchWeapon();
 	
 	void SetCoolTimeDone();
@@ -145,6 +150,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Effects")
 	UParticleSystem* ImpactParticle;
 	void SpawnImpactEffect(FVector ImpactLocation);
+	UPROPERTY(EditDefaultsOnly, Category = "Effects")
+	UParticleSystemComponent* ImpactParticleComp;
 
 	UFUNCTION(BlueprintCallable, Category = "Movement")
 	void VaultStart();

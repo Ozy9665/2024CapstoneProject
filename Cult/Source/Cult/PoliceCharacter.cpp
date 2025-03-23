@@ -206,6 +206,9 @@ void APoliceCharacter::StartAttack()
 	case EWeaponType::Pistol:
 		if (bIsAiming)
 		{
+			// 이동불가
+			GetCharacterMovement()->DisableMovement();
+
 			UE_LOG(LogTemp, Warning, TEXT("Shoot Pistol"));
 			ShootPistol();
 		}
@@ -228,6 +231,7 @@ void APoliceCharacter::StartAttack()
 
 void APoliceCharacter::ShootPistol()
 {
+	bIsShooting = true;
 	FHitResult HitResult;
 	FVector Start = MuzzleLocation->GetComponentLocation();
 	FVector ForwardVector = MuzzleLocation->GetForwardVector();
@@ -242,7 +246,8 @@ void APoliceCharacter::ShootPistol()
 		UE_LOG(LogTemp, Warning, TEXT("Particle Effect!"));
 		SpawnImpactEffect(HitResult.ImpactPoint);
 	}
-	EndAttack();
+	GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndPistolShoot, 0.7f, false);
+
 }
 
 
@@ -280,6 +285,14 @@ void APoliceCharacter::EndAttack()
 	bIsAttacking = false;
 	UE_LOG(LogTemp, Warning, TEXT("EndAttack"));
 	GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::SetCoolTimeDone, fCoolTime, false);
+
+}
+
+void APoliceCharacter::EndPistolShoot()
+{
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	bIsShooting = false;
+	bIsAttacking = false;
 
 }
 
@@ -330,6 +343,7 @@ void APoliceCharacter::UpdateWeaponVisibility()
 
 void APoliceCharacter::OnAimPressed()
 {
+	if (CurrentWeapon == EWeaponType::Baton)return;
 	UE_LOG(LogTemp, Warning, TEXT("OnAimPressed"));
 	StartAiming();
 }
@@ -363,7 +377,23 @@ void APoliceCharacter::SpawnImpactEffect(FVector ImpactLocation)
 {
 	if (ImpactParticle)
 	{
-		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ImpactParticle, ImpactLocation, FRotator::ZeroRotator);
+		ImpactParticleComp = UGameplayStatics::SpawnEmitterAtLocation(
+			GetWorld(), ImpactParticle, ImpactLocation, FRotator::ZeroRotator, true
+		);
+
+		//if (ImpactParticleComp)
+		//{
+		//	ImpactParticleComp->SetAutoDestroy(true);
+
+		//	FTimerHandle TimerHandle;
+		//	GetWorldTimerManager().SetTimer(TimerHandle, FTimerDelegate::CreateLambda([ImpactParticleComp]()
+		//		{
+		//			if (ImpactParticleComp)
+		//			{
+		//				ImpactParticleComp->DestroyComponent();
+		//			}
+		//		}), 2.0f, false);
+		//}
 	}
 }
 
