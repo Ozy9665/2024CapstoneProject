@@ -324,6 +324,9 @@ void APoliceCharacter::OnAttackHit()
 
 void APoliceCharacter::SwitchWeapon()
 {
+	if (bIsAiming)return;
+	if (bIsShooting)return;
+	if (bIsAttacking)return;
 	if (CurrentWeapon == EWeaponType::Baton)
 		CurrentWeapon = EWeaponType::Pistol;
 	else if (CurrentWeapon == EWeaponType::Pistol)
