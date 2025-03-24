@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Blueprint/UserWidget.h"
 #include"GameFramework/SpringArmComponent.h"
 #include "BaseCharacter.h"
 #include "Altar.h"
@@ -55,6 +56,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual")
 	class AAltar* CurrentAltar = nullptr;
 
+	// 현 의식 게이지
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual")
+	float TaskRitualProgress;
+	float TaskRitualSpeed;
+	FTimerHandle TaskRitualTimerHandle;
+
+	// UI
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UUserWidget> TaskRitualWidgetClass;
+	UUserWidget* TaskRitualWidget;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual")
 	float RitualProgress = 0.0f;

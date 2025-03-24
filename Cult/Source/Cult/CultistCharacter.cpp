@@ -4,6 +4,7 @@
 #include "CultistCharacter.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Components/ProgressBar.h"
 #include "Components/InputComponent.h"
 
 
@@ -13,7 +14,8 @@ ACultistCharacter::ACultistCharacter()
 	WalkSpeed = 600.0f;
 	
 
-	
+
+
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 	
 
@@ -21,7 +23,9 @@ ACultistCharacter::ACultistCharacter()
 	RitualProgress = 0.0f;
 	RitualSpeed = 10.0f; // 초당 증가속도
 
-
+	// 의식 수행 작업 진행도
+	TaskRitualProgress = 0.0f;
+	TaskRitualSpeed = 20.0f;
 }
 
 void ACultistCharacter::BeginPlay()
@@ -56,7 +60,25 @@ void ACultistCharacter::BeginPlay()
 			UE_LOG(LogTemp, Error, TEXT("Still Null SpringArm"));
 		}
 	}
-
+	if (!TaskRitualWidgetClass)
+	{
+		UE_LOG(LogTemp, Error, TEXT("TaskRitualWidgetClass is NULL! Make sure it's set in Blueprint."));
+		return;
+	}
+	if (TaskRitualWidgetClass)
+	{
+		TaskRitualWidget = CreateWidget<UUserWidget>(GetWorld(), TaskRitualWidgetClass);
+		if (TaskRitualWidget)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("TaskRitualWidget Created"));
+			TaskRitualWidget->AddToViewport();
+			TaskRitualWidget->SetVisibility(ESlateVisibility::Hidden);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("Failed to create widget"));
+		}
+	}
 
 }
 
@@ -114,10 +136,26 @@ void ACultistCharacter::ToggleCrouch()
 void ACultistCharacter::PerformRitual()
 {
 	if (!bIsPerformingRitual) return;
-	RitualProgress += RitualSpeed;
 
+	TaskRitualProgress += TaskRitualSpeed * 0.1f; // 의식 작업 진행도
 	
+	if (TaskRitualWidget)
+	{
+		UProgressBar* ProgressBar = Cast<UProgressBar>(TaskRitualWidget->GetWidgetFromName(TEXT("RitualProgressBar")));
+		if (ProgressBar)
+		{
+			ProgressBar->SetPercent(TaskRitualProgress / 100.0f);
+			UE_LOG(LogTemp, Warning, TEXT("TaskProgressBar Exist"));
+		}
+	}
 	UE_LOG(LogTemp, Warning, TEXT("Performing Ritual..."));
+	UE_LOG(LogTemp, Warning, TEXT("TaskRitualProgress: %f"), TaskRitualProgress);
+	if (TaskRitualProgress >= 100.0f)
+	{
+		CurrentAltar->IncreaseRitualGauge();
+		StopRitual();
+	}
+
 
 	// Check 100%
 	//if (RitualProgress >= 100.0f)
@@ -125,8 +163,7 @@ void ACultistCharacter::PerformRitual()
 	//	UE_LOG(LogTemp, Warning, TEXT("Ritual Completed!"));
 	//}
 
-	CurrentAltar->IncreaseRitualGauge();
-	StopRitual();
+
 }
 
 void ACultistCharacter::StartRitual()
@@ -142,9 +179,13 @@ void ACultistCharacter::StartRitual()
 	}
 
 	bIsPerformingRitual = true;
-
+	TaskRitualProgress = 0.0f;
+	if (TaskRitualWidget)
+	{
+		TaskRitualWidget->SetVisibility(ESlateVisibility::Visible);
+	}
 	
-	GetWorld()->GetTimerManager().SetTimer(RitualTimerHandle, this, &ACultistCharacter::PerformRitual, 1.0f, true);
+	GetWorld()->GetTimerManager().SetTimer(RitualTimerHandle, this, &ACultistCharacter::PerformRitual, 0.1f, true);
 	UE_LOG(LogTemp, Warning, TEXT("Ritual Started"));
 
 	GetCharacterMovement()->DisableMovement();
@@ -158,9 +199,16 @@ void ACultistCharacter::StopRitual()
 
 	bIsPerformingRitual = false;
 	GetWorld()->GetTimerManager().ClearTimer(RitualTimerHandle);
-
+	GetWorld()->GetTimerManager().ClearTimer(TaskRitualTimerHandle);
 
 	UE_LOG(LogTemp, Warning, TEXT("Ritual Stopped"));
+	RitualProgress += RitualSpeed;	// 전체 의식게이지
+
+	if (TaskRitualWidget)
+	{
+		TaskRitualWidget->SetVisibility(ESlateVisibility::Hidden);
+		TaskRitualProgress = 0.0f;
+	}
 
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 }
