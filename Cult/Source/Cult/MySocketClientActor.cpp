@@ -551,6 +551,14 @@ void AMySocketClientActor::UpdatePoliceAnimInstanceProperties(UAnimInstance* Ani
         BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsPakour);
     }
 
+    // ABP_IsNearToPakour 업데이트
+    FProperty* ABP_IsNearToPakourProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsNearToPakour"));
+    if (ABP_IsNearToPakourProperty && ABP_IsNearToPakourProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ABP_IsNearToPakourProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsNearEnoughToPakour);
+    }
+
     // EVaultingType 업데이트
     if (State.CurrentVaultType == EVaultingType::OneHandVault)
     {

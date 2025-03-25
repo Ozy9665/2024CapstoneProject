@@ -41,6 +41,7 @@ struct FPoliceCharacterState
 	bool bIsAttacking;
 	EWeaponType CurrentWeapon;
 	bool bIsPakour;
+	bool bIsNearEnoughToPakour;
 	EVaultingType CurrentVaultType;
 	bool bIsOneHand;
 	bool bIsTwoHand;

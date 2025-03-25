@@ -276,6 +276,7 @@ FPoliceCharacterState AMySocketActor::GetServerCharacterState()
 
     // ÆÄÄí¸£
     State.bIsPakour = ServerCharacter->IsPakour;
+    State.bIsNearEnoughToPakour = ServerCharacter->bIsNearEnoughToPakour;
     State.CurrentVaultType = ServerCharacter->CurrentVaultType;
 
     return State;
