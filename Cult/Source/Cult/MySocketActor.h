@@ -46,6 +46,7 @@ struct FPoliceCharacterState
 	bool bIsOneHand;
 	bool bIsTwoHand;
 	bool bIsFlip;
+	bool bIsShooting;
 };
 
 USTRUCT(BlueprintType)

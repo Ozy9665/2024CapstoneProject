@@ -644,6 +644,14 @@ void AMySocketClientActor::UpdatePoliceAnimInstanceProperties(UAnimInstance* Ani
             }
         }
     }
+
+    // bIsShooting 업데이트
+    FProperty* IsShootingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsShooting"));
+    if (IsShootingProperty && IsShootingProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsShootingProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsShooting);
+    }
 }
 
 void AMySocketClientActor::SpawnCultistCharacter(const FCultistCharacterState& State)

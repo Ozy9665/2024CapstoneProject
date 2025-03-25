@@ -271,13 +271,16 @@ FPoliceCharacterState AMySocketActor::GetServerCharacterState()
     // IsAttacking 상태
     State.bIsAttacking = ServerCharacter->bIsAttacking;
 
-    // 무기
+    // 무기 값
     State.CurrentWeapon = ServerCharacter->CurrentWeapon;
 
-    // 파쿠르
+    // 파쿠르 관련 상태
     State.bIsPakour = ServerCharacter->IsPakour;
     State.bIsNearEnoughToPakour = ServerCharacter->bIsNearEnoughToPakour;
     State.CurrentVaultType = ServerCharacter->CurrentVaultType;
+
+    // IsShooting 상태
+    State.bIsShooting = ServerCharacter->bIsShooting;
 
     return State;
 }
