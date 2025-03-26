@@ -242,6 +242,24 @@ void AMySocketActor::SendObjectData(int32 BlockID, FTransform NewTransform)
     }
 }
 
+void AMySocketActor::SendParticleData(SOCKET TargetSocket, FVector ImpactLoc) {
+    int32 TotalBytes = sizeof(uint8) + sizeof(FVector);
+    TArray<uint8> PacketData;
+    PacketData.SetNumUninitialized(TotalBytes);
+
+    memcpy(PacketData.GetData(), &particleHeader, sizeof(uint8));
+    memcpy(PacketData.GetData() + sizeof(uint8), &ImpactLoc, sizeof(FVector));
+
+    int BytesSent = send(TargetSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
+
+    // 로그 추가
+    if (BytesSent == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("SendParticleData failed with WSAGetLastError %ld during send to %d"), WSAGetLastError(), TargetSocket);
+        CloseClientSocket(TargetSocket);
+    }
+}
+
 FPoliceCharacterState AMySocketActor::GetServerCharacterState()
 {
     FPoliceCharacterState State;
@@ -468,6 +486,49 @@ void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, c
     }
 }
 
+void AMySocketActor::CheckImpactEffect()
+{
+    APoliceCharacter* PoliceChar = Cast<APoliceCharacter>(ServerCharacter);
+    if (PoliceChar)
+    {
+        if (PoliceChar->bHit)
+        {
+            FVector ImpactLoc = PoliceChar->ImpactLocation;
+            ImpactLocations.Add(ImpactLoc);
+            SpawnImpactEffect(ImpactLoc);
+            UE_LOG(LogTemp, Log, TEXT("Added ImpactLocation: %s"), *ImpactLoc.ToString());
+
+            FScopeLock Lock(&ClientSocketsMutex);
+            for (SOCKET ClientSocket : ClientSockets)
+            {
+                if (ClientSocket != INVALID_SOCKET)
+                {
+                    SendParticleData(ClientSocket, ImpactLoc);
+                }
+            }
+
+            PoliceChar->bHit = false;
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("CheckImpactEffect: ServerCharacter is not a valid PoliceCharacter."));
+    }
+}
+
+void AMySocketActor::SpawnImpactEffect(const FVector& ImpactLocation)
+{
+    if (ImpactParticle)
+    {
+        UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ImpactParticle, ImpactLocation, FRotator::ZeroRotator, true);
+        UE_LOG(LogTemp, Log, TEXT("Spawned Impact Effect at: %s"), *ImpactLocation.ToString());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ImpactParticle is not set."));
+    }
+}
+
 void AMySocketActor::CloseClientSocket(SOCKET ClientSocket)
 {
     AsyncTask(ENamedThreads::GameThread, [this, ClientSocket]()
@@ -534,5 +595,6 @@ void AMySocketActor::Tick(float DeltaTime)
                 SendPoliceData(ClientSocket);
             }
         }
+        CheckImpactEffect();
     }
 }

@@ -240,11 +240,12 @@ void APoliceCharacter::ShootPistol()
 	FCollisionQueryParams QueryParams;
 	QueryParams.AddIgnoredActor(this);
 
-	bool bHit = GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, QueryParams);
+	bHit = GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, QueryParams);
 	if (bHit)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Particle Effect!"));
-		SpawnImpactEffect(HitResult.ImpactPoint);
+		FVector ImpactLocation = HitResult.ImpactPoint;
+		// SpawnImpactEffect(HitResult.ImpactPoint);
 	}
 	GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndPistolShoot, 0.7f, false);
 

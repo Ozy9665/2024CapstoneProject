@@ -95,11 +95,14 @@ private:
 	TMap<SOCKET, FCultistCharacterState> ClientStates;
 	TMap<int32, AReplicatedPhysicsBlock*> BlockMap;
 	TMap<int32, FTransform> BlockTransforms;
+	TArray<FVector> ImpactLocations;
+	UParticleSystem* ImpactParticle;
 	FCriticalSection ClientSocketsMutex;
 	bool bIsRunning = false;
 	uint8 cultistHeader = 0x00;
 	uint8 objectHeader = 0x01;
 	uint8 policeHeader = 0x10;
+	uint8 particleHeader = 0x11;
 
 public:	
 	// Called every frame
@@ -112,6 +115,7 @@ public:
 	void SendCultistData(SOCKET TargetSocket);
 	void SendPoliceData(SOCKET TargetSocket);
 	void SendObjectData(int32 BlockID, FTransform NewTransform);
+	void SendParticleData(SOCKET TargetSocket, FVector ImpactLoc);
 	FPoliceCharacterState GetServerCharacterState();
 	void ReceiveData(SOCKET ClientSocket);
 	void ProcessPlayerData(SOCKET ClientSocket, char* Buffer, int32 BytesReceived);
@@ -119,6 +123,8 @@ public:
 	void SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCultistCharacterState& State);
 	void UpdateCharacterState(ACharacter* Character, const FCultistCharacterState& State);
 	void UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCultistCharacterState& State);
+	void CheckImpactEffect();
+	void SpawnImpactEffect(const FVector& ImpactLocation);
 	void CloseClientSocket(SOCKET ClientSocket);
 	void CloseAllClientSockets();
 	void CloseServerSocket();

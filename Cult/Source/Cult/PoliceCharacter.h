@@ -152,6 +152,8 @@ public:
 	void SpawnImpactEffect(FVector ImpactLocation);
 	UPROPERTY(EditDefaultsOnly, Category = "Effects")
 	UParticleSystemComponent* ImpactParticleComp;
+	bool bHit;
+	FVector ImpactLocation;
 
 	UFUNCTION(BlueprintCallable, Category = "Movement")
 	void VaultStart();
