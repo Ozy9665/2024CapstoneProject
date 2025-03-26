@@ -493,7 +493,7 @@ void AMySocketActor::CheckImpactEffect()
     {
         if (PoliceChar->bHit)
         {
-            FVector ImpactLoc = PoliceChar->ImpactLocation;
+            FVector ImpactLoc = PoliceChar->ImpactLoc;
             ImpactLocations.Add(ImpactLoc);
             SpawnImpactEffect(ImpactLoc);
             UE_LOG(LogTemp, Log, TEXT("Added ImpactLocation: %s"), *ImpactLoc.ToString());

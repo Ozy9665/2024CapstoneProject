@@ -244,8 +244,8 @@ void APoliceCharacter::ShootPistol()
 	if (bHit)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Particle Effect!"));
-		FVector ImpactLocation = HitResult.ImpactPoint;
-		// SpawnImpactEffect(HitResult.ImpactPoint);
+		ImpactLoc = HitResult.ImpactPoint;
+		//SpawnImpactEffect(HitResult.ImpactPoint);
 	}
 	GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndPistolShoot, 0.7f, false);
 
