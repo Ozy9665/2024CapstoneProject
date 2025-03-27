@@ -142,6 +142,10 @@ void AMySocketClientActor::ReceiveData()
                     {
                         ProcessObjectData(Buffer, BytesReceived);
                     }
+					else if (PacketType == particleHeader)
+					{
+						ProcessParticleData(Buffer, BytesReceived);
+					}
                     else
                     {
                         UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
@@ -218,6 +222,20 @@ void AMySocketClientActor::ProcessObjectData(char* Buffer, int32 BytesReceived) 
     memcpy(&NewTransform, Buffer + Offset, sizeof(FTransform));
 
     LastReceivedTransform.FindOrAdd(BlockID) = NewTransform;
+}
+
+void AMySocketClientActor::ProcessParticleData(char* Buffer, int32 BytesReceived) {
+    int32 Offset = sizeof(uint8);
+
+    if (BytesReceived < Offset + sizeof(FVector)) {
+        UE_LOG(LogTemp, Error, TEXT("Invalid object data packet received."));
+        return;
+    }
+
+    FVector NewVector;
+    memcpy(&NewVector, Buffer + Offset, sizeof(FVector));
+    ImpactLocations.Add(NewVector);
+    SpawnImpactEffect(NewVector);
 }
 
 void AMySocketClientActor::SendPlayerData()
@@ -748,6 +766,19 @@ void AMySocketClientActor::ProcessObjectUpdates(float DeltaTime)
             Block->SetActorLocation(InterpolatedLocation);
             Block->SetActorRotation(InterpolatedRotation);
         }
+    }
+}
+
+void AMySocketClientActor::SpawnImpactEffect(const FVector& ImpactLocation)
+{
+    if (ImpactParticle)
+    {
+        UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ImpactParticle, ImpactLocation, FRotator::ZeroRotator, true);
+        UE_LOG(LogTemp, Log, TEXT("Spawned Impact Effect at: %s"), *ImpactLocation.ToString());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ImpactParticle is not set."));
     }
 }
 

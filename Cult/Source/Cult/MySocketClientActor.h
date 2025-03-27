@@ -28,9 +28,12 @@ private:
 	TMap<FString, FPoliceCharacterState> ReceivedPoliceStates;
 	TMap<int32, AReplicatedPhysicsBlock*> SyncedBlocks;
 	TMap<int32, FTransform> LastReceivedTransform;
+	TArray<FVector> ImpactLocations;
+	UParticleSystem* ImpactParticle;
 	uint8 cultistHeader = 0x00;
 	uint8 objectHeader = 0x01;
 	uint8 policeHeader = 0x10;
+	uint8 particleHeader = 0x11;
 
 public:	
 	// Called every frame
@@ -42,6 +45,7 @@ public:
 	void ReceiveData();
 	void ProcessPlayerData(char* Buffer, int32 BytesReceived);
 	void ProcessObjectData(char* Buffer, int32 BytesReceived);
+	void ProcessParticleData(char* Buffer, int32 BytesReceived);
 	void SpawnCultistCharacter(const FCultistCharacterState& State);
 	void SpawnPoliceCharacter(const FPoliceCharacterState& State);
 	void SendPlayerData();
@@ -52,5 +56,6 @@ public:
 	void UpdateCultistAnimInstanceProperties(UAnimInstance* AnimInstance, const FCultistCharacterState& State);
 	void UpdatePoliceAnimInstanceProperties(UAnimInstance* AnimInstance, const FPoliceCharacterState& State);
 	void ProcessObjectUpdates(float DeltaTime);
+	void SpawnImpactEffect(const FVector& ImpactLocation);
 
 };
