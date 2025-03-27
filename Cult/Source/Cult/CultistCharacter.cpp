@@ -14,7 +14,9 @@ ACultistCharacter::ACultistCharacter()
 	WalkSpeed = 600.0f;
 	
 
-
+	Health = 100.0f;
+	bIsStunned = false;
+	bIsAlreadyStunned = false;
 
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 	
@@ -225,11 +227,71 @@ void ACultistCharacter::SetCurrentAltar(AAltar* Altar)
 
 void ACultistCharacter::TakeDamage(float DamageAmount)
 {
+	if (bIsStunned)return;
+
 	StopRitual();
-	UE_LOG(LogTemp, Warning, TEXT("You've Been Hit. Ritual Stopped"));
+	
+	Health -= DamageAmount;
+	UE_LOG(LogTemp, Warning, TEXT("You've Been Hit"));
+
+	if (Health <= 0)
+	{
+		if (bIsAlreadyStunned)
+		{
+			Die();
+		}
+		else
+		{
+			Stun();
+		}
+	}
 }
 
+void ACultistCharacter::Die()
+{
+	UE_LOG(LogTemp, Warning, TEXT("Died."));
+	Destroy();
+}
 
+void ACultistCharacter::Stun()
+{
+	UE_LOG(LogTemp, Warning, TEXT("Got Stunned"));
+	bIsStunned = true;
+	GetCharacterMovement()->DisableMovement();
+	// Ragdoll 효과
+	
+	// 일정 시간 후 깨어남
+	GetWorld()->GetTimerManager().SetTimer(ReviveTimerHandle, this, &ACultistCharacter::Revive, 10.0f, false);
+}
+
+void ACultistCharacter::Revive()
+{
+	if (!bIsStunned)return;
+
+	bIsStunned = false;
+	bIsAlreadyStunned = true;
+	Health = 50.0f;
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	UE_LOG(LogTemp, Warning, TEXT("Revive."));
+}
+
+void ACultistCharacter::TakeMeleeDamage(float DamageAmount)
+{
+	TakeDamage(DamageAmount);
+	// 경직
+}
+
+void ACultistCharacter::TakePistolDamage(float DamageAmount)
+{
+	TakeDamage(DamageAmount);
+	// 피격
+}
+
+void ACultistCharacter::GotHitTaser()
+{
+	Stun();
+	// 감전
+}
 
 // 이동 시 중단 but 이동불가로 설정
 /*

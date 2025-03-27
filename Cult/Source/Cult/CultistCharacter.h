@@ -79,8 +79,25 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Abilities")
 	ESpecialAbility SpecialAbility;
 
+	// Damage
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+	bool bIsStunned;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Health")
+	bool bIsAlreadyStunned;
+	FTimerHandle ReviveTimerHandle;
 
-
+	UFUNCTION(BlueprintCallable, Category="Health")
+	void Die();
+	UFUNCTION(BlueprintCallable, Category = "Health")
+	void Stun();
+	UFUNCTION(BlueprintCallable, Category = "Health")
+	void Revive();
+	UFUNCTION(BlueprintCallable, Category = "Health")
+	void TakeMeleeDamage(float DamageAmount);
+	UFUNCTION(BlueprintCallable, Category = "Health")
+	void TakePistolDamage(float DamageAmount);
+	UFUNCTION(BlueprintCallable, Category = "Health")
+	void GotHitTaser();
 
 
 
