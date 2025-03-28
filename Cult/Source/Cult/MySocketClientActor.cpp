@@ -19,6 +19,18 @@ AMySocketClientActor::AMySocketClientActor()
     // Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
     PrimaryActorTick.bCanEverTick = true;
     ClientSocket = INVALID_SOCKET;
+
+    ConstructorHelpers::FObjectFinder<UParticleSystem> ParticleAsset(TEXT("ParticleSystem'/Engine/Tutorial/SubEditors/TutorialAssets/TutorialParticleSystem.TutorialParticleSystem'"));
+    if (ParticleAsset.Succeeded())
+    {
+        ImpactParticle = ParticleAsset.Object;
+        UE_LOG(LogTemp, Log, TEXT("Successfully loaded ImpactParticle from code!"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to load ImpactParticle in code! Check path."));
+        ImpactParticle = nullptr;
+    }
 }
 
 // Called when the game starts or when spawned
@@ -235,7 +247,10 @@ void AMySocketClientActor::ProcessParticleData(char* Buffer, int32 BytesReceived
     FVector NewVector;
     memcpy(&NewVector, Buffer + Offset, sizeof(FVector));
     ImpactLocations.Add(NewVector);
-    SpawnImpactEffect(NewVector);
+    UE_LOG(LogTemp, Log, TEXT("Added ImpactLocation: %s"), *NewVector.ToString());
+    AsyncTask(ENamedThreads::GameThread, [this, NewVector]() {
+        SpawnImpactEffect(NewVector);
+        });
 }
 
 void AMySocketClientActor::SendPlayerData()
@@ -773,8 +788,13 @@ void AMySocketClientActor::SpawnImpactEffect(const FVector& ImpactLocation)
 {
     if (ImpactParticle)
     {
-        UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ImpactParticle, ImpactLocation, FRotator::ZeroRotator, true);
-        UE_LOG(LogTemp, Log, TEXT("Spawned Impact Effect at: %s"), *ImpactLocation.ToString());
+        UParticleSystemComponent* PSC = UGameplayStatics::SpawnEmitterAtLocation(
+            GetWorld(), ImpactParticle, ImpactLocation, FRotator::ZeroRotator, true);
+        if (PSC)
+        {
+            PSC->bAutoDestroy = true;
+            UE_LOG(LogTemp, Log, TEXT("Spawned Impact Effect at: %s"), *ImpactLocation.ToString());
+        }
     }
     else
     {
