@@ -145,7 +145,7 @@ public:
 
 	// Attack Hit
 	UFUNCTION(BlueprintCallable, Category="Combat")
-	void OnAttackHit();
+	void OnAttackHit(AActor* HitActor);
 	
 	UPROPERTY(EditDefaultsOnly, Category = "Effects")
 	UParticleSystem* ImpactParticle;

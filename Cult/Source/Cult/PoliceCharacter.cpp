@@ -2,6 +2,7 @@
 
 
 #include "PoliceCharacter.h"
+#include "CultistCharacter.h"
 #include "GameFramework/Actor.h"
 #include "Camera/CameraComponent.h"
 #include"Components/BoxComponent.h"
@@ -266,7 +267,14 @@ void APoliceCharacter::BatonAttack()
 		if (Actor != this)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("Hit : %s"), *Actor->GetName());
-			UGameplayStatics::ApplyDamage(Actor, AttackDamage, GetController(), this, UDamageType::StaticClass());
+			//UGameplayStatics::ApplyDamage(Actor, AttackDamage, GetController(), this, UDamageType::StaticClass());
+			ACultistCharacter* Cultist = Cast<ACultistCharacter>(Actor);
+			if (Cultist)
+			{
+				OnAttackHit(Cultist);
+				UE_LOG(LogTemp, Warning, TEXT("Cultist Hit "));
+
+			}
 		}
 	}
 	AttackCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -302,23 +310,12 @@ void APoliceCharacter::SetCoolTimeDone()
 	bIsCoolTime = false;
 }
 
-void APoliceCharacter::OnAttackHit()
+void APoliceCharacter::OnAttackHit(AActor* HitActor)
 {
-	AttackCollision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-
-	TArray<AActor*> HitActors;
-	AttackCollision->GetOverlappingActors(HitActors);
-
-	for (AActor* Actor : HitActors)
+	if (HitActor)
 	{
-		if (Actor != this)
-		{
-			// 맞은 캐릭터에게 데미지
-			UGameplayStatics::ApplyDamage(Actor, AttackDamage, GetController(), this, UDamageType::StaticClass());
-		}
+		//
 	}
-
-	AttackCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 
