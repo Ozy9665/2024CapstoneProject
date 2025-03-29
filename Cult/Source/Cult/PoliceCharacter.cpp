@@ -256,28 +256,44 @@ void APoliceCharacter::ShootPistol()
 
 void APoliceCharacter::BatonAttack()
 {
-	UE_LOG(LogTemp, Warning, TEXT("CheckBaton"));
-	AttackCollision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	FVector Start = GetActorLocation();
+	FVector ForwardVector = GetActorForwardVector();
+	// 공격 범위
+	FVector End = Start + (ForwardVector * 200.0f);
 
-	TArray<AActor*> HitActors;
-	AttackCollision->GetOverlappingActors(HitActors);
+	FHitResult HitResult;
+	FCollisionQueryParams CollisionParams;
+	CollisionParams.AddIgnoredActor(this);
 
-	for (AActor* Actor : HitActors)
+	// 공격범위 충돌체크
+	bool bBatonHit = GetWorld()->SweepSingleByChannel(
+		HitResult, Start, End, FQuat::Identity,
+		ECC_Pawn, FCollisionShape::MakeSphere(50.0f),
+		CollisionParams
+	);
+
+	if (bBatonHit)
 	{
-		if (Actor != this)
+		AActor* HitActor = HitResult.GetActor();
+		if (HitActor)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Hit : %s"), *Actor->GetName());
-			//UGameplayStatics::ApplyDamage(Actor, AttackDamage, GetController(), this, UDamageType::StaticClass());
-			ACultistCharacter* Cultist = Cast<ACultistCharacter>(Actor);
+			ACultistCharacter* Cultist = Cast<ACultistCharacter>(HitActor);
 			if (Cultist)
 			{
 				OnAttackHit(Cultist);
-				UE_LOG(LogTemp, Warning, TEXT("Cultist Hit "));
-
+				UE_LOG(LogTemp, Warning, TEXT("Cultist Hit"));
 			}
 		}
 	}
-	AttackCollision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+}
+
+void APoliceCharacter::OnAttackHit(AActor* HitActor)
+{
+	if (HitActor)
+	{
+		//
+		UE_LOG(LogTemp, Warning, TEXT("OnAttack"));
+	}
 }
 
 void APoliceCharacter::EndAttack()
@@ -310,13 +326,7 @@ void APoliceCharacter::SetCoolTimeDone()
 	bIsCoolTime = false;
 }
 
-void APoliceCharacter::OnAttackHit(AActor* HitActor)
-{
-	if (HitActor)
-	{
-		//
-	}
-}
+
 
 
 
