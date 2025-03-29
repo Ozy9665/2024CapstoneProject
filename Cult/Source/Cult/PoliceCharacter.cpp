@@ -198,7 +198,8 @@ void APoliceCharacter::StartAttack()
 			//FVector ForwardDirection = GetActorForwardVector();
 			//AddMovementInput(ForwardDirection, AttackPushForce);
 
-			GetWorldTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::BatonAttack, 0.3f, false);
+			//GetWorldTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::BatonAttack, 0.3f, false);
+			BatonAttack();
 			UE_LOG(LogTemp, Warning, TEXT("SetTimer for CheckBatonAttack"));
 			GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, BatonMontageDuration-0.7f, false);
 		}
@@ -256,6 +257,12 @@ void APoliceCharacter::ShootPistol()
 
 void APoliceCharacter::BatonAttack()
 {
+	if (!this)
+	{
+		UE_LOG(LogTemp, Error, TEXT("BatonAttack: this is NULL"));
+		return;
+	}
+	UE_LOG(LogTemp, Warning, TEXT("BatonAttackStart"));
 	FVector Start = GetActorLocation();
 	FVector ForwardVector = GetActorForwardVector();
 	// 공격 범위
@@ -272,11 +279,14 @@ void APoliceCharacter::BatonAttack()
 		CollisionParams
 	);
 
+	UE_LOG(LogTemp, Warning, TEXT("Sweep Result: %s"), bBatonHit ? TEXT("Hit") : TEXT("Miss"));
+
 	if (bBatonHit)
 	{
 		AActor* HitActor = HitResult.GetActor();
 		if (HitActor)
 		{
+			UE_LOG(LogTemp, Warning, TEXT("Hit Actor: %s"), *HitActor->GetName());
 			ACultistCharacter* Cultist = Cast<ACultistCharacter>(HitActor);
 			if (Cultist)
 			{
