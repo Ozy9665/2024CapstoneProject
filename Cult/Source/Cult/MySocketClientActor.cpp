@@ -10,6 +10,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "PoliceCharacter.h"
+#include "CultistCharacter.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -301,9 +302,15 @@ FCultistCharacterState AMySocketClientActor::GetCharacterState(ACharacter* Playe
     State.VelocityZ = Velocity.Z;
     State.Speed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
     
-    // Crouch ป๓ลย
     State.bIsCrouching = PlayerCharacter->bIsCrouched;
 
+    ACultistCharacter* CultistChar = Cast<ACultistCharacter>(PlayerCharacter);
+    if (CultistChar)
+    {
+        State.bIsPerformingRitual = CultistChar->bIsPerformingRitual;
+        State.bIsStunned = CultistChar->bIsStunned;
+        State.Health = CultistChar->Health;
+    }
     return State;
 }
 
