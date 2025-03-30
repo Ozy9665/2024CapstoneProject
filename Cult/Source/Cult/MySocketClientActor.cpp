@@ -309,7 +309,8 @@ FCultistCharacterState AMySocketClientActor::GetCharacterState(ACharacter* Playe
     {
         State.bIsPerformingRitual = CultistChar->bIsPerformingRitual;
         State.bIsStunned = CultistChar->bIsStunned;
-        State.Health = CultistChar->Health;
+        State.CurrentHealth = CultistChar->CurrentHealth;
+		State.bIsHitByAnAttack = CultistChar->bIsHitByAnAttack;
     }
     return State;
 }

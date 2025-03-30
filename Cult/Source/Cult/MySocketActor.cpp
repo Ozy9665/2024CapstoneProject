@@ -503,6 +503,13 @@ void AMySocketActor::UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, c
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsPerformingProperty);
         BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsPerformingRitual);
     }
+    
+    FProperty* IsABP_IsHitByAnAttackProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsHitByAnAttack"));
+    if (IsABP_IsHitByAnAttackProperty && IsABP_IsHitByAnAttackProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsHitByAnAttackProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsHitByAnAttack);
+    }
 }
 
 void AMySocketActor::CheckImpactEffect()
