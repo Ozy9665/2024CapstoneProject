@@ -81,10 +81,15 @@ public:
 
 	// Damage
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+	float CurrentHealth;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+	bool bIsHitByAnAttack=false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
 	bool bIsStunned;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Health")
 	bool bIsAlreadyStunned;
 	FTimerHandle ReviveTimerHandle;
+	FTimerHandle HitByAttackTH;
 
 	UFUNCTION(BlueprintCallable, Category="Health")
 	void Die();
@@ -98,7 +103,8 @@ public:
 	void TakePistolDamage(float DamageAmount);
 	UFUNCTION(BlueprintCallable, Category = "Health")
 	void GotHitTaser();
-
+	UFUNCTION(BlueprintCallable, Category = "Health")
+	void GottaRun();
 
 
 	FTimerHandle RitualTimerHandle;

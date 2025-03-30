@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "BaseCharacter.h"
 #include "Bullet.h"
+#include "Blueprint/UserWidget.h"
 #include "Particles/ParticleSystemComponent.h"
 #include"GameFramework/Character.h"
 #include"GameFramework/SpringArmComponent.h"
@@ -97,6 +98,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 	class USpringArmComponent* SpringArmComp;
 
+
+	// UI
+	UPROPERTY(EditAnywhere, Category = "UI")
+	TSubclassOf<UUserWidget> CrosshairWidgetClass;
+
+	UUserWidget* CrosshairWidget;
 
 
 	// =========Func=========

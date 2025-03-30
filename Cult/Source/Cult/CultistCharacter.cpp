@@ -15,6 +15,7 @@ ACultistCharacter::ACultistCharacter()
 	
 
 	Health = 100.0f;
+	CurrentHealth = 100.0f;
 	bIsStunned = false;
 	bIsAlreadyStunned = false;
 
@@ -228,13 +229,19 @@ void ACultistCharacter::SetCurrentAltar(AAltar* Altar)
 void ACultistCharacter::TakeDamage(float DamageAmount)
 {
 	if (bIsStunned)return;
-
+	bIsHitByAnAttack = true;
 	StopRitual();
+	// 피격 리액션 타이머
+	GetWorld()->GetTimerManager().SetTimer(HitByAttackTH, this, &ACultistCharacter::GottaRun, 0.8f, false);
 	
-	Health -= DamageAmount;
-	UE_LOG(LogTemp, Warning, TEXT("You've Been Hit"));
+	// 잠시 이동불가
+	GetCharacterMovement()->DisableMovement();
 
-	if (Health <= 0)
+	// 데미지 처리
+	CurrentHealth -= DamageAmount;
+	UE_LOG(LogTemp, Warning, TEXT("HP : %f Now"), CurrentHealth);
+
+	if (CurrentHealth <= 0)
 	{
 		if (bIsAlreadyStunned)
 		{
@@ -245,6 +252,14 @@ void ACultistCharacter::TakeDamage(float DamageAmount)
 			Stun();
 		}
 	}
+}
+
+void ACultistCharacter::GottaRun()
+{
+	UE_LOG(LogTemp, Warning, TEXT("Cultist Gotta Run"));
+	bIsHitByAnAttack = false;
+
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 }
 
 void ACultistCharacter::Die()
@@ -258,6 +273,10 @@ void ACultistCharacter::Stun()
 	UE_LOG(LogTemp, Warning, TEXT("Got Stunned"));
 	bIsStunned = true;
 	GetCharacterMovement()->DisableMovement();
+
+	//AI 방지
+	GetCharacterMovement()->MaxWalkSpeed = 0.0f;
+
 	// Ragdoll 효과
 	
 	// 일정 시간 후 깨어남
@@ -272,6 +291,7 @@ void ACultistCharacter::Revive()
 	bIsAlreadyStunned = true;
 	Health = 50.0f;
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	GetCharacterMovement()->MaxWalkSpeed = 550.0f;
 	UE_LOG(LogTemp, Warning, TEXT("Revive."));
 }
 
@@ -309,4 +329,5 @@ void ACultistCharacter::LookUpCamera(float Value)
 {
 	AddControllerPitchInput(Value);
 }
+
 

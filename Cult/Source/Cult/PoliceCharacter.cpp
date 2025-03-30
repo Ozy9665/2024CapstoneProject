@@ -123,6 +123,17 @@ void APoliceCharacter::BeginPlay()	// 초기화
 	{
 		UE_LOG(LogTemp, Error, TEXT("NO PlayerController"));
 	}
+
+	// 조준점 위젯 생성
+	if (CrosshairWidgetClass)
+	{
+		CrosshairWidget = CreateWidget<UUserWidget>(GetWorld(), CrosshairWidgetClass);
+		if (CrosshairWidget)
+		{
+			CrosshairWidget->AddToViewport();
+			CrosshairWidget->SetVisibility(ESlateVisibility::Hidden);
+		}
+	}
 }
 
 void APoliceCharacter::Tick(float DeltaTime)
@@ -248,8 +259,24 @@ void APoliceCharacter::ShootPistol()
 		UE_LOG(LogTemp, Warning, TEXT("Particle Effect!"));
 		ImpactLoc = HitResult.ImpactPoint;
 		//SpawnImpactEffect(HitResult.ImpactPoint);
+
+		// Cultist확인하고 TakeDamage호출
+		AActor* HitActor = HitResult.GetActor();
+		if (HitActor)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("HitActor: %s"), *HitActor->GetName());
+
+			ACultistCharacter* Cultist = Cast<ACultistCharacter>(HitActor);
+
+			if (Cultist)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Shot Cultist"));
+				Cultist->TakeDamage(AttackDamage);
+			}
+		}
+
 	}
-	GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndPistolShoot, 0.7f, false);
+	GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndPistolShoot, 1.1f, false);
 
 }
 
@@ -291,7 +318,6 @@ void APoliceCharacter::BatonAttack()
 			if (Cultist)
 			{
 				OnAttackHit(Cultist);
-				UE_LOG(LogTemp, Warning, TEXT("Cultist Hit"));
 			}
 		}
 	}
@@ -301,9 +327,17 @@ void APoliceCharacter::OnAttackHit(AActor* HitActor)
 {
 	if (HitActor)
 	{
-		//
-		UE_LOG(LogTemp, Warning, TEXT("OnAttack"));
+		UE_LOG(LogTemp, Warning, TEXT("OnAttackHit Called"));
+		ACultistCharacter* Cultist = Cast<ACultistCharacter>(HitActor);
+		// 데미지
+		if (Cultist)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("OnAttackHit: %s"), *Cultist->GetName());
+
+			Cultist->TakeDamage(AttackDamage);
+		}
 	}
+
 }
 
 void APoliceCharacter::EndAttack()
@@ -376,7 +410,11 @@ void APoliceCharacter::StartAiming()
 	bIsAiming = true;
 	UE_LOG(LogTemp, Warning, TEXT("StartAiming, bIsAiming is %s"), (bIsAiming ? TEXT("true"): TEXT("false")));
 
-
+	//조준점 활성화
+	if (CrosshairWidget)
+	{
+		CrosshairWidget->SetVisibility(ESlateVisibility::Visible);
+	}
 }
 
 void APoliceCharacter::StopAiming()
@@ -391,6 +429,12 @@ void APoliceCharacter::StopAiming()
 	if (!GetCharacterMovement()->bOrientRotationToMovement)
 	{
 		GetCharacterMovement()->bOrientRotationToMovement = true;
+	}
+
+	// 조준점 다시 숨김
+	if (CrosshairWidget)
+	{
+		CrosshairWidget->SetVisibility(ESlateVisibility::Hidden);
 	}
 }
 
