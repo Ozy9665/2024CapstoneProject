@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "BaseCharacter.h"
 #include "Bullet.h"
+#include "NiagaraSystem.h"
+#include "NiagaraFunctionLibrary.h"
 #include "Blueprint/UserWidget.h"
 #include "Particles/ParticleSystemComponent.h"
 #include"GameFramework/Character.h"
@@ -71,7 +73,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
 	bool bIsAiming = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat")
-	float AttackPushForce = 1200.0f;
+	float AttackPushForce = 600.0f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weapon")
 	bool bIsShooting = false;
 
@@ -154,8 +156,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	void OnAttackHit(AActor* HitActor);
 	
+	// Particle
+
 	UPROPERTY(EditDefaultsOnly, Category = "Effects")
 	UParticleSystem* ImpactParticle;
+	UPROPERTY(EditDefaultsOnly, Category = "Effects")
+	UNiagaraSystem* NG_ImpactParticle;
+	UPROPERTY(EditDefaultsOnly, Category = "Effects")
+	UNiagaraSystem* MuzzleImpactParticle;
 	void SpawnImpactEffect(FVector ImpactLocation);
 	UPROPERTY(EditDefaultsOnly, Category = "Effects")
 	UParticleSystemComponent* ImpactParticleComp;

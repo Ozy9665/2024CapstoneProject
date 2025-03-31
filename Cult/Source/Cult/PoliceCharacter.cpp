@@ -260,6 +260,16 @@ void APoliceCharacter::ShootPistol()
 		ImpactLoc = HitResult.ImpactPoint;
 		//SpawnImpactEffect(HitResult.ImpactPoint);
 
+		// 총구에 나이아가라 이펙트
+		if (MuzzleImpactParticle)
+		{
+			UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+				GetWorld(), MuzzleImpactParticle,
+				MuzzleLocation->GetComponentLocation(),
+				MuzzleLocation->GetComponentRotation()
+			);
+		}
+
 		// Cultist확인하고 TakeDamage호출
 		AActor* HitActor = HitResult.GetActor();
 		if (HitActor)
