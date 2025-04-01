@@ -147,31 +147,36 @@ void AMySocketClientActor::ReceiveData()
                     uint8 PacketType;
                     memcpy(&PacketType, Buffer, sizeof(uint8));
 
-                    if (PacketType == cultistHeader || PacketType == policeHeader)
+                    switch (PacketType)
                     {
+                    case cultistHeader:
+                    case policeHeader:
                         ProcessPlayerData(Buffer, BytesReceived);
-                    }
-                    else if (PacketType == objectHeader)
-                    {
+                        break;
+                    case objectHeader:
                         ProcessObjectData(Buffer, BytesReceived);
-                    }
-					else if (PacketType == particleHeader)
-					{
-						ProcessParticleData(Buffer, BytesReceived);
-					}
-                    else
-                    {
+                        break;
+                    case particleHeader:
+                        ProcessParticleData(Buffer, BytesReceived);
+                        break;
+                    case DisconnectionHeader:
+                        ProcessDisconnection(Buffer, BytesReceived);
+                        break;
+                    default:
                         UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
+                        break;
                     }
                 }
                 else if (BytesReceived == 0 || WSAGetLastError() == WSAECONNRESET)
                 {
                     UE_LOG(LogTemp, Log, TEXT("Connection closed by server."));
+                    CloseConnection();
                     break;
                 }
                 else
                 {
                     UE_LOG(LogTemp, Error, TEXT("recv failed with error: %ld"), WSAGetLastError());
+                    CloseConnection();
                     break;
                 }
             }
@@ -254,16 +259,48 @@ void AMySocketClientActor::ProcessParticleData(char* Buffer, int32 BytesReceived
         });
 }
 
+void AMySocketClientActor::ProcessDisconnection(char* Buffer, int32 BytesReceived)
+{
+    if (BytesReceived < sizeof(uint8) + sizeof(int32))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Invalid disconnection packet received."));
+        return;
+    }
+
+    int32 DisconnectedID;
+    memcpy(&DisconnectedID, Buffer + sizeof(uint8), sizeof(int32));
+    // 나일때
+    if (DisconnectedID == static_cast<int32>(ClientSocket))
+    {
+        CloseConnection();
+    }
+    // 다른 플레이어일때
+    FString CharacterKey = FString::Printf(TEXT("Character_%d"), DisconnectedID);
+
+    if (ACharacter* CharToRemove = SpawnedCharacters.FindRef(CharacterKey))
+    {
+        CharToRemove->Destroy();
+        SpawnedCharacters.Remove(CharacterKey);
+        ReceivedCultistStates.Remove(CharacterKey);
+
+        UE_LOG(LogTemp, Log, TEXT("Removed disconnected character: %s"), *CharacterKey);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Tried to remove non-existing character: %s"), *CharacterKey);
+    }
+}
+
 void AMySocketClientActor::SendPlayerData()
 {
     // 데이터 보내기
     if (ClientSocket != INVALID_SOCKET)
     {
         // 캐릭터 상태 가져오기
-        ACharacter* PlayerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
-        if (PlayerCharacter)
+        ACultistCharacter* CultistChar = Cast<ACultistCharacter>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
+        if (CultistChar)
         {
-            FCultistCharacterState CharacterState = GetCharacterState(PlayerCharacter);
+            FCultistCharacterState CharacterState = CultistChar->GenerateCharacterState();
 
             TArray<uint8> PacketData;
             PacketData.SetNumUninitialized(sizeof(uint8) + sizeof(FCultistCharacterState));
@@ -280,7 +317,7 @@ void AMySocketClientActor::SendPlayerData()
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("PlayerCharacter is null."));
+            CloseConnection();
         }
     }
 }
@@ -308,9 +345,9 @@ FCultistCharacterState AMySocketClientActor::GetCharacterState(ACharacter* Playe
     if (CultistChar)
     {
         State.bIsPerformingRitual = CultistChar->bIsPerformingRitual;
-        State.bIsStunned = CultistChar->bIsStunned;
-        State.CurrentHealth = CultistChar->CurrentHealth;
 		State.bIsHitByAnAttack = CultistChar->bIsHitByAnAttack;
+        State.bIsDead = CultistChar->bIsDead;
+        UE_LOG(LogTemp, Error, TEXT("Client bIsDead: %d, this: %p"), State.bIsDead, CultistChar);
     }
     return State;
 }
@@ -810,6 +847,17 @@ void AMySocketClientActor::SpawnImpactEffect(const FVector& ImpactLocation)
     }
 }
 
+void AMySocketClientActor::CloseConnection() {
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        closesocket(ClientSocket);
+        ClientSocket = INVALID_SOCKET;
+    }
+    WSACleanup();
+
+    FGenericPlatformMisc::RequestExit(false);
+    return;
+}
 // Called every frame
 void AMySocketClientActor::Tick(float DeltaTime)
 {

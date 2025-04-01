@@ -29,10 +29,11 @@ private:
 	TMap<int32, AReplicatedPhysicsBlock*> SyncedBlocks;
 	TMap<int32, FTransform> LastReceivedTransform;
 	TArray<FVector> ImpactLocations;
-	uint8 cultistHeader = 0x00;
-	uint8 objectHeader = 0x01;
-	uint8 policeHeader = 0x10;
-	uint8 particleHeader = 0x11;
+	static constexpr uint8 cultistHeader = 0x00;
+	static constexpr uint8 objectHeader = 0x01;
+	static constexpr uint8 policeHeader = 0x10;
+	static constexpr uint8 particleHeader = 0x11;
+	static constexpr uint8 DisconnectionHeader = 0x12;
 	UPROPERTY(EditDefaultsOnly, Category = "Effects")
 	UParticleSystem* ImpactParticle;
 
@@ -47,6 +48,7 @@ public:
 	void ProcessPlayerData(char* Buffer, int32 BytesReceived);
 	void ProcessObjectData(char* Buffer, int32 BytesReceived);
 	void ProcessParticleData(char* Buffer, int32 BytesReceived);
+	void ProcessDisconnection(char* buffer, int32 BytesReceived);
 	void SpawnCultistCharacter(const FCultistCharacterState& State);
 	void SpawnPoliceCharacter(const FPoliceCharacterState& State);
 	void SendPlayerData();
@@ -58,5 +60,5 @@ public:
 	void UpdatePoliceAnimInstanceProperties(UAnimInstance* AnimInstance, const FPoliceCharacterState& State);
 	void ProcessObjectUpdates(float DeltaTime);
 	void SpawnImpactEffect(const FVector& ImpactLocation);
-
+	void CloseConnection();
 };
