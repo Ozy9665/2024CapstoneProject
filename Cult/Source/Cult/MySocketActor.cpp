@@ -422,6 +422,13 @@ void AMySocketActor::SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCu
 {
     AsyncTask(ENamedThreads::GameThread, [this, ClientSocket, State]()
         {
+            if (State.bIsDead)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("PlayerID=%d is dead. Closing socket."), State.PlayerID);
+                CloseClientSocket(ClientSocket);
+                return;
+            }
+
             if (ClientCharacters.Contains(ClientSocket))
             {
                 // 기존 캐릭터 업데이트
@@ -565,7 +572,7 @@ void AMySocketActor::CloseClientSocket(SOCKET ClientSocket)
     AsyncTask(ENamedThreads::GameThread, [this, ClientSocket]()
         {
             FScopeLock Lock(&ClientSocketsMutex);
-            if (ClientCharacters.Contains(ClientSocket))
+            /*if (ClientCharacters.Contains(ClientSocket))
             {
                 ACharacter* Character = ClientCharacters[ClientSocket];
                 if (Character)
@@ -577,8 +584,28 @@ void AMySocketActor::CloseClientSocket(SOCKET ClientSocket)
             if (ClientSockets.Contains(ClientSocket))
             {
                 ClientSockets.Remove(ClientSocket);
-                closesocket(ClientSocket);
+            }*/
+            int32 DisconnectedID = static_cast<int32>(ClientSocket);
+            int32 PacketSize = sizeof(uint8) + sizeof(int32);
+
+            TArray<uint8> Packet;
+            Packet.SetNumUninitialized(PacketSize);
+            memcpy(Packet.GetData(), &DisconnectionHeader, sizeof(uint8));
+            memcpy(Packet.GetData() + sizeof(uint8), &DisconnectedID, sizeof(int32));
+
+            for (SOCKET Socket : ClientSockets)
+            {
+                if (Socket != INVALID_SOCKET)
+                {
+                    send(Socket, reinterpret_cast<const char*>(Packet.GetData()), PacketSize, 0);
+                }
             }
+
+            ClientCharacters.Remove(ClientSocket);
+            ClientStates.Remove(ClientSocket);
+            ClientSockets.Remove(ClientSocket);
+            closesocket(ClientSocket);
+
             UE_LOG(LogTemp, Error, TEXT("Closed client socket: %d"), ClientSocket);
         });
 }

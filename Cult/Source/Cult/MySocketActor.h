@@ -70,9 +70,8 @@ struct FCultistCharacterState
 
 	bool bIsPerformingRitual;
 	bool bIsCrouching;
-	bool bIsStunned;
-	float CurrentHealth;
 	bool bIsHitByAnAttack;
+	bool bIsDead;
 };
 
 UCLASS()
@@ -102,10 +101,11 @@ private:
 	TArray<FVector> ImpactLocations;
 	FCriticalSection ClientSocketsMutex;
 	bool bIsRunning = false;
-	uint8 cultistHeader = 0x00;
-	uint8 objectHeader = 0x01;
-	uint8 policeHeader = 0x10;
-	uint8 particleHeader = 0x11;
+	static constexpr uint8 cultistHeader = 0x00;
+	static constexpr uint8 objectHeader = 0x01;
+	static constexpr uint8 policeHeader = 0x10;
+	static constexpr uint8 particleHeader = 0x11;
+	static constexpr uint8 DisconnectionHeader = 0x12;
 	UPROPERTY(EditDefaultsOnly, Category = "Effects")
 	UParticleSystem* ImpactParticle;
 
