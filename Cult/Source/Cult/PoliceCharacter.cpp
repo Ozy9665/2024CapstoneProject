@@ -30,7 +30,24 @@ APoliceCharacter::APoliceCharacter(const FObjectInitializer& ObjectInitializer)
 	StimulusComponent = CreateDefaultSubobject<UAIPerceptionStimuliSourceComponent>(TEXT("StimuliSourceComponent"));
 	StimulusComponent->RegisterForSense(TSubclassOf<UAISense>(UAISense_Sight::StaticClass()));
 	StimulusComponent->RegisterWithPerceptionSystem();
-
+	
+	// 공격 몽타주 확인
+	if (!AttackMontage)
+	{
+		static ConstructorHelpers::FObjectFinder<UAnimMontage> MontageAsset(TEXT("AnimMontage'/Game/Cult_Custom/Characters/Police/Animation/AttackMontage.AttackMontage'"));
+		if (MontageAsset.Succeeded())
+		{
+			AttackMontage = MontageAsset.Object;
+			UE_LOG(LogTemp, Warning, TEXT("AttackMontage Load"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("AttackMontage Load Fail"));
+		}
+	}
+	else {
+		UE_LOG(LogTemp, Warning, TEXT(" AttackMontage is already"));
+	}
 
 	// 무기 초기화
 	BatonMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("BatonMesh"));
@@ -75,24 +92,6 @@ void APoliceCharacter::BeginPlay()	// 초기화
 	bIsAttacking = false;
 
 
-
-	// 공격 몽타주 확인
-	if (!AttackMontage)
-	{
-		static ConstructorHelpers::FObjectFinder<UAnimMontage> MontageAsset(TEXT("AnimMontage'/Game/Cult_Custom/Characters/Police/Animation/AttackMontage.AttackMontage'"));
-		if (MontageAsset.Succeeded())
-		{
-			AttackMontage = MontageAsset.Object;
-			UE_LOG(LogTemp, Warning, TEXT("AttackMontage Load"));
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("AttackMontage Load Fail"));
-		}
-	}
-	else {
-		UE_LOG(LogTemp, Warning, TEXT(" AttackMontage is already"));
-	}
 
 
 	// melee 콜리전 설정
