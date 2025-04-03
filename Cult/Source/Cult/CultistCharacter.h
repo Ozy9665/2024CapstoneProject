@@ -9,7 +9,6 @@
 #include "BaseCharacter.h"
 #include "Altar.h"
 #include "RitualPerformer.h"
-#include "MySocketActor.h"
 #include "CultistCharacter.generated.h"
 
 
@@ -91,8 +90,6 @@ public:
 	bool bIsAlreadyStunned;
 	FTimerHandle ReviveTimerHandle;
 	FTimerHandle HitByAttackTH;
-	UPROPERTY(BlueprintReadWrite, Category = "State")
-	bool bIsDead = false;
 	UFUNCTION(BlueprintCallable, Category="Health")
 	void Die();
 	UFUNCTION(BlueprintCallable, Category = "Health")
@@ -123,5 +120,4 @@ public:
 	// 데미지 처리
 	virtual void TakeDamage(float DamageAmount) override;
 
-	FCultistCharacterState GenerateCharacterState();
 };

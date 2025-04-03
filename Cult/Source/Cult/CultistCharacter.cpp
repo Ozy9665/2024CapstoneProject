@@ -264,8 +264,7 @@ void ACultistCharacter::GottaRun()
 
 void ACultistCharacter::Die()
 {
-	bIsDead = true;
-	UE_LOG(LogTemp, Warning, TEXT("Died. %d, this: %p"), bIsDead, this);
+	UE_LOG(LogTemp, Warning, TEXT("Died."));
 }
 
 void ACultistCharacter::Stun()
@@ -328,31 +327,5 @@ void ACultistCharacter::TurnCamera(float Value)
 void ACultistCharacter::LookUpCamera(float Value)
 {
 	AddControllerPitchInput(Value);
-}
-
-FCultistCharacterState ACultistCharacter::GenerateCharacterState()
-{
-	FCultistCharacterState State;
-	State.PositionX = GetActorLocation().X;
-	State.PositionY = GetActorLocation().Y;
-	State.PositionZ = GetActorLocation().Z;
-
-	State.RotationPitch = GetActorRotation().Pitch;
-	State.RotationYaw =GetActorRotation().Yaw;
-	State.RotationRoll = GetActorRotation().Roll;
-
-	FVector Velocity = GetVelocity();
-	State.VelocityX = Velocity.X;
-	State.VelocityY = Velocity.Y;
-	State.VelocityZ = Velocity.Z;
-	State.Speed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
-
-	State.bIsCrouching = bIsCrouched;
-	State.bIsPerformingRitual = bIsPerformingRitual;
-	State.bIsHitByAnAttack = bIsHitByAnAttack;
-	State.bIsDead = bIsDead;
-	UE_LOG(LogTemp, Error, TEXT("Client bIsDead: %d, State bIsDead: %d, this: %p"), State.bIsDead, bIsDead, this);
-	
-	return State;
 }
 

@@ -297,10 +297,10 @@ void AMySocketClientActor::SendPlayerData()
     if (ClientSocket != INVALID_SOCKET)
     {
         // 캐릭터 상태 가져오기
-        ACultistCharacter* CultistChar = Cast<ACultistCharacter>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
-        if (CultistChar)
+        ACharacter* PlayerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
+        if (PlayerCharacter)
         {
-            FCultistCharacterState CharacterState = CultistChar->GenerateCharacterState();
+            FCultistCharacterState CharacterState = GetCharacterState(PlayerCharacter);
 
             TArray<uint8> PacketData;
             PacketData.SetNumUninitialized(sizeof(uint8) + sizeof(FCultistCharacterState));
@@ -346,8 +346,9 @@ FCultistCharacterState AMySocketClientActor::GetCharacterState(ACharacter* Playe
     {
         State.bIsPerformingRitual = CultistChar->bIsPerformingRitual;
 		State.bIsHitByAnAttack = CultistChar->bIsHitByAnAttack;
-        State.bIsDead = CultistChar->bIsDead;
-        UE_LOG(LogTemp, Error, TEXT("Client bIsDead: %d, this: %p"), State.bIsDead, CultistChar);
+        UE_LOG(LogTemp, Error, TEXT("Client bIsPerformingRitual: %d, bIsHitByAnAttack: %d"), State.bIsPerformingRitual, State.bIsHitByAnAttack);
+        State.CurrentHealth = CultistChar->CurrentHealth;
+        UE_LOG(LogTemp, Error, TEXT("health: %f"), State.CurrentHealth);
     }
     return State;
 }

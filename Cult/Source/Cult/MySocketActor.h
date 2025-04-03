@@ -68,10 +68,10 @@ struct FCultistCharacterState
 	float VelocityZ;
 	float Speed;
 
-	bool bIsPerformingRitual;
 	bool bIsCrouching;
+	bool bIsPerformingRitual;
 	bool bIsHitByAnAttack;
-	bool bIsDead;
+	float CurrentHealth;
 };
 
 UCLASS()

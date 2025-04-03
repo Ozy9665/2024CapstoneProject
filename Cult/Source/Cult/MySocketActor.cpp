@@ -422,7 +422,7 @@ void AMySocketActor::SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCu
 {
     AsyncTask(ENamedThreads::GameThread, [this, ClientSocket, State]()
         {
-            if (State.bIsDead)
+            if (State.CurrentHealth < 0)
             {
                 UE_LOG(LogTemp, Warning, TEXT("PlayerID=%d is dead. Closing socket."), State.PlayerID);
                 CloseClientSocket(ClientSocket);
