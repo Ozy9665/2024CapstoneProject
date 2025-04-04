@@ -10,7 +10,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "TimerManager.h"
-// #include "MyLegacyCameraShake.h"
+#include "MyLegacyCameraShake.h"
 // SpawnAltar
 #include "Engine/World.h"
 
@@ -48,7 +48,7 @@ void ACultGameMode::EndGame()
 	APlayerController* PC = GetWorld()->GetFirstPlayerController();
 	if (PC) // 실행
 	{
-		// PC->ClientStartCameraShake(UMyLegacyCameraShake::StaticClass());
+		PC->ClientStartCameraShake(UMyLegacyCameraShake::StaticClass());
 	}
 
 	// 게임 재시작	(3seconds)

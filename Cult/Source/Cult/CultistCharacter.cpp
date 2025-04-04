@@ -239,8 +239,7 @@ void ACultistCharacter::TakeDamage(float DamageAmount)
 
 	// 데미지 처리
 	CurrentHealth -= DamageAmount;
-	serverHealth = !serverHealth;
-	UE_LOG(LogTemp, Warning, TEXT("HP : %f Now | serverHealth: "), CurrentHealth, serverHealth);
+	UE_LOG(LogTemp, Warning, TEXT("HP : %f Now"), CurrentHealth);
 
 	if (CurrentHealth <= 0)
 	{

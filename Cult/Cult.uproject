@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "{E7AA3799-4BE0-E1EF-BD04-438E41B5DBC6}",
+	"EngineAssociation": "5.4",
 	"Category": "",
 	"Description": "",
 	"Modules": [
@@ -13,14 +13,7 @@
 				"AIModule",
 				"GameplayCameras"
 			]
-		},
-		{
-			"Name": "CultServer",
-      			"Type": "Program"
 		}
-	],
-	"TargetPlatforms": [
-		"Windows"
 	],
 	"Plugins": [
 		{
@@ -41,10 +34,6 @@
 		{
 			"Name": "Niagara",
 			"Enabled": true
-		},
-  		{
-   			"Name": "GameplayCameras",
-   			"Enabled": true
-  		}
+		}
 	]
 }

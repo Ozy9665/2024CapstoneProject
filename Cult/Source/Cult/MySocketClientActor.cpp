@@ -348,8 +348,7 @@ FCultistCharacterState AMySocketClientActor::GetCharacterState(ACharacter* Playe
 		State.bIsHitByAnAttack = CultistChar->bIsHitByAnAttack;
         UE_LOG(LogTemp, Error, TEXT("Client bIsPerformingRitual: %d, bIsHitByAnAttack: %d"), State.bIsPerformingRitual, State.bIsHitByAnAttack);
         State.CurrentHealth = CultistChar->CurrentHealth;
-        State.serverHealth = CultistChar->serverHealth;
-        UE_LOG(LogTemp, Error, TEXT("health: %f, serverHealth: %d"), State.CurrentHealth, State.serverHealth);
+        UE_LOG(LogTemp, Error, TEXT("health: %f"), State.CurrentHealth);
     }
     return State;
 }

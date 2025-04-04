@@ -72,7 +72,6 @@ struct FCultistCharacterState
 	bool bIsPerformingRitual;
 	bool bIsHitByAnAttack;
 	float CurrentHealth;
-	bool serverHealth;
 };
 
 UCLASS()
