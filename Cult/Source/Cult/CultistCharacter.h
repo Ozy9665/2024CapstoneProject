@@ -51,7 +51,8 @@ public:
 	// 의식중 여부
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ritual")
 	bool bIsPerformingRitual = false;
-	
+
+	bool serverHealth{ false };
 	// 현재 제단
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual")
 	class AAltar* CurrentAltar = nullptr;
