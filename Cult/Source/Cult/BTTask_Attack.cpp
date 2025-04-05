@@ -20,7 +20,7 @@ EBTNodeResult::Type UBTTask_Attack::ExecuteTask(UBehaviorTreeComponent& OwnerCom
 	if (!PoliceAI) return EBTNodeResult::Failed;
 
 	UBlackboardComponent* Blackboard = OwnerComp.GetBlackboardComponent();
-	AActor* Target = Cast<AActor>(Blackboard->GetValueAsObject("Target"));
+	AActor* Target = Cast<AActor>(Blackboard->GetValueAsObject("TargetActor"));
 
 	if (Target)
 	{

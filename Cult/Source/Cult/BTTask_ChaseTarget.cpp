@@ -21,7 +21,7 @@ EBTNodeResult::Type UBTTask_ChaseTarget::ExecuteTask(UBehaviorTreeComponent& Own
 	if (!AICharacter)return EBTNodeResult::Failed;
 
 	UBlackboardComponent* Blackboard = OwnerComp.GetBlackboardComponent();
-	AActor* Target = Cast<AActor>(Blackboard->GetValueAsObject("Target"));
+	AActor* Target = Cast<AActor>(Blackboard->GetValueAsObject("TargetActor"));
 
 	if (Target)
 	{

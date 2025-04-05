@@ -2,8 +2,8 @@
 
 
 #include "AI_PoliceAIController.h"
-#include "BehaviorTree/BehaviorTree.h"
-#include "BehaviorTree/BlackboardComponent.h"
+
+
 
 void AAI_PoliceAIController::BeginPlay()
 {
