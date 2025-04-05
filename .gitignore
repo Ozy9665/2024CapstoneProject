@@ -23,3 +23,5 @@ Cult/.vs/Cult/v17/DocumentLayout.json
 *.json
 /Cult/.vs/Cult
 /Cult/.vs
+/CultServer/.vs
+/CultServer/CultServer/x64
