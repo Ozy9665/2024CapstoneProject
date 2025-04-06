@@ -4,11 +4,18 @@
 
 #include "CoreMinimal.h"
 #include "PoliceCharacter.h"
+#include "Perception/AIPerceptionComponent.h"
+#include "BehaviorTree/BlackboardComponent.h"
+#include "AIController.h"
+#include "Perception/AISenseConfig_Sight.h"
+
+
+class UAIPerceptionComponent;
+class UAISenseConfig_Sight;
+
 #include "PoliceAICharacter.generated.h"
 
-/**
- * 
- */
+
 UCLASS()
 class CULT_API APoliceAICharacter : public APoliceCharacter
 {
@@ -24,8 +31,14 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category="AI")
 	class UAIPerceptionComponent* AIPerceptionComponent;
 
+	UPROPERTY()
+	UAISenseConfig_Sight* SightConfig;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="AI")
 	class UBehaviorTree* BehaviorTree;
+
+	UFUNCTION()
+	void OnTargetPerceived(AActor* Actor, FAIStimulus Stimulus);
 
 	void ChaseTarget(AActor* Target);
 	void AttackTarget();

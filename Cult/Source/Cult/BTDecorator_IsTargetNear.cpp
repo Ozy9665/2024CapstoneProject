@@ -14,7 +14,7 @@ UBTDecorator_IsTargetNear::UBTDecorator_IsTargetNear()
 bool UBTDecorator_IsTargetNear::CalculateRawConditionValue(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) const
 {
 	UBlackboardComponent* Blackboard = OwnerComp.GetBlackboardComponent();
-	AActor* Target = Cast<AActor>(Blackboard->GetValueAsObject("Target"));
+	AActor* Target = Cast<AActor>(Blackboard->GetValueAsObject("TargetActor"));
 	ACharacter* AICharacter = Cast<ACharacter>(OwnerComp.GetAIOwner()->GetPawn());
 
 	if (Target && AICharacter)
