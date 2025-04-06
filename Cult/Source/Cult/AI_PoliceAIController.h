@@ -20,8 +20,15 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="AI")
+	UBehaviorTree* AIBehaviorTree;
+
 	UPROPERTY(EditDefaultsOnly, Category="AI")
-	class UBehaviorTree* AIBehaviorTree;
+	UBlackboardData* BlackboardAsset;
+
+	UBlackboardComponent* BlackboardComponent;
 
 	void StartChase(AActor* Target);
-};
+	virtual void OnPossess(APawn* InPawn) override;
+}; 
+

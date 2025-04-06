@@ -9,10 +9,12 @@ void AAI_PoliceAIController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (AIBehaviorTree)
+	/*if (AIBehaviorTree)
 	{
 		RunBehaviorTree(AIBehaviorTree);
-	}
+	}*/
+
+
 }
 
 void AAI_PoliceAIController::StartChase(AActor* Target)
@@ -22,3 +24,14 @@ void AAI_PoliceAIController::StartChase(AActor* Target)
 		Blackboard->SetValueAsObject(TEXT("Target"), Target);
 	}
 }
+
+void AAI_PoliceAIController::OnPossess(APawn* InPawn)
+{
+	Super::OnPossess(InPawn);
+
+	
+	if (UseBlackboard(BlackboardAsset, BlackboardComponent))
+	{
+		RunBehaviorTree(AIBehaviorTree);
+	}
+ }

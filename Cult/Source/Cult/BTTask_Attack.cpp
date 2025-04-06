@@ -3,6 +3,7 @@
 
 #include "BTTask_Attack.h"
 #include "AIController.h"
+#include "AI_PoliceAIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "PoliceCharacter.h"
 
@@ -13,20 +14,33 @@ UBTTask_Attack::UBTTask_Attack()
 
 EBTNodeResult::Type UBTTask_Attack::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
-	AAIController* AIController = OwnerComp.GetAIOwner();
+	AAI_PoliceAIController* AIController = Cast<AAI_PoliceAIController>(OwnerComp.GetAIOwner());
 	if (!AIController)return EBTNodeResult::Failed;
 
 	APoliceCharacter* PoliceAI = Cast<APoliceCharacter>(AIController->GetPawn());
 	if (!PoliceAI) return EBTNodeResult::Failed;
 
-	UBlackboardComponent* Blackboard = OwnerComp.GetBlackboardComponent();
-	AActor* Target = Cast<AActor>(Blackboard->GetValueAsObject("TargetActor"));
-
-	if (Target)
+	if (PoliceAI->bIsAttacking)
 	{
-		PoliceAI->StartAttack();  
-		return EBTNodeResult::Succeeded;
+		return EBTNodeResult::Failed;
 	}
+	PoliceAI->StartAttack();
 
-	return EBTNodeResult::Failed;
+	bNotifyTick = true;
+
+	return EBTNodeResult::InProgress;
+}
+
+void UBTTask_Attack::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
+{
+	AAI_PoliceAIController* AIController = Cast<AAI_PoliceAIController>(OwnerComp.GetAIOwner());
+	if (!AIController)return ;
+
+	APoliceCharacter* PoliceAI = Cast<APoliceCharacter>(AIController->GetPawn());
+	if (!PoliceAI) return ;
+
+	if (!PoliceAI->bIsAttacking)
+	{
+		FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
+	}
 }

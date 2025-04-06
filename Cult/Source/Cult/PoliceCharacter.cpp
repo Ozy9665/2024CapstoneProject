@@ -314,6 +314,7 @@ void APoliceCharacter::BatonAttack()
 		ECC_Pawn, FCollisionShape::MakeSphere(50.0f),
 		CollisionParams
 	);
+	DrawDebugSphere(GetWorld(), End, 50.0f, 12, FColor::Blue, false, 1.0f);
 
 	UE_LOG(LogTemp, Warning, TEXT("Sweep Result: %s"), bBatonHit ? TEXT("Hit") : TEXT("Miss"));
 

@@ -34,8 +34,8 @@ public:
 	UPROPERTY()
 	UAISenseConfig_Sight* SightConfig;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="AI")
-	class UBehaviorTree* BehaviorTree;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI")
+	UBehaviorTree* AIBehaviorTree;
 
 	UFUNCTION()
 	void OnTargetPerceived(AActor* Actor, FAIStimulus Stimulus);
