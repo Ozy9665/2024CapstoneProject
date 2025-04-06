@@ -47,7 +47,7 @@ void AMySocketClientActor::BeginPlay()
     {
         UE_LOG(LogTemp, Log, TEXT("Connected to server!"));
         ReceiveData();  // 데이터 수신 시작
-        InitializeBlocks();
+        // InitializeBlocks();
     }
     else
     {
@@ -72,7 +72,7 @@ void AMySocketClientActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 bool AMySocketClientActor::ConnectToServer(const FString& ServerIP, int32 ServerPort)
 {
     WSADATA WsaData;
-    int Result = WSAStartup(MAKEWORD(2, 2), &WsaData);
+    int Result = WSAStartup(MAKEWORD(2, 0), &WsaData);
     if (Result != 0)
     {
         UE_LOG(LogTemp, Error, TEXT("WSAStartup failed: %d"), Result);
@@ -99,7 +99,7 @@ bool AMySocketClientActor::ConnectToServer(const FString& ServerIP, int32 Server
 
     return true;
 }
-
+/*
 void AMySocketClientActor::InitializeBlocks()
 {
     TArray<AActor*> FoundBlocks;
@@ -118,7 +118,7 @@ void AMySocketClientActor::InitializeBlocks()
         }
     }
 }
-
+*/
 void AMySocketClientActor::LogAndCleanupSocketError(const TCHAR* ErrorMessage)
 {
     UE_LOG(LogTemp, Error, TEXT("%s with error: %ld"), ErrorMessage, WSAGetLastError());
@@ -144,8 +144,7 @@ void AMySocketClientActor::ReceiveData()
                 if (BytesReceived > 0)
                 {
                     // 패킷의 첫 바이트는 헤더, 이후는 데이터
-                    uint8 PacketType;
-                    memcpy(&PacketType, Buffer, sizeof(uint8));
+                    int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
 
                     switch (PacketType)
                     {
@@ -154,10 +153,13 @@ void AMySocketClientActor::ReceiveData()
                         ProcessPlayerData(Buffer, BytesReceived);
                         break;
                     case objectHeader:
-                        ProcessObjectData(Buffer, BytesReceived);
+                        //ProcessObjectData(Buffer, BytesReceived);
                         break;
                     case particleHeader:
-                        ProcessParticleData(Buffer, BytesReceived);
+                        //ProcessParticleData(Buffer, BytesReceived);
+                        break;
+                    case connectionHeader:
+                        ProcessConnection(Buffer, BytesReceived);
                         break;
                     case DisconnectionHeader:
                         ProcessDisconnection(Buffer, BytesReceived);
@@ -185,10 +187,10 @@ void AMySocketClientActor::ReceiveData()
 
 void AMySocketClientActor::ProcessPlayerData(char* Buffer, int32 BytesReceived)
 {
-    uint8 PacketType;
-    memcpy(&PacketType, Buffer, sizeof(uint8));
-
-    int32 Offset = sizeof(uint8); // 첫 바이트(헤더) 이후 데이터 처리
+    if (BytesReceived < 2)
+        return;
+    int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
+    int32 Offset = 2;
 
     if (PacketType == cultistHeader) 
     {
@@ -197,11 +199,9 @@ void AMySocketClientActor::ProcessPlayerData(char* Buffer, int32 BytesReceived)
             FCultistCharacterState ReceivedState;
             memcpy(&ReceivedState, Buffer + Offset, sizeof(FCultistCharacterState));
 
-            FString PlayerID = FString::Printf(TEXT("Character_%d"), ReceivedState.PlayerID);
-
             {
                 FScopeLock Lock(&ReceivedDataMutex);
-                ReceivedCultistStates.Add(PlayerID, ReceivedState);
+                ReceivedCultistStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
             }
             Offset += sizeof(FCultistCharacterState);
         }
@@ -213,17 +213,16 @@ void AMySocketClientActor::ProcessPlayerData(char* Buffer, int32 BytesReceived)
             FPoliceCharacterState ReceivedState;
             memcpy(&ReceivedState, Buffer + Offset, sizeof(FPoliceCharacterState));
 
-            FString PlayerID = FString::Printf(TEXT("Character_%d"), ReceivedState.PlayerID);
-
             {
                 FScopeLock Lock(&ReceivedDataMutex);
-                ReceivedPoliceStates.Add(PlayerID, ReceivedState);
+                ReceivedPoliceStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
             }
             Offset += sizeof(FPoliceCharacterState);
         }
     }
 }
 
+/*
 void AMySocketClientActor::ProcessObjectData(char* Buffer, int32 BytesReceived) {
     int32 Offset = sizeof(uint8);
 
@@ -241,7 +240,8 @@ void AMySocketClientActor::ProcessObjectData(char* Buffer, int32 BytesReceived) 
 
     LastReceivedTransform.FindOrAdd(BlockID) = NewTransform;
 }
-
+*/
+/*
 void AMySocketClientActor::ProcessParticleData(char* Buffer, int32 BytesReceived) {
     int32 Offset = sizeof(uint8);
 
@@ -258,36 +258,62 @@ void AMySocketClientActor::ProcessParticleData(char* Buffer, int32 BytesReceived
         SpawnImpactEffect(NewVector);
         });
 }
+*/
 
-void AMySocketClientActor::ProcessDisconnection(char* Buffer, int32 BytesReceived)
-{
-    if (BytesReceived < sizeof(uint8) + sizeof(int32))
+void AMySocketClientActor::ProcessConnection(char* Buffer, int32 BytesReceived) {
+    if (BytesReceived < 3)
     {
-        UE_LOG(LogTemp, Error, TEXT("Invalid disconnection packet received."));
+        UE_LOG(LogTemp, Error, TEXT("Invalid connection packet received."));
         return;
     }
 
-    int32 DisconnectedID;
-    memcpy(&DisconnectedID, Buffer + sizeof(uint8), sizeof(int32));
+    unsigned char packet_size = static_cast<unsigned char>(Buffer[1]);
+    unsigned char connectedId = static_cast<unsigned char>(Buffer[2]);
+
+    if (my_ID == -1) {
+        my_ID = static_cast<int>(connectedId);
+        UE_LOG(LogTemp, Warning, TEXT("Connected. My ID is: %d"), my_ID);
+    }
+    else {
+        TArray<char> BufferCopy;
+        BufferCopy.SetNum(BytesReceived);
+        memcpy(BufferCopy.GetData(), Buffer, BytesReceived);
+
+        AsyncTask(ENamedThreads::GameThread, [this, BufferCopy]() mutable
+            {
+                this->SpawnCultistCharacter(BufferCopy.GetData());
+            });
+    }
+}
+
+void AMySocketClientActor::ProcessDisconnection(char* Buffer, int32 BytesReceived)
+{
+    if (BytesReceived < 3)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Invalid connection packet received."));
+        return;
+    }
+
+    unsigned char packet_size = static_cast<unsigned char>(Buffer[1]);
+    unsigned char disconnectedID = static_cast<int>(static_cast<unsigned char>(Buffer[2]));
+
     // 나일때
-    if (DisconnectedID == static_cast<int32>(ClientSocket))
+    if (disconnectedID == my_ID)
     {
         CloseConnection();
     }
     // 다른 플레이어일때
-    FString CharacterKey = FString::Printf(TEXT("Character_%d"), DisconnectedID);
-
-    if (ACharacter* CharToRemove = SpawnedCharacters.FindRef(CharacterKey))
+    if (ACharacter* CharToRemove = SpawnedCharacters.FindRef(disconnectedID))
     {
         CharToRemove->Destroy();
-        SpawnedCharacters.Remove(CharacterKey);
-        ReceivedCultistStates.Remove(CharacterKey);
+        SpawnedCharacters.Remove(disconnectedID);
+        ReceivedCultistStates.Remove(disconnectedID);
 
-        UE_LOG(LogTemp, Log, TEXT("Removed disconnected character: %s"), *CharacterKey);
+        UE_LOG(LogTemp, Log, TEXT("Removed disconnected character: %d"), disconnectedID);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("Tried to remove non-existing character: %s"), *CharacterKey);
+        UE_LOG(LogTemp, Warning, TEXT("Tried to remove non-existing character: %d"), disconnectedID);
     }
 }
 
@@ -302,12 +328,15 @@ void AMySocketClientActor::SendPlayerData()
         {
             FCultistCharacterState CharacterState = GetCharacterState(PlayerCharacter);
 
-            TArray<uint8> PacketData;
-            PacketData.SetNumUninitialized(sizeof(uint8) + sizeof(FCultistCharacterState));
+            auto packet_size = 3 + sizeof(FCultistCharacterState);
 
-            uint8 Header = cultistHeader;
-            memcpy(PacketData.GetData(), &Header, sizeof(uint8));
-            memcpy(PacketData.GetData() + sizeof(uint8), &CharacterState, sizeof(FCultistCharacterState));
+            TArray<uint8> PacketData;
+            PacketData.SetNumUninitialized(packet_size);
+
+            PacketData[0] = cultistHeader;
+            PacketData[1] = packet_size;
+            PacketData[2] = my_ID;
+            memcpy(PacketData.GetData() + 3, &CharacterState, sizeof(FCultistCharacterState));
 
             int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
             if (BytesSent == SOCKET_ERROR)
@@ -346,9 +375,9 @@ FCultistCharacterState AMySocketClientActor::GetCharacterState(ACharacter* Playe
     {
         State.bIsPerformingRitual = CultistChar->bIsPerformingRitual;
 		State.bIsHitByAnAttack = CultistChar->bIsHitByAnAttack;
-        UE_LOG(LogTemp, Error, TEXT("Client bIsPerformingRitual: %d, bIsHitByAnAttack: %d"), State.bIsPerformingRitual, State.bIsHitByAnAttack);
+        // UE_LOG(LogTemp, Error, TEXT("Client bIsPerformingRitual: %d, bIsHitByAnAttack: %d"), State.bIsPerformingRitual, State.bIsHitByAnAttack);
         State.CurrentHealth = CultistChar->CurrentHealth;
-        UE_LOG(LogTemp, Error, TEXT("health: %f"), State.CurrentHealth);
+        // UE_LOG(LogTemp, Error, TEXT("health: %f"), State.CurrentHealth);
     }
     return State;
 }
@@ -359,34 +388,24 @@ void AMySocketClientActor::ProcessCharacterUpdates(float DeltaTime)
 
     for (auto& Pair : ReceivedCultistStates)
     {
-        const FString& CharacterKey = FString::Printf(TEXT("Character_%d"), Pair.Value.PlayerID);
         const FCultistCharacterState& State = Pair.Value;
 
-        if (ACharacter* FoundChar = SpawnedCharacters.FindRef(CharacterKey))
+        if (ACharacter* FoundChar = SpawnedCharacters.FindRef(Pair.Value.PlayerID))
         {
             UpdateCultistState(FoundChar, State, DeltaTime);
-        }
-        else
-        {
-            SpawnCultistCharacter(State);
         }
     }
 
     for (auto& Pair : ReceivedPoliceStates)
     {
-        const FString& CharacterKey = Pair.Key;
         const FPoliceCharacterState& PoliceState = Pair.Value;
 
-        if (ACharacter* FoundChar = SpawnedCharacters.FindRef(CharacterKey))
+        if (ACharacter* FoundChar = SpawnedCharacters.FindRef(Pair.Value.PlayerID))
         {
             if (APoliceCharacter* PoliceChar = Cast<APoliceCharacter>(FoundChar))
             {
-                UpdatePoliceState(PoliceChar, PoliceState, DeltaTime);
+                // UpdatePoliceState(PoliceChar, PoliceState, DeltaTime);
             }
-        }
-        else
-        {
-            SpawnPoliceCharacter(PoliceState);
         }
     }
 }
@@ -415,41 +434,6 @@ void AMySocketClientActor::UpdateCultistState(ACharacter* Character, const FCult
         {
             UpdateCultistAnimInstanceProperties(AnimInstance, State);
         }
-    }
-}
-
-void AMySocketClientActor::UpdatePoliceState(ACharacter* Character, const FPoliceCharacterState& State, float DeltaTime)
-{
-    float InterpSpeed = 30.0f; // 보간 속도
-
-    FVector CurrentLocation = Character->GetActorLocation();
-    FVector TargetLocation(State.PositionX, State.PositionY, State.PositionZ);
-
-    if (State.bIsCrouching)
-    {
-        TargetLocation.Z += 50.0f;
-    }
-
-    FVector NewLocation = FMath::VInterpTo(CurrentLocation, TargetLocation, DeltaTime, InterpSpeed);
-    Character->SetActorLocation(NewLocation);
-    Character->SetActorRotation(FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll));
-
-    // 애니메이션 상태 업데이트
-    if (USkeletalMeshComponent* Mesh = Character->GetMesh())
-    {
-        UAnimInstance* AnimInstance = Mesh->GetAnimInstance();
-        if (AnimInstance)
-        {
-            UpdatePoliceAnimInstanceProperties(AnimInstance, State);
-        }
-    }
-
-    // 무기 상태 업데이트
-    APoliceCharacter* PoliceChar = Cast<APoliceCharacter>(Character);
-    if (PoliceChar)
-    {
-        PoliceChar->CurrentWeapon = State.CurrentWeapon; // 네트워크에서 받은 무기 타입으로 업데이트
-        PoliceChar->UpdateWeaponVisibility();
     }
 }
 
@@ -487,6 +471,81 @@ void AMySocketClientActor::UpdateCultistAnimInstanceProperties(UAnimInstance* An
     }
 }
 
+void AMySocketClientActor::SpawnCultistCharacter(const char* Buffer)
+{
+    // PlayerID를 기반으로 고유 키 생성
+    int PlayerID = static_cast<int>(static_cast<unsigned char>(Buffer[2]));
+    // 이미 캐릭터가 존재하면 아무 작업도 하지 않음
+    if (SpawnedCharacters.Contains(PlayerID))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Character already exists: %d"), PlayerID);
+        return;
+    }
+
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Owner = this;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A_Client.BP_Cultist_A_Client_C"));
+
+    if (BP_ClientCharacter)
+    {
+        ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
+            BP_ClientCharacter,
+            FVector(DummyState.PositionX, DummyState.PositionY, DummyState.PositionZ),
+            FRotator(DummyState.RotationPitch, DummyState.RotationYaw, DummyState.RotationRoll),
+            SpawnParams
+        );
+        if (NewCharacter)
+        {
+            SpawnedCharacters.Add(PlayerID, NewCharacter);
+            ReceivedCultistStates.Add(PlayerID, DummyState);
+            UE_LOG(LogTemp, Log, TEXT("Spawned new character for PlayerID=%d"), PlayerID);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), PlayerID);
+        }
+    }
+}
+/*
+void AMySocketClientActor::UpdatePoliceState(ACharacter* Character, const FPoliceCharacterState& State, float DeltaTime)
+{
+    float InterpSpeed = 30.0f; // 보간 속도
+
+    FVector CurrentLocation = Character->GetActorLocation();
+    FVector TargetLocation(State.PositionX, State.PositionY, State.PositionZ);
+
+    if (State.bIsCrouching)
+    {
+        TargetLocation.Z += 50.0f;
+    }
+
+    FVector NewLocation = FMath::VInterpTo(CurrentLocation, TargetLocation, DeltaTime, InterpSpeed);
+    Character->SetActorLocation(NewLocation);
+    Character->SetActorRotation(FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll));
+
+    // 애니메이션 상태 업데이트
+    if (USkeletalMeshComponent* Mesh = Character->GetMesh())
+    {
+        UAnimInstance* AnimInstance = Mesh->GetAnimInstance();
+        if (AnimInstance)
+        {
+            UpdatePoliceAnimInstanceProperties(AnimInstance, State);
+        }
+    }
+
+    // 무기 상태 업데이트
+    APoliceCharacter* PoliceChar = Cast<APoliceCharacter>(Character);
+    if (PoliceChar)
+    {
+        PoliceChar->CurrentWeapon = State.CurrentWeapon; // 네트워크에서 받은 무기 타입으로 업데이트
+        PoliceChar->UpdateWeaponVisibility();
+    }
+}
+*/
+
+/*
 void AMySocketClientActor::UpdatePoliceAnimInstanceProperties(UAnimInstance* AnimInstance, const FPoliceCharacterState& State)
 {
     // Velocity 업데이트
@@ -732,45 +791,8 @@ void AMySocketClientActor::UpdatePoliceAnimInstanceProperties(UAnimInstance* Ani
         BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsShooting);
     }
 }
-
-void AMySocketClientActor::SpawnCultistCharacter(const FCultistCharacterState& State)
-{
-    // PlayerID를 기반으로 고유 키 생성
-    FString CharacterKey = FString::Printf(TEXT("Character_%d"), State.PlayerID);
-
-    // 이미 캐릭터가 존재하면 아무 작업도 하지 않음
-    if (SpawnedCharacters.Contains(CharacterKey))
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Character already exists: %s"), *CharacterKey);
-        return;
-    }
-    FActorSpawnParameters SpawnParams;
-    SpawnParams.Owner = this;
-    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A_Client.BP_Cultist_A_Client_C"));
-    
-    if (BP_ClientCharacter)
-    {
-        ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
-            BP_ClientCharacter,
-            FVector(State.PositionX, State.PositionY, State.PositionZ),
-            FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll),
-            SpawnParams
-        );
-        if (NewCharacter)
-        {
-            SpawnedCharacters.Add(CharacterKey, NewCharacter);
-            UE_LOG(LogTemp, Log, TEXT("Spawned new character for PlayerID=%d at Position=(%f, %f, %f)"),
-                State.PlayerID, State.PositionX, State.PositionY, State.PositionZ);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), State.PlayerID);
-        }
-    }
-}
-
+*/
+/*
 void AMySocketClientActor::SpawnPoliceCharacter(const FPoliceCharacterState& State)
 {
     // PlayerID를 기반으로 고유 키 생성
@@ -808,7 +830,8 @@ void AMySocketClientActor::SpawnPoliceCharacter(const FPoliceCharacterState& Sta
         }
     }
 }
-
+*/
+/*
 void AMySocketClientActor::ProcessObjectUpdates(float DeltaTime)
 {
     for (auto& Pair : LastReceivedTransform)
@@ -829,7 +852,8 @@ void AMySocketClientActor::ProcessObjectUpdates(float DeltaTime)
         }
     }
 }
-
+*/
+/*
 void AMySocketClientActor::SpawnImpactEffect(const FVector& ImpactLocation)
 {
     if (ImpactParticle)
@@ -847,7 +871,7 @@ void AMySocketClientActor::SpawnImpactEffect(const FVector& ImpactLocation)
         UE_LOG(LogTemp, Warning, TEXT("ImpactParticle is not set."));
     }
 }
-
+*/
 void AMySocketClientActor::CloseConnection() {
     if (ClientSocket != INVALID_SOCKET)
     {
@@ -865,5 +889,5 @@ void AMySocketClientActor::Tick(float DeltaTime)
     Super::Tick(DeltaTime);
     SendPlayerData();
     ProcessCharacterUpdates(DeltaTime);
-    ProcessObjectUpdates(DeltaTime);
+    // ProcessObjectUpdates(DeltaTime);
 }

@@ -63,7 +63,7 @@ struct FPoliceCharacterState
 
 struct FCultistCharacterState
 {
-	int PlayerID;
+	int playerID;
 	// 위치
 	float PositionX;
 	float PositionY;
@@ -90,7 +90,23 @@ extern std::unordered_map<int, SESSION> g_users;
 
 class EXP_OVER {
 public:
-	EXP_OVER(char header, long long id, char* mess) : id(id) {
+	EXP_OVER(int header, const void* data, size_t size) {			// cultist
+		ZeroMemory(&send_over, sizeof(send_over));
+
+		auto packet_size = 2 + size;
+		if (packet_size > sizeof(send_buffer)) {
+			std::cout << "PACKET TOO LARGE\n";
+			exit(-1);
+		}
+		send_buffer[0] = static_cast<unsigned char>(header);
+		send_buffer[1] = static_cast<unsigned char>(packet_size);
+		memcpy(send_buffer + 2, data, size);
+
+		send_wsabuf[0].buf = send_buffer;
+		send_wsabuf[0].len = static_cast<ULONG>(packet_size);
+	}
+
+	EXP_OVER(int header, int id, char* mess) : id(id) {
 		ZeroMemory(&send_over, sizeof(send_over));
 
 		auto  packet_size = 3 + strlen(mess);
@@ -98,7 +114,7 @@ public:
 			std::cout << "MESSAGE TOO LONG";
 			exit(-1);
 		}
-		send_buffer[0] = header;
+		send_buffer[0] = static_cast<unsigned char>(header);
 		send_buffer[1] = static_cast<unsigned char>(packet_size);
 		send_buffer[2] = static_cast<unsigned char>(id);
 		send_wsabuf[0].buf = send_buffer;
@@ -106,11 +122,11 @@ public:
 		strcpy_s(send_buffer + 3, sizeof(send_buffer) - 3, mess);
 	}
 
-	EXP_OVER(long long id, char header) : id(id) {
+	EXP_OVER(int header, int id) : id(id) {							// connection, disconnection
 		ZeroMemory(&send_over, sizeof(send_over));
 
 		auto packet_size = 3;
-		send_buffer[0] = header;
+		send_buffer[0] = static_cast<unsigned char>(header);
 		send_buffer[1] = static_cast<unsigned char>(packet_size);
 		send_buffer[2] = static_cast<unsigned char>(id);
 		send_wsabuf[0].buf = send_buffer;
@@ -118,7 +134,7 @@ public:
 	}
 
 	WSAOVERLAPPED	send_over;
-	long long		id;
+	int				id;
 	char			send_buffer[1024];
 	WSABUF			send_wsabuf[1];
 };
@@ -154,7 +170,7 @@ public:
 		std::cout << "DEFAULT SESSION CONSTRUCTOR CALLED!!\n";
 		exit(-1);
 	}
-	SESSION(long long session_id, SOCKET s) : id(session_id), c_socket(s)
+	SESSION(int session_id, SOCKET s) : id(session_id), c_socket(s)
 	{
 		recv_wsabuf[0].len = sizeof(recv_buffer);
 		recv_wsabuf[0].buf = recv_buffer;
@@ -172,7 +188,6 @@ public:
 	{
 		if (0 != err || 0 == num_bytes) {
 			std::cout << "Client [" << id << "] disconnected." << std::endl;
-			// 다른 모든 클라이언트에 끊김 알림 (헤더 2 사용)
 			for (auto& u : g_users) {
 				if (u.first != id) {
 					u.second.do_send_disconnection(2, id);
@@ -182,43 +197,71 @@ public:
 			return;
 		}
 		recv_buffer[num_bytes] = 0;
-		std::cout << "From Client[" << id << "] : " << recv_buffer << std::endl;
 
 		switch (recv_buffer[0]) {
 		case cultistHeader:
+		{
+			if (num_bytes < 3 + sizeof(FCultistCharacterState)) {
+				std::cout << "Invalid cultist packet size\n";
+				break;
+			}
+
+			FCultistCharacterState recvState;
+			memcpy(&recvState, recv_buffer + 3, sizeof(FCultistCharacterState));
+
+			// 세션 상태에 저장
+			cultist_state = recvState;
+			cultist_state.playerID = id;
+
+			/*std::cout << "[Cultist] ID=" << id << "\n";
+			std::cout << "  States   : "
+				<< "Crouching=" << recvState.bIsCrouching << ", "
+				<< "PerformingRitual=" << recvState.bIsPerformingRitual << ", "
+				<< "HitByAttack=" << recvState.bIsHitByAnAttack << ", "
+				<< "Health=" << recvState.CurrentHealth << "\n";*/
+
 			break;
+		}	
 		case policeHeader:
 			break;
 		default:
 			std::cout << "Unknown packet type received: " << static_cast<int>(recv_buffer[0]) << std::endl;
 		}
 
-		char send_data[1024];
-
 		for (auto& u : g_users) {
-			u.second.do_send(1, id, send_data);
+			if (u.first != id) {
+				u.second.do_send_cultist(cultistHeader, &cultist_state, sizeof(FCultistCharacterState));
+
+			}
 		}
 
 		do_recv();
 	}
 
-	void do_send(char header, long long id, char* mess)
+	void do_send(char header, int id, char* mess)
 	{
-		EXP_OVER* o = new EXP_OVER(header, id, mess);
+		EXP_OVER* o = new EXP_OVER(header, id, mess);/*
 		std::cout << "[Send to Client " << id << "] id: " << id
-			<< ", data: " << mess[0] << mess[1] << std::endl;
+			<< ", data: " << mess[0] << mess[1] << std::endl;*/
 		DWORD size_sent;
 		WSASend(c_socket, o->send_wsabuf, 1, &size_sent, 0, &(o->send_over), g_send_callback);
 	}
 
-	void do_send_connection(char header) {
-		EXP_OVER* o = new EXP_OVER(id, header);
+	void do_send_cultist(int header, const void* data, size_t size)
+	{
+		EXP_OVER* o = new EXP_OVER(header, data, size);
+		DWORD size_sent;
+		WSASend(c_socket, o->send_wsabuf, 1, &size_sent, 0, &(o->send_over), g_send_callback);
+	}
+
+	void do_send_connection(char header, int new_player_id) {
+		EXP_OVER* o = new EXP_OVER(header, new_player_id);
 		DWORD size_sent;
 		WSASend(c_socket, o->send_wsabuf, 1, &size_sent, 0, &(o->send_over), g_send_callback);
 	}
 
 	void do_send_disconnection(char header, int id) {
-		EXP_OVER* o = new EXP_OVER(id, header);
+		EXP_OVER* o = new EXP_OVER(header, id);
 		DWORD size_sent;
 		WSASend(c_socket, o->send_wsabuf, 1, &size_sent, 0, &(o->send_over), g_send_callback);
 	}

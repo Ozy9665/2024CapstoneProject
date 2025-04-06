@@ -42,7 +42,9 @@ int main()
 		g_users.try_emplace(client_id, client_id, c_socket);
 		std::cout << "새로운 클라이언트가 연결되었습니다." << inet_ntoa(addr.sin_addr)
 			<< " Port: " << ntohs(addr.sin_port) << std::endl;
-		//g_users[client_id].do_send_connection(0);
+		for (auto& u : g_users) {
+			u.second.do_send_connection(connectionHeader, client_id);
+		}
 
 		client_id++;
 	}
