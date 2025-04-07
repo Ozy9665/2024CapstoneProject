@@ -43,8 +43,7 @@ private:
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
-
-	bool ConnectToServer(const FString& ServerIP, int32 ServerPort);
+	void SetClientSocket(SOCKET InSocket);
 	//void InitializeBlocks();
 	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);
 	void ReceiveData();
@@ -65,4 +64,5 @@ public:
 	//void ProcessObjectUpdates(float DeltaTime);
 	//void SpawnImpactEffect(const FVector& ImpactLocation);
 	void CloseConnection();
+	void SafeDestroyCharacter(int PlayerID);
 };

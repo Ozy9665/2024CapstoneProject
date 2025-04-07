@@ -43,13 +43,13 @@ void AMyNetworkManagerActor::Tick(float DeltaTime)
 
 }
 
-bool AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32 ServerPort)
+SOCKET AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32 ServerPort)
 {
     SOCKET ClientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (ClientSocket == INVALID_SOCKET)
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to create socket: %d"), WSAGetLastError());
-        return false;
+        return INVALID_SOCKET;
     }
 
     sockaddr_in ServerAddr;
@@ -58,14 +58,17 @@ bool AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32 S
     ServerAddr.sin_addr.s_addr = inet_addr(TCHAR_TO_ANSI(*ServerIP));
 
     // Attempt to connect
-    bool bIsConnected = connect(ClientSocket, (SOCKADDR*)&ServerAddr, sizeof(ServerAddr)) != SOCKET_ERROR;
-    if (!bIsConnected)
+    
+    if (connect(ClientSocket, (SOCKADDR*)&ServerAddr, sizeof(ServerAddr)) != SOCKET_ERROR)
     {
-        UE_LOG(LogTemp, Error, TEXT("Failed to connect to server: %d"), WSAGetLastError());
+        UE_LOG(LogTemp, Log, TEXT("Connected to server."));
+        return ClientSocket;
     }
-
-    closesocket(ClientSocket);
-    return bIsConnected;
+    else {
+        UE_LOG(LogTemp, Error, TEXT("Failed to connect to server: %d"), WSAGetLastError());
+        closesocket(ClientSocket);
+        return INVALID_SOCKET;
+    }
 }
 
 void AMyNetworkManagerActor::CheckAndSpawnActor()
@@ -74,9 +77,9 @@ void AMyNetworkManagerActor::CheckAndSpawnActor()
     int32 ServerPort = 7777;               // 포트 번호
 
     APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-
+    SOCKET ConnectedSocket = CanConnectToServer(ServerIP, ServerPort);
     // 서버 연결 가능 여부 체크
-    if (CanConnectToServer(ServerIP, ServerPort))
+    if (ConnectedSocket != INVALID_SOCKET)
     {
         if (PC)
         {
@@ -121,8 +124,13 @@ void AMyNetworkManagerActor::CheckAndSpawnActor()
         }
 
         // 클라이언트 액터 스폰
-        GetWorld()->SpawnActor<AMySocketClientActor>(AMySocketClientActor::StaticClass(), GetActorLocation(), GetActorRotation());
-        UE_LOG(LogTemp, Error, TEXT("Client Actor Spawn"));
+        AMySocketClientActor* ClientActor = GetWorld()->SpawnActor<AMySocketClientActor>(
+            AMySocketClientActor::StaticClass(), GetActorLocation(), GetActorRotation());
+        if (ClientActor)
+        {
+            ClientActor->SetClientSocket(ConnectedSocket);
+            UE_LOG(LogTemp, Error, TEXT("Client Actor Spawned & Socket Passed."));
+        }
     }
     else
     {

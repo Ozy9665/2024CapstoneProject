@@ -189,9 +189,7 @@ public:
 		if (0 != err || 0 == num_bytes) {
 			std::cout << "Client [" << id << "] disconnected." << std::endl;
 			for (auto& u : g_users) {
-				if (u.first != id) {
-					u.second.do_send_disconnection(2, id);
-				}
+				u.second.do_send_disconnection(DisconnectionHeader, id);	
 			}
 			g_users.erase(id);
 			return;
@@ -263,6 +261,7 @@ public:
 	void do_send_disconnection(char header, int id) {
 		EXP_OVER* o = new EXP_OVER(header, id);
 		DWORD size_sent;
+		std::cout << "disconnetion sended\n";
 		WSASend(c_socket, o->send_wsabuf, 1, &size_sent, 0, &(o->send_over), g_send_callback);
 	}
 };

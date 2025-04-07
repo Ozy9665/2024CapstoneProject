@@ -21,7 +21,7 @@ public:
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
-	bool CanConnectToServer(const FString& ServerIP, int32 ServerPort);
+	SOCKET CanConnectToServer(const FString& ServerIP, int32 ServerPort);
 	void CheckAndSpawnActor();
 
 public:	

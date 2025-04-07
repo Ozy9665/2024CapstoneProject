@@ -101,11 +101,12 @@ private:
 	TArray<FVector> ImpactLocations;
 	FCriticalSection ClientSocketsMutex;
 	bool bIsRunning = false;
-	static constexpr uint8 cultistHeader = 0x00;
-	static constexpr uint8 objectHeader = 0x01;
-	static constexpr uint8 policeHeader = 0x10;
-	static constexpr uint8 particleHeader = 0x11;
-	static constexpr uint8 DisconnectionHeader = 0x12;
+	const int cultistHeader = 0x00;
+	const int objectHeader = 0x01;
+	const int policeHeader = 0x02;
+	const int particleHeader = 0x03;
+	const int connectionHeader = 0x10;
+	const int DisconnectionHeader = 0x11;
 	UPROPERTY(EditDefaultsOnly, Category = "Effects")
 	UParticleSystem* ImpactParticle;
 

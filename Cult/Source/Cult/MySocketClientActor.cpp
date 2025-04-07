@@ -38,21 +38,6 @@ AMySocketClientActor::AMySocketClientActor()
 void AMySocketClientActor::BeginPlay()
 {
     Super::BeginPlay();
-  
-    // 서버 연결
-    FString ServerIP = TEXT("127.0.0.1");  // 서버 IP
-    int32 ServerPort = 7777;              // 서버 포트
-
-    if (ConnectToServer(ServerIP, ServerPort))
-    {
-        UE_LOG(LogTemp, Log, TEXT("Connected to server!"));
-        ReceiveData();  // 데이터 수신 시작
-        // InitializeBlocks();
-    }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("Failed to connect to server."));
-    }
 }
 
 void AMySocketClientActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -69,36 +54,20 @@ void AMySocketClientActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
     UE_LOG(LogTemp, Log, TEXT("Client socket closed and cleaned up."));
 }
 
-bool AMySocketClientActor::ConnectToServer(const FString& ServerIP, int32 ServerPort)
+void AMySocketClientActor::SetClientSocket(SOCKET InSocket)
 {
-    WSADATA WsaData;
-    int Result = WSAStartup(MAKEWORD(2, 0), &WsaData);
-    if (Result != 0)
+    ClientSocket = InSocket;
+    if (ClientSocket != INVALID_SOCKET)
     {
-        UE_LOG(LogTemp, Error, TEXT("WSAStartup failed: %d"), Result);
-        return false;
+        UE_LOG(LogTemp, Log, TEXT("Client socket set. Starting ReceiveData."));
+        ReceiveData();
     }
-
-    ClientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (ClientSocket == INVALID_SOCKET)
+    else
     {
-        LogAndCleanupSocketError(TEXT("Failed to create socket"));
-        return false;
+        UE_LOG(LogTemp, Error, TEXT("Invalid socket passed to SetClientSocket."));
     }
-
-    sockaddr_in ServerAddr;
-    ServerAddr.sin_family = AF_INET;
-    ServerAddr.sin_port = htons(ServerPort);
-    ServerAddr.sin_addr.s_addr = inet_addr(TCHAR_TO_ANSI(*ServerIP));
-
-    if (connect(ClientSocket, (SOCKADDR*)&ServerAddr, sizeof(ServerAddr)) == SOCKET_ERROR)
-    {
-        LogAndCleanupSocketError(TEXT("Connection failed"));
-        return false;
-    }
-
-    return true;
 }
+
 /*
 void AMySocketClientActor::InitializeBlocks()
 {
@@ -288,33 +257,20 @@ void AMySocketClientActor::ProcessConnection(char* Buffer, int32 BytesReceived) 
 
 void AMySocketClientActor::ProcessDisconnection(char* Buffer, int32 BytesReceived)
 {
-    if (BytesReceived < 3)
-    {
+    if (BytesReceived < 3) {
         UE_LOG(LogTemp, Error, TEXT("Invalid connection packet received."));
         return;
     }
 
-    unsigned char packet_size = static_cast<unsigned char>(Buffer[1]);
-    unsigned char disconnectedID = static_cast<int>(static_cast<unsigned char>(Buffer[2]));
+    int DisconnectedID = static_cast<int>(static_cast<unsigned char>(Buffer[2]));
 
-    // 나일때
-    if (disconnectedID == my_ID)
+    if (DisconnectedID == my_ID)
     {
         CloseConnection();
+        return;
     }
-    // 다른 플레이어일때
-    if (ACharacter* CharToRemove = SpawnedCharacters.FindRef(disconnectedID))
-    {
-        CharToRemove->Destroy();
-        SpawnedCharacters.Remove(disconnectedID);
-        ReceivedCultistStates.Remove(disconnectedID);
 
-        UE_LOG(LogTemp, Log, TEXT("Removed disconnected character: %d"), disconnectedID);
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Tried to remove non-existing character: %d"), disconnectedID);
-    }
+    SafeDestroyCharacter(DisconnectedID);
 }
 
 void AMySocketClientActor::SendPlayerData()
@@ -880,9 +836,43 @@ void AMySocketClientActor::CloseConnection() {
     }
     WSACleanup();
 
-    FGenericPlatformMisc::RequestExit(false);
+    // FGenericPlatformMisc::RequestExit(false);
     return;
 }
+
+void AMySocketClientActor::SafeDestroyCharacter(int PlayerID)
+{
+    // 복사해서 쓰는 방식
+    ACharacter* CharToDestroy = nullptr;
+
+    if (ACharacter* const* FoundPtr = SpawnedCharacters.Find(PlayerID))
+    {
+        CharToDestroy = *FoundPtr;
+    }
+
+    if (!CharToDestroy || !IsValid(CharToDestroy) || !CharToDestroy->IsValidLowLevelFast())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Invalid character pointer for ID=%d"), PlayerID);
+        return;
+    }
+
+    // GameThread에서만 Destroy 하도록
+    AsyncTask(ENamedThreads::GameThread, [this, PlayerID, CharToDestroy]()
+        {
+            if (!IsValid(CharToDestroy) || CharToDestroy->IsPendingKillPending())
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Character already pending destroy: %d"), PlayerID);
+                return;
+            }
+
+            UE_LOG(LogTemp, Log, TEXT("Destroying character safely on GameThread for ID=%d"), PlayerID);
+
+            CharToDestroy->Destroy();
+            SpawnedCharacters.Remove(PlayerID);
+            ReceivedCultistStates.Remove(PlayerID);
+        });
+}
+
 // Called every frame
 void AMySocketClientActor::Tick(float DeltaTime)
 {
