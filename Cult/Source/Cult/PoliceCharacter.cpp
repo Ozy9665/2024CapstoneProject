@@ -23,7 +23,7 @@ APoliceCharacter::APoliceCharacter(const FObjectInitializer& ObjectInitializer)
 	PrimaryActorTick.bCanEverTick = true;
 	bIsAttacking = false;
 	//
-	WalkSpeed = 650.0f;	// more faster than cultist
+	WalkSpeed = 620.0f;	// more faster than cultist
 	CurrentWeapon = EWeaponType::Baton;
 
 
@@ -138,6 +138,18 @@ void APoliceCharacter::BeginPlay()	// 초기화
 void APoliceCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	if (bIsAiming)
+	{
+		float RawPitch = GetControlRotation().Pitch;
+		float NormalizedPitch = (RawPitch > 180.0f) ? RawPitch - 360.0f : RawPitch;
+		float ClampedPitch = FMath::Clamp(NormalizedPitch, -60.0f, 45.0f);
+		AimPitch = -ClampedPitch;
+	}
+	else
+	{
+		AimPitch = 0.0f;
+	}
 }
 
 void APoliceCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -148,8 +160,8 @@ void APoliceCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 
 	PlayerInputComponent->BindAxis("MoveForward", this, &APoliceCharacter::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight", this, &APoliceCharacter::MoveRight);
-	PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
-	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
+	PlayerInputComponent->BindAxis("Turn", this, &APoliceCharacter::TurnCamera);
+	PlayerInputComponent->BindAxis("LookUp", this, &APoliceCharacter::LookUpCamera);
 
 	PlayerInputComponent->BindAction("Attack", IE_Pressed, this, &APoliceCharacter::StartAttack);
 	PlayerInputComponent->BindAction("SwitchWeapon", IE_Pressed, this, &APoliceCharacter::SwitchWeapon);
@@ -244,15 +256,26 @@ void APoliceCharacter::StartAttack()
 void APoliceCharacter::ShootPistol()
 {
 	bIsShooting = true;
-	FHitResult HitResult;
+
+	// 방법1. Muzzle 기준
 	FVector Start = MuzzleLocation->GetComponentLocation();
 	FVector ForwardVector = MuzzleLocation->GetForwardVector();
-	FVector End = Start + (ForwardVector * 10000.0f);
+	FVector End = Start + (ForwardVector * 10000.0f);	// 사거리
 
+	// 방법2. 카메라기준
+	FVector CameraLocation;
+	FRotator CameraRotation;
+	GetActorEyesViewPoint(CameraLocation, CameraRotation);
+	FVector TraceStart = CameraLocation;
+	FVector TraceEnd = TraceStart + (CameraRotation.Vector() * 10000.0f);	// 사거리
+
+	// 공통
+	FHitResult HitResult;
 	FCollisionQueryParams QueryParams;
 	QueryParams.AddIgnoredActor(this);
 
-	bHit = GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, QueryParams);
+	// 쏘아주기	( 방법에 따라 Start or TraceStart / End or TraceEnd )
+	bHit = GetWorld()->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_Visibility, QueryParams);
 	if (bHit)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Particle Effect!"));
@@ -355,7 +378,7 @@ void APoliceCharacter::EndAttack()
 
 	// 이동 가능
 	//GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-	GetCharacterMovement()->MaxWalkSpeed = 650.0f;
+	GetCharacterMovement()->MaxWalkSpeed = 620.0f;
 	GetCharacterMovement()->GroundFriction = 8.0f; // 마찰율 복구
 	if (!bIsAiming)
 	{
@@ -420,6 +443,9 @@ void APoliceCharacter::StartAiming()
 	bIsAiming = true;
 	UE_LOG(LogTemp, Warning, TEXT("StartAiming, bIsAiming is %s"), (bIsAiming ? TEXT("true"): TEXT("false")));
 
+	GetCharacterMovement()->MaxWalkSpeed = 200.0f;
+
+
 	//조준점 활성화
 	if (CrosshairWidget)
 	{
@@ -431,6 +457,8 @@ void APoliceCharacter::StopAiming()
 {
 	bIsAiming = false;
 	UE_LOG(LogTemp, Warning, TEXT("StopAiming, bIsAiming is %s"), (bIsAiming ? TEXT("true") : TEXT("false")));
+
+	GetCharacterMovement()->MaxWalkSpeed = 620.0f;
 
 	if (CameraComp)
 	{
@@ -505,11 +533,13 @@ void APoliceCharacter::MoveRight(float Value)
 
 void APoliceCharacter::TurnCamera(float Value)
 {
-	AddControllerYawInput(Value);
+	float TurnCameraSpeed = bIsAiming ? 0.2f : 0.4f;
+	AddControllerYawInput(Value * TurnCameraSpeed);
 }
 void APoliceCharacter::LookUpCamera(float Value)
 {
-	AddControllerPitchInput(Value);
+	float LookUpSpeed = bIsAiming ? 0.2f : 0.4f;
+	AddControllerPitchInput(Value * LookUpSpeed);
 }
 void APoliceCharacter::TurnCharacter()
 {

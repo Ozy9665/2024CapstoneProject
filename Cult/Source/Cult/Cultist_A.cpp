@@ -6,7 +6,7 @@
 ACultist_A::ACultist_A()
 {
 	// Setting
-	WalkSpeed = 550.0f;
+	WalkSpeed = 600.0f;
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 	SpecialAbility = ESpecialAbility::Vision;
 }

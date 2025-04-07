@@ -53,7 +53,8 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	float AttackRange = 150.0f;
-
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+	float AimPitch;
 
 
 

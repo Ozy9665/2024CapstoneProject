@@ -28,6 +28,7 @@ APoliceAICharacter::APoliceAICharacter(const FObjectInitializer& ObjectInitializ
 	// Perception ¹ÙÀÎµù
 	AIPerceptionComponent->OnTargetPerceptionUpdated.AddDynamic(this, &APoliceAICharacter::OnTargetPerceived);
 
+	CurrentWeapon = EWeaponType::Baton;
 }
 
 void APoliceAICharacter::BeginPlay()

@@ -24,6 +24,11 @@ EBTNodeResult::Type UBTTask_Attack::ExecuteTask(UBehaviorTreeComponent& OwnerCom
 	{
 		return EBTNodeResult::Failed;
 	}
+
+	// ¸ØÃã
+	AIController->StopMovement();
+
+	// °ø°ÝÈ£Ãâ
 	PoliceAI->StartAttack();
 
 	bNotifyTick = true;
