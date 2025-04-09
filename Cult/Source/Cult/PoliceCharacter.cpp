@@ -186,7 +186,7 @@ void APoliceCharacter::ToggleCrouch()
 
 void APoliceCharacter::StartAttack()
 {
-	if (bIsAttacking || bIsCoolTime)return;
+	if (bIsAttacking || bIsCoolTime || bIsShooting)return;
 
 	bIsAttacking = true; 
 
@@ -255,6 +255,7 @@ void APoliceCharacter::StartAttack()
 
 void APoliceCharacter::ShootPistol()
 {
+	if (bIsShooting || !bIsAiming)return;
 	bIsShooting = true;
 
 	// 방법1. Muzzle 기준
@@ -282,6 +283,19 @@ void APoliceCharacter::ShootPistol()
 		ImpactLoc = HitResult.ImpactPoint;
 		//SpawnImpactEffect(HitResult.ImpactPoint);
 
+		// 피격위치에 Niagara 파티클
+		if (NG_ImpactParticle)
+		{
+			FRotator ImpactRotation = HitResult.ImpactNormal.Rotation();
+			UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+				GetWorld(), NG_ImpactParticle,
+				HitResult.ImpactPoint,
+				ImpactRotation,
+				FVector(1.0f), true, true,
+				ENCPoolMethod::None, true
+			);
+		}
+
 		// 총구에 나이아가라 이펙트
 		if (MuzzleImpactParticle)
 		{
@@ -308,11 +322,17 @@ void APoliceCharacter::ShootPistol()
 		}
 
 	}
-	GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndPistolShoot, 1.1f, false);
+	//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndPistolShoot, 1.1f, false);
 
 }
 
+void APoliceCharacter::EndPistolShoot()
+{
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	bIsShooting = false;
+	bIsAttacking = false;
 
+}
 
 void APoliceCharacter::BatonAttack()
 {
@@ -390,13 +410,7 @@ void APoliceCharacter::EndAttack()
 
 }
 
-void APoliceCharacter::EndPistolShoot()
-{
-	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-	bIsShooting = false;
-	bIsAttacking = false;
 
-}
 
 void APoliceCharacter::SetCoolTimeDone()
 {
