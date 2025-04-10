@@ -1,5 +1,6 @@
 #pragma once
 
+
 #include <iostream>
 #include <WS2tcpip.h>
 #include <unordered_map>
@@ -16,6 +17,8 @@ const int DisconnectionHeader = 0x11;
 
 void CALLBACK g_recv_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
 void CALLBACK g_send_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
+
+#pragma pack(push, 1)
 
 enum EWeaponType
 {
@@ -83,6 +86,8 @@ struct FCultistCharacterState
 	bool bIsHitByAnAttack;
 	float CurrentHealth;
 };
+
+#pragma pack(pop)
 
 class SESSION;
 
