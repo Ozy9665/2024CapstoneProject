@@ -6,6 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "MySocketActor.h"
 #include "MySocketClientActor.h"
+#include "MyGameInstance.h"
 #include "MyNetworkManagerActor.generated.h"
 
 UCLASS()

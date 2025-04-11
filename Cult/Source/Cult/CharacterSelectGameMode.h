@@ -12,15 +12,4 @@ class CULT_API ACharacterSelectGameMode : public AGameModeBase
 	GENERATED_BODY()
 	
 public:
-	UPROPERTY(BlueprintReadWrite, Category = "Character Selection")
-	bool bIsCultist{ false };
-
-	UPROPERTY(BlueprintReadWrite, Category = "Character Selection")
-	bool bIsPolice{ false };
-
-	UFUNCTION(BlueprintCallable, Category = "Character Selection")
-	void SetCultistSelected();
-
-	UFUNCTION(BlueprintCallable, Category = "Character Selection")
-	void SetPoliceSelected();
 };
