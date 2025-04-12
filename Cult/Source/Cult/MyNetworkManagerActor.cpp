@@ -129,19 +129,17 @@ void AMyNetworkManagerActor::CheckAndSpawnActor()
             {
                 UE_LOG(LogTemp, Log, TEXT("GetPlayerController Failed."));
             }
-
             // 클라이언트 액터 스폰
-            AMySocketClientActor* ClientActor = GetWorld()->SpawnActor<AMySocketClientActor>(
-                AMySocketClientActor::StaticClass(), GetActorLocation(), GetActorRotation());
-            if (ClientActor)
+            AMySocketCultistActor* CultistActor = GetWorld()->SpawnActor<AMySocketCultistActor>(
+                AMySocketCultistActor::StaticClass(), GetActorLocation(), GetActorRotation());
+            if (CultistActor)
             {
-                ClientActor->SetClientSocket(ConnectedSocket);
+                CultistActor->SetClientSocket(ConnectedSocket);
                 UE_LOG(LogTemp, Error, TEXT("Client Actor Spawned & Socket Passed."));
             }
         }
-        else
+        else if (MyGI->bIsPolice)
         {
-            /*
             if (PC)
             {
                 APawn* DefaultPawn = PC->GetPawn();
@@ -183,11 +181,14 @@ void AMyNetworkManagerActor::CheckAndSpawnActor()
             {
                 UE_LOG(LogTemp, Log, TEXT("GetPlayerController Failed."));
             }
-
-        */
-        // 서버 액터 스폰
-            GetWorld()->SpawnActor<AMySocketActor>(AMySocketActor::StaticClass(), GetActorLocation(), GetActorRotation());
-            UE_LOG(LogTemp, Error, TEXT("Server Actor Spawn"));
+            // 서버 액터 스폰
+            AMySocketPoliceActor* PoliceActor = GetWorld()->SpawnActor<AMySocketPoliceActor>(
+                AMySocketPoliceActor::StaticClass(), GetActorLocation(), GetActorRotation());
+            if (PoliceActor)
+            {
+                PoliceActor->SetClientSocket(ConnectedSocket);
+                UE_LOG(LogTemp, Error, TEXT("Client Actor Spawned & Socket Passed."));
+            }
         }
     }
     else {
