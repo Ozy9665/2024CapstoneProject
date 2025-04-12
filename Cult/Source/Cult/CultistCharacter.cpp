@@ -196,6 +196,7 @@ void ACultistCharacter::StartRitual()
 	// Animation
 }
 
+// 중단 x, 완료처리
 void ACultistCharacter::StopRitual()
 {
 	if (!bIsPerformingRitual)return;
@@ -206,6 +207,23 @@ void ACultistCharacter::StopRitual()
 
 	UE_LOG(LogTemp, Warning, TEXT("Ritual Stopped"));
 	RitualProgress += RitualSpeed;	// 전체 의식게이지
+
+	if (TaskRitualWidget)
+	{
+		TaskRitualWidget->SetVisibility(ESlateVisibility::Hidden);
+		TaskRitualProgress = 0.0f;
+	}
+
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+}
+
+void ACultistCharacter::CancelRitual()
+{
+	UE_LOG(LogTemp, Warning, TEXT("Ritual Canceled"));
+
+	bIsPerformingRitual = false;
+	GetWorld()->GetTimerManager().ClearTimer(RitualTimerHandle);
+	GetWorld()->GetTimerManager().ClearTimer(TaskRitualTimerHandle);
 
 	if (TaskRitualWidget)
 	{
@@ -230,7 +248,12 @@ void ACultistCharacter::TakeDamage(float DamageAmount)
 {
 	if (bIsStunned)return;
 	bIsHitByAnAttack = true;
-	StopRitual();
+	
+	if (bIsPerformingRitual)
+	{
+		CancelRitual();
+	}
+
 	// 피격 리액션 타이머
 	GetWorld()->GetTimerManager().SetTimer(HitByAttackTH, this, &ACultistCharacter::GottaRun, 0.8f, false);
 	

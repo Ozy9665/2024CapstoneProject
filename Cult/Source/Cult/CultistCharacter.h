@@ -47,6 +47,7 @@ public:
 
 	void StartRitual() override;
 	void StopRitual() override;
+	void CancelRitual();
 
 	// 의식중 여부
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ritual")

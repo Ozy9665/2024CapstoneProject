@@ -2,7 +2,7 @@
 
 
 #include "AI_PoliceAIController.h"
-
+#include "PoliceAICharacter.h"
 
 
 void AAI_PoliceAIController::BeginPlay()
@@ -34,4 +34,30 @@ void AAI_PoliceAIController::OnPossess(APawn* InPawn)
 	{
 		RunBehaviorTree(AIBehaviorTree);
 	}
+	APoliceAICharacter* AICharacter = Cast<APoliceAICharacter>(InPawn);
+	if (AICharacter && AICharacter->PatrolPoints.Num() > 0)
+	{
+		PatrolPoints = AICharacter->PatrolPoints;
+	}
+
  }
+
+void AAI_PoliceAIController::OnTargetPerceived(AActor* Actor, FAIStimulus Stimulus)
+{
+	if (Actor->ActorHasTag("Cultist") && Stimulus.WasSuccessfullySensed())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Find Cultist! Ganna Chase Target"));
+		Blackboard->SetValueAsObject("TargetActor", Actor);
+	}
+}
+
+FVector AAI_PoliceAIController::GetRandomPatrolLocation()
+{
+	if (PatrolPoints.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("No PatrolPoint"));
+		return GetPawn()->GetActorLocation();
+	}
+	int32 Index = FMath::RandRange(0, PatrolPoints.Num() - 1);
+	return PatrolPoints[Index]->GetActorLocation();
+}

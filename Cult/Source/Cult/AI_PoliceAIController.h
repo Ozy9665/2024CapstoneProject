@@ -6,7 +6,9 @@
 #include "AIController.h"
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BlackboardComponent.h"
+#include "Perception/AIPerceptionTypes.h"
 #include "AI_PoliceAIController.generated.h"
+
 
 /**
  * 
@@ -30,5 +32,11 @@ public:
 
 	void StartChase(AActor* Target);
 	virtual void OnPossess(APawn* InPawn) override;
+	void OnTargetPerceived(AActor* Actor, FAIStimulus Stimulus);
+	FVector GetRandomPatrolLocation();
+
+	// 맵에 배치할 패트롤포인트
+	UPROPERTY(EditAnywhere, Category="AI")
+	TArray<AActor*> PatrolPoints;
 }; 
 

@@ -40,6 +40,9 @@ public:
 	UFUNCTION()
 	void OnTargetPerceived(AActor* Actor, FAIStimulus Stimulus);
 
+	UPROPERTY(EditInstanceOnly, Category = "AI")
+	TArray<AActor*> PatrolPoints;
+
 	void ChaseTarget(AActor* Target);
 	void AttackTarget();
 };
