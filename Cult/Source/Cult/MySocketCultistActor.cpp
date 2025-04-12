@@ -105,8 +105,9 @@ void AMySocketCultistActor::ReceiveData()
                     switch (PacketType)
                     {
                     case cultistHeader:
+                        ProcessCultistData(Buffer, BytesReceived);
+                        break;
                     case policeHeader:
-                        ProcessPlayerData(Buffer, BytesReceived);
                         break;
                     case objectHeader:
                         //ProcessObjectData(Buffer, BytesReceived);
@@ -141,41 +142,34 @@ void AMySocketCultistActor::ReceiveData()
         });
 }
 
-void AMySocketCultistActor::ProcessPlayerData(char* Buffer, int32 BytesReceived)
+void AMySocketCultistActor::ProcessCultistData(char* Buffer, int32 BytesReceived)
 {
-    if (BytesReceived < 2)
+    if (BytesReceived < 2 + sizeof(FCultistCharacterState))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Invalid Cultist Data Packet. BytesReceived: %d"), BytesReceived);
         return;
-    int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
-    int32 Offset = 2;
-
-    if (PacketType == cultistHeader)
-    {
-        while (Offset + sizeof(FCultistCharacterState) <= BytesReceived) // 안전 체크
-        {
-            FCultistCharacterState ReceivedState;
-            memcpy(&ReceivedState, Buffer + Offset, sizeof(FCultistCharacterState));
-
-            {
-                FScopeLock Lock(&ReceivedDataMutex);
-                ReceivedCultistStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
-            }
-            Offset += sizeof(FCultistCharacterState);
-        }
     }
-    else if (PacketType == policeHeader)
-    {
-        while (Offset + sizeof(FPoliceCharacterState) <= BytesReceived) // 안전 체크
-        {
-            FPoliceCharacterState ReceivedState;
-            memcpy(&ReceivedState, Buffer + Offset, sizeof(FPoliceCharacterState));
 
-            {
-                FScopeLock Lock(&ReceivedDataMutex);
-                ReceivedPoliceStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
-            }
-            Offset += sizeof(FPoliceCharacterState);
-        }
+    FCultistCharacterState ReceivedState;
+    memcpy(&ReceivedState, Buffer + 2, sizeof(FCultistCharacterState));
+    {
+        FScopeLock Lock(&ReceivedDataMutex);
+        ReceivedCultistStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
     }
+    //else if (PacketType == policeHeader)
+    //{
+    //    while (Offset + sizeof(FPoliceCharacterState) <= BytesReceived) // 안전 체크
+    //    {
+    //        FPoliceCharacterState ReceivedState;
+    //        memcpy(&ReceivedState, Buffer + Offset, sizeof(FPoliceCharacterState));
+
+    //        {
+    //            FScopeLock Lock(&ReceivedDataMutex);
+    //            ReceivedPoliceStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
+    //        }
+    //        Offset += sizeof(FPoliceCharacterState);
+    //    }
+    //}
 }
 
 void AMySocketCultistActor::ProcessConnection(char* Buffer, int32 BytesReceived) {
@@ -270,11 +264,9 @@ FCultistCharacterState AMySocketCultistActor::GetCharacterState(ACharacter* Play
     State.PositionX = PlayerCharacter->GetActorLocation().X;
     State.PositionY = PlayerCharacter->GetActorLocation().Y;
     State.PositionZ = PlayerCharacter->GetActorLocation().Z;
-
     State.RotationPitch = PlayerCharacter->GetActorRotation().Pitch;
     State.RotationYaw = PlayerCharacter->GetActorRotation().Yaw;
     State.RotationRoll = PlayerCharacter->GetActorRotation().Roll;
-
     FVector Velocity = PlayerCharacter->GetVelocity();
     State.VelocityX = Velocity.X;
     State.VelocityY = Velocity.Y;
@@ -295,7 +287,7 @@ FCultistCharacterState AMySocketCultistActor::GetCharacterState(ACharacter* Play
     return State;
 }
 
-void AMySocketCultistActor::ProcessCharacterUpdates(float DeltaTime)
+void AMySocketCultistActor::ProcessCharacterUpdates()
 {
     FScopeLock Lock(&ReceivedDataMutex);
 
@@ -305,7 +297,10 @@ void AMySocketCultistActor::ProcessCharacterUpdates(float DeltaTime)
 
         if (ACharacter* FoundChar = SpawnedCharacters.FindRef(Pair.Value.PlayerID))
         {
-            UpdateCultistState(FoundChar, State, DeltaTime);
+            UpdateCultistState(FoundChar, State);
+        }
+        else {
+            UE_LOG(LogTemp, Warning, TEXT("No PlayerID %d"), Pair.Value.PlayerID);
         }
     }
 
@@ -317,15 +312,16 @@ void AMySocketCultistActor::ProcessCharacterUpdates(float DeltaTime)
         {
             if (APoliceCharacter* PoliceChar = Cast<APoliceCharacter>(FoundChar))
             {
-                // UpdatePoliceState(PoliceChar, PoliceState, DeltaTime);
+                // UpdatePoliceState(PoliceChar, PoliceState);
             }
         }
     }
 }
 
-void AMySocketCultistActor::UpdateCultistState(ACharacter* Character, const FCultistCharacterState& State, float DeltaTime)
+void AMySocketCultistActor::UpdateCultistState(ACharacter* Character, const FCultistCharacterState& State)
 {
     float InterpSpeed = 30.0f; // 보간 속도
+    const float DeltaTime = GetWorld()->GetDeltaSeconds();
 
     FVector CurrentLocation = Character->GetActorLocation();
     FVector TargetLocation(State.PositionX, State.PositionY, State.PositionZ);
@@ -336,6 +332,10 @@ void AMySocketCultistActor::UpdateCultistState(ACharacter* Character, const FCul
     }
 
     FVector NewLocation = FMath::VInterpTo(CurrentLocation, TargetLocation, DeltaTime, InterpSpeed);
+    UE_LOG(LogTemp, Warning, TEXT("PlayerID %d - From (%f, %f, %f) To (%f, %f, %f)"),
+        State.PlayerID,
+        CurrentLocation.X, CurrentLocation.Y, CurrentLocation.Z,
+        TargetLocation.X, TargetLocation.Y, TargetLocation.Z);
     Character->SetActorLocation(NewLocation);
     Character->SetActorRotation(FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll));
 
@@ -572,7 +572,7 @@ void AMySocketCultistActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
     SendPlayerData();
-    ProcessCharacterUpdates(DeltaTime);
+    ProcessCharacterUpdates();
     // ProcessObjectUpdates(DeltaTime);
 }
 
