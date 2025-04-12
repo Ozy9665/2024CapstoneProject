@@ -1,6 +1,7 @@
 #include "Protocol.h"
 
 std::unordered_map<int, SESSION> g_users;
+int client_id = 0;
 
 void CALLBACK g_send_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, DWORD flag)
 {

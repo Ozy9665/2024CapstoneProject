@@ -92,6 +92,7 @@ struct FCultistCharacterState
 class SESSION;
 
 extern std::unordered_map<int, SESSION> g_users;
+extern int client_id;
 
 class EXP_OVER {
 public:
@@ -127,7 +128,19 @@ public:
 		strcpy_s(send_buffer + 3, sizeof(send_buffer) - 3, mess);
 	}
 
-	EXP_OVER(int header, int id) : id(id) {							// connection, disconnection
+	EXP_OVER(int header, int id, int role) : id(id) {				// connection
+		ZeroMemory(&send_over, sizeof(send_over));
+
+		auto packet_size = 4;
+		send_buffer[0] = static_cast<unsigned char>(header);
+		send_buffer[1] = static_cast<unsigned char>(packet_size);
+		send_buffer[2] = static_cast<unsigned char>(id);
+		send_buffer[3] = static_cast<unsigned char>(role);
+		send_wsabuf[0].buf = send_buffer;
+		send_wsabuf[0].len = static_cast<ULONG>(packet_size);
+	}
+
+	EXP_OVER(int header, int id) : id(id) {							// disconnection
 		ZeroMemory(&send_over, sizeof(send_over));
 
 		auto packet_size = 3;
@@ -223,19 +236,33 @@ public:
 				<< "HitByAttack=" << recvState.bIsHitByAnAttack << ", "
 				<< "Health=" << recvState.CurrentHealth << "\n";*/
 
+			for (auto& u : g_users) {
+				if (u.first != id) {
+					u.second.do_send_cultist(cultistHeader, &cultist_state, sizeof(FCultistCharacterState));
+
+				}
+			}
 			break;
 		}	
 		case policeHeader:
 			break;
+		case connectionHeader: 
+		{
+			if (num_bytes < 3) {
+				std::cout << "Invalid connection packet size\n";
+				break;
+			}
+
+			int role = static_cast<unsigned char>(recv_buffer[2]);
+
+			std::cout << "Client[" << id << "] connected with role: " << (role == 0 ? "Cultist" : "Police") << std::endl;
+			for (auto& u : g_users) {
+				u.second.do_send_connection(connectionHeader, client_id, role);
+			}
+			break;
+		}
 		default:
 			std::cout << "Unknown packet type received: " << static_cast<int>(recv_buffer[0]) << std::endl;
-		}
-
-		for (auto& u : g_users) {
-			if (u.first != id) {
-				u.second.do_send_cultist(cultistHeader, &cultist_state, sizeof(FCultistCharacterState));
-
-			}
 		}
 
 		do_recv();
@@ -257,8 +284,8 @@ public:
 		WSASend(c_socket, o->send_wsabuf, 1, &size_sent, 0, &(o->send_over), g_send_callback);
 	}
 
-	void do_send_connection(char header, int new_player_id) {
-		EXP_OVER* o = new EXP_OVER(header, new_player_id);
+	void do_send_connection(char header, int new_player_id, int role) {
+		EXP_OVER* o = new EXP_OVER(header, new_player_id, role);
 		DWORD size_sent;
 		WSASend(c_socket, o->send_wsabuf, 1, &size_sent, 0, &(o->send_over), g_send_callback);
 	}
