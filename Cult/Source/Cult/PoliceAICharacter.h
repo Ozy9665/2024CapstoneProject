@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "PoliceCharacter.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "Perception/AIPerceptionComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "AIController.h"

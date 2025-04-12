@@ -7,6 +7,8 @@
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "Perception/AIPerceptionTypes.h"
+#include "Navigation/PathFollowingComponent.h"
+
 #include "AI_PoliceAIController.generated.h"
 
 
