@@ -37,20 +37,20 @@ EBTNodeResult::Type UBTTask_Patrol::ExecuteTask(UBehaviorTreeComponent& OwnerCom
 
 	if (Result.Code == EPathFollowingRequestResult::RequestSuccessful)
 	{
-		AIController->GetPathFollowingComponent()->OnRequestFinished.AddUObject(this, &UBTTask_Patrol::OnMoveCompleted);
+		//AIController->GetPathFollowingComponent()->OnRequestFinished.AddUObject(this, &UBTTask_Patrol::OnMoveCompleted);
 		return EBTNodeResult::InProgress;
 	}
 
 	return EBTNodeResult::Failed;
 }
 
-void UBTTask_Patrol::OnMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result)
-{
-	if (CachedOwnerComp)
-	{
-		FinishLatentTask(*CachedOwnerComp, EBTNodeResult::Succeeded);
-	}
-}
+//void UBTTask_Patrol::OnMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result)
+//{
+//	if (CachedOwnerComp)
+//	{
+//		FinishLatentTask(*CachedOwnerComp, EBTNodeResult::Succeeded);
+//	}
+//}
 
 void UBTTask_Patrol::OnTaskFinished(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, EBTNodeResult::Type TaskResult)
 {

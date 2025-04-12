@@ -25,8 +25,8 @@ protected:
 	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory);
 	virtual void TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
 	virtual void OnTaskFinished(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, EBTNodeResult::Type TaskResult)override;
-	UFUNCTION()
-	void OnMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result);
+	//UFUNCTION()
+	//void OnMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result);
 
 private:
 
