@@ -9,6 +9,8 @@
 #include <winsock2.h>
 #include "MySocketActor.generated.h"
 
+#pragma pack(push, 1)
+
 USTRUCT(BlueprintType)
 struct FPoliceCharacterState
 {
@@ -65,6 +67,8 @@ struct FCultistCharacterState
 	bool bIsHitByAnAttack;
 	float CurrentHealth;
 };
+
+#pragma pack(pop)
 
 UCLASS()
 class CULT_API AMySocketActor : public AActor

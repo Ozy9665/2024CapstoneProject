@@ -257,8 +257,9 @@ public:
 
 			std::cout << "Client[" << id << "] connected with role: " << (role == 0 ? "Cultist" : "Police") << std::endl;
 			for (auto& u : g_users) {
-				u.second.do_send_connection(connectionHeader, client_id, role);
+				u.second.do_send_connection(connectionHeader, id, role);
 			}
+			client_id++;
 			break;
 		}
 		default:

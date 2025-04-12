@@ -29,7 +29,7 @@ private:
 	int my_ID = -1;
 	FCriticalSection ReceivedDataMutex;
 	TMap<int, ACharacter*> SpawnedCharacters;
-	FCultistCharacterState DummyState{ -1, 0.0f, 0.0f, 100.0f, 0.0f, 0.0f, 0.0f };
+	FCultistCharacterState DummyState{ -1, 110, -1100,  2770, 0, 90, 0};
 	TMap<int, FCultistCharacterState> ReceivedCultistStates;
 	TMap<int, FPoliceCharacterState> ReceivedPoliceStates;
 	TMap<int32, AReplicatedPhysicsBlock*> SyncedBlocks;
@@ -50,14 +50,15 @@ public:
 	void SetClientSocket(SOCKET InSocket);
 	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);
 	void ReceiveData();
-	void ProcessPlayerData(char* Buffer, int32 BytesReceived);
+	void ProcessCultistData(char* Buffer, int32 BytesReceived);
+	//void ProcessPoliceData(char* Buffer, int32 BytesReceived);
 	void ProcessConnection(char* Buffer, int32 BytesReceived);
 	void ProcessDisconnection(char* Buffer, int32 BytesReceived);
 	void SpawnCultistCharacter(const char* Buffer);
 	void SendPlayerData();
 	FCultistCharacterState GetCharacterState(ACharacter* PlayerCharacter);
-	void ProcessCharacterUpdates(float DeltaTime);
-	void UpdateCultistState(ACharacter* Character, const FCultistCharacterState& State, float DeltaTime);
+	void ProcessCharacterUpdates();
+	void UpdateCultistState(ACharacter* Character, const FCultistCharacterState& State);
 	void UpdateCultistAnimInstanceProperties(UAnimInstance* AnimInstance, const FCultistCharacterState& State);
 	void CloseConnection();
 	void SafeDestroyCharacter(int PlayerID);
