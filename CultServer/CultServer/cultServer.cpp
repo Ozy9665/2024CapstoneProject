@@ -33,7 +33,6 @@ int main()
 	listen(s_socket, SOMAXCONN);
 	INT addr_size = sizeof(SOCKADDR_IN);
 
-	int client_id = 0;
 	while (true) {
 		auto c_socket = WSAAccept(s_socket, reinterpret_cast<sockaddr*>(&addr), &addr_size, NULL, NULL);
 		if (c_socket == INVALID_SOCKET) {
@@ -42,11 +41,6 @@ int main()
 		g_users.try_emplace(client_id, client_id, c_socket);
 		std::cout << "새로운 클라이언트가 연결되었습니다." << inet_ntoa(addr.sin_addr)
 			<< " Port: " << ntohs(addr.sin_port) << std::endl;
-		for (auto& u : g_users) {
-			u.second.do_send_connection(connectionHeader, client_id);
-		}
-
-		client_id++;
 	}
 
 	closesocket(s_socket);

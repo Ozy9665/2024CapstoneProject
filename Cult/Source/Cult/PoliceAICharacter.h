@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "PoliceCharacter.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "Perception/AIPerceptionComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "AIController.h"
@@ -39,6 +40,9 @@ public:
 
 	UFUNCTION()
 	void OnTargetPerceived(AActor* Actor, FAIStimulus Stimulus);
+
+	UPROPERTY(EditInstanceOnly, Category = "AI")
+	TArray<AActor*> PatrolPoints;
 
 	void ChaseTarget(AActor* Target);
 	void AttackTarget();

@@ -9,13 +9,7 @@
 #include <winsock2.h>
 #include "MySocketActor.generated.h"
 
-UENUM(BlueprintType)
-enum class EAnimationState : uint8
-{
-	Idle UMETA(DisplayName = "IDLE"),
-	Walk UMETA(DisplayName = "Walk"),
-	Crouch UMETA(DisplayName = "Crouch")
-};
+#pragma pack(push, 1)
 
 USTRUCT(BlueprintType)
 struct FPoliceCharacterState
@@ -74,6 +68,8 @@ struct FCultistCharacterState
 	float CurrentHealth;
 };
 
+#pragma pack(pop)
+
 UCLASS()
 class CULT_API AMySocketActor : public AActor
 {
@@ -90,7 +86,6 @@ protected:
 
 private:
 	SOCKET ServerSocket;
-	FPoliceCharacterState ServerState;
 	APoliceCharacter* ServerCharacter;
 	TQueue<FCultistCharacterState> ReceivedDataQueue;
 	TArray<SOCKET> ClientSockets;

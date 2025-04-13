@@ -29,7 +29,13 @@ ACultGameMode::ACultGameMode()
 void ACultGameMode::BeginPlay()
 {
 	Super::BeginPlay();
-	SpawnAltars();
+	
+	// 현재 레벨
+	FString CurrentLevelName = UGameplayStatics::GetCurrentLevelName(this, true);
+	if (CurrentLevelName == "NewWorld")
+	{
+		SpawnAltars();
+	}
 }
 
 void ACultGameMode::CheckRitualComlete(float CurrentRitualGauge)
