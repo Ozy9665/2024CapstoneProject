@@ -32,7 +32,7 @@ void ACultGameMode::BeginPlay()
 	
 	// 현재 레벨
 	FString CurrentLevelName = UGameplayStatics::GetCurrentLevelName(this, true);
-	if (CurrentLevelName == "NewLevel")
+	if (CurrentLevelName == "NewWorld")
 	{
 		SpawnAltars();
 	}
