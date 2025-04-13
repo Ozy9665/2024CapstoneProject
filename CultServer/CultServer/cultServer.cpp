@@ -41,7 +41,6 @@ int main()
 		g_users.try_emplace(client_id, client_id, c_socket);
 		std::cout << "새로운 클라이언트가 연결되었습니다." << inet_ntoa(addr.sin_addr)
 			<< " Port: " << ntohs(addr.sin_port) << std::endl;
-		client_id++;
 	}
 
 	closesocket(s_socket);

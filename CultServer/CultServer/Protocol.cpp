@@ -59,7 +59,7 @@ EXP_OVER::EXP_OVER(int header, int id, int role) : id(id)				// connection
 	send_wsabuf[0].len = static_cast<ULONG>(packet_size);
 }
 
-EXP_OVER::EXP_OVER(int header, int id) : id(id)								// disconnection
+EXP_OVER::EXP_OVER(int header, int id) : id(id)							// disconnection
 {
 	ZeroMemory(&send_over, sizeof(send_over));
 
