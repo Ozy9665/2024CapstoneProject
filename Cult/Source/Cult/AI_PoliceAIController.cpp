@@ -59,5 +59,23 @@ FVector AAI_PoliceAIController::GetRandomPatrolLocation()
 		return GetPawn()->GetActorLocation();
 	}
 	int32 Index = FMath::RandRange(0, PatrolPoints.Num() - 1);
+
+	UE_LOG(LogTemp, Warning, TEXT("Patrol 목표 위치: %s"), *PatrolPoints[Index]->GetActorLocation().ToString());
 	return PatrolPoints[Index]->GetActorLocation();
+}
+
+AActor* AAI_PoliceAIController::GetCurrentPatrolPoint()
+{
+	if (PatrolPoints.IsValidIndex(CurrentPatrolIndex))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Patrol 목표 위치: %s"), *PatrolPoints[CurrentPatrolIndex]->GetActorLocation().ToString());
+
+		return PatrolPoints[CurrentPatrolIndex];
+	}
+	return nullptr;
+}
+
+void AAI_PoliceAIController::AdvancePatrolPoint()
+{
+	CurrentPatrolIndex = (CurrentPatrolIndex + 1) % PatrolPoints.Num();
 }

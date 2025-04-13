@@ -4,29 +4,37 @@
 #include "BTTask_Patrol.h"
 #include "PoliceCharacter.h"
 #include "BehaviorTree/BlackboardComponent.h"
+#include "BehaviorTree/BTTaskNode.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/Controller.h"
 #include "AI_PoliceAIController.h"
-#include "PoliceAICharacter.h"
 #include "AIController.h"
+#include "PoliceAICharacter.h"
+#include "NavigationSystem.h"
 
 
 UBTTask_Patrol::UBTTask_Patrol()
 {
 	NodeName = TEXT("Patrol");
-	bNotifyTick = false;
+	bNotifyTick = true;
 	bNotifyTaskFinished = true;
 }
 
 EBTNodeResult::Type UBTTask_Patrol::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
-	AAI_PoliceAIController* AIController = Cast<AAI_PoliceAIController>(OwnerComp.GetAIOwner());
+	Super::ExecuteTask(OwnerComp, NodeMemory);
+
+	AIController = Cast<AAI_PoliceAIController>(OwnerComp.GetAIOwner());
 	if (!AIController) return EBTNodeResult::Failed;
 
-	CachedOwnerComp = &OwnerComp;
-
-	// 랜덤위치 패트롤
-	FVector PatrolLocation = AIController->GetRandomPatrolLocation();
+	AActor* CurrentPatrolTarget = AIController->GetCurrentPatrolPoint();
+	if (!CurrentPatrolTarget)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Current Patrol is null"));
+		return EBTNodeResult::Failed;
+	}
+	FVector PatrolLocation = CurrentPatrolTarget->GetActorLocation();
 
 	FAIMoveRequest MoveRequest;
 	MoveRequest.SetGoalLocation(PatrolLocation);
@@ -37,24 +45,20 @@ EBTNodeResult::Type UBTTask_Patrol::ExecuteTask(UBehaviorTreeComponent& OwnerCom
 
 	if (Result.Code == EPathFollowingRequestResult::RequestSuccessful)
 	{
-		//AIController->GetPathFollowingComponent()->OnRequestFinished.AddUObject(this, &UBTTask_Patrol::OnMoveCompleted);
+		UE_LOG(LogTemp, Warning, TEXT("Called MoveTo %s"), *PatrolLocation.ToString());
 		return EBTNodeResult::InProgress;
 	}
-
-	return EBTNodeResult::Failed;
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Failed Call MoveTo"));
+		return EBTNodeResult::Failed;
+	}
 }
 
-//void UBTTask_Patrol::OnMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result)
-//{
-//	if (CachedOwnerComp)
-//	{
-//		FinishLatentTask(*CachedOwnerComp, EBTNodeResult::Succeeded);
-//	}
-//}
 
 void UBTTask_Patrol::OnTaskFinished(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, EBTNodeResult::Type TaskResult)
 {
-	AAI_PoliceAIController* AIController = Cast<AAI_PoliceAIController>(OwnerComp.GetAIOwner());
+	AIController = Cast<AAI_PoliceAIController>(OwnerComp.GetAIOwner());
 	if (AIController)
 	{
 		AIController->GetPathFollowingComponent()->OnRequestFinished.RemoveAll(this);
@@ -63,6 +67,30 @@ void UBTTask_Patrol::OnTaskFinished(UBehaviorTreeComponent& OwnerComp, uint8* No
 
 void UBTTask_Patrol::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
 {
+	Super::TickTask(OwnerComp, NodeMemory, DeltaSeconds);
+	AIController = Cast<AAI_PoliceAIController>(OwnerComp.GetAIOwner());
+	if (!AIController) return;
+	AIPawn = AIController->GetPawn();
 
-//	FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
+	if (!AIController || !AIPawn || !bIsMoving)
+	{
+		FinishLatentTask(OwnerComp, EBTNodeResult::Failed);
+		return;
+	}
+
+	AActor* CurrentPatrolTarget = AIController->GetCurrentPatrolPoint();
+	if (!CurrentPatrolTarget)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Current Patrol is null"));
+		return;
+	}
+	FVector PatrolLocation = CurrentPatrolTarget->GetActorLocation();
+	const float Distance = FVector::Dist(AIPawn->GetActorLocation(), PatrolLocation);
+
+	if (Distance <= 100.0f)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Near To PatPoint. Move To Next"));
+		AIController->AdvancePatrolPoint();
+		FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
+	}
 }

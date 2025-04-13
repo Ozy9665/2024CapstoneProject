@@ -37,8 +37,14 @@ public:
 	void OnTargetPerceived(AActor* Actor, FAIStimulus Stimulus);
 	FVector GetRandomPatrolLocation();
 
+
 	// 맵에 배치할 패트롤포인트
 	UPROPERTY(EditAnywhere, Category="AI")
 	TArray<AActor*> PatrolPoints;
+
+	int32 CurrentPatrolIndex = 0;
+
+	AActor* GetCurrentPatrolPoint();
+	void AdvancePatrolPoint();
 }; 
 
