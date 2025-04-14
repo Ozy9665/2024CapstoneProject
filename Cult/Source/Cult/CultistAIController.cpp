@@ -6,6 +6,7 @@
 #include"Perception/AISense_Sight.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "Altar.h"
+#include "GenericTeamAgentInterface.h"
 #include "Kismet/GameplayStatics.h"
 #include "PoliceCharacter.h"
 
@@ -46,6 +47,8 @@ void ACultistAIController::BeginPlay()
 	Super::BeginPlay();
 	RunBehaviorTree(BehaviorTree);
 	FindAndSetNearestAltar();
+	SetGenericTeamId(FGenericTeamId(2));
+
 }
 
 void ACultistAIController::OnPossess(APawn* InPawn)

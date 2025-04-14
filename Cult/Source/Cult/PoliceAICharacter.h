@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PerceptionActor.h"
 #include "PoliceCharacter.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "Perception/AIPerceptionComponent.h"
@@ -44,6 +45,16 @@ public:
 	UPROPERTY(EditInstanceOnly, Category = "AI")
 	TArray<AActor*> PatrolPoints;
 
+	// 시야전용 클래스 지정 
+	UPROPERTY(EditDefaultsOnly, Category="AI")
+	TSubclassOf<class APerceptionActor> PerceptionActorClass;
+
+	// 인스턴스
+	UPROPERTY()
+	APerceptionActor* OnlyPerceptionActor;
+
 	void ChaseTarget(AActor* Target);
 	void AttackTarget();
+	void TurnRightPerception();
+	void TurnLeftPerception();
 };

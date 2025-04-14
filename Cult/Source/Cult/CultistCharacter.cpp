@@ -83,6 +83,7 @@ void ACultistCharacter::BeginPlay()
 		}
 	}
 
+
 }
 
 void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)

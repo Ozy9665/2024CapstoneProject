@@ -3,6 +3,7 @@
 
 #include "PoliceAICharacter.h"
 #include "Perception/AIPerceptionComponent.h"
+#include "AI_PoliceAIController.h"
 #include "BehaviorTree/BehaviorTree.h"
 
 APoliceAICharacter::APoliceAICharacter(const FObjectInitializer& ObjectInitializer)
@@ -11,22 +12,24 @@ APoliceAICharacter::APoliceAICharacter(const FObjectInitializer& ObjectInitializ
 
 	PrimaryActorTick.bCanEverTick = true;
 
-	// 시야 감지
-	AIPerceptionComponent = CreateDefaultSubobject<UAIPerceptionComponent>(TEXT("AIPerceptionComponent"));
-	SightConfig = CreateDefaultSubobject<UAISenseConfig_Sight>(TEXT("SightConfig"));
+	//// 시야 감지
+	//AIPerceptionComponent = CreateDefaultSubobject<UAIPerceptionComponent>(TEXT("AIPerceptionComponent"));
+	//SightConfig = CreateDefaultSubobject<UAISenseConfig_Sight>(TEXT("SightConfig"));
 
-	SightConfig->SightRadius = 1500.0f;
-	SightConfig->LoseSightRadius = 1600.0f;
-	SightConfig->PeripheralVisionAngleDegrees = 90.0f;
-	SightConfig->DetectionByAffiliation.bDetectEnemies = true;
-	SightConfig->DetectionByAffiliation.bDetectNeutrals = true;
-	SightConfig->DetectionByAffiliation.bDetectFriendlies = true;
+	//SightConfig->SightRadius = 1500.0f;
+	//SightConfig->LoseSightRadius = 1600.0f;
+	//SightConfig->PeripheralVisionAngleDegrees = 90.0f;
+	//SightConfig->DetectionByAffiliation.bDetectEnemies = true;
+	//SightConfig->DetectionByAffiliation.bDetectNeutrals = true;
+	//SightConfig->DetectionByAffiliation.bDetectFriendlies = true;
 
-	AIPerceptionComponent->ConfigureSense(*SightConfig);
-	AIPerceptionComponent->SetDominantSense(SightConfig->GetSenseImplementation());
+	//AIPerceptionComponent->ConfigureSense(*SightConfig);
+	//AIPerceptionComponent->SetDominantSense(SightConfig->GetSenseImplementation());
 
-	// Perception 바인딩
-	AIPerceptionComponent->OnTargetPerceptionUpdated.AddDynamic(this, &APoliceAICharacter::OnTargetPerceived);
+	//// Perception 바인딩
+	//AIPerceptionComponent->OnTargetPerceptionUpdated.AddDynamic(this, &APoliceAICharacter::OnTargetPerceived);
+
+
 
 	CurrentWeapon = EWeaponType::Baton;
 }
@@ -34,6 +37,36 @@ APoliceAICharacter::APoliceAICharacter(const FObjectInitializer& ObjectInitializ
 void APoliceAICharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (PerceptionActorClass)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.Owner = this;
+
+		OnlyPerceptionActor = GetWorld()->SpawnActor<APerceptionActor>(
+			PerceptionActorClass,
+			GetActorLocation(),
+			GetActorRotation(),
+			SpawnParams
+		);
+	}
+
+	if (OnlyPerceptionActor)
+	{
+		AAI_PoliceAIController* AIController = Cast<AAI_PoliceAIController>(GetController());
+		if (AIController)
+		{
+			OnlyPerceptionActor->PerceptionComponent->OnTargetPerceptionUpdated.AddDynamic(
+				AIController,
+				&AAI_PoliceAIController::OnTargetDetected
+			);
+			UE_LOG(LogTemp, Warning, TEXT("Bind Detect Function From BeginPlay"));
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("Create Perception Actor"));
+	}
+	OnlyPerceptionActor->AttachToActor(this, FAttachmentTransformRules::KeepRelativeTransform);
+	OnlyPerceptionActor->SetActorRelativeLocation(FVector(0.f, 0.f, 80.f));
 }
 
 void APoliceAICharacter::ChaseTarget(AActor* Target)
@@ -64,5 +97,23 @@ void APoliceAICharacter::OnTargetPerceived(AActor* Actor, FAIStimulus Stimulus)
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Lost Sight of : %s"), *Actor->GetName());
+	}
+}
+
+void APoliceAICharacter::TurnRightPerception()
+{
+	if (OnlyPerceptionActor)
+	{
+		FRotator RightLookRotation = GetActorRotation() + FRotator(0.f, 90.f, 0.f);
+		OnlyPerceptionActor->SetActorRotation(RightLookRotation);
+	}
+}
+
+void APoliceAICharacter::TurnLeftPerception()
+{
+	if (OnlyPerceptionActor)
+	{
+		FRotator LeftLookRotation = GetActorRotation() + FRotator(0.f, -90.f, 0.f);
+		OnlyPerceptionActor->SetActorRotation(LeftLookRotation);
 	}
 }

@@ -35,6 +35,8 @@ public:
 	void StartChase(AActor* Target);
 	virtual void OnPossess(APawn* InPawn) override;
 	void OnTargetPerceived(AActor* Actor, FAIStimulus Stimulus);
+	UFUNCTION()
+	void OnTargetDetected(AActor* Actor, FAIStimulus Stimulus);
 	FVector GetRandomPatrolLocation();
 
 
@@ -43,6 +45,7 @@ public:
 	TArray<AActor*> PatrolPoints;
 
 	int32 CurrentPatrolIndex = 0;
+
 
 	AActor* GetCurrentPatrolPoint();
 	void AdvancePatrolPoint();

@@ -3,6 +3,7 @@
 
 #include "AI_PoliceAIController.h"
 #include "PoliceAICharacter.h"
+#include "GenericTeamAgentInterface.h"
 
 
 void AAI_PoliceAIController::BeginPlay()
@@ -14,6 +15,15 @@ void AAI_PoliceAIController::BeginPlay()
 		RunBehaviorTree(AIBehaviorTree);
 	}*/
 
+	APoliceAICharacter* AIChar = Cast<APoliceAICharacter>(GetPawn());
+	if (AIChar && AIChar->OnlyPerceptionActor)
+	{
+		AIChar->OnlyPerceptionActor->PerceptionComponent->OnTargetPerceptionUpdated.AddDynamic(
+			this, &AAI_PoliceAIController::OnTargetDetected
+		);
+		UE_LOG(LogTemp, Warning, TEXT("Bind Detect Function"));
+	}
+	SetGenericTeamId(FGenericTeamId(1));
 
 }
 
@@ -40,6 +50,14 @@ void AAI_PoliceAIController::OnPossess(APawn* InPawn)
 		PatrolPoints = AICharacter->PatrolPoints;
 	}
 
+	UE_LOG(LogTemp, Warning, TEXT("OnlyPerceptionActor is %s"), AICharacter->OnlyPerceptionActor ? TEXT("Valid") : TEXT("NULL"));
+	if (AICharacter && AICharacter->OnlyPerceptionActor)
+	{
+		AICharacter->OnlyPerceptionActor->PerceptionComponent->OnTargetPerceptionUpdated.AddDynamic(
+			this, &AAI_PoliceAIController::OnTargetDetected
+		);
+		UE_LOG(LogTemp, Warning, TEXT("Bind Detect Function"));
+	}
  }
 
 void AAI_PoliceAIController::OnTargetPerceived(AActor* Actor, FAIStimulus Stimulus)
@@ -60,7 +78,7 @@ FVector AAI_PoliceAIController::GetRandomPatrolLocation()
 	}
 	int32 Index = FMath::RandRange(0, PatrolPoints.Num() - 1);
 
-	UE_LOG(LogTemp, Warning, TEXT("Patrol 목표 위치: %s"), *PatrolPoints[Index]->GetActorLocation().ToString());
+	//UE_LOG(LogTemp, Warning, TEXT("Patrol 목표 위치: %s"), *PatrolPoints[Index]->GetActorLocation().ToString());
 	return PatrolPoints[Index]->GetActorLocation();
 }
 
@@ -68,7 +86,7 @@ AActor* AAI_PoliceAIController::GetCurrentPatrolPoint()
 {
 	if (PatrolPoints.IsValidIndex(CurrentPatrolIndex))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Patrol 목표 위치: %s"), *PatrolPoints[CurrentPatrolIndex]->GetActorLocation().ToString());
+		//UE_LOG(LogTemp, Warning, TEXT("Patrol 목표 위치: %s"), *PatrolPoints[CurrentPatrolIndex]->GetActorLocation().ToString());
 
 		return PatrolPoints[CurrentPatrolIndex];
 	}
@@ -78,4 +96,14 @@ AActor* AAI_PoliceAIController::GetCurrentPatrolPoint()
 void AAI_PoliceAIController::AdvancePatrolPoint()
 {
 	CurrentPatrolIndex = (CurrentPatrolIndex + 1) % PatrolPoints.Num();
+}
+
+void AAI_PoliceAIController::OnTargetDetected(AActor* Actor, FAIStimulus Stimulus)
+{
+	if (!Actor || !Stimulus.WasSuccessfullySensed())return;
+	if (Actor->ActorHasTag("Cultist"))
+	{
+		Blackboard->SetValueAsObject("TargetActor", Actor);
+		UE_LOG(LogTemp, Warning, TEXT("Cultist Detected!"));
+	}
 }
