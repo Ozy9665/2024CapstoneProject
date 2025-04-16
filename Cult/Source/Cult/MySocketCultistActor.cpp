@@ -29,6 +29,12 @@ AMySocketCultistActor::AMySocketCultistActor()
 void AMySocketCultistActor::BeginPlay()
 {
     Super::BeginPlay();
+
+    MyCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
+    if (!MyCharacter)
+    {
+        UE_LOG(LogTemp, Error, TEXT("My character not found!"));
+    }
 }
 
 void AMySocketCultistActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -200,7 +206,7 @@ void AMySocketCultistActor::ProcessConnection(char* Buffer, int32 BytesReceived)
                 }
                 else if (role == 1) // Police
                 {
-                    // this->SpawnPoliceCharacter(BufferCopy.GetData());
+                    this->SpawnPoliceCharacter(BufferCopy.GetData());
                 }
             });
     }
@@ -230,52 +236,54 @@ void AMySocketCultistActor::SendPlayerData()
     if (ClientSocket != INVALID_SOCKET)
     {
         // 캐릭터 상태 가져오기
-        ACharacter* PlayerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
-        if (PlayerCharacter)
+        FCultistCharacterState CharacterState = GetCharacterState();
+
+        auto packet_size = 3 + sizeof(FCultistCharacterState);
+
+        TArray<uint8> PacketData;
+        PacketData.SetNumUninitialized(packet_size);
+
+        PacketData[0] = cultistHeader;
+        PacketData[1] = packet_size;
+        PacketData[2] = my_ID;
+        memcpy(PacketData.GetData() + 3, &CharacterState, sizeof(FCultistCharacterState));
+
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
+        if (BytesSent == SOCKET_ERROR)
         {
-            FCultistCharacterState CharacterState = GetCharacterState(PlayerCharacter);
-
-            auto packet_size = 3 + sizeof(FCultistCharacterState);
-
-            TArray<uint8> PacketData;
-            PacketData.SetNumUninitialized(packet_size);
-
-            PacketData[0] = cultistHeader;
-            PacketData[1] = packet_size;
-            PacketData[2] = my_ID;
-            memcpy(PacketData.GetData() + 3, &CharacterState, sizeof(FCultistCharacterState));
-
-            int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
-            if (BytesSent == SOCKET_ERROR)
-            {
-                UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
-            }
+            UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
         }
-        else
-        {
-            CloseConnection();
-        }
+    }
+    else
+    {
+        CloseConnection();
     }
 }
 
-FCultistCharacterState AMySocketCultistActor::GetCharacterState(ACharacter* PlayerCharacter)
+FCultistCharacterState AMySocketCultistActor::GetCharacterState()
 {
     FCultistCharacterState State;
-    State.PositionX = PlayerCharacter->GetActorLocation().X;
-    State.PositionY = PlayerCharacter->GetActorLocation().Y;
-    State.PositionZ = PlayerCharacter->GetActorLocation().Z;
-    State.RotationPitch = PlayerCharacter->GetActorRotation().Pitch;
-    State.RotationYaw = PlayerCharacter->GetActorRotation().Yaw;
-    State.RotationRoll = PlayerCharacter->GetActorRotation().Roll;
-    FVector Velocity = PlayerCharacter->GetVelocity();
+    State.PlayerID = my_ID;
+
+    // 위치 및 회전 설정
+    State.PositionX = MyCharacter->GetActorLocation().X;
+    State.PositionY = MyCharacter->GetActorLocation().Y;
+    State.PositionZ = MyCharacter->GetActorLocation().Z;
+    State.RotationPitch = MyCharacter->GetActorRotation().Pitch;
+    State.RotationYaw = MyCharacter->GetActorRotation().Yaw;
+    State.RotationRoll = MyCharacter->GetActorRotation().Roll;
+
+    // 속도 및 Speed 계산
+    FVector Velocity = MyCharacter->GetVelocity();
     State.VelocityX = Velocity.X;
     State.VelocityY = Velocity.Y;
     State.VelocityZ = Velocity.Z;
     State.Speed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
 
-    State.bIsCrouching = PlayerCharacter->bIsCrouched;
+    // Crouch 상태
+    State.bIsCrouching = MyCharacter->bIsCrouched;
 
-    ACultistCharacter* CultistChar = Cast<ACultistCharacter>(PlayerCharacter);
+    ACultistCharacter* CultistChar = Cast<ACultistCharacter>(MyCharacter);
     if (CultistChar)
     {
         State.bIsPerformingRitual = CultistChar->bIsPerformingRitual;
@@ -405,14 +413,52 @@ void AMySocketCultistActor::SpawnCultistCharacter(const char* Buffer)
     {
         ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
             BP_ClientCharacter,
-            FVector(DummyState.PositionX, DummyState.PositionY, DummyState.PositionZ),
-            FRotator(DummyState.RotationPitch, DummyState.RotationYaw, DummyState.RotationRoll),
+            FVector(CultistDummyState.PositionX, CultistDummyState.PositionY, CultistDummyState.PositionZ),
+            FRotator(CultistDummyState.RotationPitch, CultistDummyState.RotationYaw, CultistDummyState.RotationRoll),
             SpawnParams
         );
         if (NewCharacter)
         {
             SpawnedCharacters.Add(PlayerID, NewCharacter);
-            ReceivedCultistStates.Add(PlayerID, DummyState);
+            ReceivedCultistStates.Add(PlayerID, CultistDummyState);
+            UE_LOG(LogTemp, Log, TEXT("Spawned new character for PlayerID=%d"), PlayerID);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), PlayerID);
+        }
+    }
+}
+
+void AMySocketCultistActor::SpawnPoliceCharacter(const char* Buffer)
+{
+    // PlayerID를 기반으로 고유 키 생성
+    int PlayerID = static_cast<int>(static_cast<unsigned char>(Buffer[2]));
+    // 이미 캐릭터가 존재하면 아무 작업도 하지 않음
+    if (SpawnedCharacters.Contains(PlayerID))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Character already exists: %d"), PlayerID);
+        return;
+    }
+
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Owner = this;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter_Client.BP_PoliceCharacter_Client_C"));
+
+    if (BP_ClientCharacter)
+    {
+        APoliceCharacter* NewCharacter = GetWorld()->SpawnActor<APoliceCharacter>(
+            BP_ClientCharacter,
+            FVector(PoliceDummyState.PositionX, PoliceDummyState.PositionY, PoliceDummyState.PositionZ),
+            FRotator(PoliceDummyState.RotationPitch, PoliceDummyState.RotationYaw, PoliceDummyState.RotationRoll),
+            SpawnParams
+        );
+        if (NewCharacter)
+        {
+            SpawnedCharacters.Add(PlayerID, NewCharacter);
+            ReceivedPoliceStates.Add(PlayerID, PoliceDummyState);
             UE_LOG(LogTemp, Log, TEXT("Spawned new character for PlayerID=%d"), PlayerID);
         }
         else

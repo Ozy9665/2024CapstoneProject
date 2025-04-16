@@ -131,7 +131,7 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 
 		// 세션 상태에 저장
 		cultist_state = recvState;
-		cultist_state.playerID = id;
+		cultist_state.PlayerID = id;
 
 		/*std::cout << "[Cultist] ID=" << id << "\n";
 		std::cout << "  States   : "
@@ -148,8 +148,28 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		}
 		break;
 	}
-	case policeHeader:
+	case policeHeader: 
+	{
+		if (num_bytes < 3 + sizeof(FPoliceCharacterState)) {
+			std::cout << "Invalid police packet size\n";
+			break;
+		}
+
+		FPoliceCharacterState recvState;
+		memcpy(&recvState, recv_buffer + 3, sizeof(FPoliceCharacterState));
+
+		// 세션 상태에 저장
+		police_state = recvState;
+		police_state.PlayerID = id;
+
+		for (auto& u : g_users) {
+			if (u.first != id) {
+				u.second.do_send_police(policeHeader, &police_state, sizeof(FPoliceCharacterState));
+
+			}
+		}
 		break;
+	}
 	case connectionHeader:
 	{
 		if (num_bytes < 3) {
@@ -169,7 +189,7 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		for (auto& u : g_users) {
 			if (u.first != id) {
 				g_users[id].do_send_connection(connectionHeader, u.first, u.second.role);
-			}
+			}	
 		}
 
 		client_id++;
@@ -192,6 +212,13 @@ void SESSION::do_send(char header, int id, char* mess)
 }
 
 void SESSION::do_send_cultist(int header, const void* data, size_t size)
+{
+	EXP_OVER* o = new EXP_OVER(header, data, size);
+	DWORD size_sent;
+	WSASend(c_socket, o->send_wsabuf, 1, &size_sent, 0, &(o->send_over), g_send_callback);
+}
+
+void SESSION::do_send_police(int header, const void* data, size_t size)
 {
 	EXP_OVER* o = new EXP_OVER(header, data, size);
 	DWORD size_sent;

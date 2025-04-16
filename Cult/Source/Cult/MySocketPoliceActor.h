@@ -28,7 +28,7 @@ private:
 	APoliceCharacter* MyCharacter;
 	FCriticalSection ReceivedDataMutex;
 	TMap<int, ACharacter*> SpawnedCharacters;
-	FCultistCharacterState DummyState{ -1, 0.0f, 0.0f, 100.0f, 0.0f, 0.0f, 0.0f };
+	FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
 	TMap<int, FCultistCharacterState> ReceivedCultistStates;
 	TMap<int32, AReplicatedPhysicsBlock*> SyncedBlocks;
 	TMap<int32, FTransform> LastReceivedTransform;

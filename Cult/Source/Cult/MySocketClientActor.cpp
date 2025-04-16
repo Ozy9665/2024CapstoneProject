@@ -501,7 +501,7 @@ void AMySocketClientActor::UpdatePoliceState(ACharacter* Character, const FPolic
 }
 */
 
-/*
+
 void AMySocketClientActor::UpdatePoliceAnimInstanceProperties(UAnimInstance* AnimInstance, const FPoliceCharacterState& State)
 {
     // Velocity 업데이트
@@ -747,7 +747,7 @@ void AMySocketClientActor::UpdatePoliceAnimInstanceProperties(UAnimInstance* Ani
         BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsShooting);
     }
 }
-*/
+
 /*
 void AMySocketClientActor::SpawnPoliceCharacter(const FPoliceCharacterState& State)
 {

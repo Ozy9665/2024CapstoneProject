@@ -60,7 +60,7 @@ public:
 	void UpdateCultistState(ACharacter* Character, const FCultistCharacterState& State, float DeltaTime);
 	//void UpdatePoliceState(ACharacter* Character, const FPoliceCharacterState& State, float DeltaTime);
 	void UpdateCultistAnimInstanceProperties(UAnimInstance* AnimInstance, const FCultistCharacterState& State);
-	//void UpdatePoliceAnimInstanceProperties(UAnimInstance* AnimInstance, const FPoliceCharacterState& State);
+	void UpdatePoliceAnimInstanceProperties(UAnimInstance* AnimInstance, const FPoliceCharacterState& State);
 	//void ProcessObjectUpdates(float DeltaTime);
 	//void SpawnImpactEffect(const FVector& ImpactLocation);
 	void CloseConnection();

@@ -27,9 +27,11 @@ protected:
 private:
 	SOCKET ClientSocket;
 	int my_ID = -1;
+	ACharacter* MyCharacter;
 	FCriticalSection ReceivedDataMutex;
 	TMap<int, ACharacter*> SpawnedCharacters;
-	FCultistCharacterState DummyState{ -1, 110, -1100,  2770, 0, 90, 0};
+	FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0};
+	FPoliceCharacterState PoliceDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
 	TMap<int, FCultistCharacterState> ReceivedCultistStates;
 	TMap<int, FPoliceCharacterState> ReceivedPoliceStates;
 	TMap<int32, AReplicatedPhysicsBlock*> SyncedBlocks;
@@ -55,8 +57,9 @@ public:
 	void ProcessConnection(char* Buffer, int32 BytesReceived);
 	void ProcessDisconnection(char* Buffer, int32 BytesReceived);
 	void SpawnCultistCharacter(const char* Buffer);
+	void SpawnPoliceCharacter(const char* Buffer);
 	void SendPlayerData();
-	FCultistCharacterState GetCharacterState(ACharacter* PlayerCharacter);
+	FCultistCharacterState GetCharacterState();
 	void ProcessCharacterUpdates();
 	void UpdateCultistState(ACharacter* Character, const FCultistCharacterState& State);
 	void UpdateCultistAnimInstanceProperties(UAnimInstance* AnimInstance, const FCultistCharacterState& State);

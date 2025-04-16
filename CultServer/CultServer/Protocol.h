@@ -66,7 +66,7 @@ struct FPoliceCharacterState
 
 struct FCultistCharacterState
 {
-	int playerID;
+	int PlayerID;
 	// À§Ä¡
 	float PositionX;
 	float PositionY;
@@ -132,6 +132,8 @@ public:
 	void do_send(char header, int id, char* mess);
 
 	void do_send_cultist(int header, const void* data, size_t size);
+
+	void do_send_police(int header, const void* data, size_t size);
 
 	void do_send_connection(char header, int new_player_id, int role);
 

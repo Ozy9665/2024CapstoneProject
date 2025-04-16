@@ -64,7 +64,7 @@ void AMySocketPoliceActor::SetClientSocket(SOCKET InSocket)
 
         PacketData[0] = connectionHeader;
         PacketData[1] = packet_size;
-        PacketData[2] = 0;
+        PacketData[2] = 1;
 
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
         if (BytesSent == SOCKET_ERROR)
@@ -165,7 +165,7 @@ void AMySocketPoliceActor::ProcessPlayerData(char* Buffer, int32 BytesReceived)
 }
 
 void AMySocketPoliceActor::ProcessConnection(char* Buffer, int32 BytesReceived) {
-    if (BytesReceived < 3)
+    if (BytesReceived < 4)
     {
         UE_LOG(LogTemp, Error, TEXT("Invalid connection packet received."));
         return;
@@ -173,8 +173,8 @@ void AMySocketPoliceActor::ProcessConnection(char* Buffer, int32 BytesReceived) 
 
     unsigned char packet_size = static_cast<unsigned char>(Buffer[1]);
     unsigned char connectedId = static_cast<unsigned char>(Buffer[2]);
+    unsigned char role = static_cast<unsigned char>(Buffer[3]);
 
-    // spawnType을 추가해서 cult를 추가하는지 police를 추가하는지 알아야함
     if (my_ID == -1) {
         my_ID = static_cast<int>(connectedId);
         UE_LOG(LogTemp, Warning, TEXT("Connected. My ID is: %d"), my_ID);
@@ -184,9 +184,16 @@ void AMySocketPoliceActor::ProcessConnection(char* Buffer, int32 BytesReceived) 
         BufferCopy.SetNum(BytesReceived);
         memcpy(BufferCopy.GetData(), Buffer, BytesReceived);
 
-        AsyncTask(ENamedThreads::GameThread, [this, BufferCopy]() mutable
+        AsyncTask(ENamedThreads::GameThread, [this, BufferCopy, role]() mutable
             {
-                this->SpawnCultistCharacter(BufferCopy.GetData());
+                if (role == 0) // Cultist
+                {
+                    this->SpawnCultistCharacter(BufferCopy.GetData());
+                }
+                else if (role == 1) // Police
+                {
+                    // this->SpawnPoliceCharacter(BufferCopy.GetData());
+                }
             });
     }
 }
@@ -214,7 +221,6 @@ void AMySocketPoliceActor::SendPlayerData()
     // 데이터 보내기
     if (ClientSocket != INVALID_SOCKET)
     {
-
         FPoliceCharacterState CharacterState = GetCharacterState();
 
         auto packet_size = 3 + sizeof(FPoliceCharacterState);
@@ -222,7 +228,7 @@ void AMySocketPoliceActor::SendPlayerData()
         TArray<uint8> PacketData;
         PacketData.SetNumUninitialized(packet_size);
 
-        PacketData[0] = cultistHeader;
+        PacketData[0] = policeHeader;
         PacketData[1] = packet_size;
         PacketData[2] = my_ID;
         memcpy(PacketData.GetData() + 3, &CharacterState, sizeof(FPoliceCharacterState));
@@ -231,19 +237,18 @@ void AMySocketPoliceActor::SendPlayerData()
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
-            
         }
-        else
-        {
-            CloseConnection();
-        }
+    }
+    else
+    {
+        CloseConnection();
     }
 }
 
 FPoliceCharacterState AMySocketPoliceActor::GetCharacterState()
 {
     FPoliceCharacterState State;
-    State.PlayerID = -1;
+    State.PlayerID = my_ID;
 
     // 위치 및 회전 설정
     State.PositionX = MyCharacter->GetActorLocation().X;
@@ -304,14 +309,14 @@ void AMySocketPoliceActor::SpawnCultistCharacter(const char* Buffer)
     {
         ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
             BP_ClientCharacter,
-            FVector(DummyState.PositionX, DummyState.PositionY, DummyState.PositionZ),
-            FRotator(DummyState.RotationPitch, DummyState.RotationYaw, DummyState.RotationRoll),
+            FVector(CultistDummyState.PositionX, CultistDummyState.PositionY, CultistDummyState.PositionZ),
+            FRotator(CultistDummyState.RotationPitch, CultistDummyState.RotationYaw, CultistDummyState.RotationRoll),
             SpawnParams
         );
         if (NewCharacter)
         {
             SpawnedCharacters.Add(PlayerID, NewCharacter);
-            ReceivedCultistStates.Add(PlayerID, DummyState);
+            ReceivedCultistStates.Add(PlayerID, CultistDummyState);
             UE_LOG(LogTemp, Log, TEXT("Spawned new character for PlayerID=%d"), PlayerID);
         }
         else
@@ -447,6 +452,7 @@ void AMySocketPoliceActor::SafeDestroyCharacter(int PlayerID)
 void AMySocketPoliceActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
+    SendPlayerData();
+    // ProcessCharacterUpdates();
 }
 

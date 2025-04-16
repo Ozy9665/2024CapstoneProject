@@ -135,7 +135,7 @@ void AMyNetworkManagerActor::CheckAndSpawnActor()
             if (CultistActor)
             {
                 CultistActor->SetClientSocket(ConnectedSocket);
-                UE_LOG(LogTemp, Error, TEXT("Client Actor Spawned & Socket Passed."));
+                UE_LOG(LogTemp, Error, TEXT("Cultist Actor Spawned & Socket Passed."));
             }
         }
         else if (MyGI->bIsPolice)
@@ -187,7 +187,7 @@ void AMyNetworkManagerActor::CheckAndSpawnActor()
             if (PoliceActor)
             {
                 PoliceActor->SetClientSocket(ConnectedSocket);
-                UE_LOG(LogTemp, Error, TEXT("Client Actor Spawned & Socket Passed."));
+                UE_LOG(LogTemp, Error, TEXT("Police Actor Spawned & Socket Passed."));
             }
         }
     }
