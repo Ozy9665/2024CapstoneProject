@@ -6,6 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "Camera/CameraComponent.h"
 #include"Components/BoxComponent.h"
+#include "Components/CapsuleComponent.h"
 #include"Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -133,11 +134,14 @@ void APoliceCharacter::BeginPlay()	// 초기화
 			CrosshairWidget->SetVisibility(ESlateVisibility::Hidden);
 		}
 	}
+
+
 }
 
 void APoliceCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
 
 	if (bIsAiming)
 	{
@@ -387,7 +391,42 @@ void APoliceCharacter::OnAttackHit(AActor* HitActor)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("OnAttackHit: %s"), *Cultist->GetName());
 
-			Cultist->TakeDamage(AttackDamage);
+			if (bIsAttacking)
+			{
+
+				// 넉백
+				FVector Direction = (Cultist->GetActorLocation() - GetActorLocation()).GetSafeNormal();
+				float Distance = FVector::Dist(GetActorLocation(), Cultist->GetActorLocation());
+				// 거리에 반비례
+				float MaxDistance = 200.0f;
+				float MinPush = 300.0f;	// 최대 거리 히트 시 넉백속력
+				float MaxPush = 800.0f;
+
+				float Alpha = 1.0f - FMath::Clamp(Distance / MaxDistance, 0.0f, 1.0f);
+				float FinalPushStrength = FMath::Lerp(MinPush, MaxPush, Alpha);
+
+				FVector LaunchVelocity = Direction * FinalPushStrength + FVector(0.0f, 0.0f, 100.0f);
+
+				// 장애물 유무로 거리제한
+				FVector Start = Cultist->GetActorLocation();
+				FVector End = Start + Direction * FinalPushStrength;
+				// 장애물 유무판별 라인트레이스
+				FHitResult Hit;
+				FCollisionQueryParams Params;
+				Params.AddIgnoredActor(this);
+				Params.AddIgnoredActor(Cultist);
+				bool SomethingBehind = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
+				if (SomethingBehind)
+				{
+					float WallDistance = FVector::Dist(Start, Hit.ImpactPoint);
+					LaunchVelocity = Direction * WallDistance * 0.9f + FVector(0.f, 0.f, 100.f);
+				}
+				// 최종 넉백
+				Cultist->LaunchCharacter(LaunchVelocity, true, true);
+
+				// 데미지 처리
+				Cultist->TakeDamage(AttackDamage);
+			}
 		}
 	}
 
@@ -540,7 +579,6 @@ void APoliceCharacter::MoveRight(float Value)
 
 		FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 		AddMovementInput(Direction, Value);
-
 	}
 }
 

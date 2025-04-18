@@ -29,6 +29,8 @@ ACultistCharacter::ACultistCharacter()
 	// 의식 수행 작업 진행도
 	TaskRitualProgress = 0.0f;
 	TaskRitualSpeed = 20.0f;
+
+
 }
 
 void ACultistCharacter::BeginPlay()
@@ -40,6 +42,9 @@ void ACultistCharacter::BeginPlay()
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	// 회전속도
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 720.0f, 0.0f);
+	
+	// 마찰율줄이기
+	GetCharacterMovement()->GroundFriction = 0.1f; 
 
 	SpringArmComp = FindComponentByClass<USpringArmComponent>();
 	if (SpringArmComp)
@@ -259,7 +264,9 @@ void ACultistCharacter::TakeDamage(float DamageAmount)
 	GetWorld()->GetTimerManager().SetTimer(HitByAttackTH, this, &ACultistCharacter::GottaRun, 0.8f, false);
 	
 	// 잠시 이동불가
-	GetCharacterMovement()->DisableMovement();
+	GetCharacterMovement()->MaxWalkSpeed = 0.0f;
+	GetCharacterMovement()->GroundFriction = 0.1f; // 마찰율줄이기
+	GetCharacterMovement()->bOrientRotationToMovement = false;
 
 	// 데미지 처리
 	CurrentHealth -= DamageAmount;
@@ -283,7 +290,10 @@ void ACultistCharacter::GottaRun()
 	UE_LOG(LogTemp, Warning, TEXT("Cultist Gotta Run"));
 	bIsHitByAnAttack = false;
 
-	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	//GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	GetCharacterMovement()->MaxWalkSpeed = 600.0f;	// 속도 복구
+	GetCharacterMovement()->GroundFriction = 8.0f; // 마찰율 복구
+	GetCharacterMovement()->bOrientRotationToMovement = true;
 }
 
 void ACultistCharacter::Die()

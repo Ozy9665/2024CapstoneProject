@@ -118,6 +118,7 @@ public:
 	void LookUpCamera(float Value);
 	void ToggleCrouch();
 	void TurnCharacter();
+	FVector MovementInput;
 
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void OnAimPressed();
