@@ -114,6 +114,7 @@ void AMySocketCultistActor::ReceiveData()
                         ProcessCultistData(Buffer, BytesReceived);
                         break;
                     case policeHeader:
+                        ProcessPoliceData(Buffer, BytesReceived);
                         break;
                     case objectHeader:
                         //ProcessObjectData(Buffer, BytesReceived);
@@ -159,23 +160,25 @@ void AMySocketCultistActor::ProcessCultistData(char* Buffer, int32 BytesReceived
     FCultistCharacterState ReceivedState;
     memcpy(&ReceivedState, Buffer + 2, sizeof(FCultistCharacterState));
     {
-        FScopeLock Lock(&ReceivedDataMutex);
+        FScopeLock Lock(&CultistDataMutex);
         ReceivedCultistStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
     }
-    //else if (PacketType == policeHeader)
-    //{
-    //    while (Offset + sizeof(FPoliceCharacterState) <= BytesReceived) // 안전 체크
-    //    {
-    //        FPoliceCharacterState ReceivedState;
-    //        memcpy(&ReceivedState, Buffer + Offset, sizeof(FPoliceCharacterState));
+}
 
-    //        {
-    //            FScopeLock Lock(&ReceivedDataMutex);
-    //            ReceivedPoliceStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
-    //        }
-    //        Offset += sizeof(FPoliceCharacterState);
-    //    }
-    //}
+void AMySocketCultistActor::ProcessPoliceData(char* Buffer, int32 BytesReceived)
+{
+    if (BytesReceived < 2 + sizeof(FPoliceCharacterState))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Invalid Police Data Packet. BytesReceived: %d"), BytesReceived);
+        return;
+    }
+
+    FPoliceCharacterState ReceivedState;
+    memcpy(&ReceivedState, Buffer + 2, sizeof(FPoliceCharacterState));
+    {
+        FScopeLock Lock(&PoliceDataMutex);
+        ReceivedPoliceStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
+    }
 }
 
 void AMySocketCultistActor::ProcessConnection(char* Buffer, int32 BytesReceived) {
@@ -297,30 +300,33 @@ FCultistCharacterState AMySocketCultistActor::GetCharacterState()
 
 void AMySocketCultistActor::ProcessCharacterUpdates()
 {
-    FScopeLock Lock(&ReceivedDataMutex);
-
-    for (auto& Pair : ReceivedCultistStates)
     {
-        const FCultistCharacterState& State = Pair.Value;
-
-        if (ACharacter* FoundChar = SpawnedCharacters.FindRef(Pair.Value.PlayerID))
+        FScopeLock Lock(&CultistDataMutex);
+        for (auto& Pair : ReceivedCultistStates)
         {
-            UpdateCultistState(FoundChar, State);
-        }
-        else {
-            UE_LOG(LogTemp, Warning, TEXT("No PlayerID %d"), Pair.Value.PlayerID);
+            const FCultistCharacterState& State = Pair.Value;
+
+            if (ACharacter* FoundChar = SpawnedCharacters.FindRef(Pair.Value.PlayerID))
+            {
+                UpdateCultistState(FoundChar, State);
+            }
+            else {
+                UE_LOG(LogTemp, Warning, TEXT("No PlayerID %d"), Pair.Value.PlayerID);
+            }
         }
     }
-
-    for (auto& Pair : ReceivedPoliceStates)
     {
-        const FPoliceCharacterState& PoliceState = Pair.Value;
-
-        if (ACharacter* FoundChar = SpawnedCharacters.FindRef(Pair.Value.PlayerID))
+        FScopeLock Lock(&PoliceDataMutex);
+        for (auto& Pair : ReceivedPoliceStates)
         {
-            if (APoliceCharacter* PoliceChar = Cast<APoliceCharacter>(FoundChar))
+            const FPoliceCharacterState& PoliceState = Pair.Value;
+
+            if (ACharacter* FoundChar = SpawnedCharacters.FindRef(Pair.Value.PlayerID))
             {
-                // UpdatePoliceState(PoliceChar, PoliceState);
+                if (APoliceCharacter* PoliceChar = Cast<APoliceCharacter>(FoundChar))
+                {
+                    UpdatePoliceState(PoliceChar, PoliceState);
+                }
             }
         }
     }
@@ -340,10 +346,6 @@ void AMySocketCultistActor::UpdateCultistState(ACharacter* Character, const FCul
     }
 
     FVector NewLocation = FMath::VInterpTo(CurrentLocation, TargetLocation, DeltaTime, InterpSpeed);
-    UE_LOG(LogTemp, Warning, TEXT("PlayerID %d - From (%f, %f, %f) To (%f, %f, %f)"),
-        State.PlayerID,
-        CurrentLocation.X, CurrentLocation.Y, CurrentLocation.Z,
-        TargetLocation.X, TargetLocation.Y, TargetLocation.Z);
     Character->SetActorLocation(NewLocation);
     Character->SetActorRotation(FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll));
 
@@ -427,6 +429,288 @@ void AMySocketCultistActor::SpawnCultistCharacter(const char* Buffer)
         {
             UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), PlayerID);
         }
+    }
+}
+
+void AMySocketCultistActor::UpdatePoliceState(ACharacter* Character, const FPoliceCharacterState& State)
+{
+    float InterpSpeed = 30.0f; // 보간 속도
+    const float DeltaTime = GetWorld()->GetDeltaSeconds();
+
+    FVector CurrentLocation = Character->GetActorLocation();
+    FVector TargetLocation(State.PositionX, State.PositionY, State.PositionZ);
+
+    if (State.bIsCrouching)
+    {
+        TargetLocation.Z += 50.0f;
+    }
+
+    FVector NewLocation = FMath::VInterpTo(CurrentLocation, TargetLocation, DeltaTime, InterpSpeed);
+    Character->SetActorLocation(NewLocation);
+    Character->SetActorRotation(FRotator(State.RotationPitch, State.RotationYaw, State.RotationRoll));
+
+    // 무기 상태 업데이트
+    APoliceCharacter* PoliceChar = Cast<APoliceCharacter>(Character);
+    if (PoliceChar)
+    {
+        PoliceChar->CurrentWeapon = State.CurrentWeapon; // 네트워크에서 받은 무기 타입으로 업데이트
+        PoliceChar->UpdateWeaponVisibility();
+    }
+
+    // 애니메이션 상태 업데이트
+    if (USkeletalMeshComponent* Mesh = Character->GetMesh())
+    {
+        UAnimInstance* AnimInstance = Mesh->GetAnimInstance();
+        if (AnimInstance)
+        {
+            UpdatePoliceAnimInstanceProperties(AnimInstance, State);
+        }
+    }
+}
+
+void AMySocketCultistActor::UpdatePoliceAnimInstanceProperties(UAnimInstance* AnimInstance, const FPoliceCharacterState& State)
+{
+    // Velocity 업데이트
+    FProperty* VelocityProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Velocity"));
+    if (VelocityProperty && VelocityProperty->IsA<FStructProperty>())
+    {
+        FVector Velocity(State.VelocityX, State.VelocityY, State.VelocityZ);
+        FStructProperty* StructProp = CastFieldChecked<FStructProperty>(VelocityProperty);
+        void* StructContainer = StructProp->ContainerPtrToValuePtr<void>(AnimInstance);
+        if (StructContainer)
+        {
+            FMemory::Memcpy(StructContainer, &Velocity, sizeof(FVector));
+        }
+    }
+
+    // Speed 업데이트
+    {
+        FProperty* SpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Speed"));
+        if (SpeedProperty && SpeedProperty->IsA<FDoubleProperty>())
+        {
+            FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(SpeedProperty);
+            DoubleProp->SetPropertyValue_InContainer(AnimInstance, State.Speed);
+        }
+    }
+
+    // IsCrouching 업데이트
+    FProperty* IsCrouchingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Crouch"));
+    if (IsCrouchingProperty && IsCrouchingProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsCrouchingProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsCrouching);
+    }
+
+    // ABP_IsAiming 업데이트
+    FProperty* ABP_IsAimingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsAiming"));
+    if (ABP_IsAimingProperty && ABP_IsAimingProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ABP_IsAimingProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsAiming);
+    }
+
+    // IsAttacking 업데이트
+    FProperty* IsAttackingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("IsAttacking"));
+    if (IsAttackingProperty && IsAttackingProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsAttackingProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsAttacking);
+    }
+
+    // WeaponType 확인
+    if (State.CurrentWeapon == EWeaponType::Baton)
+    {
+        // IsBaton = true, 나머지 = false
+        {
+            FProperty* IsBatonProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsBaton"));
+            if (IsBatonProp && IsBatonProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsBatonProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
+            }
+        }
+        {
+            FProperty* IsPistolProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsPistol"));
+            if (IsPistolProp && IsPistolProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsPistolProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsTaserProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsTaser"));
+            if (IsTaserProp && IsTaserProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTaserProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+    }
+    else if (State.CurrentWeapon == EWeaponType::Pistol)
+    {
+        // IsPistol = true, 나머지 = false
+        {
+            FProperty* IsBatonProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsBaton"));
+            if (IsBatonProp && IsBatonProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsBatonProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsPistolProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsPistol"));
+            if (IsPistolProp && IsPistolProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsPistolProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
+            }
+        }
+        {
+            FProperty* IsTaserProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsTaser"));
+            if (IsTaserProp && IsTaserProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTaserProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+    }
+    else if (State.CurrentWeapon == EWeaponType::Taser)
+    {
+        // IsTaser = true, 나머지 = false
+        {
+            FProperty* IsBatonProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsBaton"));
+            if (IsBatonProp && IsBatonProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsBatonProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsPistolProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsPistol"));
+            if (IsPistolProp && IsPistolProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsPistolProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsTaserProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsTaser"));
+            if (IsTaserProp && IsTaserProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTaserProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
+            }
+        }
+    }
+
+    // ABP_IsPakour 업데이트
+    FProperty* ABP_IsPakourProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsPakour"));
+    if (ABP_IsPakourProperty && ABP_IsPakourProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ABP_IsPakourProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsPakour);
+    }
+
+    // ABP_IsNearToPakour 업데이트
+    FProperty* ABP_IsNearToPakourProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsNearToPakour"));
+    if (ABP_IsNearToPakourProperty && ABP_IsNearToPakourProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ABP_IsNearToPakourProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsNearEnoughToPakour);
+    }
+
+    // EVaultingType 업데이트
+    if (State.CurrentVaultType == EVaultingType::OneHandVault)
+    {
+        // IsOneHand = true, 나머지 = false
+        {
+            FProperty* IsOneHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsOneHand"));
+            if (IsOneHandProp && IsOneHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsOneHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
+            }
+        }
+        {
+            FProperty* IsTwoHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsTwoHand"));
+            if (IsTwoHandProp && IsTwoHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTwoHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsFlipProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsFlip"));
+            if (IsFlipProp && IsFlipProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFlipProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+    }
+    else if (State.CurrentVaultType == EVaultingType::TwoHandVault)
+    {
+        // IsTwoHand = true, 나머지 = false
+        {
+            FProperty* IsOneHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsOneHand"));
+            if (IsOneHandProp && IsOneHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsOneHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsTwoHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsTwoHand"));
+            if (IsTwoHandProp && IsTwoHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTwoHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
+            }
+        }
+        {
+            FProperty* IsFlipProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsFlip"));
+            if (IsFlipProp && IsFlipProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFlipProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+    }
+    else if (State.CurrentVaultType == EVaultingType::FrontFlip)
+    {
+        // IsFlip = true, 나머지 = false
+        {
+            FProperty* IsOneHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsOneHand"));
+            if (IsOneHandProp && IsOneHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsOneHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsTwoHandProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsTwoHand"));
+            if (IsTwoHandProp && IsTwoHandProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsTwoHandProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, false);
+            }
+        }
+        {
+            FProperty* IsFlipProp = AnimInstance->GetClass()->FindPropertyByName(FName("IsFlip"));
+            if (IsFlipProp && IsFlipProp->IsA<FBoolProperty>())
+            {
+                FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsFlipProp);
+                BoolProp->SetPropertyValue_InContainer(AnimInstance, true);
+            }
+        }
+    }
+
+    // bIsShooting 업데이트
+    FProperty* IsShootingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsShooting"));
+    if (IsShootingProperty && IsShootingProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsShootingProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsShooting);
     }
 }
 

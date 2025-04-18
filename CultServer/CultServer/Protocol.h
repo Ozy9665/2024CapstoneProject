@@ -20,14 +20,14 @@ void CALLBACK g_send_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
 
 #pragma pack(push, 1)
 
-enum EWeaponType
+enum EWeaponType : uint8_t
 {
 	Baton,
 	Pistol,
 	Taser
 };
 
-enum class EVaultingType
+enum class EVaultingType : uint8_t
 {
 	OneHandVault,
 	TwoHandVault,

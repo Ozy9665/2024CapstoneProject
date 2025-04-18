@@ -143,7 +143,6 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		for (auto& u : g_users) {
 			if (u.first != id) {
 				u.second.do_send_cultist(cultistHeader, &cultist_state, sizeof(FCultistCharacterState));
-
 			}
 		}
 		break;
@@ -165,7 +164,6 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		for (auto& u : g_users) {
 			if (u.first != id) {
 				u.second.do_send_police(policeHeader, &police_state, sizeof(FPoliceCharacterState));
-
 			}
 		}
 		break;
