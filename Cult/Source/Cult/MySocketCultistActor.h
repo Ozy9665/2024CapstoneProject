@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include <winsock2.h>
+#include <ws2tcpip.h>
 #include <Kismet/GameplayStatics.h>
 #include "MySocketActor.h"
 #include "CultistCharacter.h"
@@ -35,17 +36,10 @@ private:
 	FPoliceCharacterState PoliceDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
 	TMap<int, FCultistCharacterState> ReceivedCultistStates;
 	TMap<int, FPoliceCharacterState> ReceivedPoliceStates;
-	TMap<int32, AReplicatedPhysicsBlock*> SyncedBlocks;
 	TMap<int32, FTransform> LastReceivedTransform;
-	static const int cultistHeader = 0x00;
-	static const int objectHeader = 0x01;
-	static const int policeHeader = 0x02;
-	static const int particleHeader = 0x03;
-	static const int connectionHeader = 0x10;
-	static const int DisconnectionHeader = 0x11;
 	TArray<FVector> ImpactLocations;
-	UPROPERTY(EditDefaultsOnly, Category = "Effects")
-	UParticleSystem* ImpactParticle;
+	UNiagaraSystem* NG_ImpactParticle;
+	UNiagaraSystem* MuzzleImpactParticle;
 
 public:	
 	// Called every frame
@@ -66,6 +60,8 @@ public:
 	void UpdatePoliceState(ACharacter* Character, const FPoliceCharacterState& State);
 	void UpdatePoliceAnimInstanceProperties(UAnimInstance* AnimInstance, const FPoliceCharacterState& State);
 	void SpawnPoliceCharacter(const char* Buffer);
+	//void ProcessParticleData(char* Buffer, int32 BytesReceived);
+	//void SpawnImpactEffect(const FVector& ImpactLocation);
 	void CloseConnection();
 	void SafeDestroyCharacter(int PlayerID);
 };

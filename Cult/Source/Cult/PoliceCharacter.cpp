@@ -275,30 +275,14 @@ void APoliceCharacter::ShootPistol()
 	FVector TraceEnd = TraceStart + (CameraRotation.Vector() * 10000.0f);	// 사거리
 
 	// 공통
-	FHitResult HitResult;
 	FCollisionQueryParams QueryParams;
 	QueryParams.AddIgnoredActor(this);
 
 	// 쏘아주기	( 방법에 따라 Start or TraceStart / End or TraceEnd )
-	bHit = GetWorld()->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_Visibility, QueryParams);
+	bHit = GetWorld()->LineTraceSingleByChannel(ParticleResult, TraceStart, TraceEnd, ECC_Visibility, QueryParams);
 	if (bHit)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Particle Effect!"));
-		ImpactLoc = HitResult.ImpactPoint;
-		//SpawnImpactEffect(HitResult.ImpactPoint);
-
-		// 피격위치에 Niagara 파티클
-		if (NG_ImpactParticle)
-		{
-			FRotator ImpactRotation = HitResult.ImpactNormal.Rotation();
-			UNiagaraFunctionLibrary::SpawnSystemAtLocation(
-				GetWorld(), NG_ImpactParticle,
-				HitResult.ImpactPoint,
-				ImpactRotation,
-				FVector(1.0f), true, true,
-				ENCPoolMethod::None, true
-			);
-		}
 
 		// 총구에 나이아가라 이펙트
 		if (MuzzleImpactParticle)
@@ -311,7 +295,7 @@ void APoliceCharacter::ShootPistol()
 		}
 
 		// Cultist확인하고 TakeDamage호출
-		AActor* HitActor = HitResult.GetActor();
+		AActor* HitActor = ParticleResult.GetActor();
 		if (HitActor)
 		{
 			UE_LOG(LogTemp, Warning, TEXT("HitActor: %s"), *HitActor->GetName());

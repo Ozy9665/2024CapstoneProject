@@ -2,11 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "GameFramework/SpringArmComponent.h"
-#include "Containers/Queue.h"
-#include "ReplicatedPhysicsBlock.h"
 #include "PoliceCharacter.h"
-#include <winsock2.h>
 #include "MySocketActor.generated.h"
 
 #pragma pack(push, 1)
@@ -82,54 +78,15 @@ public:
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
-	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-
-private:
-	SOCKET ServerSocket;
-	APoliceCharacter* ServerCharacter;
-	TQueue<FCultistCharacterState> ReceivedDataQueue;
-	TArray<SOCKET> ClientSockets;
-	TMap<SOCKET, ACharacter*> ClientCharacters;
-	TMap<SOCKET, FCultistCharacterState> ClientStates;
-	TMap<int32, AReplicatedPhysicsBlock*> BlockMap;
-	TMap<int32, FTransform> BlockTransforms;
-	TArray<FVector> ImpactLocations;
-	FCriticalSection ClientSocketsMutex;
-	bool bIsRunning = false;
-	const int cultistHeader = 0x00;
-	const int objectHeader = 0x01;
-	const int policeHeader = 0x02;
-	const int particleHeader = 0x03;
-	const int connectionHeader = 0x10;
-	const int DisconnectionHeader = 0x11;
-	UPROPERTY(EditDefaultsOnly, Category = "Effects")
-	UParticleSystem* ImpactParticle;
 
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
-
-	bool InitializeServer(int32 Port);
-	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);
-	void AcceptClientAsync();
-	void InitializeBlocks();
-	void SendCultistData(SOCKET TargetSocket);
-	void SendPoliceData(SOCKET TargetSocket);
-	void SendObjectData(int32 BlockID, FTransform NewTransform);
-	void SendParticleData(SOCKET TargetSocket, FVector ImpactLoc);
-	FPoliceCharacterState GetServerCharacterState();
-	void ReceiveData(SOCKET ClientSocket);
-	void ProcessPlayerData(SOCKET ClientSocket, char* Buffer, int32 BytesReceived);
-	void SpawnClientCharacter(SOCKET ClientSocket, const FCultistCharacterState& State);
-	void SpawnOrUpdateClientCharacter(SOCKET ClientSocket, const FCultistCharacterState& State);
-	void UpdateCharacterState(ACharacter* Character, const FCultistCharacterState& State);
-	void UpdateAnimInstanceProperties(UAnimInstance* AnimInstance, const FCultistCharacterState& State);
-	void CheckImpactEffect();
-	void SpawnImpactEffect(const FVector& ImpactLocation);
-	void CloseClientSocket(SOCKET ClientSocket);
-	void CloseAllClientSockets();
-	void CloseServerSocket();
-
-	UPROPERTY()
-	bool bIsServer = true;
 };
+
+constexpr int cultistHeader = 0x00;
+constexpr int objectHeader = 0x01;
+constexpr int policeHeader = 0x02;
+constexpr int particleHeader = 0x03;
+constexpr int connectionHeader = 0x10;
+constexpr int DisconnectionHeader = 0x11;

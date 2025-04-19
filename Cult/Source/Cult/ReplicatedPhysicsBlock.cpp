@@ -26,19 +26,4 @@ void AReplicatedPhysicsBlock::SetBlockID(int32 NewBlockID) {
 void AReplicatedPhysicsBlock::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
-
-    // `GetOwner()`가 `AMySocketActor`(서버)인지 확인
-    AMySocketActor* ServerActor = Cast<AMySocketActor>(GetOwner());
-
-    if (ServerActor && ServerActor->bIsServer) // 서버에서만 실행
-    {
-        FTransform CurrentTransform = GetActorTransform();
-        if ((!CurrentTransform.GetLocation().Equals(LastSentLocation, 0.1f) ||
-            !CurrentTransform.GetRotation().Rotator().Equals(LastSentRotation, 0.1f)) && BlockID != -1)
-        {
-            LastSentLocation = CurrentTransform.GetLocation();
-            LastSentRotation = CurrentTransform.GetRotation().Rotator();
-            ServerActor->SendObjectData(BlockID, CurrentTransform);
-        }
-    }
 }

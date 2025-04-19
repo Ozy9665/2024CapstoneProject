@@ -170,7 +170,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Effects")
 	UParticleSystemComponent* ImpactParticleComp;
 	bool bHit;
-	FVector ImpactLoc;
+	FHitResult ParticleResult;
 
 	UFUNCTION(BlueprintCallable, Category = "Movement")
 	void VaultStart();

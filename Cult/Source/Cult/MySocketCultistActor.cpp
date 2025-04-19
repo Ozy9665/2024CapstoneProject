@@ -1,9 +1,8 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
 #include "MySocketCultistActor.h"
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
-
+#pragma comment(lib, "ws2_32.lib")
 
 // Sets default values
 AMySocketCultistActor::AMySocketCultistActor()
@@ -12,17 +11,29 @@ AMySocketCultistActor::AMySocketCultistActor()
 	PrimaryActorTick.bCanEverTick = true;
 
    // 파티클 코드
-   /* ConstructorHelpers::FObjectFinder<UParticleSystem> ParticleAsset(TEXT("ParticleSystem'/Engine/Tutorial/SubEditors/TutorialAssets/TutorialParticleSystem.TutorialParticleSystem'"));
-    if (ParticleAsset.Succeeded())
+    ConstructorHelpers::FObjectFinder<UNiagaraSystem> NGParticleAsset(TEXT("/Game/MixedVFX/Particles/Explosions/NS_ExplosionMidAirSmall.NS_ExplosionMidAirSmall"));
+    if (NGParticleAsset.Succeeded())
     {
-        ImpactParticle = ParticleAsset.Object;
-        UE_LOG(LogTemp, Log, TEXT("Successfully loaded ImpactParticle from code!"));
+        NG_ImpactParticle = NGParticleAsset.Object;
+        UE_LOG(LogTemp, Log, TEXT("Successfully loaded NG_ImpactParticle!"));
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to load ImpactParticle in code! Check path."));
-        ImpactParticle = nullptr;
-    }*/
+        UE_LOG(LogTemp, Warning, TEXT("Failed to load NG_ImpactParticle! Check path."));
+        NG_ImpactParticle = nullptr;
+    }
+
+    ConstructorHelpers::FObjectFinder<UNiagaraSystem> MuzzleAsset(TEXT("/Game/MixedVFX/Particles/Projectiles/Hits/NS_CursedArrow_Hit.NS_CursedArrow_Hit"));
+    if (MuzzleAsset.Succeeded())
+    {
+        MuzzleImpactParticle = MuzzleAsset.Object;
+        UE_LOG(LogTemp, Log, TEXT("Successfully loaded MuzzleImpactParticle!"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to load MuzzleImpactParticle! Check path."));
+        MuzzleImpactParticle = nullptr;
+    }
 }
 
 // Called when the game starts or when spawned
@@ -391,6 +402,20 @@ void AMySocketCultistActor::UpdateCultistAnimInstanceProperties(UAnimInstance* A
     {
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsCrouchingProperty);
         BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsCrouching);
+    }
+
+    FProperty* IsABP_IsPerformingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsPerforming"));
+    if (IsABP_IsPerformingProperty && IsABP_IsPerformingProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsPerformingProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsPerformingRitual);
+    }
+
+    FProperty* IsABP_IsHitByAnAttackProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsHitByAnAttack"));
+    if (IsABP_IsHitByAnAttackProperty && IsABP_IsHitByAnAttackProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsHitByAnAttackProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsHitByAnAttack);
     }
 }
 
@@ -798,6 +823,43 @@ void AMySocketCultistActor::SafeDestroyCharacter(int PlayerID)
         });
 }
 
+/*
+void AMySocketClientActor::ProcessParticleData(char* Buffer, int32 BytesReceived) {
+    int32 Offset = sizeof(uint8);
+
+    if (BytesReceived < Offset + sizeof(FVector)) {
+        UE_LOG(LogTemp, Error, TEXT("Invalid object data packet received."));
+        return;
+    }
+
+    FVector NewVector;
+    memcpy(&NewVector, Buffer + Offset, sizeof(FVector));
+    ImpactLocations.Add(NewVector);
+    UE_LOG(LogTemp, Log, TEXT("Added ImpactLocation: %s"), *NewVector.ToString());
+    AsyncTask(ENamedThreads::GameThread, [this, NewVector]() {
+        SpawnImpactEffect(NewVector);
+        });
+}
+*/
+/*
+void AMySocketClientActor::SpawnImpactEffect(const FVector& ImpactLocation)
+{
+    if (ImpactParticle)
+    {
+        UParticleSystemComponent* PSC = UGameplayStatics::SpawnEmitterAtLocation(
+            GetWorld(), ImpactParticle, ImpactLocation, FRotator::ZeroRotator, true);
+        if (PSC)
+        {
+            PSC->bAutoDestroy = true;
+            UE_LOG(LogTemp, Log, TEXT("Spawned Impact Effect at: %s"), *ImpactLocation.ToString());
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("ImpactParticle is not set."));
+    }
+}
+*/
 
 /*
 void AMySocketClientActor::InitializeBlocks()
@@ -839,24 +901,6 @@ void AMySocketClientActor::ProcessObjectData(char* Buffer, int32 BytesReceived) 
 }
 */
 /*
-void AMySocketClientActor::ProcessParticleData(char* Buffer, int32 BytesReceived) {
-    int32 Offset = sizeof(uint8);
-
-    if (BytesReceived < Offset + sizeof(FVector)) {
-        UE_LOG(LogTemp, Error, TEXT("Invalid object data packet received."));
-        return;
-    }
-
-    FVector NewVector;
-    memcpy(&NewVector, Buffer + Offset, sizeof(FVector));
-    ImpactLocations.Add(NewVector);
-    UE_LOG(LogTemp, Log, TEXT("Added ImpactLocation: %s"), *NewVector.ToString());
-    AsyncTask(ENamedThreads::GameThread, [this, NewVector]() {
-        SpawnImpactEffect(NewVector);
-        });
-}
-*/
-/*
 void AMySocketClientActor::ProcessObjectUpdates(float DeltaTime)
 {
     for (auto& Pair : LastReceivedTransform)
@@ -875,25 +919,6 @@ void AMySocketClientActor::ProcessObjectUpdates(float DeltaTime)
             Block->SetActorLocation(InterpolatedLocation);
             Block->SetActorRotation(InterpolatedRotation);
         }
-    }
-}
-*/
-/*
-void AMySocketClientActor::SpawnImpactEffect(const FVector& ImpactLocation)
-{
-    if (ImpactParticle)
-    {
-        UParticleSystemComponent* PSC = UGameplayStatics::SpawnEmitterAtLocation(
-            GetWorld(), ImpactParticle, ImpactLocation, FRotator::ZeroRotator, true);
-        if (PSC)
-        {
-            PSC->bAutoDestroy = true;
-            UE_LOG(LogTemp, Log, TEXT("Spawned Impact Effect at: %s"), *ImpactLocation.ToString());
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("ImpactParticle is not set."));
     }
 }
 */

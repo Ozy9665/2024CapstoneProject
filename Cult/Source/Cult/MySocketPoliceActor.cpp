@@ -2,6 +2,10 @@
 
 
 #include "MySocketPoliceActor.h"
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+#pragma comment(lib, "ws2_32.lib")
 
 // Sets default values
 AMySocketPoliceActor::AMySocketPoliceActor()
@@ -9,18 +13,30 @@ AMySocketPoliceActor::AMySocketPoliceActor()
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
-    // 파티클 코드
-    /* ConstructorHelpers::FObjectFinder<UParticleSystem> ParticleAsset(TEXT("ParticleSystem'/Engine/Tutorial/SubEditors/TutorialAssets/TutorialParticleSystem.TutorialParticleSystem'"));
-    if (ParticleAsset.Succeeded())
+   // 파티클 코드
+    ConstructorHelpers::FObjectFinder<UNiagaraSystem> NGParticleAsset(TEXT("/Game/MixedVFX/Particles/Explosions/NS_ExplosionMidAirSmall.NS_ExplosionMidAirSmall"));
+    if (NGParticleAsset.Succeeded())
     {
-        ImpactParticle = ParticleAsset.Object;
-        UE_LOG(LogTemp, Log, TEXT("Successfully loaded ImpactParticle from code!"));
+        NG_ImpactParticle = NGParticleAsset.Object;
+        UE_LOG(LogTemp, Log, TEXT("Successfully loaded NG_ImpactParticle!"));
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to load ImpactParticle in code! Check path."));
-        ImpactParticle = nullptr;
-    }*/
+        UE_LOG(LogTemp, Warning, TEXT("Failed to load NG_ImpactParticle! Check path."));
+        NG_ImpactParticle = nullptr;
+    }
+
+    ConstructorHelpers::FObjectFinder<UNiagaraSystem> MuzzleAsset(TEXT("/Game/MixedVFX/Particles/Projectiles/Hits/NS_CursedArrow_Hit.NS_CursedArrow_Hit"));
+    if (MuzzleAsset.Succeeded())
+    {
+        MuzzleImpactParticle = MuzzleAsset.Object;
+        UE_LOG(LogTemp, Log, TEXT("Successfully loaded MuzzleImpactParticle!"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Failed to load MuzzleImpactParticle! Check path."));
+        MuzzleImpactParticle = nullptr;
+    }
 }
 
 // Called when the game starts or when spawned
@@ -326,24 +342,24 @@ void AMySocketPoliceActor::SpawnCultistCharacter(const char* Buffer)
     }
 }
 
-void AMySocketPoliceActor::ProcessCharacterUpdates(float DeltaTime)
+void AMySocketPoliceActor::ProcessCharacterUpdates()
 {
     FScopeLock Lock(&ReceivedDataMutex);
-
     for (auto& Pair : ReceivedCultistStates)
     {
         const FCultistCharacterState& State = Pair.Value;
 
         if (ACharacter* FoundChar = SpawnedCharacters.FindRef(Pair.Value.PlayerID))
         {
-            UpdateCultistState(FoundChar, State, DeltaTime);
+            UpdateCultistState(FoundChar, State);
         }
     }
 }
 
-void AMySocketPoliceActor::UpdateCultistState(ACharacter* Character, const FCultistCharacterState& State, float DeltaTime)
+void AMySocketPoliceActor::UpdateCultistState(ACharacter* Character, const FCultistCharacterState& State)
 {
     float InterpSpeed = 30.0f; // 보간 속도
+    const float DeltaTime = GetWorld()->GetDeltaSeconds();
 
     FVector CurrentLocation = Character->GetActorLocation();
     FVector TargetLocation(State.PositionX, State.PositionY, State.PositionZ);
@@ -400,7 +416,83 @@ void AMySocketPoliceActor::UpdateCultistAnimInstanceProperties(UAnimInstance* An
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsCrouchingProperty);
         BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsCrouching);
     }
+
+    FProperty* IsABP_IsPerformingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsPerforming"));
+    if (IsABP_IsPerformingProperty && IsABP_IsPerformingProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsPerformingProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsPerformingRitual);
+    }
+
+    FProperty* IsABP_IsHitByAnAttackProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsHitByAnAttack"));
+    if (IsABP_IsHitByAnAttackProperty && IsABP_IsHitByAnAttackProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsHitByAnAttackProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsHitByAnAttack);
+    }
 }
+
+void AMySocketPoliceActor::CheckImpactEffect()
+{
+    if (MyCharacter->bHit) {
+        ImpactLocations.Add(MyCharacter->ParticleResult.ImpactPoint);
+        UE_LOG(LogTemp, Log, TEXT("Added ImpactLocation: %s"), *MyCharacter->ParticleResult.ImpactPoint.ToString());
+
+        SpawnImpactEffect(MyCharacter->ParticleResult);
+        MyCharacter->bHit = false;
+    }
+
+    //FScopeLock Lock(&ClientSocketsMutex);
+    //for (SOCKET ClientSocket : ClientSockets)
+    //{
+    //    if (ClientSocket != INVALID_SOCKET)
+    //    {
+    //        SendParticleData(ClientSocket, ImpactLoc);
+    //    }
+    //}
+
+}
+
+void AMySocketPoliceActor::SpawnImpactEffect(FHitResult HitResult) {
+    if (NG_ImpactParticle)
+    {
+        UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+            GetWorld(), NG_ImpactParticle,
+            HitResult.ImpactPoint,
+            HitResult.ImpactNormal.Rotation(),
+            FVector(1.0f), true, true,
+            ENCPoolMethod::None, true
+        );
+    }
+
+    // 총구에 나이아가라 이펙트
+    if (MuzzleImpactParticle)
+    {
+        UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+            GetWorld(), MuzzleImpactParticle,
+            MyCharacter->MuzzleLocation->GetComponentLocation(),
+            MyCharacter->MuzzleLocation->GetComponentRotation()
+        );
+    }
+}
+
+//void AMySocketActor::SendParticleData(SOCKET TargetSocket, FVector ImpactLoc) {
+//    int32 TotalBytes = sizeof(uint8) + sizeof(FVector);
+//    TArray<uint8> PacketData;
+//    PacketData.SetNumUninitialized(TotalBytes);
+//
+//    memcpy(PacketData.GetData(), &particleHeader, sizeof(uint8));
+//    memcpy(PacketData.GetData() + sizeof(uint8), &ImpactLoc, sizeof(FVector));
+//
+//    int BytesSent = send(TargetSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
+//
+//    // 로그 추가
+//    if (BytesSent == SOCKET_ERROR)
+//    {
+//        UE_LOG(LogTemp, Error, TEXT("SendParticleData failed with WSAGetLastError %ld during send to %d"), WSAGetLastError(), TargetSocket);
+//        CloseClientSocket(TargetSocket);
+//    }
+//}
 
 void AMySocketPoliceActor::CloseConnection() {
     if (ClientSocket != INVALID_SOCKET)
@@ -452,7 +544,16 @@ void AMySocketPoliceActor::SafeDestroyCharacter(int PlayerID)
 void AMySocketPoliceActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-    SendPlayerData();
-    // ProcessCharacterUpdates();
+
+    static float AccumulatedTime = 0.0f;
+    AccumulatedTime += DeltaTime;
+
+    if (AccumulatedTime >= 0.0166f) // 60FPS
+    {
+        AccumulatedTime = 0.0f;
+        SendPlayerData();
+        ProcessCharacterUpdates();
+        CheckImpactEffect();
+    }
 }
 

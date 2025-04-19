@@ -76,124 +76,110 @@ void AMyNetworkManagerActor::CheckAndSpawnActor()
     FString ServerIP = TEXT("127.0.0.1");  // 서버 IP 주소
     int32 ServerPort = 7777;               // 포트 번호
 
-    APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
     SOCKET ConnectedSocket = CanConnectToServer(ServerIP, ServerPort);
-    // 서버 연결 가능 여부 체크
-    if (ConnectedSocket != INVALID_SOCKET)
+    if (ConnectedSocket == INVALID_SOCKET)
     {
-        UMyGameInstance* MyGI = Cast<UMyGameInstance>(GetGameInstance());
-        if (!MyGI) {
-            UE_LOG(LogTemp, Error, TEXT("GameInstance 캐스팅 실패."));
+        UE_LOG(LogTemp, Error, TEXT("Server Is Closed."));
+        return;
+    }
+
+    APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+    if (not PC) {
+        UE_LOG(LogTemp, Log, TEXT("GetPlayerController Failed."));
+        return;
+    }
+
+    UMyGameInstance* MyGI = Cast<UMyGameInstance>(GetGameInstance());
+    if (not MyGI) {
+        UE_LOG(LogTemp, Error, TEXT("GameInstance 캐스팅 실패."));
+        return;
+    }
+
+    if (MyGI->bIsCultist) 
+    {
+        APawn* DefaultPawn = PC->GetPawn();
+        if (not DefaultPawn)
+        {
+            UE_LOG(LogTemp, Log, TEXT("Default pawn is not a Police pawn or is null."));
+        }
+
+        UClass* CultistClass = LoadClass<APawn>(nullptr,
+            TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A.BP_Cultist_A_C"));
+        if (not CultistClass)
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to load BP_Cultist_A class! Check path."));
+        }
+
+        FActorSpawnParameters SpawnParams;
+        SpawnParams.Owner = this;
+        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        FVector SpawnLocation = DefaultPawn->GetActorLocation();
+        FRotator SpawnRotation = DefaultPawn->GetActorRotation();
+        APawn* CultistPawn = GetWorld()->SpawnActor<APawn>(CultistClass, SpawnLocation, SpawnRotation, SpawnParams);
+        if (CultistPawn)
+        {
+            PC->Possess(CultistPawn);
+            DefaultPawn->Destroy();
+            UE_LOG(LogTemp, Log, TEXT("Spawned Cultist pawn and possessed it, default pawn destroyed."));
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to spawn Cultist pawn."));
+        }
+
+        // 컬트 액터 스폰
+        AMySocketCultistActor* CultistActor = GetWorld()->SpawnActor<AMySocketCultistActor>(
+            AMySocketCultistActor::StaticClass(), GetActorLocation(), GetActorRotation());
+        if (CultistActor)
+        {
+            CultistActor->SetClientSocket(ConnectedSocket);
+            UE_LOG(LogTemp, Error, TEXT("Cultist Actor Spawned & Socket Passed."));
+        }
+    }
+    else if (MyGI->bIsPolice)
+    {
+        APawn* DefaultPawn = PC->GetPawn();
+        if (not DefaultPawn)
+        {
+            UE_LOG(LogTemp, Log, TEXT("Default pawn is not a Police pawn or is null."));
+        }
+
+        UClass* PoliceClass = LoadClass<APawn>(nullptr,
+            TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter.BP_PoliceCharacter_C"));
+        if (not PoliceClass)
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to load BP_Police class! Check path."));
             return;
         }
-        if (MyGI->bIsCultist) 
+
+        FActorSpawnParameters SpawnParams;
+        SpawnParams.Owner = this;
+        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        FVector SpawnLocation = DefaultPawn->GetActorLocation();
+        FRotator SpawnRotation = DefaultPawn->GetActorRotation();
+        APawn* PolicePawn = GetWorld()->SpawnActor<APawn>(PoliceClass, SpawnLocation, SpawnRotation, SpawnParams);
+        if (PolicePawn)
         {
-            if (PC)
-            {
-                APawn* DefaultPawn = PC->GetPawn();
-                if (DefaultPawn)
-                {
-                    // 클라이언트라면 Cultist 폰으로 교체
-                    UClass* CultistClass = LoadClass<APawn>(nullptr,
-                        TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A.BP_Cultist_A_C"));
-                    if (CultistClass)
-                    {
-                        FActorSpawnParameters SpawnParams;
-                        SpawnParams.Owner = this;
-                        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-                        FVector SpawnLocation = DefaultPawn->GetActorLocation();
-                        FRotator SpawnRotation = DefaultPawn->GetActorRotation();
-                        APawn* CultistPawn = GetWorld()->SpawnActor<APawn>(CultistClass, SpawnLocation, SpawnRotation, SpawnParams);
-                        if (CultistPawn)
-                        {
-                            PC->Possess(CultistPawn);
-                            DefaultPawn->Destroy();
-                            UE_LOG(LogTemp, Log, TEXT("Spawned Cultist pawn and possessed it, default pawn destroyed."));
-                        }
-                        else
-                        {
-                            UE_LOG(LogTemp, Error, TEXT("Failed to spawn Cultist pawn."));
-                        }
-                    }
-                    else
-                    {
-                        UE_LOG(LogTemp, Error, TEXT("Failed to load BP_Cultist_A class! Check path."));
-                    }
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Log, TEXT("Default pawn is not a Police pawn or is null."));
-                }
-            }
-            else
-            {
-                UE_LOG(LogTemp, Log, TEXT("GetPlayerController Failed."));
-            }
-            // 클라이언트 액터 스폰
-            AMySocketCultistActor* CultistActor = GetWorld()->SpawnActor<AMySocketCultistActor>(
-                AMySocketCultistActor::StaticClass(), GetActorLocation(), GetActorRotation());
-            if (CultistActor)
-            {
-                CultistActor->SetClientSocket(ConnectedSocket);
-                UE_LOG(LogTemp, Error, TEXT("Cultist Actor Spawned & Socket Passed."));
-            }
+            PC->Possess(PolicePawn);
+            DefaultPawn->Destroy();
+            UE_LOG(LogTemp, Log, TEXT("Spawned Police pawn and possessed it, default pawn destroyed."));
         }
-        else if (MyGI->bIsPolice)
+        else
         {
-            if (PC)
-            {
-                APawn* DefaultPawn = PC->GetPawn();
-                if (DefaultPawn)
-                {
-                    // 서버면 Police 폰으로 교체
-                    UClass* PoliceClass = LoadClass<APawn>(nullptr,
-                        TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter.BP_PoliceCharacter_C"));
-                    if (PoliceClass)
-                    {
-                        FActorSpawnParameters SpawnParams;
-                        SpawnParams.Owner = this;
-                        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-                        FVector SpawnLocation = DefaultPawn->GetActorLocation();
-                        FRotator SpawnRotation = DefaultPawn->GetActorRotation();
-                        APawn* PolicePawn = GetWorld()->SpawnActor<APawn>(PoliceClass, SpawnLocation, SpawnRotation, SpawnParams);
-                        if (PolicePawn)
-                        {
-                            PC->Possess(PolicePawn);
-                            DefaultPawn->Destroy();
-                            UE_LOG(LogTemp, Log, TEXT("Spawned Police pawn and possessed it, default pawn destroyed."));
-                        }
-                        else
-                        {
-                            UE_LOG(LogTemp, Error, TEXT("Failed to spawn Police pawn."));
-                        }
-                    }
-                    else
-                    {
-                        UE_LOG(LogTemp, Error, TEXT("Failed to load BP_Police class! Check path."));
-                    }
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Log, TEXT("Default pawn is not a Police pawn or is null."));
-                }
-            }
-            else
-            {
-                UE_LOG(LogTemp, Log, TEXT("GetPlayerController Failed."));
-            }
-            // 서버 액터 스폰
-            AMySocketPoliceActor* PoliceActor = GetWorld()->SpawnActor<AMySocketPoliceActor>(
-                AMySocketPoliceActor::StaticClass(), GetActorLocation(), GetActorRotation());
-            if (PoliceActor)
-            {
-                PoliceActor->SetClientSocket(ConnectedSocket);
-                UE_LOG(LogTemp, Error, TEXT("Police Actor Spawned & Socket Passed."));
-            }
+            UE_LOG(LogTemp, Error, TEXT("Failed to spawn Police pawn."));
         }
+
+        AMySocketPoliceActor* PoliceActor = GetWorld()->SpawnActor<AMySocketPoliceActor>(
+            AMySocketPoliceActor::StaticClass(), GetActorLocation(), GetActorRotation());
+        if (not PoliceActor)
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to spawn PoliceActor."));
+            return;
+        }
+        PoliceActor->SetClientSocket(ConnectedSocket);
+        UE_LOG(LogTemp, Error, TEXT("Cultist Actor Spawned & Socket Passed."));
     }
-    else {
-        UE_LOG(LogTemp, Error, TEXT("Server Is Closed."));
-    }
+    
     
     Destroy();
 }

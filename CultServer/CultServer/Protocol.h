@@ -6,14 +6,14 @@
 #include <unordered_map>
 #include "error.h"
 
-const short SERVER_PORT = 7777;
+constexpr short SERVER_PORT = 7777;
 
-const int cultistHeader = 0x00;
-const int objectHeader = 0x01;
-const int policeHeader = 0x02;
-const int particleHeader = 0x03;
-const int connectionHeader = 0x10;
-const int DisconnectionHeader = 0x11;
+constexpr int cultistHeader = 0x00;
+constexpr int objectHeader = 0x01;
+constexpr int policeHeader = 0x02;
+constexpr int particleHeader = 0x03;
+constexpr int connectionHeader = 0x10;
+constexpr int DisconnectionHeader = 0x11;
 
 void CALLBACK g_recv_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
 void CALLBACK g_send_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
