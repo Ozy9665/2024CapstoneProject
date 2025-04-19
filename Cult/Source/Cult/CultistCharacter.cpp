@@ -3,6 +3,7 @@
 
 #include "CultistCharacter.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/ProgressBar.h"
 #include "Components/InputComponent.h"
@@ -311,7 +312,8 @@ void ACultistCharacter::Stun()
 	GetCharacterMovement()->MaxWalkSpeed = 0.0f;
 
 	// Ragdoll 효과
-	
+	GetMesh()->SetSimulatePhysics(true);
+
 	// 일정 시간 후 깨어남
 	GetWorld()->GetTimerManager().SetTimer(ReviveTimerHandle, this, &ACultistCharacter::Revive, 10.0f, false);
 }
@@ -322,6 +324,12 @@ void ACultistCharacter::Revive()
 
 	bIsStunned = false;
 	bIsAlreadyStunned = true;
+	if (GetMesh()->IsSimulatingPhysics())
+	{
+		GetMesh()->SetSimulatePhysics(false);
+		GetMesh()->AttachToComponent(GetCapsuleComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	}
 	Health = 50.0f;
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 	GetCharacterMovement()->MaxWalkSpeed = 550.0f;
@@ -338,12 +346,16 @@ void ACultistCharacter::TakePistolDamage(float DamageAmount)
 {
 	TakeDamage(DamageAmount);
 	// 피격
+
 }
 
 void ACultistCharacter::GotHitTaser()
 {
+	// 기절중 - 무효, 피격중 - 유효
+	if (bIsStunned)return;
 	Stun();
 	// 감전
+
 }
 
 // 이동 시 중단 but 이동불가로 설정

@@ -144,7 +144,12 @@ public:
 	void EndPistolShoot();
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SwitchWeapon();
-	
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void FireTaser();
+	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void EndFireTaser();
+
+
 	void SetCoolTimeDone();
 	
 	UFUNCTION(BlueprintCallable, Category = "Combat")
@@ -169,7 +174,7 @@ public:
 	void SpawnImpactEffect(FVector ImpactLocation);
 	UPROPERTY(EditDefaultsOnly, Category = "Effects")
 	UParticleSystemComponent* ImpactParticleComp;
-	bool bHit;
+	bool bHit, bTaserHit;
 	FHitResult ParticleResult;
 
 	UFUNCTION(BlueprintCallable, Category = "Movement")

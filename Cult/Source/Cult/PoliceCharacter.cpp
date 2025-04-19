@@ -246,8 +246,10 @@ void APoliceCharacter::StartAttack()
 	case EWeaponType::Taser:
 		if (bIsAiming)
 		{
+			GetCharacterMovement()->DisableMovement();
+
 			UE_LOG(LogTemp, Warning, TEXT("Shoot Taser"));
-			ShootPistol();
+			FireTaser();
 		}
 
 		//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
@@ -257,6 +259,51 @@ void APoliceCharacter::StartAttack()
 }
 
 
+//					============테이저건==========
+void APoliceCharacter::FireTaser()
+{
+	if (bIsShooting || !bIsAiming)return;
+	bIsShooting = true;
+
+	FVector CameraLocation;
+	FRotator CameraRotation;
+	GetActorEyesViewPoint(CameraLocation, CameraRotation);
+	FVector TraceStart = CameraLocation;
+	FVector TraceEnd = TraceStart + (CameraRotation.Vector() * 1000.0f);
+
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(this);
+
+	bTaserHit = GetWorld()->LineTraceSingleByChannel(ParticleResult, TraceStart, TraceEnd, ECC_Visibility, QueryParams);
+	if (bTaserHit)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Taser Effect"));
+
+		AActor* HitActor = ParticleResult.GetActor();
+		if (HitActor)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("HitActor: %s"), *HitActor->GetName());
+
+			ACultistCharacter* Cultist = Cast<ACultistCharacter>(HitActor);
+
+			if (Cultist)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Shot Cultist"));
+				Cultist->GotHitTaser();
+			}
+		}
+	}
+}
+
+void APoliceCharacter::EndFireTaser()
+{
+	// 후에 EndPistolShoot과 다른 처리
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	bIsShooting = false;
+	bIsAttacking = false;
+}
+
+//					============사격===========
 void APoliceCharacter::ShootPistol()
 {
 	if (bIsShooting || !bIsAiming)return;
@@ -312,6 +359,7 @@ void APoliceCharacter::EndPistolShoot()
 
 }
 
+//					============근접공격============
 void APoliceCharacter::BatonAttack()
 {
 	if (!this)
