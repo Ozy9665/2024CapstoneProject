@@ -106,6 +106,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Health")
 	void GottaRun();
 
+	UFUNCTION(BlueprintCallable, Category = "Health")
+	void IntoRagdoll();
 
 	FTimerHandle RitualTimerHandle;
 

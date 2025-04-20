@@ -306,13 +306,18 @@ void ACultistCharacter::Stun()
 {
 	UE_LOG(LogTemp, Warning, TEXT("Got Stunned"));
 	bIsStunned = true;
+
 	GetCharacterMovement()->DisableMovement();
 
 	//AI 방지
 	GetCharacterMovement()->MaxWalkSpeed = 0.0f;
 
-	// Ragdoll 효과
-	GetMesh()->SetSimulatePhysics(true);
+	// 캡슐충돌x
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+
+
+	IntoRagdoll();
 
 	// 일정 시간 후 깨어남
 	GetWorld()->GetTimerManager().SetTimer(ReviveTimerHandle, this, &ACultistCharacter::Revive, 10.0f, false);
@@ -324,16 +329,51 @@ void ACultistCharacter::Revive()
 
 	bIsStunned = false;
 	bIsAlreadyStunned = true;
-	if (GetMesh()->IsSimulatingPhysics())
-	{
-		GetMesh()->SetSimulatePhysics(false);
-		GetMesh()->AttachToComponent(GetCapsuleComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-	}
+
+	// 물리시뮬Off, 충돌 복구
+	GetMesh()->SetSimulatePhysics(false);
+	GetMesh()->SetCollisionProfileName(TEXT("CharacterMesh"));
+	GetMesh()->AttachToComponent(GetCapsuleComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+	
+	// 메시-캡슐 부착
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	
+	// 메시 위치, 회전 초기화	GetActorRotation().Yaw
+	GetMesh()->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
+	GetMesh()->SetRelativeLocation(FVector(0, 0, -100));
+	// 위치복구 확인
+	UE_LOG(LogTemp, Warning, TEXT("Mesh Re;ativeLocation: %s"), *GetMesh()->GetRelativeLocation().ToString());
+
+	// 애니메이션 복구
+	GetMesh()->bPauseAnims = false;
+	GetMesh()->bNoSkeletonUpdate = false;
+	
+	// 일정 체력 남은상태로 복구
 	Health = 50.0f;
+
+	// 이동 가능한 상태로 복구
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 	GetCharacterMovement()->MaxWalkSpeed = 550.0f;
 	UE_LOG(LogTemp, Warning, TEXT("Revive."));
+}
+
+void ACultistCharacter::IntoRagdoll()
+{
+	// Ragdoll 효과
+
+	// - 물리 전환
+	GetMesh()->SetSimulatePhysics(true);	// 물리시뮬On
+	GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
+	GetMesh()->bBlendPhysics = true;
+	GetMesh()->WakeAllRigidBodies();
+	
+	// 애니메이션 pause
+	FTimerHandle PauseHandle;
+	GetWorld()->GetTimerManager().SetTimer(PauseHandle, [this]()
+		{
+			GetMesh()->bPauseAnims = true;
+			GetMesh()->bNoSkeletonUpdate = true;
+		}, 0.05f, false);
 }
 
 void ACultistCharacter::TakeMeleeDamage(float DamageAmount)
