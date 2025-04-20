@@ -56,6 +56,7 @@ public:
 	void UpdateCultistAnimInstanceProperties(UAnimInstance* AnimInstance, const FCultistCharacterState& State);
 	void CheckImpactEffect();
 	void SpawnImpactEffect(FHitResult HitResult);
+	void SendParticleData(FHitResult HitResult);
 	void CloseConnection();
 	void SafeDestroyCharacter(int PlayerID);
 };

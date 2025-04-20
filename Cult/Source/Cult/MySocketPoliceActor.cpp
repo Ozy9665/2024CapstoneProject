@@ -435,21 +435,23 @@ void AMySocketPoliceActor::UpdateCultistAnimInstanceProperties(UAnimInstance* An
 void AMySocketPoliceActor::CheckImpactEffect()
 {
     if (MyCharacter->bHit) {
-        ImpactLocations.Add(MyCharacter->ParticleResult.ImpactPoint);
+        // ImpactLocations.Add(MyCharacter->ParticleResult.ImpactPoint);
         UE_LOG(LogTemp, Log, TEXT("Added ImpactLocation: %s"), *MyCharacter->ParticleResult.ImpactPoint.ToString());
 
         SpawnImpactEffect(MyCharacter->ParticleResult);
+
+        if (ClientSocket != INVALID_SOCKET)
+        {
+            SendParticleData(MyCharacter->ParticleResult);
+        }
+        else
+        {
+            CloseConnection();
+        }
+
         MyCharacter->bHit = false;
     }
 
-    //FScopeLock Lock(&ClientSocketsMutex);
-    //for (SOCKET ClientSocket : ClientSockets)
-    //{
-    //    if (ClientSocket != INVALID_SOCKET)
-    //    {
-    //        SendParticleData(ClientSocket, ImpactLoc);
-    //    }
-    //}
 
 }
 
@@ -465,7 +467,6 @@ void AMySocketPoliceActor::SpawnImpactEffect(FHitResult HitResult) {
         );
     }
 
-    // 총구에 나이아가라 이펙트
     if (MuzzleImpactParticle)
     {
         UNiagaraFunctionLibrary::SpawnSystemAtLocation(
@@ -476,23 +477,39 @@ void AMySocketPoliceActor::SpawnImpactEffect(FHitResult HitResult) {
     }
 }
 
-//void AMySocketActor::SendParticleData(SOCKET TargetSocket, FVector ImpactLoc) {
-//    int32 TotalBytes = sizeof(uint8) + sizeof(FVector);
-//    TArray<uint8> PacketData;
-//    PacketData.SetNumUninitialized(TotalBytes);
-//
-//    memcpy(PacketData.GetData(), &particleHeader, sizeof(uint8));
-//    memcpy(PacketData.GetData() + sizeof(uint8), &ImpactLoc, sizeof(FVector));
-//
-//    int BytesSent = send(TargetSocket, reinterpret_cast<const char*>(PacketData.GetData()), TotalBytes, 0);
-//
-//    // 로그 추가
-//    if (BytesSent == SOCKET_ERROR)
-//    {
-//        UE_LOG(LogTemp, Error, TEXT("SendParticleData failed with WSAGetLastError %ld during send to %d"), WSAGetLastError(), TargetSocket);
-//        CloseClientSocket(TargetSocket);
-//    }
-//}
+void AMySocketPoliceActor::SendParticleData(FHitResult HitResult) {
+    FVector MuzzleLoc = MyCharacter->MuzzleLocation->GetComponentLocation();
+    FRotator MuzzleRot = MyCharacter->MuzzleLocation->GetComponentRotation();
+
+    FImpactPacket Packet;
+    Packet.ImpactX = HitResult.ImpactPoint.X;
+    Packet.ImpactY = HitResult.ImpactPoint.Y;
+    Packet.ImpactZ = HitResult.ImpactPoint.Z;
+    Packet.NormalX = HitResult.ImpactNormal.X;
+    Packet.NormalY = HitResult.ImpactNormal.Y;
+    Packet.NormalZ = HitResult.ImpactNormal.Z;
+    Packet.MuzzleX = MuzzleLoc.X;
+    Packet.MuzzleY = MuzzleLoc.Y;
+    Packet.MuzzleZ = MuzzleLoc.Z;
+    Packet.MuzzlePitch = MuzzleRot.Pitch;
+    Packet.MuzzleYaw = MuzzleRot.Yaw;
+    Packet.MuzzleRoll = MuzzleRot.Roll;
+    auto packet_size = 3 + sizeof(FImpactPacket);
+
+    TArray<uint8> PacketData;
+    PacketData.SetNumUninitialized(packet_size);
+
+    PacketData[0] = particleHeader;
+    PacketData[1] = packet_size;
+    PacketData[2] = my_ID;
+    memcpy(PacketData.GetData() + 3, &Packet, sizeof(FImpactPacket));
+
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
+    if (BytesSent == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("SendParticleData failed with error: %ld"), WSAGetLastError());
+    }
+}
 
 void AMySocketPoliceActor::CloseConnection() {
     if (ClientSocket != INVALID_SOCKET)

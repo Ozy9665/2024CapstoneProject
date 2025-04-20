@@ -131,7 +131,7 @@ void AMySocketCultistActor::ReceiveData()
                         //ProcessObjectData(Buffer, BytesReceived);
                         break;
                     case particleHeader:
-                        //ProcessParticleData(Buffer, BytesReceived);
+                        ProcessParticleData(Buffer, BytesReceived);
                         break;
                     case connectionHeader:
                         ProcessConnection(Buffer, BytesReceived);
@@ -777,6 +777,58 @@ void AMySocketCultistActor::SpawnPoliceCharacter(const char* Buffer)
     }
 }
 
+void AMySocketCultistActor::ProcessParticleData(char* Buffer, int32 BytesReceived) {
+    if (BytesReceived < 2 + sizeof(FImpactPacket))
+    {
+        UE_LOG(LogTemp, Error, TEXT("Invalid Particle Data Packet. BytesReceived: %d"), BytesReceived);
+        return;
+    }
+
+    FImpactPacket ReceivedImpact;
+    memcpy(&ReceivedImpact, Buffer + 2, sizeof(FImpactPacket));
+    // Particles.Add(ReceivedImpact);
+    AsyncTask(ENamedThreads::GameThread, [this, ReceivedImpact]() {
+        SpawnImpactEffect(ReceivedImpact);
+        });
+}
+
+bool IsVectorFinite(const FVector& Vec) {
+    return FMath::IsFinite(Vec.X) && FMath::IsFinite(Vec.Y) && FMath::IsFinite(Vec.Z);
+}
+
+bool IsRotatorFinite(const FRotator& Rot) {
+    return FMath::IsFinite(Rot.Pitch) && FMath::IsFinite(Rot.Yaw) && FMath::IsFinite(Rot.Roll);
+}
+
+void AMySocketCultistActor::SpawnImpactEffect(const FImpactPacket& ReceivedImpact)
+{
+    FVector ImpactPoint(ReceivedImpact.ImpactX, ReceivedImpact.ImpactY, ReceivedImpact.ImpactZ);
+    FVector ImpactNormal(ReceivedImpact.NormalX, ReceivedImpact.NormalY, ReceivedImpact.NormalZ);
+    FRotator ImpactRotation = ImpactNormal.Rotation();
+    FVector MuzzleLoc(ReceivedImpact.MuzzleX, ReceivedImpact.MuzzleY, ReceivedImpact.MuzzleZ);
+    FRotator MuzzleRot(ReceivedImpact.MuzzlePitch, ReceivedImpact.MuzzleYaw, ReceivedImpact.MuzzleRoll);
+    if (!IsVectorFinite(ImpactPoint) || !IsVectorFinite(ImpactNormal) ||
+        !IsVectorFinite(MuzzleLoc) || !IsRotatorFinite(MuzzleRot) || !IsRotatorFinite(ImpactRotation))
+    {
+        UE_LOG(LogTemp, Error, TEXT("ImpactPacket contains NaN or Infinite values!"));
+        return;
+    }
+
+    UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+        GetWorld(), NG_ImpactParticle,
+        ImpactPoint,
+        ImpactRotation,
+        FVector(1.0f), true, true,
+        ENCPoolMethod::None, true
+    );
+
+    UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+        GetWorld(), MuzzleImpactParticle,
+        MuzzleLoc,
+        MuzzleRot
+    );
+}
+
 void AMySocketCultistActor::CloseConnection() {
     if (ClientSocket != INVALID_SOCKET)
     {
@@ -822,44 +874,6 @@ void AMySocketCultistActor::SafeDestroyCharacter(int PlayerID)
             ReceivedCultistStates.Remove(PlayerID);
         });
 }
-
-/*
-void AMySocketClientActor::ProcessParticleData(char* Buffer, int32 BytesReceived) {
-    int32 Offset = sizeof(uint8);
-
-    if (BytesReceived < Offset + sizeof(FVector)) {
-        UE_LOG(LogTemp, Error, TEXT("Invalid object data packet received."));
-        return;
-    }
-
-    FVector NewVector;
-    memcpy(&NewVector, Buffer + Offset, sizeof(FVector));
-    ImpactLocations.Add(NewVector);
-    UE_LOG(LogTemp, Log, TEXT("Added ImpactLocation: %s"), *NewVector.ToString());
-    AsyncTask(ENamedThreads::GameThread, [this, NewVector]() {
-        SpawnImpactEffect(NewVector);
-        });
-}
-*/
-/*
-void AMySocketClientActor::SpawnImpactEffect(const FVector& ImpactLocation)
-{
-    if (ImpactParticle)
-    {
-        UParticleSystemComponent* PSC = UGameplayStatics::SpawnEmitterAtLocation(
-            GetWorld(), ImpactParticle, ImpactLocation, FRotator::ZeroRotator, true);
-        if (PSC)
-        {
-            PSC->bAutoDestroy = true;
-            UE_LOG(LogTemp, Log, TEXT("Spawned Impact Effect at: %s"), *ImpactLocation.ToString());
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("ImpactParticle is not set."));
-    }
-}
-*/
 
 /*
 void AMySocketClientActor::InitializeBlocks()

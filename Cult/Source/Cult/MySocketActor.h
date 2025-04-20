@@ -7,10 +7,8 @@
 
 #pragma pack(push, 1)
 
-USTRUCT(BlueprintType)
 struct FPoliceCharacterState
 {
-	GENERATED_BODY()
 	int32 PlayerID;
 	// 위치
 	float PositionX;
@@ -39,10 +37,8 @@ struct FPoliceCharacterState
 	bool bIsShooting;
 };
 
-USTRUCT(BlueprintType)
 struct FCultistCharacterState
 {
-	GENERATED_BODY()
 	int32 PlayerID;
 	// 위치
 	float PositionX;
@@ -62,6 +58,22 @@ struct FCultistCharacterState
 	bool bIsPerformingRitual;
 	bool bIsHitByAnAttack;
 	float CurrentHealth;
+};
+
+struct FImpactPacket
+{
+	float ImpactX;
+	float ImpactY;
+	float ImpactZ;
+	float NormalX;
+	float NormalY;
+	float NormalZ;
+	float MuzzleX;
+	float MuzzleY;
+	float MuzzleZ;
+	float MuzzlePitch;
+	float MuzzleYaw;
+	float MuzzleRoll;
 };
 
 #pragma pack(pop)

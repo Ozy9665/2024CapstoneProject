@@ -33,11 +33,12 @@ private:
 	FCriticalSection PoliceDataMutex;
 	TMap<int, ACharacter*> SpawnedCharacters;
 	FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0};
-	FPoliceCharacterState PoliceDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
+	FPoliceCharacterState PoliceDummyState{	-1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,
+		false, false, false, EWeaponType::Baton, false, false, EVaultingType::OneHandVault, false, false, false, false };
 	TMap<int, FCultistCharacterState> ReceivedCultistStates;
 	TMap<int, FPoliceCharacterState> ReceivedPoliceStates;
 	TMap<int32, FTransform> LastReceivedTransform;
-	TArray<FVector> ImpactLocations;
+	TArray<FImpactPacket> Particles;
 	UNiagaraSystem* NG_ImpactParticle;
 	UNiagaraSystem* MuzzleImpactParticle;
 
@@ -60,8 +61,8 @@ public:
 	void UpdatePoliceState(ACharacter* Character, const FPoliceCharacterState& State);
 	void UpdatePoliceAnimInstanceProperties(UAnimInstance* AnimInstance, const FPoliceCharacterState& State);
 	void SpawnPoliceCharacter(const char* Buffer);
-	//void ProcessParticleData(char* Buffer, int32 BytesReceived);
-	//void SpawnImpactEffect(const FVector& ImpactLocation);
+	void ProcessParticleData(char* Buffer, int32 BytesReceived);
+	void SpawnImpactEffect(const FImpactPacket& ReceivedImpact);
 	void CloseConnection();
 	void SafeDestroyCharacter(int PlayerID);
 };

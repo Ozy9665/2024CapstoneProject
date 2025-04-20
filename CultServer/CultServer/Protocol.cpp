@@ -15,7 +15,7 @@ void CALLBACK g_recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over
 	g_users[my_id].recv_callback(err, num_bytes, p_over, flag);
 }
 
-EXP_OVER::EXP_OVER(int header, const void* data, size_t size) 			// cultist
+EXP_OVER::EXP_OVER(int header, const void* data, size_t size) 			// player
 {
 	ZeroMemory(&send_over, sizeof(send_over));
 	auto packet_size = 2 + size;
@@ -142,7 +142,7 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 
 		for (auto& u : g_users) {
 			if (u.first != id) {
-				u.second.do_send_cultist(cultistHeader, &cultist_state, sizeof(FCultistCharacterState));
+				u.second.do_send_data(cultistHeader, &cultist_state, sizeof(FCultistCharacterState));
 			}
 		}
 		break;
@@ -163,7 +163,24 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 
 		for (auto& u : g_users) {
 			if (u.first != id) {
-				u.second.do_send_police(policeHeader, &police_state, sizeof(FPoliceCharacterState));
+				u.second.do_send_data(policeHeader, &police_state, sizeof(FPoliceCharacterState));
+			}
+		}
+		break;
+	}
+	case particleHeader:
+	{
+		if (num_bytes < 3 + sizeof(FImpactPacket)) {
+			std::cout << "Invalid particle packet size\n";
+			break;
+		}
+
+		FImpactPacket impact;
+		memcpy(&impact, recv_buffer + 3, sizeof(FImpactPacket));
+
+		for (auto& u : g_users) {
+			if (u.first != id) {
+				u.second.do_send_data(particleHeader, &impact, sizeof(FImpactPacket));
 			}
 		}
 		break;
@@ -209,14 +226,7 @@ void SESSION::do_send(char header, int id, char* mess)
 	WSASend(c_socket, o->send_wsabuf, 1, &size_sent, 0, &(o->send_over), g_send_callback);
 }
 
-void SESSION::do_send_cultist(int header, const void* data, size_t size)
-{
-	EXP_OVER* o = new EXP_OVER(header, data, size);
-	DWORD size_sent;
-	WSASend(c_socket, o->send_wsabuf, 1, &size_sent, 0, &(o->send_over), g_send_callback);
-}
-
-void SESSION::do_send_police(int header, const void* data, size_t size)
+void SESSION::do_send_data(int header, const void* data, size_t size)
 {
 	EXP_OVER* o = new EXP_OVER(header, data, size);
 	DWORD size_sent;
