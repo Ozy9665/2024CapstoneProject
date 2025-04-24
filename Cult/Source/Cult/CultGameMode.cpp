@@ -13,6 +13,8 @@
 #include "MyLegacyCameraShake.h"
 // SpawnAltar
 #include "Engine/World.h"
+// FadeAnim
+#include "FadeWidget.h"
 
 
 ACultGameMode::ACultGameMode()
@@ -35,6 +37,16 @@ void ACultGameMode::BeginPlay()
 	if (CurrentLevelName == "NewWorld")
 	{
 		SpawnAltars();
+	}
+
+	if (FadeWidgetClass)
+	{
+		UFadeWidget* FadeWidget = CreateWidget<UFadeWidget>(GetWorld(), FadeWidgetClass);
+		if (FadeWidget)
+		{
+			FadeWidget->AddToViewport();
+			FadeWidget->PlayFadeAnim();
+		}
 	}
 }
 

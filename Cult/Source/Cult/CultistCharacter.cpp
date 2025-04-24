@@ -261,14 +261,19 @@ void ACultistCharacter::TakeDamage(float DamageAmount)
 		CancelRitual();
 	}
 
-	// 피격 리액션 타이머
-	GetWorld()->GetTimerManager().SetTimer(HitByAttackTH, this, &ACultistCharacter::GottaRun, 0.8f, false);
-	
+
 	// 잠시 이동불가
 	GetCharacterMovement()->MaxWalkSpeed = 0.0f;
 	GetCharacterMovement()->GroundFriction = 0.1f; // 마찰율줄이기
 	GetCharacterMovement()->bOrientRotationToMovement = false;
 
+	// 잠시 둔화
+	//GetCharacterMovement()->MaxWalkSpeed *= 0.4f;
+
+
+	// 피격 리액션 타이머
+	GetWorld()->GetTimerManager().SetTimer(HitByAttackTH, this, &ACultistCharacter::GottaRun, 0.8f, false);
+	
 	// 데미지 처리
 	CurrentHealth -= DamageAmount;
 	UE_LOG(LogTemp, Warning, TEXT("HP : %f Now"), CurrentHealth);

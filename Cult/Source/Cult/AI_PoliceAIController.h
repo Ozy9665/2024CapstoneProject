@@ -44,6 +44,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="AI")
 	TArray<AActor*> PatrolPoints;
 
+
 	int32 CurrentPatrolIndex = 0;
 
 

@@ -37,5 +37,10 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "Altar Spawn")
 	TSubclassOf<AActor>AltarClass;
+	
+	// 페이드인 위젯 클래스
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<class UUserWidget> FadeWidgetClass;
+
 	void SpawnAltars();
 };
