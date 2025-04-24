@@ -4,8 +4,10 @@
 #include <array>
 #include <unordered_map>
 #include <WS2tcpip.h>
+#include <thread>
 #include "Protocol.h"
 #include "error.h"
+#include "PoliceAI.h"
 
 #pragma comment (lib, "WS2_32.LIB")
 
@@ -41,6 +43,7 @@ int main()
 		g_users.try_emplace(client_id, client_id, c_socket);
 		std::cout << "새로운 클라이언트가 연결되었습니다." << inet_ntoa(addr.sin_addr)
 			<< " Port: " << ntohs(addr.sin_port) << std::endl;
+		StartAIWorker();
 	}
 
 	closesocket(s_socket);

@@ -156,3 +156,13 @@ public:
 
 extern std::unordered_map<int, SESSION> g_users;
 extern int client_id;
+
+FPoliceCharacterState AiState{ -1,
+110.f, -1100.f, 2770.f,
+0.f, 90.f, 0.f,
+0.f, 0.f, 0.f, 0.f,
+false, false, false,
+EWeaponType::Baton,
+false, false,
+EVaultingType::OneHandVault,
+false, false, false, false };

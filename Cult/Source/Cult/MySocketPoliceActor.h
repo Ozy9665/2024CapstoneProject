@@ -31,7 +31,6 @@ private:
 	APoliceCharacter* MyCharacter;
 	FCriticalSection ReceivedDataMutex;
 	TMap<int, ACharacter*> SpawnedCharacters;
-	FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
 	TMap<int, FCultistCharacterState> ReceivedCultistStates;
 	TMap<int32, FTransform> LastReceivedTransform;
 	TArray<FVector> ImpactLocations;

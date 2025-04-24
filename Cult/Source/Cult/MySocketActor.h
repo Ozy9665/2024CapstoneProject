@@ -102,3 +102,7 @@ constexpr int policeHeader = 0x02;
 constexpr int particleHeader = 0x03;
 constexpr int connectionHeader = 0x10;
 constexpr int DisconnectionHeader = 0x11;
+
+constexpr FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
+constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,
+	false, false, false, EWeaponType::Baton, false, false, EVaultingType::OneHandVault, false, false, false, false };
