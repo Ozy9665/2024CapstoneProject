@@ -11,7 +11,8 @@
 			"AdditionalDependencies": [
 				"Engine",
 				"AIModule",
-				"GameplayCameras"
+				"GameplayCameras",
+				"UMG"
 			]
 		}
 	],
