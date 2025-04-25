@@ -1,7 +1,17 @@
 #include "Protocol.h"
 
 std::unordered_map<int, SESSION> g_users;
-int client_id = 0;
+int client_id = 1;
+FPoliceCharacterState AiState{ 0,
+	110.f, -1100.f, 2770.f,
+	0.f, 90.f, 0.f,
+	0.f, 0.f, 0.f, 0.f,
+	false, false, false,
+	EWeaponType::Baton,
+	false, false,
+	EVaultingType::OneHandVault,
+	false, false, false, false
+};
 
 void CALLBACK g_send_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, DWORD flag)
 {
@@ -89,6 +99,15 @@ void SESSION::do_recv()
 SESSION::SESSION() {
 	std::cout << "DEFAULT SESSION CONSTRUCTOR CALLED!!\n";
 	exit(-1);
+}
+
+SESSION::SESSION(int session_id) : c_socket(INVALID_SOCKET), id(session_id), role(1), police_state(AiState)
+{
+	recv_wsabuf[0].len = sizeof(recv_buffer);
+	recv_wsabuf[0].buf = recv_buffer;
+
+	recv_over.hEvent = reinterpret_cast<HANDLE>(session_id);
+	std::cout << "AI SESSION »ý¼ºµÊ. ID: " << id << " role: " << (role == 0 ? "Cultist" : "Police") << std::endl;
 }
 
 SESSION::SESSION(int session_id, SOCKET s) : id(session_id), c_socket(s)
@@ -246,4 +265,9 @@ void SESSION::do_send_disconnection(char header, int id)
 	DWORD size_sent;
 	std::cout << "disconnetion sended\n";
 	WSASend(c_socket, o->send_wsabuf, 1, &size_sent, 0, &(o->send_over), g_send_callback);
+}
+
+
+void SESSION::setPoliceState(const FPoliceCharacterState& state) {
+	police_state = state;
 }

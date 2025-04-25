@@ -140,7 +140,8 @@ private:
 
 public:
 	SESSION();
-	SESSION(int session_id, SOCKET s);
+	SESSION(int session_id);			// ai
+	SESSION(int session_id, SOCKET s);	// player
 	~SESSION();
 
 	void recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, DWORD flag);
@@ -152,17 +153,10 @@ public:
 	void do_send_connection(char header, int new_player_id, int role);
 
 	void do_send_disconnection(char header, int id);
+
+	void setPoliceState(const FPoliceCharacterState& state);
 };
 
 extern std::unordered_map<int, SESSION> g_users;
 extern int client_id;
-
-FPoliceCharacterState AiState{ -1,
-110.f, -1100.f, 2770.f,
-0.f, 90.f, 0.f,
-0.f, 0.f, 0.f, 0.f,
-false, false, false,
-EWeaponType::Baton,
-false, false,
-EVaultingType::OneHandVault,
-false, false, false, false };
+extern FPoliceCharacterState AiState;

@@ -130,10 +130,12 @@
   <ItemGroup>
     <ClCompile Include="cultServer.cpp" />
     <ClCompile Include="error.cpp" />
+    <ClCompile Include="PoliceAI.cpp" />
     <ClCompile Include="Protocol.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="error.h" />
+    <ClInclude Include="PoliceAI.h" />
     <ClInclude Include="Protocol.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

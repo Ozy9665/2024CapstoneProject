@@ -18,6 +18,9 @@ int main()
 	WSADATA WSAData;
 	WSAStartup(MAKEWORD(2, 0), &WSAData);
 
+	InitializeAISession();
+	StartAIWorker();
+
 	SOCKET s_socket = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
 	if (s_socket <= 0) {
 		std::cout << "Failed to create socket" << std::endl;
@@ -43,7 +46,6 @@ int main()
 		g_users.try_emplace(client_id, client_id, c_socket);
 		std::cout << "새로운 클라이언트가 연결되었습니다." << inet_ntoa(addr.sin_addr)
 			<< " Port: " << ntohs(addr.sin_port) << std::endl;
-		StartAIWorker();
 	}
 
 	closesocket(s_socket);
