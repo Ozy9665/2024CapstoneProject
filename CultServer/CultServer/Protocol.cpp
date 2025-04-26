@@ -1,8 +1,8 @@
 #include "Protocol.h"
 
 std::unordered_map<int, SESSION> g_users;
-int client_id = 1;
-FPoliceCharacterState AiState{ 0,
+std::atomic<int> client_id = 0;
+FPoliceCharacterState AiState{ -1,
 	110.f, -1100.f, 2770.f,
 	0.f, 90.f, 0.f,
 	0.f, 0.f, 0.f, 0.f,
@@ -101,16 +101,14 @@ SESSION::SESSION() {
 	exit(-1);
 }
 
-SESSION::SESSION(int session_id) : c_socket(INVALID_SOCKET), id(session_id), role(1), police_state(AiState)
+SESSION::SESSION(int session_id) : c_socket(INVALID_SOCKET), id(session_id), role(1)	// AI Session
 {
-	recv_wsabuf[0].len = sizeof(recv_buffer);
-	recv_wsabuf[0].buf = recv_buffer;
-
-	recv_over.hEvent = reinterpret_cast<HANDLE>(session_id);
-	std::cout << "AI SESSION 积己凳. ID: " << id << " role: " << (role == 0 ? "Cultist" : "Police") << std::endl;
+	AiState.PlayerID = id;
+	police_state = AiState;
+	std::cout << "AI SESSION 积己凳. ID: " << AiState.PlayerID << " role: " << (role == 0 ? "Cultist" : "Police") << std::endl;
 }
 
-SESSION::SESSION(int session_id, SOCKET s) : id(session_id), c_socket(s)
+SESSION::SESSION(int session_id, SOCKET s) : id(session_id), c_socket(s)									// users Session
 {
 	recv_wsabuf[0].len = sizeof(recv_buffer);
 	recv_wsabuf[0].buf = recv_buffer;
@@ -160,7 +158,7 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 			<< "Health=" << recvState.CurrentHealth << "\n";*/
 
 		for (auto& u : g_users) {
-			if (u.first != id) {
+			if (u.first != id && g_users[id].isValid()) {
 				u.second.do_send_data(cultistHeader, &cultist_state, sizeof(FCultistCharacterState));
 			}
 		}
@@ -181,7 +179,7 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		police_state.PlayerID = id;
 
 		for (auto& u : g_users) {
-			if (u.first != id) {
+			if (u.first != id && g_users[id].isValid()) {
 				u.second.do_send_data(policeHeader, &police_state, sizeof(FPoliceCharacterState));
 			}
 		}
@@ -198,7 +196,7 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		memcpy(&impact, recv_buffer + 3, sizeof(FImpactPacket));
 
 		for (auto& u : g_users) {
-			if (u.first != id) {
+			if (u.first != id && g_users[id].isValid()) {
 				u.second.do_send_data(particleHeader, &impact, sizeof(FImpactPacket));
 			}
 		}
@@ -215,7 +213,7 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		this->role = role;
 
 		std::cout << "Client[" << id << "] connected with role: " << (role == 0 ? "Cultist" : "Police") << std::endl;
-		// 立加吝牢 蜡历俊霸 货 立加阑 傈价
+		// 立加吝牢 蜡历甸俊霸 货 立加阑 傈价
 		for (auto& u : g_users) {
 			u.second.do_send_connection(connectionHeader, id, role);
 		}
@@ -223,7 +221,7 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		for (auto& u : g_users) {
 			if (u.first != id) {
 				g_users[id].do_send_connection(connectionHeader, u.first, u.second.role);
-			}	
+			}
 		}
 
 		client_id++;
@@ -238,9 +236,7 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 
 void SESSION::do_send(char header, int id, char* mess)
 {
-	EXP_OVER* o = new EXP_OVER(header, id, mess);/*
-	std::cout << "[Send to Client " << id << "] id: " << id
-		<< ", data: " << mess[0] << mess[1] << std::endl;*/
+	EXP_OVER* o = new EXP_OVER(header, id, mess);
 	DWORD size_sent;
 	WSASend(c_socket, o->send_wsabuf, 1, &size_sent, 0, &(o->send_over), g_send_callback);
 }
@@ -267,7 +263,20 @@ void SESSION::do_send_disconnection(char header, int id)
 	WSASend(c_socket, o->send_wsabuf, 1, &size_sent, 0, &(o->send_over), g_send_callback);
 }
 
-
 void SESSION::setPoliceState(const FPoliceCharacterState& state) {
 	police_state = state;
+}
+
+const FPoliceCharacterState& SESSION::getPoliceState() const
+{
+	return police_state;
+}
+
+int SESSION::getRole() const {
+	return role;
+}
+
+bool SESSION::isValid() const
+{
+	return c_socket != INVALID_SOCKET;
 }

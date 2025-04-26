@@ -15,6 +15,10 @@ constexpr int particleHeader = 0x03;
 constexpr int connectionHeader = 0x10;
 constexpr int DisconnectionHeader = 0x11;
 
+constexpr char ST_FREE{ 0 };
+constexpr char ST_INGAME{ 1 };
+constexpr char ST_CLOSE{ 2 };
+
 void CALLBACK g_recv_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
 void CALLBACK g_send_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
 
@@ -107,13 +111,13 @@ struct FImpactPacket
 
 class EXP_OVER {
 public:
-	EXP_OVER(int header, const void* data, size_t size);		// cultist
+	EXP_OVER(int , const void* , size_t );			// cultist
 
-	EXP_OVER(int header, int id, char* mess);					// message
+	EXP_OVER(int , int , char* );					// message
 
-	EXP_OVER(int header, int id, int role);						// connection
+	EXP_OVER(int , int , int );						// connection
 
-	EXP_OVER(int header, int id);								// disconnection
+	EXP_OVER(int , int );							// disconnection
 
 	WSAOVERLAPPED	send_over;
 	int				id;
@@ -123,9 +127,9 @@ public:
 
 class SESSION {
 private:
-	SOCKET			c_socket;
-	int				id;
-	int				role;
+	SOCKET				c_socket;
+	int					id;
+	int					role;
 
 	WSAOVERLAPPED	recv_over;
 	char			recv_buffer[1024];
@@ -140,23 +144,29 @@ private:
 
 public:
 	SESSION();
-	SESSION(int session_id);			// ai
-	SESSION(int session_id, SOCKET s);	// player
+	SESSION(int );			// ai
+	SESSION(int , SOCKET );	// player
 	~SESSION();
 
 	void recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, DWORD flag);
 
-	void do_send(char header, int id, char* mess);
+	void do_send(char , int , char* );
 
-	void do_send_data(int header, const void* data, size_t size);
+	void do_send_data(int , const void* , size_t );
 
-	void do_send_connection(char header, int new_player_id, int role);
+	void do_send_connection(char , int , int );
 
-	void do_send_disconnection(char header, int id);
+	void do_send_disconnection(char , int );
 
-	void setPoliceState(const FPoliceCharacterState& state);
+	void setPoliceState(const FPoliceCharacterState& );
+
+	const FPoliceCharacterState& getPoliceState() const;
+
+	int getRole() const;
+
+	bool isValid() const;
 };
 
 extern std::unordered_map<int, SESSION> g_users;
-extern int client_id;
+extern std::atomic<int> client_id;
 extern FPoliceCharacterState AiState;

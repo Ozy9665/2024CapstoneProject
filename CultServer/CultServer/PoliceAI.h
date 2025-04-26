@@ -18,8 +18,10 @@ struct FRotator {
 
 };
 
-void InitializeAISession();
+void InitializeAISession(const int);
 void StartAIWorker();
+void StopAIWorker();
 void UpdatePoliceAI();
 FVector CalculateDir();
+void BroadcastPoliceAIState();
 void AIWorkerLoop();
