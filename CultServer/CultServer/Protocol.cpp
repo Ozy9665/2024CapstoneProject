@@ -101,11 +101,11 @@ SESSION::SESSION() {
 	exit(-1);
 }
 
-SESSION::SESSION(int session_id) : c_socket(INVALID_SOCKET), id(session_id), role(1)	// AI Session
+SESSION::SESSION(int session_id) : c_socket(INVALID_SOCKET), id(session_id), role(99)	// AI Session
 {
 	AiState.PlayerID = id;
 	police_state = AiState;
-	std::cout << "AI SESSION 생성됨. ID: " << AiState.PlayerID << " role: " << (role == 0 ? "Cultist" : "Police") << std::endl;
+	std::cout << "AI SESSION 생성됨. ID: " << AiState.PlayerID << " role: 99 (PoliceAI)" << std::endl;
 }
 
 SESSION::SESSION(int session_id, SOCKET s) : id(session_id), c_socket(s)									// users Session
@@ -121,6 +121,7 @@ SESSION::SESSION(int session_id, SOCKET s) : id(session_id), c_socket(s)								
 SESSION::~SESSION()
 {
 	closesocket(c_socket);
+	std::cout << "SESSION 제거. port: " << c_socket << std::endl;
 }
 
 void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, DWORD flag)
@@ -149,7 +150,7 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		// 세션 상태에 저장
 		cultist_state = recvState;
 		cultist_state.PlayerID = id;
-
+		// std::cout << cultist_state.PositionX << " " << cultist_state.PositionY << "\n";
 		/*std::cout << "[Cultist] ID=" << id << "\n";
 		std::cout << "  States   : "
 			<< "Crouching=" << recvState.bIsCrouching << ", "
@@ -158,7 +159,7 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 			<< "Health=" << recvState.CurrentHealth << "\n";*/
 
 		for (auto& u : g_users) {
-			if (u.first != id && g_users[id].isValid()) {
+			if (u.first != id && g_users[id].isValidSocket()) {
 				u.second.do_send_data(cultistHeader, &cultist_state, sizeof(FCultistCharacterState));
 			}
 		}
@@ -179,7 +180,7 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		police_state.PlayerID = id;
 
 		for (auto& u : g_users) {
-			if (u.first != id && g_users[id].isValid()) {
+			if (u.first != id && g_users[id].isValidSocket()) {
 				u.second.do_send_data(policeHeader, &police_state, sizeof(FPoliceCharacterState));
 			}
 		}
@@ -196,7 +197,7 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		memcpy(&impact, recv_buffer + 3, sizeof(FImpactPacket));
 
 		for (auto& u : g_users) {
-			if (u.first != id && g_users[id].isValid()) {
+			if (u.first != id && g_users[id].isValidSocket()) {
 				u.second.do_send_data(particleHeader, &impact, sizeof(FImpactPacket));
 			}
 		}
@@ -213,18 +214,31 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		this->role = role;
 
 		std::cout << "Client[" << id << "] connected with role: " << (role == 0 ? "Cultist" : "Police") << std::endl;
-		// 접속중인 유저들에게 새 접속을 전송
-		for (auto& u : g_users) {
-			u.second.do_send_connection(connectionHeader, id, role);
-		}
-		// 새로 접속한 유저에게 기존 유저들을 전송
-		for (auto& u : g_users) {
-			if (u.first != id) {
+		// 1. 새로 접속한 유저(id)에게 본인 id와 role 확정 send
+		g_users[id].do_send_connection(connectionHeader, id, role);
+		// 2. 새로 접속한 유저(id)에게 기존 유저들 send
+		for (auto& u : g_users)
+		{
+			if ((u.first != id))
+			{
 				g_users[id].do_send_connection(connectionHeader, u.first, u.second.role);
+			}
+		}
+		// 3. 기존 유저들에게 새로 접속한 유저(id) send
+		for (auto& u : g_users)
+		{
+			if (u.first != id && u.second.isValidSocket())
+			{
+				u.second.do_send_connection(connectionHeader, id, role);
 			}
 		}
 
 		client_id++;
+		break;
+	}
+	case readyHeader:
+	{
+		this->setState(ST_INGAME);
 		break;
 	}
 	default:
@@ -263,6 +277,10 @@ void SESSION::do_send_disconnection(char header, int id)
 	WSASend(c_socket, o->send_wsabuf, 1, &size_sent, 0, &(o->send_over), g_send_callback);
 }
 
+void SESSION::setState(const char st) {
+	state = st;
+}
+
 void SESSION::setPoliceState(const FPoliceCharacterState& state) {
 	police_state = state;
 }
@@ -276,7 +294,11 @@ int SESSION::getRole() const {
 	return role;
 }
 
-bool SESSION::isValid() const
+bool SESSION::isValidSocket() const
 {
 	return c_socket != INVALID_SOCKET;
+}
+
+bool SESSION::isValidState() const {
+	return state == ST_INGAME;
 }

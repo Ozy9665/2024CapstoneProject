@@ -4,6 +4,7 @@
 #include <iostream>
 #include <WS2tcpip.h>
 #include <unordered_map>
+#include <atomic>
 #include "error.h"
 
 constexpr short SERVER_PORT = 7777;
@@ -14,6 +15,7 @@ constexpr int policeHeader = 0x02;
 constexpr int particleHeader = 0x03;
 constexpr int connectionHeader = 0x10;
 constexpr int DisconnectionHeader = 0x11;
+constexpr int readyHeader = 0x12;
 
 constexpr char ST_FREE{ 0 };
 constexpr char ST_INGAME{ 1 };
@@ -130,6 +132,7 @@ private:
 	SOCKET				c_socket;
 	int					id;
 	int					role;
+	std::atomic<char>	state;
 
 	WSAOVERLAPPED	recv_over;
 	char			recv_buffer[1024];
@@ -158,13 +161,17 @@ public:
 
 	void do_send_disconnection(char , int );
 
+	void setState(const char st);
+
 	void setPoliceState(const FPoliceCharacterState& );
 
 	const FPoliceCharacterState& getPoliceState() const;
 
 	int getRole() const;
 
-	bool isValid() const;
+	bool isValidSocket() const;
+
+	bool isValidState() const;
 };
 
 extern std::unordered_map<int, SESSION> g_users;

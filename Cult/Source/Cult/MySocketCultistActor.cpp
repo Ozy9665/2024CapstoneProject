@@ -118,6 +118,12 @@ void AMySocketCultistActor::ReceiveData()
                 {
                     // 패킷의 첫 바이트는 헤더, 이후는 데이터
                     int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
+                    int PacketSize = static_cast<int>(static_cast<unsigned char>(Buffer[1]));
+                    if (BytesReceived != PacketSize)
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("Invalid packet size: Received %d, Expected %d"), BytesReceived, PacketSize);
+                        continue;
+                    }
 
                     switch (PacketType)
                     {
@@ -222,6 +228,9 @@ void AMySocketCultistActor::ProcessConnection(char* Buffer, int32 BytesReceived)
                 {
                     this->SpawnPoliceCharacter(BufferCopy.GetData());
                 }
+                else if (role == 99) { //PoliceAi
+                    this->SpawnPoliceAICharacter(BufferCopy.GetData());
+                }
             });
     }
 }
@@ -322,7 +331,7 @@ void AMySocketCultistActor::ProcessCharacterUpdates()
                 UpdateCultistState(FoundChar, State);
             }
             else {
-                UE_LOG(LogTemp, Warning, TEXT("No PlayerID %d"), Pair.Value.PlayerID);
+                UE_LOG(LogTemp, Warning, TEXT("No Cultist PlayerID %d"), Pair.Value.PlayerID);
             }
         }
     }
@@ -337,6 +346,9 @@ void AMySocketCultistActor::ProcessCharacterUpdates()
                 if (APoliceCharacter* PoliceChar = Cast<APoliceCharacter>(FoundChar))
                 {
                     UpdatePoliceState(PoliceChar, PoliceState);
+                }
+                else {
+                    UE_LOG(LogTemp, Warning, TEXT("No Police PlayerID %d"), Pair.Value.PlayerID);
                 }
             }
         }
@@ -774,6 +786,51 @@ void AMySocketCultistActor::SpawnPoliceCharacter(const char* Buffer)
         {
             UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), PlayerID);
         }
+    }
+}
+
+void AMySocketCultistActor::SpawnPoliceAICharacter(const char* Buffer)
+{
+    // PlayerID를 기반으로 고유 키 생성
+    int PlayerID = static_cast<int>(static_cast<unsigned char>(Buffer[2]));
+    // 이미 캐릭터가 존재하면 아무 작업도 하지 않음
+    if (SpawnedCharacters.Contains(PlayerID))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Character already exists: %d"), PlayerID);
+        return;
+    }
+
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Owner = this;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter_Client.BP_PoliceCharacter_Client_C"));
+
+    if (BP_ClientCharacter)
+    {
+        APoliceCharacter* NewCharacter = GetWorld()->SpawnActor<APoliceCharacter>(
+            BP_ClientCharacter,
+            FVector(PoliceDummyState.PositionX, PoliceDummyState.PositionY, PoliceDummyState.PositionZ),
+            FRotator(PoliceDummyState.RotationPitch, PoliceDummyState.RotationYaw, PoliceDummyState.RotationRoll),
+            SpawnParams
+        );
+        if (NewCharacter)
+        {
+            SpawnedCharacters.Add(PlayerID, NewCharacter);
+            ReceivedPoliceStates.Add(PlayerID, PoliceDummyState);
+            UE_LOG(LogTemp, Log, TEXT("Spawned new character for PlayerID=%d"), PlayerID);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), PlayerID);
+        }
+    }
+    // ready Header send
+    uint8 PacketData = readyHeader;
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&PacketData), sizeof(PacketData), 0);
+    if (BytesSent == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("SendReadyPacket failed with error: %ld"), WSAGetLastError());
     }
 }
 

@@ -58,6 +58,7 @@ public:
 	void UpdatePoliceState(ACharacter* Character, const FPoliceCharacterState& State);
 	void UpdatePoliceAnimInstanceProperties(UAnimInstance* AnimInstance, const FPoliceCharacterState& State);
 	void SpawnPoliceCharacter(const char* Buffer);
+	void SpawnPoliceAICharacter(const char* Buffer);
 	void ProcessParticleData(char* Buffer, int32 BytesReceived);
 	void SpawnImpactEffect(const FImpactPacket& ReceivedImpact);
 	void CloseConnection();

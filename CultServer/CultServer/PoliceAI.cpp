@@ -6,13 +6,15 @@
 std::thread AIThread;
 std::atomic<bool> bRunning{ false };
 
-std::array<FVector, 4> PatrolPoints	// 임시
+std::array<FVector, 5> PatrolPoints	// 임시
 {
-	FVector{110.f, -1100.f, 2770.f},
-	FVector{160.f, -1050.f, 2770.f},
-	FVector{120.f, -1000.f, 2770.f},
-	FVector{ 90.f, -1070.f, 2770.f}
+	FVector{ -900.f,1600.f, 2770.f},
+	FVector{ 2200.f, 1520.f, 2770.f},
+	FVector{ 2200.f, -2020.f, 2770.f},
+	FVector{ 470.f, -130.f, 2770.f},
+	FVector{ 1225.f, -1600.f, 2770.f}
 };
+
 std::default_random_engine dre(std::random_device{}());
 std::uniform_int_distribution<int> PatrolUID(0, static_cast<int>(PatrolPoints.size()) - 1);
 
@@ -26,7 +28,7 @@ void InitializeAISession(const int ai_id)
 	g_users.try_emplace(ai_id, ai_id); // AI 세션 생성
 	for (auto& [id, session] : g_users)
 	{
-		if (id != ai_id && session.isValid())
+		if (id != ai_id && session.isValidSocket())
 		{
 			session.do_send_connection(connectionHeader, ai_id, g_users[ai_id].getRole());
 		}
@@ -58,10 +60,21 @@ void UpdatePoliceAI()
 		// 시야에 cultist가 없으면.	(임시)
 		FVector direction = CalculateDir();
 			
-		float Speed = 100.0f;
+		float Speed = 30.0f;
 		AiState.PositionX += direction.x * Speed * 0.016f;
 		AiState.PositionY += direction.y * Speed * 0.016f;
+
 		AiState.RotationYaw = std::atan2(direction.y, direction.x) * 180.0f / 파이;
+
+		AiState.VelocityX = direction.x * Speed;
+		AiState.VelocityY = direction.y * Speed;
+		AiState.VelocityZ = 0.f;
+
+		AiState.Speed = std::sqrt(
+			AiState.VelocityX * AiState.VelocityX +
+			AiState.VelocityY * AiState.VelocityY +
+			AiState.VelocityZ * AiState.VelocityZ
+		);
 	}
 	// TODO: 탐색, 추적, 상태 업데이트 로직
 
@@ -81,10 +94,21 @@ FVector CalculateDir() {
 	if (distance < 5.0f)
 	{
 		int OldIndex = CurrentPatrolIndex;
-		while (CurrentPatrolIndex == OldIndex && PatrolPoints.size() > 1) {
-			CurrentPatrolIndex = PatrolUID(dre);
+		for (int i = 0; i < 10; ++i)
+		{
+			int NewIndex = PatrolUID(dre);
+			if (NewIndex != OldIndex)
+			{
+				CurrentPatrolIndex = NewIndex;
+				std::cout << "[AI] Patrol Point Changed: " << CurrentPatrolIndex << "\n";
+				break;
+			}
 		}
-		return CalculateDir();
+		direction = {
+			PatrolPoints[CurrentPatrolIndex].x - AiState.PositionX,
+			PatrolPoints[CurrentPatrolIndex].y - AiState.PositionY,
+			PatrolPoints[CurrentPatrolIndex].z - AiState.PositionZ
+		};
 	}
 	float len = std::sqrt(direction.x * direction.x + direction.y * direction.y);
 	if (len != 0)
@@ -104,9 +128,9 @@ void BroadcastPoliceAIState()
 	{
 		if (id == my_ID) continue;
 
-		if (session.isValid())
+		if (session.isValidSocket() && session.isValidState())
 		{
-			std::cout << "[AI Pos] id: " << state.PlayerID << "X: " << state.PositionX << "Y: " << state.PositionY << "\n";
+			std::cout << "[AI Pos] id: " << state.PlayerID << "X: " << state.PositionX << "Y: " << state.PositionY << "\r";
 			session.do_send_data(policeHeader, &state, sizeof(FPoliceCharacterState));
 		}
 	}
