@@ -76,7 +76,7 @@ void UpdatePoliceAI()
 			AiState.VelocityZ * AiState.VelocityZ
 		);
 	}
-	// TODO: 탐색, 추적, 상태 업데이트 로직
+	// TODO: 맵 충돌처리, 탐색, 추적, 상태 업데이트 로직
 
 	// 저장 후 send
 	g_users[my_ID].setPoliceState(AiState);
