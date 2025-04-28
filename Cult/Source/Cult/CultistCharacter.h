@@ -89,6 +89,14 @@ public:
 	bool bIsStunned;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Health")
 	bool bIsAlreadyStunned;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+	bool bIsFrontFallen = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+	bool bIsElectric = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+	bool TurnToStun = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+	bool TurnToGetUp = false;
 	FTimerHandle ReviveTimerHandle;
 	FTimerHandle HitByAttackTH;
 	UFUNCTION(BlueprintCallable, Category="Health")
@@ -102,7 +110,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Health")
 	void TakePistolDamage(float DamageAmount);
 	UFUNCTION(BlueprintCallable, Category = "Health")
-	void GotHitTaser();
+	void GotHitTaser(AActor* Attacker);
+	UFUNCTION(BlueprintCallable, Category = "Health")
+	void FallDown();
+	UFUNCTION(BlueprintCallable, Category = "Health")
+	void GetUp();
 	UFUNCTION(BlueprintCallable, Category = "Health")
 	void GottaRun();
 
@@ -122,5 +134,6 @@ public:
 	
 	// 데미지 처리
 	virtual void TakeDamage(float DamageAmount) override;
+
 
 };

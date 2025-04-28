@@ -289,7 +289,8 @@ void APoliceCharacter::FireTaser()
 			if (Cultist)
 			{
 				UE_LOG(LogTemp, Warning, TEXT("Shot Cultist"));
-				Cultist->GotHitTaser();
+				Cultist->GotHitTaser(this);
+				
 			}
 		}
 	}

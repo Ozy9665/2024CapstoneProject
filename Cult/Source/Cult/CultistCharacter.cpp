@@ -312,20 +312,22 @@ void ACultistCharacter::Stun()
 	UE_LOG(LogTemp, Warning, TEXT("Got Stunned"));
 	bIsStunned = true;
 
+	bIsElectric = false;
+
 	GetCharacterMovement()->DisableMovement();
 
 	//AI 방지
 	GetCharacterMovement()->MaxWalkSpeed = 0.0f;
 
 	// 캡슐충돌x
-	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	//GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 
 
-	IntoRagdoll();
+	//IntoRagdoll();
 
 	// 일정 시간 후 깨어남
-	GetWorld()->GetTimerManager().SetTimer(ReviveTimerHandle, this, &ACultistCharacter::Revive, 10.0f, false);
+	GetWorld()->GetTimerManager().SetTimer(ReviveTimerHandle, this, &ACultistCharacter::GetUp, 10.0f, false);
 }
 
 void ACultistCharacter::Revive()
@@ -334,24 +336,24 @@ void ACultistCharacter::Revive()
 
 	bIsStunned = false;
 	bIsAlreadyStunned = true;
+	TurnToStun = false;
+	//// 물리시뮬Off, 충돌 복구
+	//GetMesh()->SetSimulatePhysics(false);
+	//GetMesh()->SetCollisionProfileName(TEXT("CharacterMesh"));
+	//GetMesh()->AttachToComponent(GetCapsuleComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+	//
+	//// 메시-캡슐 부착
+	//GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	//
+	//// 메시 위치, 회전 초기화	GetActorRotation().Yaw
+	//GetMesh()->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
+	//GetMesh()->SetRelativeLocation(FVector(0, 0, -100));
+	//// 위치복구 확인
+	//UE_LOG(LogTemp, Warning, TEXT("Mesh Re;ativeLocation: %s"), *GetMesh()->GetRelativeLocation().ToString());
 
-	// 물리시뮬Off, 충돌 복구
-	GetMesh()->SetSimulatePhysics(false);
-	GetMesh()->SetCollisionProfileName(TEXT("CharacterMesh"));
-	GetMesh()->AttachToComponent(GetCapsuleComponent(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-	
-	// 메시-캡슐 부착
-	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-	
-	// 메시 위치, 회전 초기화	GetActorRotation().Yaw
-	GetMesh()->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
-	GetMesh()->SetRelativeLocation(FVector(0, 0, -100));
-	// 위치복구 확인
-	UE_LOG(LogTemp, Warning, TEXT("Mesh Re;ativeLocation: %s"), *GetMesh()->GetRelativeLocation().ToString());
-
-	// 애니메이션 복구
-	GetMesh()->bPauseAnims = false;
-	GetMesh()->bNoSkeletonUpdate = false;
+	//// 애니메이션 복구
+	//GetMesh()->bPauseAnims = false;
+	//GetMesh()->bNoSkeletonUpdate = false;
 	
 	// 일정 체력 남은상태로 복구
 	Health = 50.0f;
@@ -360,6 +362,7 @@ void ACultistCharacter::Revive()
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 	GetCharacterMovement()->MaxWalkSpeed = 550.0f;
 	UE_LOG(LogTemp, Warning, TEXT("Revive."));
+
 }
 
 void ACultistCharacter::IntoRagdoll()
@@ -394,14 +397,49 @@ void ACultistCharacter::TakePistolDamage(float DamageAmount)
 
 }
 
-void ACultistCharacter::GotHitTaser()
+void ACultistCharacter::GotHitTaser(AActor* Attacker)
 {
 	// 기절중 - 무효, 피격중 - 유효
 	if (bIsStunned)return;
-	Stun();
-	// 감전
+	
+	// 이동불가 (감전->기절과정 중)
+	GetCharacterMovement()->DisableMovement();
 
+	// 노티파이로 감전애니메이션에 Stun
+	// 
+	// 감전
+	bIsElectric = true;
+	// 방향 판단
+	if (Attacker)
+	{
+		FVector AttackerDirection = (Attacker->GetActorLocation() - GetActorLocation()).GetSafeNormal();
+		float ForwardDot = FVector::DotProduct(GetActorForwardVector(), AttackerDirection);
+
+		if (ForwardDot > 0)
+		{
+			bIsFrontFallen = false; // 앞에서 맞음 → 뒤로 넘어짐
+		}
+		else
+		{
+			bIsFrontFallen = true; // 뒤에서 맞음 → 앞으로 넘어짐
+		}
+	}
 }
+
+void ACultistCharacter::FallDown()
+{
+	//
+	TurnToStun = true;
+	Stun();
+}
+
+void ACultistCharacter::GetUp()
+{
+	TurnToGetUp = true;
+	UE_LOG(LogTemp, Warning, TEXT("Now Get Up"));
+	GetWorld()->GetTimerManager().SetTimer(ReviveTimerHandle, this, &ACultistCharacter::Revive, 3.0f, false);
+}
+
 
 // 이동 시 중단 but 이동불가로 설정
 /*
