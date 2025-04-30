@@ -88,13 +88,24 @@ void ACultistCharacter::BeginPlay()
 			UE_LOG(LogTemp, Error, TEXT("Failed to create widget"));
 		}
 	}
-
+	// 컨트롤러 확인
+	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+	if (PC && PC->GetPawn())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Possessed pawn: %s"), *PC->GetPawn()->GetName());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("NO PlayerController OR NO Pawn"));
+	}
 
 }
 
 void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	check(PlayerInputComponent);
 
 	PlayerInputComponent->BindAxis("MoveForward", this, &ACultistCharacter::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight", this, &ACultistCharacter::MoveRight);
@@ -105,6 +116,8 @@ void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
 
 	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &ACultistCharacter::ToggleCrouch);
+	UE_LOG(LogTemp, Warning, TEXT("Binding  input"));
+
 }
 
 void ACultistCharacter::MoveForward(float Value)
