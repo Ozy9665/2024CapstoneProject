@@ -150,7 +150,7 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		// 세션 상태에 저장
 		cultist_state = recvState;
 		cultist_state.PlayerID = id;
-		// std::cout << cultist_state.PositionX << " " << cultist_state.PositionY << "\n";
+		//std::cout << cultist_state.PositionX << " " << cultist_state.PositionY << "\n";
 		/*std::cout << "[Cultist] ID=" << id << "\n";
 		std::cout << "  States   : "
 			<< "Crouching=" << recvState.bIsCrouching << ", "
