@@ -57,4 +57,5 @@ public:
 	void AttackTarget();
 	void TurnRightPerception();
 	void TurnLeftPerception();
+
 };

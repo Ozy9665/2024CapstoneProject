@@ -578,6 +578,34 @@ void APoliceCharacter::SpawnImpactEffect(FVector ImpactLocation)
 
 
 
+// Interaction
+void APoliceCharacter::TryPickUp()
+{
+	TArray<AActor*> Overlapping;
+
+	for (AActor* Actor : Overlapping)
+	{
+		ACultistCharacter* Cultist = Cast<ACultistCharacter>(Actor);
+		// 기절중 && 아직 들쳐매지지 않은 상태라면
+
+			// 들쳐매기
+			// 처리 (Cultist->bIsBeingCarried = true, CarriedCharacter 등
+			// break;
+	}
+}
+
+void APoliceCharacter::TryConfine(AActor* ConfineTarget)
+{
+	if (CarriedCharacter) // && 오브젝트에 접근 시
+	{
+		
+
+		// 처리
+		CarriedCharacter->bIsConfined = true;
+		CarriedCharacter->bIsBeingCarried = false;
+		CarriedCharacter = nullptr;
+	}
+}
 
 
 

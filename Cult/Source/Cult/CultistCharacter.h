@@ -135,5 +135,9 @@ public:
 	// 데미지 처리
 	virtual void TakeDamage(float DamageAmount) override;
 
-
+	// Interaction
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")
+	bool bIsConfined = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")
+	bool bIsBeingCarried = false;
 };

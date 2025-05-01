@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CultistCharacter.h"
 #include "BaseCharacter.h"
 #include "Bullet.h"
 #include "NiagaraSystem.h"
@@ -196,4 +197,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI")
 	UAIPerceptionStimuliSourceComponent* StimulusComponent;
+
+	// Interaction
+	void TryPickUp();
+	void TryConfine(AActor* ConfineTarget);
+	ACultistCharacter* CarriedCharacter;	// 들고있는 신도
 };
