@@ -4,6 +4,7 @@
 #include "MySocketPoliceActor.h"
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include "Camera/CameraActor.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -334,6 +335,25 @@ void AMySocketPoliceActor::SpawnCultistCharacter(const char* Buffer)
             SpawnedCharacters.Add(PlayerID, NewCharacter);
             ReceivedCultistStates.Add(PlayerID, CultistDummyState);
             UE_LOG(LogTemp, Log, TEXT("Spawned new character for PlayerID=%d"), PlayerID);
+
+            APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+            if (PC && PC->IsLocalController())
+            {
+                APawn* MyPawn = PC->GetPawn();
+                if (MyPawn)
+                {
+                    // ChildActorComponent Ã£¾Æ¼­
+                    UChildActorComponent* CAC = MyPawn->FindComponentByClass<UChildActorComponent>();
+                    if (CAC)
+                    {
+                        ACameraActor* CamActor = Cast<ACameraActor>(CAC->GetChildActor());
+                        if (CamActor)
+                        {
+                            PC->SetViewTargetWithBlend(CamActor, 0.f);
+                        }
+                    }
+                }
+            }
         }
         else
         {
