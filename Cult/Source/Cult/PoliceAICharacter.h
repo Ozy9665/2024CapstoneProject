@@ -28,6 +28,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason)override;
 
 public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category="AI")
@@ -50,7 +51,7 @@ public:
 	TSubclassOf<class APerceptionActor> PerceptionActorClass;
 
 	// 인스턴스
-	UPROPERTY()
+	UPROPERTY(Transient)
 	APerceptionActor* OnlyPerceptionActor;
 
 	void ChaseTarget(AActor* Target);

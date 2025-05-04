@@ -99,6 +99,16 @@ void ACultistCharacter::BeginPlay()
 		UE_LOG(LogTemp, Error, TEXT("NO PlayerController OR NO Pawn"));
 	}
 
+	AController* CController = GetController();
+	if (CController)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Controller: %s"), *CController->GetName());
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("No Controller found on BeginPlay"));
+	}
+
 }
 
 void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)

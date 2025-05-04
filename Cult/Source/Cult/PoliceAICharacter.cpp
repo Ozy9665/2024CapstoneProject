@@ -38,7 +38,7 @@ void APoliceAICharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (PerceptionActorClass)
+	if (PerceptionActorClass && GetWorld())
 	{
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.Owner = this;
@@ -65,8 +65,11 @@ void APoliceAICharacter::BeginPlay()
 
 		UE_LOG(LogTemp, Warning, TEXT("Create Perception Actor"));
 	}
-	OnlyPerceptionActor->AttachToActor(this, FAttachmentTransformRules::KeepRelativeTransform);
-	OnlyPerceptionActor->SetActorRelativeLocation(FVector(0.f, 0.f, 80.f));
+	if (OnlyPerceptionActor)
+	{
+		OnlyPerceptionActor->AttachToActor(this, FAttachmentTransformRules::KeepRelativeTransform);
+		OnlyPerceptionActor->SetActorRelativeLocation(FVector(0.f, 0.f, 80.f));
+	}
 }
 
 void APoliceAICharacter::ChaseTarget(AActor* Target)
@@ -115,5 +118,21 @@ void APoliceAICharacter::TurnLeftPerception()
 	{
 		FRotator LeftLookRotation = GetActorRotation() + FRotator(0.f, -90.f, 0.f);
 		OnlyPerceptionActor->SetActorRotation(LeftLookRotation);
+	}
+}
+
+void APoliceAICharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Super::EndPlay(EndPlayReason);
+
+	if (OnlyPerceptionActor)
+	{
+		if (OnlyPerceptionActor->PerceptionComponent)
+		{
+			OnlyPerceptionActor->PerceptionComponent->OnTargetPerceptionUpdated.RemoveAll(this);
+		}
+
+		OnlyPerceptionActor->SetLifeSpan(0.1f);
+		OnlyPerceptionActor = nullptr;
 	}
 }
