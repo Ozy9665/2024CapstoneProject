@@ -41,23 +41,20 @@ struct FCultistCharacterState
 {
 	int32 PlayerID;
 	// 위치
-	float PositionX;
-	float PositionY;
-	float PositionZ;
+	float PositionX, PositionY, PositionZ;
 	// 회전
-	float RotationPitch;
-	float RotationYaw;
-	float RotationRoll;
+	float RotationPitch, RotationYaw, RotationRoll;
 	// 속도
-	float VelocityX;
-	float VelocityY;
-	float VelocityZ;
-	float Speed;
-
-	bool bIsCrouching;
-	bool bIsPerformingRitual;
-	bool bIsHitByAnAttack;
+	float VelocityX, VelocityY, VelocityZ, Speed;
 	float CurrentHealth;
+	// 상태
+	uint8_t Crouch;
+	uint8_t ABP_IsPerforming;
+	uint8_t ABP_IsHitByAnAttack;
+	uint8_t ABP_IsFrontKO;
+	uint8_t ABP_IsElectric;
+	uint8_t ABP_TTStun;
+	uint8_t ABP_TTGetUp;
 };
 
 struct FImpactPacket

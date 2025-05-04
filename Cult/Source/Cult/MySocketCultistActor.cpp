@@ -271,7 +271,6 @@ void AMySocketCultistActor::SendPlayerData()
         PacketData[1] = packet_size;
         PacketData[2] = my_ID;
         memcpy(PacketData.GetData() + 3, &CharacterState, sizeof(FCultistCharacterState));
-
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
         if (BytesSent == SOCKET_ERROR)
         {
@@ -305,16 +304,20 @@ FCultistCharacterState AMySocketCultistActor::GetCharacterState()
     State.Speed = FVector(Velocity.X, Velocity.Y, 0.0f).Size();
 
     // Crouch 상태
-    State.bIsCrouching = MyCharacter->bIsCrouched;
+    State.Crouch = MyCharacter->bIsCrouched;
 
     ACultistCharacter* CultistChar = Cast<ACultistCharacter>(MyCharacter);
     if (CultistChar)
     {
-        State.bIsPerformingRitual = CultistChar->bIsPerformingRitual;
-        State.bIsHitByAnAttack = CultistChar->bIsHitByAnAttack;
+        State.ABP_IsPerforming = CultistChar->bIsPerformingRitual;
+        State.ABP_IsHitByAnAttack = CultistChar->bIsHitByAnAttack;
+        State.ABP_IsFrontKO = CultistChar->bIsFrontFallen;
+        State.ABP_IsElectric = CultistChar->bIsElectric;
+        State.ABP_TTStun = CultistChar->bIsStunned;
+        State.ABP_TTGetUp = CultistChar->TurnToGetUp;
+
         // UE_LOG(LogTemp, Error, TEXT("Client bIsPerformingRitual: %d, bIsHitByAnAttack: %d"), State.bIsPerformingRitual, State.bIsHitByAnAttack);
         State.CurrentHealth = CultistChar->CurrentHealth;
-        // UE_LOG(LogTemp, Error, TEXT("health: %f"), State.CurrentHealth);
     }
     return State;
 }
@@ -364,7 +367,7 @@ void AMySocketCultistActor::UpdateCultistState(ACharacter* Character, const FCul
     FVector CurrentLocation = Character->GetActorLocation();
     FVector TargetLocation(State.PositionX, State.PositionY, State.PositionZ);
 
-    if (State.bIsCrouching)
+    if (State.Crouch)
     {
         TargetLocation.Z += 50.0f;
     }
@@ -409,26 +412,53 @@ void AMySocketCultistActor::UpdateCultistAnimInstanceProperties(UAnimInstance* A
         }
     }
 
-    // IsCrouching 업데이트
-    FProperty* IsCrouchingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Crouch"));
-    if (IsCrouchingProperty && IsCrouchingProperty->IsA<FBoolProperty>())
+    FProperty* IsCrouchProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Crouch"));
+    if (IsCrouchProperty && IsCrouchProperty->IsA<FBoolProperty>())
     {
-        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsCrouchingProperty);
-        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsCrouching);
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsCrouchProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.Crouch));
     }
 
     FProperty* IsABP_IsPerformingProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsPerforming"));
     if (IsABP_IsPerformingProperty && IsABP_IsPerformingProperty->IsA<FBoolProperty>())
     {
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsPerformingProperty);
-        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsPerformingRitual);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_IsPerforming));
     }
 
     FProperty* IsABP_IsHitByAnAttackProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsHitByAnAttack"));
     if (IsABP_IsHitByAnAttackProperty && IsABP_IsHitByAnAttackProperty->IsA<FBoolProperty>())
     {
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsHitByAnAttackProperty);
-        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsHitByAnAttack);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_IsHitByAnAttack));
+    }
+
+    FProperty* IsABP_IsFrontKOProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsFrontKO"));
+    if (IsABP_IsFrontKOProperty && IsABP_IsFrontKOProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsFrontKOProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_IsFrontKO));
+    }
+
+    FProperty* IsABP_IsElectricProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsElectric"));
+    if (IsABP_IsElectricProperty && IsABP_IsElectricProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsElectricProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_IsElectric));
+    }
+
+    FProperty* IsABP_TTStunProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_TTStun"));
+    if (IsABP_TTStunProperty && IsABP_TTStunProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_TTStunProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_TTStun));
+    }
+
+    FProperty* IsABP_TTGetUpProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_TTGetUp"));
+    if (IsABP_TTGetUpProperty && IsABP_TTGetUpProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_TTGetUpProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_TTGetUp));
     }
 }
 

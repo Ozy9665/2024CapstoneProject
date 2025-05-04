@@ -151,12 +151,10 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		cultist_state = recvState;
 		cultist_state.PlayerID = id;
 		//std::cout << cultist_state.PositionX << " " << cultist_state.PositionY << "\n";
-		/*std::cout << "[Cultist] ID=" << id << "\n";
-		std::cout << "  States   : "
-			<< "Crouching=" << recvState.bIsCrouching << ", "
-			<< "PerformingRitual=" << recvState.bIsPerformingRitual << ", "
-			<< "HitByAttack=" << recvState.bIsHitByAnAttack << ", "
-			<< "Health=" << recvState.CurrentHealth << "\n";*/
+		//std::cout << "[Cultist] ID=" << id << "\n";
+		//std::cout << "  States   : Crouch=" << (cultist_state.Crouch ? "true" : "false") << std::endl;
+		//std::cout << "  States   : isElectric=" << (cultist_state.ABP_IsElectric ? "true" : "false") << std::endl;
+
 
 		for (auto& u : g_users) {
 			if (u.first != id && g_users[id].isValidSocket()) {
