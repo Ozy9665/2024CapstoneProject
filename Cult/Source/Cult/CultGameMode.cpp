@@ -19,11 +19,11 @@
 
 ACultGameMode::ACultGameMode()
 {
-	static ConstructorHelpers::FClassFinder<APawn> PlayerPawnClassFinder(TEXT("/Game/Blueprints/BP_PoliceCharacter"));
-	if (PlayerPawnClassFinder.Succeeded())
-	{
-		DefaultPawnClass = PlayerPawnClassFinder.Class;
-	}
+	//static ConstructorHelpers::FClassFinder<APawn> PlayerPawnClassFinder(TEXT("/Game/Blueprints/BP_PoliceCharacter"));
+	//if (PlayerPawnClassFinder.Succeeded())
+	//{
+	//	DefaultPawnClass = PlayerPawnClassFinder.Class;
+	//}
 
 
 }

@@ -43,9 +43,12 @@ void ACultistCharacter::BeginPlay()
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	// 회전속도
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 720.0f, 0.0f);
-	
-	// 마찰율줄이기
-	GetCharacterMovement()->GroundFriction = 0.1f; 
+	//
+	//// 마찰율줄이기
+	//GetCharacterMovement()->GroundFriction = 0.1f; 
+
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+
 
 	SpringArmComp = FindComponentByClass<USpringArmComponent>();
 	if (SpringArmComp)
@@ -138,6 +141,11 @@ void ACultistCharacter::MoveForward(float Value)
 		FRotator YawRotation(0, ControlRotation.Yaw, 0);
 
 		FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+		UE_LOG(LogTemp, Warning, TEXT("MoveForward: %f"), Value);
+		UE_LOG(LogTemp, Warning, TEXT("WalkSpeed: %f"), GetCharacterMovement()->MaxWalkSpeed);
+		UE_LOG(LogTemp, Warning, TEXT("Movement Mode: %d"), GetCharacterMovement()->MovementMode);
+		UE_LOG(LogTemp, Warning, TEXT("Is Falling: %d"), GetCharacterMovement()->IsFalling());
+		UE_LOG(LogTemp, Warning, TEXT("Is Moving On Ground: %d"), GetCharacterMovement()->IsMovingOnGround());
 		AddMovementInput(Direction, Value);
 	}
 }
@@ -208,6 +216,7 @@ void ACultistCharacter::StartRitual()
 	}
 	if (!CurrentAltar) { 
 		UE_LOG(LogTemp, Warning, TEXT("No altar Here!"));
+		//UE_LOG(LogTemp, Warning, TEXT("%f"), GetCharacterMovement()->MaxWalkSpeed);
 		return;
 	}
 
