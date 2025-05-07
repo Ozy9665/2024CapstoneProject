@@ -7,9 +7,10 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include "MySocketActor.h"
-#include "PoliceCharacter.h"
 #include <Kismet/GameplayStatics.h>
 #include "MySocketPoliceActor.generated.h"
+
+class APoliceCharacter;
 
 UCLASS()
 class CULT_API AMySocketPoliceActor : public AActor
@@ -48,6 +49,7 @@ public:
 	void ProcessConnection(char* Buffer, int32 BytesReceived);
 	void ProcessDisconnection(char* Buffer, int32 BytesReceived);
 	void SendPlayerData();
+	void SendHitData(FHitPacket hitPacket);
 	FPoliceCharacterState GetCharacterState();
 	void SpawnCultistCharacter(const char* Buffer);
 	void ProcessCharacterUpdates();

@@ -3,6 +3,7 @@
 
 #include "PoliceCharacter.h"
 #include "CultistCharacter.h"
+#include "MySocketPoliceActor.h"
 #include "GameFramework/Actor.h"
 #include "Camera/CameraComponent.h"
 #include"Components/BoxComponent.h"
@@ -18,6 +19,8 @@
 #include "Perception/AISense_Sight.h"
 #include "Perception/AIPerceptionStimuliSourceComponent.h"
 #include "Kismet/GameplayStatics.h"
+
+extern AMySocketPoliceActor* MySocketPoliceActor;
 
 APoliceCharacter::APoliceCharacter(const FObjectInitializer& ObjectInitializer)
 {
@@ -282,15 +285,20 @@ void APoliceCharacter::FireTaser()
 		AActor* HitActor = ParticleResult.GetActor();
 		if (HitActor)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("HitActor: %s"), *HitActor->GetName());
+			UE_LOG(LogTemp, Warning, TEXT("HitActor: %s"), *HitActor->GetName());	
 
 			ACultistCharacter* Cultist = Cast<ACultistCharacter>(HitActor);
 
 			if (Cultist)
 			{
 				UE_LOG(LogTemp, Warning, TEXT("Shot Cultist"));
-				Cultist->GotHitTaser(this);
-				
+				// Cultist->GotHitTaser(this);
+				FHitPacket HitPacket;
+				HitPacket.AttackerID = my_ID;
+				HitPacket.TargetID = Cultist->GetPlayerID();
+				HitPacket.Weapon = EWeaponType::Baton;
+
+				MySocketPoliceActor->SendHitData(HitPacket);
 			}
 		}
 	}
@@ -343,7 +351,13 @@ void APoliceCharacter::ShootPistol()
 			if (Cultist)
 			{
 				UE_LOG(LogTemp, Warning, TEXT("Shot Cultist"));
-				Cultist->TakeDamage(AttackDamage);
+				// Cultist->TakeDamage(AttackDamage);// 面倒贸府
+				FHitPacket HitPacket;
+				HitPacket.AttackerID = my_ID;
+				HitPacket.TargetID = Cultist->GetPlayerID();
+				HitPacket.Weapon = EWeaponType::Baton;
+
+				MySocketPoliceActor->SendHitData(HitPacket);
 			}
 		}
 
@@ -397,7 +411,14 @@ void APoliceCharacter::BatonAttack()
 			ACultistCharacter* Cultist = Cast<ACultistCharacter>(HitActor);
 			if (Cultist)
 			{
-				OnAttackHit(Cultist);
+				// 面倒贸府
+				//OnAttackHit(Cultist);
+				FHitPacket HitPacket;
+				HitPacket.AttackerID = my_ID;
+				HitPacket.TargetID = Cultist->GetPlayerID();
+				HitPacket.Weapon = EWeaponType::Baton;
+
+				MySocketPoliceActor->SendHitData(HitPacket);
 			}
 		}
 	}

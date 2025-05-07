@@ -42,7 +42,7 @@ void AMySocketCultistActor::BeginPlay()
 {
     Super::BeginPlay();
 
-    MyCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
+    MyCharacter = Cast<ACultistCharacter>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
     if (!MyCharacter)
     {
         UE_LOG(LogTemp, Error, TEXT("My character not found!"));
@@ -213,6 +213,10 @@ void AMySocketCultistActor::ProcessConnection(char* Buffer, int32 BytesReceived)
     if (my_ID == -1) {
         my_ID = static_cast<int>(connectedId);
         UE_LOG(LogTemp, Warning, TEXT("Connected. My ID is: %d"), my_ID);
+
+        if (MyCharacter) {
+            MyCharacter->my_ID = my_ID;
+        }
     }
     else {
         TArray<char> BufferCopy;

@@ -5,8 +5,10 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include "Camera/CameraActor.h"
+#include "PoliceCharacter.h"
 
 #pragma comment(lib, "ws2_32.lib")
+AMySocketPoliceActor* MySocketPoliceActor = nullptr;
 
 // Sets default values
 AMySocketPoliceActor::AMySocketPoliceActor()
@@ -195,6 +197,10 @@ void AMySocketPoliceActor::ProcessConnection(char* Buffer, int32 BytesReceived) 
     if (my_ID == -1) {
         my_ID = static_cast<int>(connectedId);
         UE_LOG(LogTemp, Warning, TEXT("Connected. My ID is: %d"), my_ID);
+
+        if (MyCharacter) {
+            MyCharacter->my_ID = my_ID;
+        }
     }
     else {
         TArray<char> BufferCopy;
@@ -235,7 +241,6 @@ void AMySocketPoliceActor::ProcessDisconnection(char* Buffer, int32 BytesReceive
 
 void AMySocketPoliceActor::SendPlayerData()
 {
-    // 데이터 보내기
     if (ClientSocket != INVALID_SOCKET)
     {
         FPoliceCharacterState CharacterState = GetCharacterState();
@@ -249,6 +254,30 @@ void AMySocketPoliceActor::SendPlayerData()
         PacketData[1] = packet_size;
         PacketData[2] = my_ID;
         memcpy(PacketData.GetData() + 3, &CharacterState, sizeof(FPoliceCharacterState));
+
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
+        }
+    }
+    else
+    {
+        CloseConnection();
+    }
+}
+
+void AMySocketPoliceActor::SendHitData(FHitPacket hitPacket) {
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        auto packet_size = 2 + sizeof(FHitPacket);
+
+        TArray<uint8> PacketData;
+        PacketData.SetNumUninitialized(packet_size);
+
+        PacketData[0] = hitHeader;
+        PacketData[1] = packet_size;
+        memcpy(PacketData.GetData() + 2, &hitPacket, sizeof(FHitPacket));
 
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
         if (BytesSent == SOCKET_ERROR)

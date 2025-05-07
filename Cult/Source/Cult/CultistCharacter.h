@@ -140,4 +140,7 @@ public:
 	bool bIsConfined = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")
 	bool bIsBeingCarried = false;
+
+	int my_ID = -1;
+	int GetPlayerID() const;
 };

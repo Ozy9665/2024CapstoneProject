@@ -28,7 +28,7 @@ protected:
 private:
 	SOCKET ClientSocket;
 	int my_ID = -1;
-	ACharacter* MyCharacter;
+	ACultistCharacter* MyCharacter;
 	FCriticalSection CultistDataMutex;
 	FCriticalSection PoliceDataMutex;
 	TMap<int, ACharacter*> SpawnedCharacters;

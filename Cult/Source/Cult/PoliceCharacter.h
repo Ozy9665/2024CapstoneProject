@@ -15,6 +15,7 @@
 #include "Perception/AIPerceptionStimuliSourceComponent.h"
 #include "PoliceCharacter.generated.h"
 
+class AMySocketPoliceActor;
 
 UENUM(BlueprintType)
 enum class EWeaponType : uint8
@@ -202,4 +203,6 @@ public:
 	void TryPickUp();
 	void TryConfine(AActor* ConfineTarget);
 	ACultistCharacter* CarriedCharacter;	// 들고있는 신도
+
+	int my_ID = -1;
 };

@@ -73,6 +73,12 @@ struct FImpactPacket
 	float MuzzleRoll;
 };
 
+struct FHitPacket {
+	int AttackerID;
+	int TargetID;
+	EWeaponType Weapon;
+};
+
 #pragma pack(pop)
 
 UCLASS()
@@ -97,6 +103,7 @@ constexpr int cultistHeader = 0x00;
 constexpr int objectHeader = 0x01;
 constexpr int policeHeader = 0x02;
 constexpr int particleHeader = 0x03;
+constexpr int hitHeader = 0x04;
 constexpr int connectionHeader = 0x10;
 constexpr int DisconnectionHeader = 0x11;
 constexpr int readyHeader = 0x12;

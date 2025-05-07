@@ -490,3 +490,6 @@ void ACultistCharacter::LookUpCamera(float Value)
 	AddControllerPitchInput(Value);
 }
 
+int ACultistCharacter::GetPlayerID() const {
+	return my_ID;
+}
