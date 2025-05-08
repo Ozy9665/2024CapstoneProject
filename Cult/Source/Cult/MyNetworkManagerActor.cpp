@@ -74,7 +74,7 @@ SOCKET AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32
 
 void AMyNetworkManagerActor::CheckAndSpawnActor()
 {
-    FString ServerIP = TEXT("172.30.1.50");  // 서버 IP 주소
+    FString ServerIP = TEXT("127.0.0.1");  // 서버 IP 주소
     int32 ServerPort = 7777;               // 포트 번호
 
     SOCKET ConnectedSocket = CanConnectToServer(ServerIP, ServerPort);

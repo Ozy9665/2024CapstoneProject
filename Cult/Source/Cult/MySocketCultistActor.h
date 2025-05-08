@@ -47,6 +47,7 @@ public:
 	void ReceiveData();
 	void ProcessCultistData(char* Buffer, int32 BytesReceived);
 	void ProcessPoliceData(char* Buffer, int32 BytesReceived);
+	void ProcessHitData(char* Buffer, int32 BytesReceived);
 	void ProcessConnection(char* Buffer, int32 BytesReceived);
 	void ProcessDisconnection(char* Buffer, int32 BytesReceived);
 	void SendPlayerData();

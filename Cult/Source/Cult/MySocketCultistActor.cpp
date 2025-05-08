@@ -131,14 +131,17 @@ void AMySocketCultistActor::ReceiveData()
                     case cultistHeader:
                         ProcessCultistData(Buffer, BytesReceived);
                         break;
-                    case policeHeader:
-                        ProcessPoliceData(Buffer, BytesReceived);
-                        break;
                     case objectHeader:
                         //ProcessObjectData(Buffer, BytesReceived);
                         break;
+                    case policeHeader:
+                        ProcessPoliceData(Buffer, BytesReceived);
+                        break;
                     case particleHeader:
                         ProcessParticleData(Buffer, BytesReceived);
+                        break;
+                    case hitHeader:
+                        ProcessHitData(Buffer, BytesReceived);
                         break;
                     case connectionHeader:
                         ProcessConnection(Buffer, BytesReceived);
@@ -198,6 +201,35 @@ void AMySocketCultistActor::ProcessPoliceData(char* Buffer, int32 BytesReceived)
         ReceivedPoliceStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
     }
 }
+
+void AMySocketCultistActor::ProcessHitData(char* Buffer, int32 BytesReceived)
+{
+    if (BytesReceived < 2 + sizeof(FHitPacket))
+        return;
+
+    FHitPacket ReceivedState;
+    memcpy(&ReceivedState, Buffer + 2, sizeof(FHitPacket));
+    {
+        FScopeLock Lock(&CultistDataMutex);
+        // ReceivedCultistStates.FindOrAdd(ReceivedState.TargetID) = ReceivedState; 수정 코드 추가. hit당한 캐릭터 수정하는 로직
+        switch (ReceivedState.Weapon)
+        {
+        case EWeaponType::Baton:
+            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
+            break;
+        case EWeaponType::Pistol:
+            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
+            break;
+        case EWeaponType::Taser:
+            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
+            break;
+        default:
+            UE_LOG(LogTemp, Error, TEXT("EWeaponType Error: %d"), ReceivedState.Weapon);
+            break;
+        }
+    }
+}
+
 
 void AMySocketCultistActor::ProcessConnection(char* Buffer, int32 BytesReceived) {
     if (BytesReceived < 4)

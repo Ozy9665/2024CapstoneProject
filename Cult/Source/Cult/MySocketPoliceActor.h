@@ -46,6 +46,7 @@ public:
 	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);
 	void ReceiveData();
 	void ProcessPlayerData(char* Buffer, int32 BytesReceived);
+	void ProcessHitData(char* Buffer, int32 BytesReceived);
 	void ProcessConnection(char* Buffer, int32 BytesReceived);
 	void ProcessDisconnection(char* Buffer, int32 BytesReceived);
 	void SendPlayerData();

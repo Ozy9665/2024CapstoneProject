@@ -46,7 +46,7 @@ AMySocketPoliceActor::AMySocketPoliceActor()
 void AMySocketPoliceActor::BeginPlay()
 {
 	Super::BeginPlay();
-	
+    MySocketPoliceActor = this;
     MyCharacter = Cast<APoliceCharacter>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
     if (!MyCharacter)
     {
@@ -124,6 +124,12 @@ void AMySocketPoliceActor::ReceiveData()
                 {
                     // 패킷의 첫 바이트는 헤더, 이후는 데이터
                     int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
+                    int PacketSize = static_cast<int>(static_cast<unsigned char>(Buffer[1]));
+                    if (BytesReceived != PacketSize)
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("Invalid packet size: Received %d, Expected %d"), BytesReceived, PacketSize);
+                        continue;
+                    }
 
                     switch (PacketType)
                     {
@@ -135,6 +141,9 @@ void AMySocketPoliceActor::ReceiveData()
                         break;
                     case particleHeader:
                         //ProcessParticleData(Buffer, BytesReceived);
+                        break;
+                    case hitHeader:
+                        ProcessHitData(Buffer, BytesReceived);
                         break;
                     case connectionHeader:
                         ProcessConnection(Buffer, BytesReceived);
@@ -165,21 +174,43 @@ void AMySocketPoliceActor::ReceiveData()
 
 void AMySocketPoliceActor::ProcessPlayerData(char* Buffer, int32 BytesReceived)
 {
-    if (BytesReceived < 2)
+    if (BytesReceived < 2 + sizeof(FCultistCharacterState))
         return;
-    int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
-    int32 Offset = 2;
 
-    while (Offset + sizeof(FCultistCharacterState) <= BytesReceived) // 안전 체크
+    FCultistCharacterState ReceivedState;
+    memcpy(&ReceivedState, Buffer + 2, sizeof(FCultistCharacterState));
+
     {
-        FCultistCharacterState ReceivedState;
-        memcpy(&ReceivedState, Buffer + Offset, sizeof(FCultistCharacterState));
+        FScopeLock Lock(&ReceivedDataMutex);
+        ReceivedCultistStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
+    }
+}
 
+void AMySocketPoliceActor::ProcessHitData(char* Buffer, int32 BytesReceived)
+{
+    if (BytesReceived < 2 + sizeof(FHitPacket))
+        return;
+
+    FHitPacket ReceivedState;
+    memcpy(&ReceivedState, Buffer + 2, sizeof(FHitPacket));
+    {
+        FScopeLock Lock(&ReceivedDataMutex);
+       // ReceivedCultistStates.FindOrAdd(ReceivedState.TargetID) = ReceivedState; 수정 코드 추가. hit당한 캐릭터 수정하는 로직
+        switch (ReceivedState.Weapon)
         {
-            FScopeLock Lock(&ReceivedDataMutex);
-            ReceivedCultistStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
+        case EWeaponType::Baton:
+            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
+            break;
+        case EWeaponType::Pistol:
+            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
+            break;
+        case EWeaponType::Taser:
+            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
+            break;
+        default:
+            UE_LOG(LogTemp, Error, TEXT("EWeaponType Error: %d"), ReceivedState.Weapon);
+            break;
         }
-        Offset += sizeof(FCultistCharacterState);
     }
 }
 
@@ -507,7 +538,7 @@ void AMySocketPoliceActor::UpdateCultistAnimInstanceProperties(UAnimInstance* An
         BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_TTGetUp));
     }
 }
-
+// 이것도 shoot pistol에서 bhit시 호출하도록 변경.
 void AMySocketPoliceActor::CheckImpactEffect()
 {
     if (MyCharacter->bHit) {

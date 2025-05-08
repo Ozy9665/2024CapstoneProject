@@ -318,7 +318,7 @@ void APoliceCharacter::FireTaser()
 				FHitPacket HitPacket;
 				HitPacket.AttackerID = my_ID;
 				HitPacket.TargetID = Cultist->GetPlayerID();
-				HitPacket.Weapon = EWeaponType::Baton;
+				HitPacket.Weapon = EWeaponType::Taser;
 
 				MySocketPoliceActor->SendHitData(HitPacket);
 			}
@@ -377,7 +377,7 @@ void APoliceCharacter::ShootPistol()
 				FHitPacket HitPacket;
 				HitPacket.AttackerID = my_ID;
 				HitPacket.TargetID = Cultist->GetPlayerID();
-				HitPacket.Weapon = EWeaponType::Baton;
+				HitPacket.Weapon = EWeaponType::Pistol;
 
 				MySocketPoliceActor->SendHitData(HitPacket);
 			}
@@ -440,7 +440,15 @@ void APoliceCharacter::BatonAttack()
 				HitPacket.TargetID = Cultist->GetPlayerID();
 				HitPacket.Weapon = EWeaponType::Baton;
 
-				MySocketPoliceActor->SendHitData(HitPacket);
+				if (MySocketPoliceActor)
+				{
+					MySocketPoliceActor->SendHitData(HitPacket);
+				}
+				else
+				{
+					UE_LOG(LogTemp, Error, TEXT("MySocketPoliceActor is nullptr!"));
+				}
+
 			}
 		}
 	}
