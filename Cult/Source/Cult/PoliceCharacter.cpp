@@ -19,6 +19,9 @@
 #include "Perception/AISense_Sight.h"
 #include "Perception/AIPerceptionStimuliSourceComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "BuildingBlockComponent.h"
+#include "GameFramework/PlayerController.h"
+#include "Engine/World.h"
 
 extern AMySocketPoliceActor* MySocketPoliceActor;
 
@@ -138,6 +141,19 @@ void APoliceCharacter::BeginPlay()	// √ ±‚»≠
 		}
 	}
 
+	if (TestTargetActor)
+	{
+		TestTargetBlock = Cast<UBuildingBlockComponent>(TestTargetActor->GetComponentByClass(UBuildingBlockComponent::StaticClass()));
+		if (TestTargetBlock)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Target Block Found: %s"), *TestTargetBlock->GetName());
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("Failed to get BuildingBlockComponent from %s"), *TestTargetActor->GetName());
+		}
+	}
+
 
 }
 
@@ -157,6 +173,10 @@ void APoliceCharacter::Tick(float DeltaTime)
 	{
 		AimPitch = 0.0f;
 	}
+
+
+
+
 }
 
 void APoliceCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -177,6 +197,8 @@ void APoliceCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	UE_LOG(LogTemp, Warning, TEXT("Binding Aim input"));
 	PlayerInputComponent->BindAction("Aim", IE_Pressed, this, &APoliceCharacter::OnAimPressed);
 	PlayerInputComponent->BindAction("Aim", IE_Released, this, &APoliceCharacter::StopAiming);
+
+	PlayerInputComponent->BindAction("TestCollapse", IE_Pressed, this, &APoliceCharacter::TestCollapse);
 }
 
 void APoliceCharacter::ToggleCrouch()
@@ -687,4 +709,17 @@ void APoliceCharacter::VaultStart()
 void APoliceCharacter::VaultEnd()
 {
 	IsPakour = false;
+}
+
+void APoliceCharacter::TestCollapse()
+{
+	if (TestTargetBlock)
+	{
+		FVector ImpulseDirection = FVector::UpVector;
+
+		UE_LOG(LogTemp, Warning, TEXT("Sending impulse to block"));
+		TestTargetBlock->ReceiveImpulse(ImpulseAmount, ImpulseDirection);
+
+		DrawDebugSphere(GetWorld(), TestTargetBlock->GetComponentLocation(), 30.f, 12, FColor::Red, false, 2.0f);
+	}
 }
