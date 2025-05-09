@@ -69,7 +69,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat")
 	class UAnimMontage* AttackMontage;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat")
-	float AttackDamage = 20.0f;
+	float AttackDamage = 50.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+	float bulletDamage = 30.0f;
 	UPROPERTY(EditDefaultsOnly, Category="Camera")
 	float AimFOV = 60.0f;
 	UPROPERTY(EditDefaultsOnly, Category = "Camera")
