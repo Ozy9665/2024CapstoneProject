@@ -546,6 +546,8 @@ void APoliceCharacter::SwitchWeapon()
 	if (bIsAiming)return;
 	if (bIsShooting)return;
 	if (bIsAttacking)return;
+	if (bIsSwitchingWeapon)return;
+	bIsSwitchingWeapon = true;
 	if (CurrentWeapon == EWeaponType::Baton)
 		CurrentWeapon = EWeaponType::Pistol;
 	else if (CurrentWeapon == EWeaponType::Pistol)
@@ -554,6 +556,7 @@ void APoliceCharacter::SwitchWeapon()
 		CurrentWeapon = EWeaponType::Baton;
 
 	UpdateWeaponVisibility();
+	GetWorld()->GetTimerManager().SetTimer(SwitchWeaponHandle, this, &APoliceCharacter::SwitchWeaponEnd, 0.5f, false);
 }
 
 void APoliceCharacter::UpdateWeaponVisibility()
@@ -561,6 +564,11 @@ void APoliceCharacter::UpdateWeaponVisibility()
 	BatonMesh->SetVisibility(CurrentWeapon == EWeaponType::Baton);
 	PistolMesh->SetVisibility(CurrentWeapon == EWeaponType::Pistol);
 	TaserMesh->SetVisibility(CurrentWeapon == EWeaponType::Taser);
+}
+
+void APoliceCharacter::SwitchWeaponEnd()
+{
+	bIsSwitchingWeapon = false;
 }
 
 void APoliceCharacter::OnAimPressed()

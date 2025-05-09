@@ -148,6 +148,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SwitchWeapon();
 	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void SwitchWeaponEnd();
+	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void FireTaser();
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void EndFireTaser();
@@ -185,12 +187,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Movement")
 	void VaultEnd();
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	bool bIsSwitchingWeapon = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	bool IsPakour = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	bool bIsNearEnoughToPakour = false;
 
 
 	FTimerHandle AttackTimerHandle;
+	FTimerHandle SwitchWeaponHandle;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat")
 	bool bIsAttacking;
