@@ -61,4 +61,5 @@ public:
 	void SendParticleData(FHitResult HitResult);
 	void CloseConnection();
 	void SafeDestroyCharacter(int PlayerID);
+	const TMap<int, ACharacter*>& GetSpawnedCharacters() const;
 };

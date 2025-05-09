@@ -304,23 +304,28 @@ void APoliceCharacter::FireTaser()
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Taser Effect"));
 
+
 		AActor* HitActor = ParticleResult.GetActor();
 		if (HitActor)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("HitActor: %s"), *HitActor->GetName());	
+			const TMap<int, ACharacter*>& Characters = MySocketPoliceActor->GetSpawnedCharacters();
 
-			ACultistCharacter* Cultist = Cast<ACultistCharacter>(HitActor);
-
-			if (Cultist)
+			for (auto& Pair : Characters)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Shot Cultist"));
-				// Cultist->GotHitTaser(this);
-				FHitPacket HitPacket;
-				HitPacket.AttackerID = my_ID;
-				HitPacket.TargetID = Cultist->GetPlayerID();
-				HitPacket.Weapon = EWeaponType::Taser;
+				if (Pair.Value == HitActor)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Shot Cultist"));
+					FHitPacket HitPacket;
+					HitPacket.AttackerID = my_ID;
+					HitPacket.TargetID = Pair.Key;
+					HitPacket.Weapon = EWeaponType::Taser;
 
-				MySocketPoliceActor->SendHitData(HitPacket);
+					if (MySocketPoliceActor)
+					{
+						MySocketPoliceActor->SendHitData(HitPacket);
+					}
+					return;
+				}
 			}
 		}
 	}
@@ -366,20 +371,24 @@ void APoliceCharacter::ShootPistol()
 		AActor* HitActor = ParticleResult.GetActor();
 		if (HitActor)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("HitActor: %s"), *HitActor->GetName());
+			const TMap<int, ACharacter*>& Characters = MySocketPoliceActor->GetSpawnedCharacters();
 
-			ACultistCharacter* Cultist = Cast<ACultistCharacter>(HitActor);
-
-			if (Cultist)
+			for (auto& Pair : Characters)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Shot Cultist"));
-				// Cultist->TakeDamage(AttackDamage);// 面倒贸府
-				FHitPacket HitPacket;
-				HitPacket.AttackerID = my_ID;
-				HitPacket.TargetID = Cultist->GetPlayerID();
-				HitPacket.Weapon = EWeaponType::Pistol;
+				if (Pair.Value == HitActor)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Shot Cultist"));
+					FHitPacket HitPacket;
+					HitPacket.AttackerID = my_ID;
+					HitPacket.TargetID = Pair.Key;
+					HitPacket.Weapon = EWeaponType::Pistol;
 
-				MySocketPoliceActor->SendHitData(HitPacket);
+					if (MySocketPoliceActor)
+					{
+						MySocketPoliceActor->SendHitData(HitPacket);
+					}
+					return;
+				}
 			}
 		}
 
@@ -429,27 +438,25 @@ void APoliceCharacter::BatonAttack()
 		AActor* HitActor = HitResult.GetActor();
 		if (HitActor)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Hit Actor: %s"), *HitActor->GetName());
-			ACultistCharacter* Cultist = Cast<ACultistCharacter>(HitActor);
-			if (Cultist)
+			const TMap<int, ACharacter*>& Characters = MySocketPoliceActor->GetSpawnedCharacters();
+			for (auto& Pair : Characters)
 			{
-				// 面倒贸府
-				//OnAttackHit(Cultist);
-				FHitPacket HitPacket;
-				HitPacket.AttackerID = my_ID;
-				HitPacket.TargetID = Cultist->GetPlayerID();
-				HitPacket.Weapon = EWeaponType::Baton;
-
-				if (MySocketPoliceActor)
+				if (Pair.Value == HitActor)
 				{
-					MySocketPoliceActor->SendHitData(HitPacket);
-				}
-				else
-				{
-					UE_LOG(LogTemp, Error, TEXT("MySocketPoliceActor is nullptr!"));
-				}
+					FHitPacket HitPacket;
+					HitPacket.AttackerID = my_ID;
+					HitPacket.TargetID = Pair.Key;
+					HitPacket.Weapon = EWeaponType::Baton;
 
+					if (MySocketPoliceActor)
+					{
+						MySocketPoliceActor->SendHitData(HitPacket);
+					}
+					return;
+				}
 			}
+
+			UE_LOG(LogTemp, Error, TEXT("HitActor is not in SpawnedCharacters!"));
 		}
 	}
 }

@@ -210,9 +210,8 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 
 		FHitPacket recvPacket;
 		memcpy(&recvPacket, recv_buffer + 2, sizeof(FHitPacket));
-
 		for (auto& u : g_users) {
-			if (u.second.isValidSocket()) {
+			if ((u.first != id) && u.second.isValidSocket()) {
 				u.second.do_send_data(hitHeader, &recvPacket, sizeof(FHitPacket));
 			}
 		}

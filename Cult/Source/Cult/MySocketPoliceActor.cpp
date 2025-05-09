@@ -195,11 +195,9 @@ void AMySocketPoliceActor::ProcessHitData(char* Buffer, int32 BytesReceived)
     memcpy(&ReceivedState, Buffer + 2, sizeof(FHitPacket));
     {
         FScopeLock Lock(&ReceivedDataMutex);
-       // ReceivedCultistStates.FindOrAdd(ReceivedState.TargetID) = ReceivedState; 수정 코드 추가. hit당한 캐릭터 수정하는 로직
         switch (ReceivedState.Weapon)
         {
         case EWeaponType::Baton:
-            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
             break;
         case EWeaponType::Pistol:
             UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
@@ -662,6 +660,11 @@ void AMySocketPoliceActor::SafeDestroyCharacter(int PlayerID)
             SpawnedCharacters.Remove(PlayerID);
             ReceivedCultistStates.Remove(PlayerID);
         });
+}
+
+const TMap<int, ACharacter*>& AMySocketPoliceActor::GetSpawnedCharacters() const
+{
+    return SpawnedCharacters;
 }
 
 // Called every frame
