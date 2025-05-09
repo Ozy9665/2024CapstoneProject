@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "CultistCharacter.h"
+#include "BuildingBlockComponent.h"
 #include "BaseCharacter.h"
 #include "Bullet.h"
 #include "NiagaraSystem.h"
@@ -15,6 +16,7 @@
 #include "Perception/AIPerceptionStimuliSourceComponent.h"
 #include "PoliceCharacter.generated.h"
 
+class AMySocketPoliceActor;
 
 UENUM(BlueprintType)
 enum class EWeaponType : uint8
@@ -146,6 +148,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SwitchWeapon();
 	UFUNCTION(BlueprintCallable, Category = "Combat")
+	void SwitchWeaponEnd();
+	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void FireTaser();
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void EndFireTaser();
@@ -183,12 +187,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Movement")
 	void VaultEnd();
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	bool bIsSwitchingWeapon = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	bool IsPakour = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
 	bool bIsNearEnoughToPakour = false;
 
 
 	FTimerHandle AttackTimerHandle;
+	FTimerHandle SwitchWeaponHandle;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Combat")
 	bool bIsAttacking;
@@ -202,4 +209,14 @@ public:
 	void TryPickUp();
 	void TryConfine(AActor* ConfineTarget);
 	ACultistCharacter* CarriedCharacter;	// 들고있는 신도
+
+	void TestCollapse();	// Y키
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
+	AActor* TestTargetActor;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
+	UBuildingBlockComponent* TestTargetBlock;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
+	float ImpulseAmount = 1200.0f;
+
+	int my_ID = -1;
 };

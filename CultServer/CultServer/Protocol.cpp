@@ -201,6 +201,22 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		}
 		break;
 	}
+	case hitHeader:
+	{
+		if (num_bytes < 2 + sizeof(FHitPacket)) {
+			std::cout << "Invalid hit packet size\n";
+			break;
+		}
+
+		FHitPacket recvPacket;
+		memcpy(&recvPacket, recv_buffer + 2, sizeof(FHitPacket));
+		for (auto& u : g_users) {
+			if ((u.first != id) && u.second.isValidSocket()) {
+				u.second.do_send_data(hitHeader, &recvPacket, sizeof(FHitPacket));
+			}
+		}
+		break;
+	}
 	case connectionHeader:
 	{
 		if (num_bytes < 3) {

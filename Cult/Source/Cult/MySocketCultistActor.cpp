@@ -42,7 +42,7 @@ void AMySocketCultistActor::BeginPlay()
 {
     Super::BeginPlay();
 
-    MyCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
+    MyCharacter = Cast<ACultistCharacter>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
     if (!MyCharacter)
     {
         UE_LOG(LogTemp, Error, TEXT("My character not found!"));
@@ -131,14 +131,17 @@ void AMySocketCultistActor::ReceiveData()
                     case cultistHeader:
                         ProcessCultistData(Buffer, BytesReceived);
                         break;
-                    case policeHeader:
-                        ProcessPoliceData(Buffer, BytesReceived);
-                        break;
                     case objectHeader:
                         //ProcessObjectData(Buffer, BytesReceived);
                         break;
+                    case policeHeader:
+                        ProcessPoliceData(Buffer, BytesReceived);
+                        break;
                     case particleHeader:
                         ProcessParticleData(Buffer, BytesReceived);
+                        break;
+                    case hitHeader:
+                        ProcessHitData(Buffer, BytesReceived);
                         break;
                     case connectionHeader:
                         ProcessConnection(Buffer, BytesReceived);
@@ -199,6 +202,118 @@ void AMySocketCultistActor::ProcessPoliceData(char* Buffer, int32 BytesReceived)
     }
 }
 
+void AMySocketCultistActor::ProcessHitData(char* Buffer, int32 BytesReceived)
+{
+    if (BytesReceived < 2 + sizeof(FHitPacket))
+        return;
+
+    FHitPacket ReceivedState;
+    memcpy(&ReceivedState, Buffer + 2, sizeof(FHitPacket));
+    {
+        FScopeLock Lock(&CultistDataMutex);
+        switch (ReceivedState.Weapon)
+        {
+        case EWeaponType::Baton:
+        {
+            APoliceCharacter* Attacker = Cast<APoliceCharacter>(SpawnedCharacters.FindRef(ReceivedState.AttackerID));
+            if (not Attacker) {
+                UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn attacker: %d"), ReceivedState.AttackerID);
+                return;
+            }
+            if (ReceivedState.TargetID == my_ID)
+            {
+                if (not MyCharacter)
+                {
+                    UE_LOG(LogTemp, Error, TEXT("MyCharacter is null for self-hit!"));
+                    return;
+                }
+                AsyncTask(ENamedThreads::GameThread, [this, Attacker]()
+                    {
+                        MyCharacter->OnHitbyBaton(Attacker->GetActorLocation(), BatonAttackDamage);
+                    });
+            }
+            else {
+                ACultistCharacter* Target = Cast<ACultistCharacter>(SpawnedCharacters.FindRef(ReceivedState.TargetID));
+                if (not Target) {
+                    UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn Target: %d"), ReceivedState.TargetID);
+                    return;
+                }
+                AsyncTask(ENamedThreads::GameThread, [this, Target, Attacker]()
+                    {
+                        Target->OnHitbyBaton(Attacker->GetActorLocation(), BatonAttackDamage);
+                    });
+            }
+
+            break;
+        }
+        case EWeaponType::Pistol: 
+        {
+            if (ReceivedState.TargetID == my_ID)
+            {
+                if (not MyCharacter)
+                {
+                    UE_LOG(LogTemp, Error, TEXT("MyCharacter is null for self-hit!"));
+                    return;
+                }
+                AsyncTask(ENamedThreads::GameThread, [this]()
+                    {
+                        MyCharacter->TakeDamage(BatonAttackDamage);
+                    });
+            }
+            else {
+                ACultistCharacter* Target = Cast<ACultistCharacter>(SpawnedCharacters.FindRef(ReceivedState.TargetID));
+                if (not Target) {
+                    UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn Target: %d"), ReceivedState.TargetID);
+                    return;
+                }
+                AsyncTask(ENamedThreads::GameThread, [this, Target]()
+                    {
+                        Target->TakeDamage(BatonAttackDamage);
+                    });
+            }
+            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
+            break;
+        }
+        case EWeaponType::Taser:
+        {
+            APoliceCharacter* Attacker = Cast<APoliceCharacter>(SpawnedCharacters.FindRef(ReceivedState.AttackerID));
+            if (not Attacker) {
+                UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn attacker: %d"), ReceivedState.AttackerID);
+                return;
+            }
+            if (ReceivedState.TargetID == my_ID)
+            {
+                if (not MyCharacter)
+                {
+                    UE_LOG(LogTemp, Error, TEXT("MyCharacter is null for self-hit!"));
+                    return;
+                }
+                AsyncTask(ENamedThreads::GameThread, [this, Attacker]()
+                    {
+                        MyCharacter->GotHitTaser(Attacker);
+                    });
+            }
+            else {
+                ACultistCharacter* Target = Cast<ACultistCharacter>(SpawnedCharacters.FindRef(ReceivedState.TargetID));
+                if (not Target) {
+                    UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn Target: %d"), ReceivedState.TargetID);
+                    return;
+                }
+                AsyncTask(ENamedThreads::GameThread, [this, Target, Attacker]()
+                    {
+                        Target->GotHitTaser(Attacker);
+                    });
+            }
+            break;
+        }
+        default:
+            UE_LOG(LogTemp, Error, TEXT("EWeaponType Error: %d"), ReceivedState.Weapon);
+            break;
+        }
+    }
+}
+
+
 void AMySocketCultistActor::ProcessConnection(char* Buffer, int32 BytesReceived) {
     if (BytesReceived < 4)
     {
@@ -213,6 +328,10 @@ void AMySocketCultistActor::ProcessConnection(char* Buffer, int32 BytesReceived)
     if (my_ID == -1) {
         my_ID = static_cast<int>(connectedId);
         UE_LOG(LogTemp, Warning, TEXT("Connected. My ID is: %d"), my_ID);
+
+        if (MyCharacter) {
+            MyCharacter->my_ID = my_ID;
+        }
     }
     else {
         TArray<char> BufferCopy;

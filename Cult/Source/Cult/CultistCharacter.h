@@ -134,10 +134,13 @@ public:
 	
 	// 데미지 처리
 	virtual void TakeDamage(float DamageAmount) override;
-
+	void OnHitbyBaton(const FVector& AttackerLocation, float AttackDamage);
 	// Interaction
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")
 	bool bIsConfined = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")
 	bool bIsBeingCarried = false;
+
+	int my_ID = -1;
+	int GetPlayerID() const;
 };

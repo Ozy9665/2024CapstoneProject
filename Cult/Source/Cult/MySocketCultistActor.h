@@ -28,7 +28,7 @@ protected:
 private:
 	SOCKET ClientSocket;
 	int my_ID = -1;
-	ACharacter* MyCharacter;
+	ACultistCharacter* MyCharacter;
 	FCriticalSection CultistDataMutex;
 	FCriticalSection PoliceDataMutex;
 	TMap<int, ACharacter*> SpawnedCharacters;
@@ -47,6 +47,7 @@ public:
 	void ReceiveData();
 	void ProcessCultistData(char* Buffer, int32 BytesReceived);
 	void ProcessPoliceData(char* Buffer, int32 BytesReceived);
+	void ProcessHitData(char* Buffer, int32 BytesReceived);
 	void ProcessConnection(char* Buffer, int32 BytesReceived);
 	void ProcessDisconnection(char* Buffer, int32 BytesReceived);
 	void SendPlayerData();

@@ -5,8 +5,10 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include "Camera/CameraActor.h"
+#include "PoliceCharacter.h"
 
 #pragma comment(lib, "ws2_32.lib")
+AMySocketPoliceActor* MySocketPoliceActor = nullptr;
 
 // Sets default values
 AMySocketPoliceActor::AMySocketPoliceActor()
@@ -44,7 +46,7 @@ AMySocketPoliceActor::AMySocketPoliceActor()
 void AMySocketPoliceActor::BeginPlay()
 {
 	Super::BeginPlay();
-	
+    MySocketPoliceActor = this;
     MyCharacter = Cast<APoliceCharacter>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
     if (!MyCharacter)
     {
@@ -122,6 +124,12 @@ void AMySocketPoliceActor::ReceiveData()
                 {
                     // 패킷의 첫 바이트는 헤더, 이후는 데이터
                     int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
+                    int PacketSize = static_cast<int>(static_cast<unsigned char>(Buffer[1]));
+                    if (BytesReceived != PacketSize)
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("Invalid packet size: Received %d, Expected %d"), BytesReceived, PacketSize);
+                        continue;
+                    }
 
                     switch (PacketType)
                     {
@@ -133,6 +141,9 @@ void AMySocketPoliceActor::ReceiveData()
                         break;
                     case particleHeader:
                         //ProcessParticleData(Buffer, BytesReceived);
+                        break;
+                    case hitHeader:
+                        ProcessHitData(Buffer, BytesReceived);
                         break;
                     case connectionHeader:
                         ProcessConnection(Buffer, BytesReceived);
@@ -163,21 +174,41 @@ void AMySocketPoliceActor::ReceiveData()
 
 void AMySocketPoliceActor::ProcessPlayerData(char* Buffer, int32 BytesReceived)
 {
-    if (BytesReceived < 2)
+    if (BytesReceived < 2 + sizeof(FCultistCharacterState))
         return;
-    int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
-    int32 Offset = 2;
 
-    while (Offset + sizeof(FCultistCharacterState) <= BytesReceived) // 안전 체크
+    FCultistCharacterState ReceivedState;
+    memcpy(&ReceivedState, Buffer + 2, sizeof(FCultistCharacterState));
+
     {
-        FCultistCharacterState ReceivedState;
-        memcpy(&ReceivedState, Buffer + Offset, sizeof(FCultistCharacterState));
+        FScopeLock Lock(&ReceivedDataMutex);
+        ReceivedCultistStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
+    }
+}
 
+void AMySocketPoliceActor::ProcessHitData(char* Buffer, int32 BytesReceived)
+{
+    if (BytesReceived < 2 + sizeof(FHitPacket))
+        return;
+
+    FHitPacket ReceivedState;
+    memcpy(&ReceivedState, Buffer + 2, sizeof(FHitPacket));
+    {
+        FScopeLock Lock(&ReceivedDataMutex);
+        switch (ReceivedState.Weapon)
         {
-            FScopeLock Lock(&ReceivedDataMutex);
-            ReceivedCultistStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
+        case EWeaponType::Baton:
+            break;
+        case EWeaponType::Pistol:
+            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
+            break;
+        case EWeaponType::Taser:
+            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
+            break;
+        default:
+            UE_LOG(LogTemp, Error, TEXT("EWeaponType Error: %d"), ReceivedState.Weapon);
+            break;
         }
-        Offset += sizeof(FCultistCharacterState);
     }
 }
 
@@ -195,6 +226,10 @@ void AMySocketPoliceActor::ProcessConnection(char* Buffer, int32 BytesReceived) 
     if (my_ID == -1) {
         my_ID = static_cast<int>(connectedId);
         UE_LOG(LogTemp, Warning, TEXT("Connected. My ID is: %d"), my_ID);
+
+        if (MyCharacter) {
+            MyCharacter->my_ID = my_ID;
+        }
     }
     else {
         TArray<char> BufferCopy;
@@ -235,7 +270,6 @@ void AMySocketPoliceActor::ProcessDisconnection(char* Buffer, int32 BytesReceive
 
 void AMySocketPoliceActor::SendPlayerData()
 {
-    // 데이터 보내기
     if (ClientSocket != INVALID_SOCKET)
     {
         FPoliceCharacterState CharacterState = GetCharacterState();
@@ -249,6 +283,30 @@ void AMySocketPoliceActor::SendPlayerData()
         PacketData[1] = packet_size;
         PacketData[2] = my_ID;
         memcpy(PacketData.GetData() + 3, &CharacterState, sizeof(FPoliceCharacterState));
+
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
+        }
+    }
+    else
+    {
+        CloseConnection();
+    }
+}
+
+void AMySocketPoliceActor::SendHitData(FHitPacket hitPacket) {
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        auto packet_size = 2 + sizeof(FHitPacket);
+
+        TArray<uint8> PacketData;
+        PacketData.SetNumUninitialized(packet_size);
+
+        PacketData[0] = hitHeader;
+        PacketData[1] = packet_size;
+        memcpy(PacketData.GetData() + 2, &hitPacket, sizeof(FHitPacket));
 
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
         if (BytesSent == SOCKET_ERROR)
@@ -478,7 +536,7 @@ void AMySocketPoliceActor::UpdateCultistAnimInstanceProperties(UAnimInstance* An
         BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_TTGetUp));
     }
 }
-
+// 이것도 shoot pistol에서 bhit시 호출하도록 변경.
 void AMySocketPoliceActor::CheckImpactEffect()
 {
     if (MyCharacter->bHit) {
@@ -602,6 +660,11 @@ void AMySocketPoliceActor::SafeDestroyCharacter(int PlayerID)
             SpawnedCharacters.Remove(PlayerID);
             ReceivedCultistStates.Remove(PlayerID);
         });
+}
+
+const TMap<int, ACharacter*>& AMySocketPoliceActor::GetSpawnedCharacters() const
+{
+    return SpawnedCharacters;
 }
 
 // Called every frame

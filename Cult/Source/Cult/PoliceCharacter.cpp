@@ -3,6 +3,7 @@
 
 #include "PoliceCharacter.h"
 #include "CultistCharacter.h"
+#include "MySocketPoliceActor.h"
 #include "GameFramework/Actor.h"
 #include "Camera/CameraComponent.h"
 #include"Components/BoxComponent.h"
@@ -18,6 +19,11 @@
 #include "Perception/AISense_Sight.h"
 #include "Perception/AIPerceptionStimuliSourceComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "BuildingBlockComponent.h"
+#include "GameFramework/PlayerController.h"
+#include "Engine/World.h"
+
+extern AMySocketPoliceActor* MySocketPoliceActor;
 
 APoliceCharacter::APoliceCharacter(const FObjectInitializer& ObjectInitializer)
 {
@@ -135,6 +141,19 @@ void APoliceCharacter::BeginPlay()	// √ ±‚»≠
 		}
 	}
 
+	if (TestTargetActor)
+	{
+		TestTargetBlock = Cast<UBuildingBlockComponent>(TestTargetActor->GetComponentByClass(UBuildingBlockComponent::StaticClass()));
+		if (TestTargetBlock)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Target Block Found: %s"), *TestTargetBlock->GetName());
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("Failed to get BuildingBlockComponent from %s"), *TestTargetActor->GetName());
+		}
+	}
+
 
 }
 
@@ -154,6 +173,10 @@ void APoliceCharacter::Tick(float DeltaTime)
 	{
 		AimPitch = 0.0f;
 	}
+
+
+
+
 }
 
 void APoliceCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -174,6 +197,8 @@ void APoliceCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 	UE_LOG(LogTemp, Warning, TEXT("Binding Aim input"));
 	PlayerInputComponent->BindAction("Aim", IE_Pressed, this, &APoliceCharacter::OnAimPressed);
 	PlayerInputComponent->BindAction("Aim", IE_Released, this, &APoliceCharacter::StopAiming);
+
+	PlayerInputComponent->BindAction("TestCollapse", IE_Pressed, this, &APoliceCharacter::TestCollapse);
 }
 
 void APoliceCharacter::ToggleCrouch()
@@ -279,18 +304,28 @@ void APoliceCharacter::FireTaser()
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Taser Effect"));
 
+
 		AActor* HitActor = ParticleResult.GetActor();
 		if (HitActor)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("HitActor: %s"), *HitActor->GetName());
+			const TMap<int, ACharacter*>& Characters = MySocketPoliceActor->GetSpawnedCharacters();
 
-			ACultistCharacter* Cultist = Cast<ACultistCharacter>(HitActor);
-
-			if (Cultist)
+			for (auto& Pair : Characters)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Shot Cultist"));
-				Cultist->GotHitTaser(this);
-				
+				if (Pair.Value == HitActor)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Shot Cultist"));
+					FHitPacket HitPacket;
+					HitPacket.AttackerID = my_ID;
+					HitPacket.TargetID = Pair.Key;
+					HitPacket.Weapon = EWeaponType::Taser;
+
+					if (MySocketPoliceActor)
+					{
+						MySocketPoliceActor->SendHitData(HitPacket);
+					}
+					return;
+				}
 			}
 		}
 	}
@@ -336,14 +371,24 @@ void APoliceCharacter::ShootPistol()
 		AActor* HitActor = ParticleResult.GetActor();
 		if (HitActor)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("HitActor: %s"), *HitActor->GetName());
+			const TMap<int, ACharacter*>& Characters = MySocketPoliceActor->GetSpawnedCharacters();
 
-			ACultistCharacter* Cultist = Cast<ACultistCharacter>(HitActor);
-
-			if (Cultist)
+			for (auto& Pair : Characters)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Shot Cultist"));
-				Cultist->TakeDamage(AttackDamage);
+				if (Pair.Value == HitActor)
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Shot Cultist"));
+					FHitPacket HitPacket;
+					HitPacket.AttackerID = my_ID;
+					HitPacket.TargetID = Pair.Key;
+					HitPacket.Weapon = EWeaponType::Pistol;
+
+					if (MySocketPoliceActor)
+					{
+						MySocketPoliceActor->SendHitData(HitPacket);
+					}
+					return;
+				}
 			}
 		}
 
@@ -393,12 +438,25 @@ void APoliceCharacter::BatonAttack()
 		AActor* HitActor = HitResult.GetActor();
 		if (HitActor)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Hit Actor: %s"), *HitActor->GetName());
-			ACultistCharacter* Cultist = Cast<ACultistCharacter>(HitActor);
-			if (Cultist)
+			const TMap<int, ACharacter*>& Characters = MySocketPoliceActor->GetSpawnedCharacters();
+			for (auto& Pair : Characters)
 			{
-				OnAttackHit(Cultist);
+				if (Pair.Value == HitActor)
+				{
+					FHitPacket HitPacket;
+					HitPacket.AttackerID = my_ID;
+					HitPacket.TargetID = Pair.Key;
+					HitPacket.Weapon = EWeaponType::Baton;
+
+					if (MySocketPoliceActor)
+					{
+						MySocketPoliceActor->SendHitData(HitPacket);
+					}
+					return;
+				}
 			}
+
+			UE_LOG(LogTemp, Error, TEXT("HitActor is not in SpawnedCharacters!"));
 		}
 	}
 }
@@ -488,6 +546,8 @@ void APoliceCharacter::SwitchWeapon()
 	if (bIsAiming)return;
 	if (bIsShooting)return;
 	if (bIsAttacking)return;
+	if (bIsSwitchingWeapon)return;
+	bIsSwitchingWeapon = true;
 	if (CurrentWeapon == EWeaponType::Baton)
 		CurrentWeapon = EWeaponType::Pistol;
 	else if (CurrentWeapon == EWeaponType::Pistol)
@@ -496,6 +556,7 @@ void APoliceCharacter::SwitchWeapon()
 		CurrentWeapon = EWeaponType::Baton;
 
 	UpdateWeaponVisibility();
+	GetWorld()->GetTimerManager().SetTimer(SwitchWeaponHandle, this, &APoliceCharacter::SwitchWeaponEnd, 0.5f, false);
 }
 
 void APoliceCharacter::UpdateWeaponVisibility()
@@ -503,6 +564,11 @@ void APoliceCharacter::UpdateWeaponVisibility()
 	BatonMesh->SetVisibility(CurrentWeapon == EWeaponType::Baton);
 	PistolMesh->SetVisibility(CurrentWeapon == EWeaponType::Pistol);
 	TaserMesh->SetVisibility(CurrentWeapon == EWeaponType::Taser);
+}
+
+void APoliceCharacter::SwitchWeaponEnd()
+{
+	bIsSwitchingWeapon = false;
 }
 
 void APoliceCharacter::OnAimPressed()
@@ -666,4 +732,17 @@ void APoliceCharacter::VaultStart()
 void APoliceCharacter::VaultEnd()
 {
 	IsPakour = false;
+}
+
+void APoliceCharacter::TestCollapse()
+{
+	if (TestTargetBlock)
+	{
+		FVector ImpulseDirection = FVector::UpVector;
+
+		UE_LOG(LogTemp, Warning, TEXT("Sending impulse to block"));
+		TestTargetBlock->ReceiveImpulse(ImpulseAmount, ImpulseDirection);
+
+		DrawDebugSphere(GetWorld(), TestTargetBlock->GetComponentLocation(), 30.f, 12, FColor::Red, false, 2.0f);
+	}
 }
