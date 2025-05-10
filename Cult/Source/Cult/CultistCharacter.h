@@ -97,6 +97,8 @@ public:
 	bool TurnToStun = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
 	bool TurnToGetUp = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+	bool bIsDead = false;
 	FTimerHandle ReviveTimerHandle;
 	FTimerHandle HitByAttackTH;
 	UFUNCTION(BlueprintCallable, Category="Health")

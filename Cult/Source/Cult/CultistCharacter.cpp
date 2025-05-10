@@ -141,11 +141,11 @@ void ACultistCharacter::MoveForward(float Value)
 		FRotator YawRotation(0, ControlRotation.Yaw, 0);
 
 		FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-		UE_LOG(LogTemp, Warning, TEXT("MoveForward: %f"), Value);
-		UE_LOG(LogTemp, Warning, TEXT("WalkSpeed: %f"), GetCharacterMovement()->MaxWalkSpeed);
-		UE_LOG(LogTemp, Warning, TEXT("Movement Mode: %d"), GetCharacterMovement()->MovementMode);
-		UE_LOG(LogTemp, Warning, TEXT("Is Falling: %d"), GetCharacterMovement()->IsFalling());
-		UE_LOG(LogTemp, Warning, TEXT("Is Moving On Ground: %d"), GetCharacterMovement()->IsMovingOnGround());
+		//UE_LOG(LogTemp, Warning, TEXT("MoveForward: %f"), Value);
+		//UE_LOG(LogTemp, Warning, TEXT("WalkSpeed: %f"), GetCharacterMovement()->MaxWalkSpeed);
+		//UE_LOG(LogTemp, Warning, TEXT("Movement Mode: %d"), GetCharacterMovement()->MovementMode);
+		//UE_LOG(LogTemp, Warning, TEXT("Is Falling: %d"), GetCharacterMovement()->IsFalling());
+		//UE_LOG(LogTemp, Warning, TEXT("Is Moving On Ground: %d"), GetCharacterMovement()->IsMovingOnGround());
 		AddMovementInput(Direction, Value);
 	}
 }
@@ -155,7 +155,7 @@ void ACultistCharacter::MoveRight(float Value)
 	if (Value != 0.0f)
 	{
 		FRotator ControlRotation = GetControlRotation();
-		FRotator YawRotation(0, ControlRotation.Yaw, 9);
+		FRotator YawRotation(0, ControlRotation.Yaw, 0);
 
 		FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 		AddMovementInput(Direction, Value);
@@ -193,7 +193,10 @@ void ACultistCharacter::PerformRitual()
 	UE_LOG(LogTemp, Warning, TEXT("TaskRitualProgress: %f"), TaskRitualProgress);
 	if (TaskRitualProgress >= 100.0f)
 	{
-		CurrentAltar->IncreaseRitualGauge();
+		if (CurrentAltar)
+		{
+			CurrentAltar->IncreaseRitualGauge();
+		}
 		StopRitual();
 	}
 
@@ -294,11 +297,7 @@ void ACultistCharacter::TakeDamage(float DamageAmount)
 	}
 
 
-	// 잠시 이동불가
-	GetCharacterMovement()->MaxWalkSpeed = 0.0f;
-	GetCharacterMovement()->GroundFriction = 0.1f; // 마찰율줄이기
-	GetCharacterMovement()->bOrientRotationToMovement = false;
-
+	GetCharacterMovement()->MaxWalkSpeed = 100.0f;
 	// 잠시 둔화
 	//GetCharacterMovement()->MaxWalkSpeed *= 0.4f;
 
@@ -370,6 +369,16 @@ void ACultistCharacter::GottaRun()
 void ACultistCharacter::Die()
 {
 	UE_LOG(LogTemp, Warning, TEXT("Died."));
+
+	bIsDead = true;
+	GetCharacterMovement()->DisableMovement();
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (PC)
+	{
+		DisableInput(PC);                   // 모든 입력 막기
+	}
+
 }
 
 void ACultistCharacter::Stun()
@@ -425,7 +434,7 @@ void ACultistCharacter::Revive()
 
 	// 이동 가능한 상태로 복구
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-	GetCharacterMovement()->MaxWalkSpeed = 550.0f;
+	GetCharacterMovement()->MaxWalkSpeed = 600.0f;
 	UE_LOG(LogTemp, Warning, TEXT("Revive."));
 
 }
