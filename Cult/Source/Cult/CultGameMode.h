@@ -43,4 +43,8 @@ public:
 	TSubclassOf<class UUserWidget> FadeWidgetClass;
 
 	void SpawnAltars();
+
+	UFUNCTION()
+	void CheckPoliceVictoryCondition();
+
 };

@@ -378,11 +378,19 @@ void ACultistCharacter::Die()
 	{
 		DisableInput(PC);                   // 모든 입력 막기
 	}
-
+	if (ACultGameMode* GM = Cast<ACultGameMode>(UGameplayStatics::GetGameMode(this)))
+	{
+		GM->CheckPoliceVictoryCondition();	// 죽었을때, 감금당했을 때 체크
+	}
 }
 
 void ACultistCharacter::Stun()
 {
+	if (bIsAlreadyStunned)
+	{
+		Die();
+		return;
+	}
 	UE_LOG(LogTemp, Warning, TEXT("Got Stunned"));
 	bIsStunned = true;
 
@@ -514,6 +522,10 @@ void ACultistCharacter::GetUp()
 	GetWorld()->GetTimerManager().SetTimer(ReviveTimerHandle, this, &ACultistCharacter::Revive, 3.0f, false);
 }
 
+bool ACultistCharacter::IsInactive() const
+{
+	return bIsDead || bIsConfined;
+}
 
 // 이동 시 중단 but 이동불가로 설정
 /*

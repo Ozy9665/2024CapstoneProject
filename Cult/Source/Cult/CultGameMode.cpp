@@ -108,3 +108,21 @@ void ACultGameMode::SpawnAltars()
 		SpawnedAltar2->SetActorScale3D(FVector(5.0f));
 	}
 }
+
+void ACultGameMode::CheckPoliceVictoryCondition()
+{
+	TArray<AActor*> Cultists;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ACultistCharacter::StaticClass(), Cultists);
+	for (AActor* Actor : Cultists)
+	{
+		ACultistCharacter* Cultist = Cast<ACultistCharacter>(Actor);
+		if (Cultist && !Cultist->IsInactive())
+		{
+			// 해당 신도가 죽거나 감금당하면 true. 부정이므로 죽지도 감금당하지도 않았을 시 return
+			return;
+		}
+	}
+	// return 안됐음 -> 생존자 없음
+	UE_LOG(LogTemp, Warning, TEXT("All Cultist Dead or Confined. PoliceWin"));
+	EndGame();
+}

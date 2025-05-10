@@ -123,6 +123,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Health")
 	void IntoRagdoll();
 
+	UFUNCTION(BlueprintCallable, Category = "Health") 
+	bool IsInactive()const;
+
 	FTimerHandle RitualTimerHandle;
 
 	// ==== Func ====
