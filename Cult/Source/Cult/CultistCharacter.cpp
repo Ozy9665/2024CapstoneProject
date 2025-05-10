@@ -25,7 +25,7 @@ ACultistCharacter::ACultistCharacter()
 
 	bIsPerformingRitual = false;
 	RitualProgress = 0.0f;
-	RitualSpeed = 10.0f; // 초당 증가속도
+	RitualSpeed = 50.0f; // 초당 증가속도
 
 	// 의식 수행 작업 진행도
 	TaskRitualProgress = 0.0f;
@@ -37,6 +37,18 @@ ACultistCharacter::ACultistCharacter()
 void ACultistCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	// 초기화 값
+	WalkSpeed = 600.0f;
+	Health = 100.0f;
+	CurrentHealth = 100.0f;
+	bIsStunned = false;
+	bIsAlreadyStunned = false;
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+	bIsPerformingRitual = false;
+	RitualProgress = 0.0f;
+	RitualSpeed = 50.0f; // 초당 증가속도
+	TaskRitualProgress = 0.0f;	// 의식수행 작업 진행도
+	TaskRitualSpeed = 20.0f;
 	// 컨트롤러 yaw 회전 false
 	bUseControllerRotationYaw = false;
 	// 입력 방향으로 회전
@@ -110,6 +122,14 @@ void ACultistCharacter::BeginPlay()
 	else
 	{
 		UE_LOG(LogTemp, Error, TEXT("No Controller found on BeginPlay"));
+	}
+
+	APlayerController* PCtrl = Cast<APlayerController>(GetController());
+	if (PCtrl)
+	{
+		// 마우스 커서 숨기고, 게임 전용 입력 모드로 복원
+		PCtrl->bShowMouseCursor = false;
+		PCtrl->SetInputMode(FInputModeGameOnly());
 	}
 
 }

@@ -6,6 +6,13 @@
 #include "GameFramework/GameModeBase.h"
 #include "CultGameMode.generated.h"
 
+UENUM(BlueprintType)
+enum class EGAME_END_TYPE : uint8
+{
+	CultistWin	UMETA(DisplayName = "Cultist Win"),
+	PoliceWin	UMETA(DisplayName = "Police Win")
+};
+
 /**
  * 
  */
@@ -26,10 +33,11 @@ public:
 	void CheckRitualComlete(float CurrentRitualGauge);
 
 	// 게임 재시작
+	UFUNCTION(BlueprintCallable, Category = "Ending")
 	void RestartGame();
 
 	// 게임 종료 처리
-	void EndGame();
+	void EndGame(EGAME_END_TYPE EndType);
 
 	// 제단 생성
 	UPROPERTY(EditAnywhere, Category = "Altar Spawn")
@@ -47,4 +55,9 @@ public:
 	UFUNCTION()
 	void CheckPoliceVictoryCondition();
 
+	// 게임결과
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
+	TSubclassOf<class UUserWidget> GameResultWidgetClass;
+
+	UUserWidget* GameResultWidget = nullptr;
 };

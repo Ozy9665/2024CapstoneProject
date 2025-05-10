@@ -5,6 +5,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Kismet/GameplayStatics.h"
 #include "PoliceCharacter.h"
+#include "GameFramework/Character.h"
 // Gamemode - camera
 #include "Camera/PlayerCameraManager.h"
 #include "Kismet/GameplayStatics.h"
@@ -15,7 +16,8 @@
 #include "Engine/World.h"
 // FadeAnim
 #include "FadeWidget.h"
-
+// TextBlock
+#include "Components/TextBlock.h"
 
 ACultGameMode::ACultGameMode()
 {
@@ -55,28 +57,62 @@ void ACultGameMode::CheckRitualComlete(float CurrentRitualGauge)
 	if (CurrentRitualGauge >= 100.0f)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Ritual Completed! Ending Game."));
-		EndGame();
+		EndGame(EGAME_END_TYPE::CultistWin);
 	}
 }
 
-void ACultGameMode::EndGame()
+void ACultGameMode::EndGame(EGAME_END_TYPE EndType)
 {
 	UE_LOG(LogTemp, Warning, TEXT("Game Over."));
 
 	APlayerController* PC = GetWorld()->GetFirstPlayerController();
 	if (PC) // 실행
 	{
-		PC->ClientStartCameraShake(UMyLegacyCameraShake::StaticClass());
+		PC->bShowMouseCursor = true;
+		PC->SetInputMode(FInputModeUIOnly());
+
+		if (GameResultWidgetClass)
+		{
+			GameResultWidget = CreateWidget<UUserWidget>(PC, GameResultWidgetClass);
+			if (GameResultWidget)
+			{
+				GameResultWidget->AddToViewport();
+
+				FString ResultText;
+				UTextBlock* ResultTextBlock = Cast<UTextBlock>(GameResultWidget->GetWidgetFromName(TEXT("TextBlock_ResultText")));
+
+				switch (EndType)
+				{
+				case EGAME_END_TYPE::CultistWin:
+					ResultText = TEXT("Cultist Win");
+					if (ResultTextBlock)
+					{
+						ResultTextBlock->SetText(FText::FromString(ResultText));
+					}
+					PC->ClientStartCameraShake(UMyLegacyCameraShake::StaticClass());
+					break;
+				case EGAME_END_TYPE::PoliceWin:
+					ResultText = TEXT("Police Win");
+					if (ResultTextBlock)
+					{
+						ResultTextBlock->SetText(FText::FromString(ResultText));
+					}
+					break;
+				}
+
+				
+			}
+		}
 	}
 
 	// 게임 재시작	(3seconds)
-	FTimerHandle RestartTimerHandle;
-	GetWorld()->GetTimerManager().SetTimer(RestartTimerHandle, this, &ACultGameMode::RestartGame, 3.0f, false);
+	//FTimerHandle RestartTimerHandle;
+	//GetWorld()->GetTimerManager().SetTimer(RestartTimerHandle, this, &ACultGameMode::RestartGame, 5.0f, false);
 }
 
 void ACultGameMode::RestartGame()
 {
-	UGameplayStatics::OpenLevel(this, FName(*GetWorld()->GetName()), false);
+	UGameplayStatics::OpenLevel(this, FName("CharacterUI"));
 }
 
 void ACultGameMode::SpawnAltars()
@@ -124,5 +160,5 @@ void ACultGameMode::CheckPoliceVictoryCondition()
 	}
 	// return 안됐음 -> 생존자 없음
 	UE_LOG(LogTemp, Warning, TEXT("All Cultist Dead or Confined. PoliceWin"));
-	EndGame();
+	EndGame(EGAME_END_TYPE::PoliceWin);
 }

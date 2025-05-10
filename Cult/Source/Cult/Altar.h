@@ -68,7 +68,7 @@ public:
 	float RitualGauge = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ritual")
-	float BaseGainRate = 5.0f;
+	float BaseGainRate = 35.0f;
 
 
 	UFUNCTION(BlueprintCallable, Category="Ritual")

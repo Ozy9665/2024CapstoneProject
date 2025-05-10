@@ -72,7 +72,7 @@ public:
 	float RitualProgress = 0.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual")
-	float RitualSpeed = 10.0f;
+	float RitualSpeed = 50.0f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 	class USpringArmComponent* SpringArmComp;

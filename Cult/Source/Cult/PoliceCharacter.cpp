@@ -124,6 +124,8 @@ void APoliceCharacter::BeginPlay()	// ÃÊ±âÈ­
 	if (PC)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("valid PlayerController"));
+		PC->bShowMouseCursor = false;
+		PC->SetInputMode(FInputModeGameOnly());
 	}
 	else
 	{
