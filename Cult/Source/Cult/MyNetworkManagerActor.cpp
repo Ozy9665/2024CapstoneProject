@@ -125,7 +125,8 @@ void AMyNetworkManagerActor::CheckAndSpawnActor()
             return;
         }
         PC->Possess(CultistPawn);
-
+        PC->SetInputMode(FInputModeGameOnly());
+        PC->bShowMouseCursor = false;
         UChildActorComponent* CAC = CultistPawn->FindComponentByClass<UChildActorComponent>();
         if (not CAC)
         {
@@ -189,7 +190,8 @@ void AMyNetworkManagerActor::CheckAndSpawnActor()
             return;
         }
         PC->Possess(PolicePawn);
-          
+        PC->SetInputMode(FInputModeGameOnly());
+        PC->bShowMouseCursor = false;
         UChildActorComponent* CAC = PolicePawn->FindComponentByClass<UChildActorComponent>();
         if (not CAC)
         {
