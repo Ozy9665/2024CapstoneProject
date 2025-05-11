@@ -55,6 +55,8 @@ struct FCultistCharacterState
 	uint8_t ABP_IsElectric;
 	uint8_t ABP_TTStun;
 	uint8_t ABP_TTGetUp;
+	uint8_t ABP_IsDead;
+	uint8_t ABP_IsStunned;
 };
 
 struct FImpactPacket
@@ -107,9 +109,11 @@ constexpr int hitHeader = 0x04;
 constexpr int connectionHeader = 0x10;
 constexpr int DisconnectionHeader = 0x11;
 constexpr int readyHeader = 0x12;
+constexpr int disableHeader = 0x13;
 
 constexpr FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,
 	false, false, false, EWeaponType::Baton, false, false, EVaultingType::OneHandVault, false, false, false, false };
 
-constexpr float BatonAttackDamage = 20.0f;
+constexpr float BatonAttackDamage = 50.0f;
+constexpr float PistolAttackDamage = 50.0f;

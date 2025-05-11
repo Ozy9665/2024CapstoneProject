@@ -478,14 +478,13 @@ void AMySocketPoliceActor::UpdateCultistAnimInstanceProperties(UAnimInstance* An
     }
 
     // Speed 업데이트
+    FProperty* SpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Speed"));
+    if (SpeedProperty && SpeedProperty->IsA<FDoubleProperty>())
     {
-        FProperty* SpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Speed"));
-        if (SpeedProperty && SpeedProperty->IsA<FDoubleProperty>())
-        {
-            FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(SpeedProperty);
-            DoubleProp->SetPropertyValue_InContainer(AnimInstance, State.Speed);
-        }
+        FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(SpeedProperty);
+        DoubleProp->SetPropertyValue_InContainer(AnimInstance, State.Speed);
     }
+    
 
     FProperty* IsCrouchProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Crouch"));
     if (IsCrouchProperty && IsCrouchProperty->IsA<FBoolProperty>())
@@ -534,6 +533,20 @@ void AMySocketPoliceActor::UpdateCultistAnimInstanceProperties(UAnimInstance* An
     {
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_TTGetUpProperty);
         BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_TTGetUp));
+    }
+
+    FProperty* IsABP_IsDeadProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsDead"));
+    if (IsABP_IsDeadProperty && IsABP_IsDeadProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsDeadProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_IsDead));
+    }
+
+    FProperty* IsABP_IsStunnedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsStunned"));
+    if (IsABP_IsStunnedProperty && IsABP_IsStunnedProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsStunnedProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_IsStunned));
     }
 }
 // 이것도 shoot pistol에서 bhit시 호출하도록 변경.
@@ -625,7 +638,6 @@ void AMySocketPoliceActor::CloseConnection() {
     WSACleanup();
 
     // 게임 종료
-    // FGenericPlatformMisc::RequestExit(false);
     return;
 }
 

@@ -1,4 +1,5 @@
 #include "Protocol.h"
+#include <thread>
 
 std::unordered_map<int, SESSION> g_users;
 std::atomic<int> client_id = 0;
@@ -22,7 +23,9 @@ void CALLBACK g_send_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over
 void CALLBACK g_recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, DWORD flag)
 {
 	auto my_id = reinterpret_cast<long long>(p_over->hEvent);
-	g_users[my_id].recv_callback(err, num_bytes, p_over, flag);
+	if (g_users.contains(my_id)) {
+		g_users[my_id].recv_callback(err, num_bytes, p_over, flag);
+	}
 }
 
 EXP_OVER::EXP_OVER(int header, const void* data, size_t size) 			// player
@@ -83,6 +86,11 @@ EXP_OVER::EXP_OVER(int header, int id) : id(id)							// disconnection
 
 void SESSION::do_recv() 
 {
+	if (c_socket == INVALID_SOCKET)
+	{
+		std::cout << "do_recv() aborted: invalid socket\n";
+		return;
+	}
 	DWORD recv_flag = 0;
 	ZeroMemory(&recv_over, sizeof(recv_over));
 	recv_over.hEvent = reinterpret_cast<HANDLE>(id);
@@ -120,12 +128,24 @@ SESSION::SESSION(int session_id, SOCKET s) : id(session_id), c_socket(s)								
 
 SESSION::~SESSION()
 {
-	closesocket(c_socket);
-	std::cout << "SESSION 제거. port: " << c_socket << std::endl;
+	if (c_socket != INVALID_SOCKET)
+	{
+		closesocket(c_socket);
+		std::cout << "SESSION 제거. port: " << c_socket << std::endl;
+	}
+	else
+	{
+		std::cout << "SESSION 제거. 이미 닫힌 소켓.\n";
+	}
 }
 
 void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, DWORD flag)
 {
+	if (c_socket == INVALID_SOCKET)
+	{
+		std::cout << "[recv_callback] Skipped due to invalid socket. ID: " << id << "\n";
+		return;
+	}
 	if (0 != err || 0 == num_bytes) {
 		std::cout << "Client [" << id << "] disconnected." << std::endl;
 		for (auto& u : g_users) {
@@ -151,9 +171,10 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		cultist_state = recvState;
 		cultist_state.PlayerID = id;
 		//std::cout << cultist_state.PositionX << " " << cultist_state.PositionY << "\n";
-		//std::cout << "[Cultist] ID=" << id << "\n";
+		//std::cout << "[Cultist] ID=" << cultist_state.CurrentHealth << "\n";
 		//std::cout << "  States   : Crouch=" << (cultist_state.Crouch ? "true" : "false") << std::endl;
-		//std::cout << "  States   : isElectric=" << (cultist_state.ABP_IsElectric ? "true" : "false") << std::endl;
+		//std::cout << "  States   : ABP_TTStun=" << (cultist_state.ABP_TTStun ? "true" : "false") << std::endl;
+		//std::cout << "  States   : ABP_IsDead=" << (cultist_state.ABP_IsDead ? "true" : "false") << std::endl;
 
 
 		for (auto& u : g_users) {
@@ -255,6 +276,46 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 		this->setState(ST_INGAME);
 		break;
 	}
+	case disableHeader:
+	{
+		this->setState(ST_DISABLE);
+
+		bool allCultistsDisabled = true;
+
+		for (const auto& [id, session] : g_users)
+		{
+			if (session.getRole() == 0 && session.getState() != ST_DISABLE) /* Cultist */
+			{
+				allCultistsDisabled = false;
+				break;
+			}
+		}
+
+		if (allCultistsDisabled)
+		{
+			std::cout << "[Server] All cultists are disabled!\n";
+			std::cout << "[Server] Police Win!\n";
+
+			// TODO: 경찰 승리 처리 or 게임 종료 로직 추가
+			for (auto& [id, session] : g_users)
+			{
+				if (session.isValidSocket())
+				{
+					session.setState(ST_FREE);
+					session.do_send_disconnection(DisconnectionHeader, id);
+					closesocket(c_socket);
+					std::cout << "소켓 수동 종료. ID: " << id << std::endl;
+					c_socket = INVALID_SOCKET;
+				}
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // 전송 여유 시간
+
+			g_users.clear(); // 서버 상태 리셋
+			client_id = 1;   // ID 다시 초기화
+
+		}
+		break;
+	}
 	default:
 		std::cout << "Unknown packet type received: " << static_cast<int>(recv_buffer[0]) << std::endl;
 	}
@@ -295,6 +356,10 @@ void SESSION::setState(const char st) {
 	state = st;
 }
 
+char SESSION::getState() const {
+	return state;
+}
+
 void SESSION::setPoliceState(const FPoliceCharacterState& state) {
 	police_state = state;
 }
@@ -314,5 +379,5 @@ bool SESSION::isValidSocket() const
 }
 
 bool SESSION::isValidState() const {
-	return state == ST_INGAME;
+	return (state == ST_INGAME) || (state == ST_DISABLE);
 }

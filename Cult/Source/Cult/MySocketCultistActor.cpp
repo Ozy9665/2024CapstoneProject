@@ -2,8 +2,10 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include "Camera/CameraActor.h"
+#include "CultistCharacter.h"
 
 #pragma comment(lib, "ws2_32.lib")
+AMySocketCultistActor* MySocketCultistActor = nullptr;
 
 // Sets default values
 AMySocketCultistActor::AMySocketCultistActor()
@@ -41,7 +43,7 @@ AMySocketCultistActor::AMySocketCultistActor()
 void AMySocketCultistActor::BeginPlay()
 {
     Super::BeginPlay();
-
+    MySocketCultistActor = this;
     MyCharacter = Cast<ACultistCharacter>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
     if (!MyCharacter)
     {
@@ -257,7 +259,7 @@ void AMySocketCultistActor::ProcessHitData(char* Buffer, int32 BytesReceived)
                 }
                 AsyncTask(ENamedThreads::GameThread, [this]()
                     {
-                        MyCharacter->TakeDamage(BatonAttackDamage);
+                        MyCharacter->TakeDamage(PistolAttackDamage);
                     });
             }
             else {
@@ -268,7 +270,7 @@ void AMySocketCultistActor::ProcessHitData(char* Buffer, int32 BytesReceived)
                 }
                 AsyncTask(ENamedThreads::GameThread, [this, Target]()
                     {
-                        Target->TakeDamage(BatonAttackDamage);
+                        Target->TakeDamage(PistolAttackDamage);
                     });
             }
             UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
@@ -312,7 +314,6 @@ void AMySocketCultistActor::ProcessHitData(char* Buffer, int32 BytesReceived)
         }
     }
 }
-
 
 void AMySocketCultistActor::ProcessConnection(char* Buffer, int32 BytesReceived) {
     if (BytesReceived < 4)
@@ -371,6 +372,29 @@ void AMySocketCultistActor::ProcessDisconnection(char* Buffer, int32 BytesReceiv
     }
 
     SafeDestroyCharacter(DisconnectedID);
+}
+
+void AMySocketCultistActor::SendDisable() {
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        auto packet_size = 3;
+
+        TArray<uint8> PacketData;
+        PacketData.SetNumUninitialized(packet_size);
+
+        PacketData[0] = disableHeader;
+        PacketData[1] = packet_size;
+        PacketData[2] = my_ID;
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
+        }
+    }
+    else
+    {
+        CloseConnection();
+    }
 }
 
 void AMySocketCultistActor::SendPlayerData()
@@ -432,10 +456,12 @@ FCultistCharacterState AMySocketCultistActor::GetCharacterState()
         State.ABP_IsHitByAnAttack = CultistChar->bIsHitByAnAttack;
         State.ABP_IsFrontKO = CultistChar->bIsFrontFallen;
         State.ABP_IsElectric = CultistChar->bIsElectric;
-        State.ABP_TTStun = CultistChar->bIsStunned;
+        State.ABP_TTStun = CultistChar->TurnToStun;
         State.ABP_TTGetUp = CultistChar->TurnToGetUp;
-
-        // UE_LOG(LogTemp, Error, TEXT("Client bIsPerformingRitual: %d, bIsHitByAnAttack: %d"), State.bIsPerformingRitual, State.bIsHitByAnAttack);
+        State.ABP_IsDead = CultistChar->bIsDead;
+        State.ABP_IsStunned = CultistChar->bIsStunned;
+        
+        //UE_LOG(LogTemp, Error, TEXT("Client ABP_TTStun: %d, ABP_IsDead: %d"), State.ABP_TTStun, CultistChar->bIsDead);
         State.CurrentHealth = CultistChar->CurrentHealth;
     }
     return State;
@@ -522,15 +548,13 @@ void AMySocketCultistActor::UpdateCultistAnimInstanceProperties(UAnimInstance* A
     }
 
     // Speed 업데이트
+    FProperty* SpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Speed"));
+    if (SpeedProperty && SpeedProperty->IsA<FDoubleProperty>())
     {
-        FProperty* SpeedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Speed"));
-        if (SpeedProperty && SpeedProperty->IsA<FDoubleProperty>())
-        {
-            FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(SpeedProperty);
-            DoubleProp->SetPropertyValue_InContainer(AnimInstance, State.Speed);
-        }
+        FDoubleProperty* DoubleProp = CastFieldChecked<FDoubleProperty>(SpeedProperty);
+        DoubleProp->SetPropertyValue_InContainer(AnimInstance, State.Speed);
     }
-
+    
     FProperty* IsCrouchProperty = AnimInstance->GetClass()->FindPropertyByName(FName("Crouch"));
     if (IsCrouchProperty && IsCrouchProperty->IsA<FBoolProperty>())
     {
@@ -578,6 +602,20 @@ void AMySocketCultistActor::UpdateCultistAnimInstanceProperties(UAnimInstance* A
     {
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_TTGetUpProperty);
         BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_TTGetUp));
+    }
+
+    FProperty* IsABP_IsDeadProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsDead"));
+    if (IsABP_IsDeadProperty && IsABP_IsDeadProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsDeadProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_IsDead));
+    }
+
+    FProperty* IsABP_IsStunnedProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsStunned"));
+    if (IsABP_IsStunnedProperty && IsABP_IsStunnedProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsStunnedProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_IsStunned));
     }
 }
 
@@ -1083,7 +1121,6 @@ void AMySocketCultistActor::CloseConnection() {
     WSACleanup();
 
     // 게임 종료
-    // FGenericPlatformMisc::RequestExit(false);
     return;
 }
 

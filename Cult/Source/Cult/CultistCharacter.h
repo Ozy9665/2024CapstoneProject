@@ -11,6 +11,7 @@
 #include "RitualPerformer.h"
 #include "CultistCharacter.generated.h"
 
+class AMySocketCultistActor;
 
 // Ability Type
 UENUM(BlueprintType)
@@ -101,6 +102,7 @@ public:
 	bool bIsDead = false;
 	FTimerHandle ReviveTimerHandle;
 	FTimerHandle HitByAttackTH;
+	FTimerHandle DisableTimerHandle;
 	UFUNCTION(BlueprintCallable, Category="Health")
 	void Die();
 	UFUNCTION(BlueprintCallable, Category = "Health")
@@ -148,4 +150,5 @@ public:
 
 	int my_ID = -1;
 	int GetPlayerID() const;
+	void SendDisableToServer();
 };

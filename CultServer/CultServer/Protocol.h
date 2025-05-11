@@ -17,10 +17,12 @@ constexpr int hitHeader = 0x04;
 constexpr int connectionHeader = 0x10;
 constexpr int DisconnectionHeader = 0x11;
 constexpr int readyHeader = 0x12;
+constexpr int disableHeader = 0x13;
 
 constexpr char ST_FREE{ 0 };
 constexpr char ST_INGAME{ 1 };
 constexpr char ST_CLOSE{ 2 };
+constexpr char ST_DISABLE{ 3 };
 
 void CALLBACK g_recv_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
 void CALLBACK g_send_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
@@ -89,6 +91,8 @@ struct FCultistCharacterState
 	uint8_t ABP_IsElectric;
 	uint8_t ABP_TTStun;
 	uint8_t ABP_TTGetUp;
+	uint8_t ABP_IsDead;
+	uint8_t ABP_IsStunned;
 };
 
 struct FImpactPacket
@@ -166,6 +170,8 @@ public:
 	void do_send_disconnection(char , int );
 
 	void setState(const char st);
+
+	char getState() const;
 
 	void setPoliceState(const FPoliceCharacterState& );
 

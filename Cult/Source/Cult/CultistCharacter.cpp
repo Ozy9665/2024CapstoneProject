@@ -2,12 +2,14 @@
 
 
 #include "CultistCharacter.h"
+#include "MySocketCultistActor.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Components/ProgressBar.h"
 #include "Components/InputComponent.h"
 
+extern AMySocketCultistActor* MySocketCultistActor;
 
 ACultistCharacter::ACultistCharacter()
 {
@@ -398,10 +400,13 @@ void ACultistCharacter::Die()
 	{
 		DisableInput(PC);                   // 모든 입력 막기
 	}
-	if (ACultGameMode* GM = Cast<ACultGameMode>(UGameplayStatics::GetGameMode(this)))
-	{
-		GM->CheckPoliceVictoryCondition();	// 죽었을때, 감금당했을 때 체크
-	}
+	// MySocketCultistActor에서 disable send하기. 
+	GetWorldTimerManager().SetTimer(DisableTimerHandle, this, &ACultistCharacter::SendDisableToServer, 5.0f, false);
+
+	//if (ACultGameMode* GM = Cast<ACultGameMode>(UGameplayStatics::GetGameMode(this)))
+	//{
+	//	GM->CheckPoliceVictoryCondition();	// 죽었을때, 감금당했을 때 체크
+	//}
 }
 
 void ACultistCharacter::Stun()
@@ -413,7 +418,7 @@ void ACultistCharacter::Stun()
 	}
 	UE_LOG(LogTemp, Warning, TEXT("Got Stunned"));
 	bIsStunned = true;
-
+	UE_LOG(LogTemp, Warning, TEXT("Stun called %d Now"), bIsStunned);
 	bIsElectric = false;
 
 	GetCharacterMovement()->DisableMovement();
@@ -566,4 +571,12 @@ void ACultistCharacter::LookUpCamera(float Value)
 
 int ACultistCharacter::GetPlayerID() const {
 	return my_ID;
+}
+
+void ACultistCharacter::SendDisableToServer()
+{
+	if (MySocketCultistActor)
+	{
+		MySocketCultistActor->SendDisable();
+	}
 }

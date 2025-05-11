@@ -11,6 +11,8 @@
 #include "CultistCharacter.h"
 #include "MySocketCultistActor.generated.h"
 
+class ACultistCharacter;
+
 UCLASS()
 class CULT_API AMySocketCultistActor : public AActor
 {
@@ -50,6 +52,7 @@ public:
 	void ProcessHitData(char* Buffer, int32 BytesReceived);
 	void ProcessConnection(char* Buffer, int32 BytesReceived);
 	void ProcessDisconnection(char* Buffer, int32 BytesReceived);
+	void SendDisable();
 	void SendPlayerData();
 	FCultistCharacterState GetCharacterState();
 	void ProcessCharacterUpdates();
