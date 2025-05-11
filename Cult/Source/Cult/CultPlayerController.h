@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "CultGameMode.h"
 #include "CultPlayerController.generated.h"
 
 /**
@@ -13,5 +14,5 @@ UCLASS()
 class CULT_API ACultPlayerController : public APlayerController
 {
 	GENERATED_BODY()
-	
+
 };

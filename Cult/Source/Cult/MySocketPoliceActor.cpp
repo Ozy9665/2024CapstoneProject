@@ -628,6 +628,7 @@ void AMySocketPoliceActor::SendParticleData(FHitResult HitResult) {
         UE_LOG(LogTemp, Error, TEXT("SendParticleData failed with error: %ld"), WSAGetLastError());
     }
 }
+#include "Components/TextBlock.h"
 
 void AMySocketPoliceActor::CloseConnection() {
     if (ClientSocket != INVALID_SOCKET)
@@ -637,7 +638,34 @@ void AMySocketPoliceActor::CloseConnection() {
     }
     WSACleanup();
 
-    // 게임 종료
+    AsyncTask(ENamedThreads::GameThread, [this]()
+        {
+            APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+
+            if (PC)
+            {
+                PC->bShowMouseCursor = true;
+                PC->SetInputMode(FInputModeUIOnly());
+
+                TSubclassOf<UUserWidget> GameResultWidgetClass = LoadClass<UUserWidget>(nullptr, TEXT("/Game/Cult_Custom/WBP_GameResult.WBP_GameResult_C"));
+                if (GameResultWidgetClass)
+                {
+                    UUserWidget* GameResultWidget = CreateWidget<UUserWidget>(PC, GameResultWidgetClass);
+                    if (GameResultWidget)
+                    {
+                        GameResultWidget->AddToViewport();
+
+                        UTextBlock* ResultTextBlock = Cast<UTextBlock>(GameResultWidget->GetWidgetFromName(TEXT("TextBlock_ResultText")));
+                        if (ResultTextBlock)
+                        {
+                            ResultTextBlock->SetText(FText::FromString(TEXT("GameOver"))); // 또는 Cultist Win
+                        }
+                    }
+                }
+            }
+        }
+    );
+
     Destroy();
     return;
 }
