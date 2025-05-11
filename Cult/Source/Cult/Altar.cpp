@@ -67,6 +67,7 @@ void AAltar::BeginPlay()
 	{
 		UE_LOG(LogTemp, Error, TEXT("Check Collision!"));
 	}
+	BaseGainRate = 35.0f;
 
 	// 충돌 이벤트 바인드
 	CollisionComp->OnComponentBeginOverlap.AddDynamic(this, &AAltar::OnOverlapBegin);

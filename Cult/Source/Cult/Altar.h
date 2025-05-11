@@ -74,6 +74,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Ritual")
 	void IncreaseRitualGauge();
 
+	FTimerHandle DisableTimerHandle;
 
 	//UPROPERTY(EditDefaultsOnly, Category="Effects")
 	//TSubclassOf<class UMatineeCameraShake> EarthquakeEffect;

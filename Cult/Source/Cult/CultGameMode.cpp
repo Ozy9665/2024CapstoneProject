@@ -52,12 +52,19 @@ void ACultGameMode::BeginPlay()
 	}
 }
 
+#include "MySocketCultistActor.h"
+extern AMySocketCultistActor* MySocketCultistActor;
+
+
 void ACultGameMode::CheckRitualComlete(float CurrentRitualGauge)
 {
 	if (CurrentRitualGauge >= 100.0f)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Ritual Completed! Ending Game."));
-		EndGame(EGAME_END_TYPE::CultistWin);
+		if (MySocketCultistActor)
+		{
+			MySocketCultistActor->SendDisable();
+		}
 	}
 }
 
