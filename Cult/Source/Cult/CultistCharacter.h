@@ -100,6 +100,8 @@ public:
 	bool TurnToGetUp = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
 	bool bIsDead = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	bool bIsPakour = false;
 	FTimerHandle ReviveTimerHandle;
 	FTimerHandle HitByAttackTH;
 	FTimerHandle DisableTimerHandle;
