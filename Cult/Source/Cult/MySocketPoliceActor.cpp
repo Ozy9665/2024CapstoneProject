@@ -663,11 +663,9 @@ void AMySocketPoliceActor::CloseConnection() {
                     }
                 }
             }
+            this->Destroy();
         }
     );
-
-    Destroy();
-    return;
 }
 
 void AMySocketPoliceActor::SafeDestroyCharacter(int PlayerID)

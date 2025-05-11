@@ -1147,11 +1147,9 @@ void AMySocketCultistActor::CloseConnection() {
                     }
                 }
             }
+            this->Destroy();
         }
     );
-
-    Destroy();
-    return;
 }
 
 void AMySocketCultistActor::SafeDestroyCharacter(int PlayerID)
