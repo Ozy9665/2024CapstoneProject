@@ -400,11 +400,9 @@ void ACultistCharacter::Die()
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (PC)
 	{
-		DisableInput(PC);                   // 모든 입력 막기
+		DisableInput(PC);
+		GetWorldTimerManager().SetTimer(DisableTimerHandle, this, &ACultistCharacter::SendDisableToServer, 5.0f, false);
 	}
-	// MySocketCultistActor에서 disable send하기. 
-	GetWorldTimerManager().SetTimer(DisableTimerHandle, this, &ACultistCharacter::SendDisableToServer, 5.0f, false);
-
 	//if (ACultGameMode* GM = Cast<ACultGameMode>(UGameplayStatics::GetGameMode(this)))
 	//{
 	//	GM->CheckPoliceVictoryCondition();	// 죽었을때, 감금당했을 때 체크

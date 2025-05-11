@@ -311,8 +311,6 @@ void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, 
 			std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // 전송 여유 시간
 
 			g_users.clear(); // 서버 상태 리셋
-			client_id = 1;   // ID 다시 초기화
-
 		}
 		break;
 	}
