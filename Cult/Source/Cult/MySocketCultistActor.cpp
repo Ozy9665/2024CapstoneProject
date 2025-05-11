@@ -1121,6 +1121,7 @@ void AMySocketCultistActor::CloseConnection() {
     WSACleanup();
 
     // 게임 종료
+    Destroy();
     return;
 }
 

@@ -638,6 +638,7 @@ void AMySocketPoliceActor::CloseConnection() {
     WSACleanup();
 
     // 게임 종료
+    Destroy();
     return;
 }
 
