@@ -21,6 +21,7 @@ ACultistCharacter::ACultistCharacter()
 	CurrentHealth = 100.0f;
 	bIsStunned = false;
 	bIsAlreadyStunned = false;
+	bIsDead = false;
 
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 	
@@ -45,12 +46,14 @@ void ACultistCharacter::BeginPlay()
 	CurrentHealth = 100.0f;
 	bIsStunned = false;
 	bIsAlreadyStunned = false;
+	bIsDead = false;
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 	bIsPerformingRitual = false;
 	RitualProgress = 0.0f;
 	RitualSpeed = 50.0f; // 초당 증가속도
 	TaskRitualProgress = 0.0f;	// 의식수행 작업 진행도
 	TaskRitualSpeed = 20.0f;
+
 	// 컨트롤러 yaw 회전 false
 	bUseControllerRotationYaw = false;
 	// 입력 방향으로 회전
@@ -106,7 +109,7 @@ void ACultistCharacter::BeginPlay()
 		}
 	}
 	// 컨트롤러 확인
-	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (PC && PC->GetPawn())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Possessed pawn: %s"), *PC->GetPawn()->GetName());
@@ -126,12 +129,11 @@ void ACultistCharacter::BeginPlay()
 		UE_LOG(LogTemp, Error, TEXT("No Controller found on BeginPlay"));
 	}
 
-	APlayerController* PCtrl = Cast<APlayerController>(GetController());
-	if (PCtrl)
+	if (PC)
 	{
 		// 마우스 커서 숨기고, 게임 전용 입력 모드로 복원
-		PCtrl->bShowMouseCursor = false;
-		PCtrl->SetInputMode(FInputModeGameOnly());
+		PC->bShowMouseCursor = false;
+		PC->SetInputMode(FInputModeGameOnly());
 	}
 
 }
