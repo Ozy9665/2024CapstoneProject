@@ -150,6 +150,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")
 	bool bIsBeingCarried = false;
 
+	// 피격효과 위젯 클래스
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
+	TSubclassOf<class UUserWidget> BloodWidgetClass;
+	UPROPERTY()
+	UUserWidget* BloodEffectWidget;
+	// 바인딩할 애니메이션
+	UPROPERTY(meta = (BindWidgetAnim), Transient)
+	UWidgetAnimation* HitBloodEffect;
+
 	int my_ID = -1;
 	int GetPlayerID() const;
 	void SendDisableToServer();

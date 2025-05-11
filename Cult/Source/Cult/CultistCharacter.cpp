@@ -92,7 +92,6 @@ void ACultistCharacter::BeginPlay()
 	if (!TaskRitualWidgetClass)
 	{
 		UE_LOG(LogTemp, Error, TEXT("TaskRitualWidgetClass is NULL! Make sure it's set in Blueprint."));
-		return;
 	}
 	if (TaskRitualWidgetClass)
 	{
@@ -134,6 +133,15 @@ void ACultistCharacter::BeginPlay()
 		// 마우스 커서 숨기고, 게임 전용 입력 모드로 복원
 		PC->bShowMouseCursor = false;
 		PC->SetInputMode(FInputModeGameOnly());
+	}
+
+	if (BloodWidgetClass)
+	{
+		BloodEffectWidget = CreateWidget<UUserWidget>(GetWorld(), BloodWidgetClass);
+		if (BloodEffectWidget)
+		{
+			BloodEffectWidget->AddToViewport();
+		}
 	}
 
 }
@@ -320,6 +328,15 @@ void ACultistCharacter::TakeDamage(float DamageAmount)
 		CancelRitual();
 	}
 
+	// 피격 이펙트
+	if (BloodEffectWidget)
+	{
+		UFunction* PlayFunc = BloodEffectWidget->FindFunction(FName("PlayBloodEffect"));
+		if (PlayFunc)
+		{
+			BloodEffectWidget->ProcessEvent(PlayFunc, nullptr);
+		}
+	}
 
 	GetCharacterMovement()->MaxWalkSpeed = 100.0f;
 	// 잠시 둔화
@@ -516,6 +533,17 @@ void ACultistCharacter::GotHitTaser(AActor* Attacker)
 	// 
 	// 감전
 	bIsElectric = true;
+	
+	// 피격 이펙트
+	if (BloodEffectWidget)
+	{
+		UFunction* PlayFunc = BloodEffectWidget->FindFunction(FName("PlayBloodEffect"));
+		if (PlayFunc)
+		{
+			BloodEffectWidget->ProcessEvent(PlayFunc, nullptr);
+		}
+	}
+
 	// 방향 판단
 	if (Attacker)
 	{
@@ -531,6 +559,7 @@ void ACultistCharacter::GotHitTaser(AActor* Attacker)
 			bIsFrontFallen = true; // 뒤에서 맞음 → 앞으로 넘어짐
 		}
 	}
+
 }
 
 void ACultistCharacter::FallDown()
