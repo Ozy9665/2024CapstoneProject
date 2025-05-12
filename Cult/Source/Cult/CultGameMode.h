@@ -50,6 +50,8 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
 	TSubclassOf<class UUserWidget> FadeWidgetClass;
 
+
+
 	void SpawnAltars();
 
 	UFUNCTION()

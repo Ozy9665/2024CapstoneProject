@@ -52,8 +52,6 @@ void ACultGameMode::BeginPlay()
 	}
 }
 
-#include "MySocketCultistActor.h"
-extern AMySocketCultistActor* MySocketCultistActor;
 
 
 void ACultGameMode::CheckRitualComlete(float CurrentRitualGauge)
@@ -61,10 +59,10 @@ void ACultGameMode::CheckRitualComlete(float CurrentRitualGauge)
 	if (CurrentRitualGauge >= 100.0f)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Ritual Completed! Ending Game."));
-		if (MySocketCultistActor)
-		{
-			MySocketCultistActor->SendDisable();
-		}
+		//if (MySocketCultistActor)
+		//{
+		//	MySocketCultistActor->SendDisable();
+		//}
 	}
 }
 
@@ -72,45 +70,45 @@ void ACultGameMode::EndGame(EGAME_END_TYPE EndType)
 {
 	UE_LOG(LogTemp, Warning, TEXT("Game Over."));
 
-	APlayerController* PC = GetWorld()->GetFirstPlayerController();
-	if (PC) // 실행
-	{
-		PC->bShowMouseCursor = true;
-		PC->SetInputMode(FInputModeUIOnly());
+	//APlayerController* PC = GetWorld()->GetFirstPlayerController();
+	//if (PC) // 실행
+	//{
+	//	PC->bShowMouseCursor = true;
+	//	PC->SetInputMode(FInputModeUIOnly());
 
-		if (GameResultWidgetClass)
-		{
-			GameResultWidget = CreateWidget<UUserWidget>(PC, GameResultWidgetClass);
-			if (GameResultWidget)
-			{
-				GameResultWidget->AddToViewport();
+	//	if (GameResultWidgetClass)
+	//	{
+	//		GameResultWidget = CreateWidget<UUserWidget>(PC, GameResultWidgetClass);
+	//		if (GameResultWidget)
+	//		{
+	//			GameResultWidget->AddToViewport();
 
-				FString ResultText;
-				UTextBlock* ResultTextBlock = Cast<UTextBlock>(GameResultWidget->GetWidgetFromName(TEXT("TextBlock_ResultText")));
+	//			FString ResultText;
+	//			UTextBlock* ResultTextBlock = Cast<UTextBlock>(GameResultWidget->GetWidgetFromName(TEXT("TextBlock_ResultText")));
 
-				switch (EndType)
-				{
-				case EGAME_END_TYPE::CultistWin:
-					ResultText = TEXT("Cultist Win");
-					if (ResultTextBlock)
-					{
-						ResultTextBlock->SetText(FText::FromString(ResultText));
-					}
-					PC->ClientStartCameraShake(UMyLegacyCameraShake::StaticClass());
-					break;
-				case EGAME_END_TYPE::PoliceWin:
-					ResultText = TEXT("Police Win");
-					if (ResultTextBlock)
-					{
-						ResultTextBlock->SetText(FText::FromString(ResultText));
-					}
-					break;
-				}
+	//			switch (EndType)
+	//			{
+	//			case EGAME_END_TYPE::CultistWin:
+	//				ResultText = TEXT("Cultist Win");
+	//				if (ResultTextBlock)
+	//				{
+	//					ResultTextBlock->SetText(FText::FromString(ResultText));
+	//				}
+	//				PC->ClientStartCameraShake(UMyLegacyCameraShake::StaticClass());
+	//				break;
+	//			case EGAME_END_TYPE::PoliceWin:
+	//				ResultText = TEXT("Police Win");
+	//				if (ResultTextBlock)
+	//				{
+	//					ResultTextBlock->SetText(FText::FromString(ResultText));
+	//				}
+	//				break;
+	//			}
 
-				
-			}
-		}
-	}
+	//			
+	//		}
+	//	}
+	//}
 
 	// 게임 재시작	(3seconds)
 	//FTimerHandle RestartTimerHandle;
@@ -119,7 +117,7 @@ void ACultGameMode::EndGame(EGAME_END_TYPE EndType)
 
 void ACultGameMode::RestartGame()
 {
-	UGameplayStatics::OpenLevel(this, FName("CharacterUI"));
+	UGameplayStatics::OpenLevel(this, FName("CharaterUI"));
 }
 
 void ACultGameMode::SpawnAltars()
@@ -167,5 +165,5 @@ void ACultGameMode::CheckPoliceVictoryCondition()
 	}
 	// return 안됐음 -> 생존자 없음
 	UE_LOG(LogTemp, Warning, TEXT("All Cultist Dead or Confined. PoliceWin"));
-	EndGame(EGAME_END_TYPE::PoliceWin);
+	//EndGame(EGAME_END_TYPE::PoliceWin);
 }
