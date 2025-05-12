@@ -431,7 +431,7 @@ void APoliceCharacter::BatonAttack()
 		ECC_Pawn, FCollisionShape::MakeSphere(50.0f),
 		CollisionParams
 	);
-	DrawDebugSphere(GetWorld(), End, 50.0f, 12, FColor::Blue, false, 1.0f);
+	//DrawDebugSphere(GetWorld(), End, 50.0f, 12, FColor::Blue, false, 1.0f);
 
 	UE_LOG(LogTemp, Warning, TEXT("Sweep Result: %s"), bBatonHit ? TEXT("Hit") : TEXT("Miss"));
 
@@ -745,6 +745,6 @@ void APoliceCharacter::TestCollapse()
 		UE_LOG(LogTemp, Warning, TEXT("Sending impulse to block"));
 		TestTargetBlock->ReceiveImpulse(ImpulseAmount, ImpulseDirection);
 
-		DrawDebugSphere(GetWorld(), TestTargetBlock->GetComponentLocation(), 30.f, 12, FColor::Red, false, 2.0f);
+	//	DrawDebugSphere(GetWorld(), TestTargetBlock->GetComponentLocation(), 30.f, 12, FColor::Red, false, 2.0f);
 	}
 }
