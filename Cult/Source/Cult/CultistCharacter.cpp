@@ -6,6 +6,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "GrowthPreviewActor.h"
 #include "Components/ProgressBar.h"
 #include "Components/InputComponent.h"
 
@@ -161,6 +162,8 @@ void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
 
 	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &ACultistCharacter::ToggleCrouch);
+	
+	PlayerInputComponent->BindAction("SpecialAbility", IE_Pressed, this, &ACultistCharacter::StartPreviewPlacement);
 	UE_LOG(LogTemp, Warning, TEXT("Binding  input"));
 
 }
@@ -311,6 +314,11 @@ void ACultistCharacter::CancelRitual()
 void ACultistCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	if(SpawnedPreviewActor)
+	{
+		UpdatePreviewPlacement();
+	}
 }
 
 void ACultistCharacter::SetCurrentAltar(AAltar* Altar)
@@ -587,6 +595,46 @@ void ACultistCharacter::MoveForward(float Value)
 {
 	if (Value != 0.0f) StopRitual();
 }*/
+
+
+
+// Skill, Abilities		================================================
+void ACultistCharacter::StartPreviewPlacement()
+{
+	UE_LOG(LogTemp, Warning, TEXT("StartPreviewPlacement"));
+	if (GrowthPreviewActorClass && !SpawnedPreviewActor)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SpawnPreviewActor"));
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.Owner = this;
+		SpawnedPreviewActor = GetWorld()->SpawnActor<AGrowthPreviewActor>(GrowthPreviewActorClass, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+	}
+}
+
+void ACultistCharacter::UpdatePreviewPlacement()
+{
+	FHitResult Hit;
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC)return;
+
+	// 커서위치 -> 월드에 트레이스
+	PC->GetHitResultUnderCursor(PlacementCheckChannel, false, Hit);
+
+	if (Hit.bBlockingHit)
+	{
+		FVector Location = Hit.Location;
+		SpawnedPreviewActor->UpdatePreviewLocation(Location);
+
+		// 충돌체크
+		bool bCanPlace = !GetWorld()->OverlapBlockingTestByChannel(
+			Location, FQuat::Identity,
+			PlacementCheckChannel, FCollisionShape::MakeSphere(50.0f)	// 기둥 반경
+		);
+		SpawnedPreviewActor->SetValidPlacement(bCanPlace);
+	}
+}
+
+
 
 
 void ACultistCharacter::TurnCamera(float Value)

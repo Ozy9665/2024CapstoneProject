@@ -13,5 +13,5 @@ ACultist_A::ACultist_A()
 
 void ACultist_A::UseAbility()
 {
-	UE_LOG(LogTemp, Warning, TEXT("Vision!"));
+	UE_LOG(LogTemp, Warning, TEXT("Growth!"));
 }
