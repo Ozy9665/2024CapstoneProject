@@ -29,6 +29,8 @@ void CALLBACK g_send_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
 
 #pragma pack(push, 1)
 
+enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND };
+
 enum EWeaponType : uint8_t
 {
 	Baton,
@@ -129,10 +131,11 @@ public:
 
 	EXP_OVER(int , int );							// disconnection
 
-	WSAOVERLAPPED	send_over;
+	WSAOVERLAPPED	over;
 	int				id;
 	char			send_buffer[1024];
 	WSABUF			send_wsabuf[1];
+	COMP_TYPE		comp_type;
 };
 
 class SESSION {

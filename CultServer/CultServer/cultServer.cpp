@@ -12,6 +12,9 @@
 
 #pragma comment (lib, "WS2_32.LIB")
 
+SOCKET g_s_socket, g_c_socket;
+EXP_OVER g_a_over;
+
 void CommandWorker()
 {
 	while (true)
@@ -37,10 +40,9 @@ void CommandWorker()
 	}
 }
 
-
-
 int main()
 {
+	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));	// 한국어로 출력
 
 	WSADATA WSAData;
@@ -48,8 +50,8 @@ int main()
 
 	std::thread CommandThread(CommandWorker);
 
-	SOCKET s_socket = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
-	if (s_socket <= 0) {
+	g_s_socket = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
+	if (g_s_socket <= 0) {
 		std::cout << "Failed to create socket" << std::endl;
 		return 1;
 	}
@@ -58,25 +60,52 @@ int main()
 	}
 
 	SOCKADDR_IN addr;
+	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(SERVER_PORT);
 	addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	bind(s_socket, reinterpret_cast<sockaddr*>(&addr), sizeof(SOCKADDR_IN));
-	listen(s_socket, SOMAXCONN);
+	bind(g_s_socket, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+	listen(g_s_socket, SOMAXCONN);
 	INT addr_size = sizeof(SOCKADDR_IN);
 
+	h_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 0);
+	CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_s_socket), h_iocp, 9999, 0);
+	g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+	g_a_over.comp_type = OP_ACCEPT;
+
 	while (true) {
-		auto c_socket = WSAAccept(s_socket, reinterpret_cast<sockaddr*>(&addr), &addr_size, NULL, NULL);
-		if (c_socket == INVALID_SOCKET) {
-			std::cout << "클라이언트 연결 실패, 에러 코드: " << WSAGetLastError() << std::endl;
+		DWORD io_size;
+		WSAOVERLAPPED* o;
+		ULONG_PTR key;
+		BOOL ret = GetQueuedCompletionStatus(h_iocp, &io_size, &key, &o, INFINITE);
+		EXP_OVER* eo = reinterpret_cast<EXP_OVER*>(o);
+		if (FALSE == ret) {
+			auto err_no = WSAGetLastError();
+			print_error_message(err_no);
+			if (g_users.count(key) != 0) {
+				g_users.erase(key);
+			}
 		}
-		g_users.try_emplace(client_id, client_id, c_socket);
-		std::cout << "새로운 클라이언트가 연결되었습니다." << inet_ntoa(addr.sin_addr)
-			<< " Port: " << ntohs(addr.sin_port) << std::endl;
+		if ((eo->comp_type == OP_RECV || eo->comp_type == OP_SEND) && io_size == 0) {
+			if (g_users.count(key) != 0) {
+				g_users.erase(key);
+				delete eo;
+				continue;
+			}
+		}	
+		switch (eo->comp_type)
+		{
+		case OP_ACCEPT:
+			break;
+		case OP_SEND:
+			break;
+		case OP_RECV:
+			break;
+		}
 	}
 
 	CommandThread.join();
 	StopAIWorker();
-	closesocket(s_socket);
+	closesocket(g_s_socket);
 	WSACleanup();
 }
