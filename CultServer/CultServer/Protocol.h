@@ -8,6 +8,7 @@
 #include "error.h"
 
 constexpr short SERVER_PORT = 7777;
+constexpr int BUF_SIZE = 200;
 
 constexpr int cultistHeader = 0x00;
 constexpr int objectHeader = 0x01;
@@ -119,10 +120,38 @@ struct FHitPacket {
 	EWeaponType Weapon;
 };
 
+struct CultistPacket {
+	char header;
+	unsigned char size;
+	FCultistCharacterState state;
+};
+
+struct PolicePacket {
+	char header;
+	unsigned char size;
+	FPoliceCharacterState state;
+};
+
+struct ParticlePacket {
+	char header;
+	unsigned char size;
+	FImpactPacket data;
+};
+
+struct HitPacket {
+	char header;
+	unsigned char size;
+	FHitPacket data;
+};
+
 #pragma pack(pop)
 
 class EXP_OVER {
 public:
+	EXP_OVER();
+
+	EXP_OVER(char* packet);
+
 	EXP_OVER(int , const void* , size_t );			// cultist
 
 	EXP_OVER(int , int , char* );					// message
@@ -134,20 +163,18 @@ public:
 	WSAOVERLAPPED	over;
 	int				id;
 	char			send_buffer[1024];
-	WSABUF			send_wsabuf[1];
+	WSABUF			wsabuf;
 	COMP_TYPE		comp_type;
 };
 
 class SESSION {
-private:
-	SOCKET				c_socket;
-	int					id;
-	int					role;
-	std::atomic<char>	state;
-
-	WSAOVERLAPPED	recv_over;
-	char			recv_buffer[1024];
-	WSABUF			recv_wsabuf[1];
+	EXP_OVER		recv_over;
+public:
+	SOCKET			c_socket;
+	int				id;
+	int				role;
+	char			state;
+	int				prev_remain;
 
 	union {
 		FCultistCharacterState cultist_state;
@@ -161,8 +188,6 @@ public:
 	SESSION(int );			// ai
 	SESSION(int , SOCKET );	// player
 	~SESSION();
-
-	void recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, DWORD flag);
 
 	void do_send(char , int , char* );
 
