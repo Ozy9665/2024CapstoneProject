@@ -73,20 +73,15 @@ void AMySocketCultistActor::SetClientSocket(SOCKET InSocket)
         ReceiveData();
         UE_LOG(LogTemp, Log, TEXT("Cultist Client socket set. Starting ReceiveData."));
 
-        auto packet_size = 3;
-
-        TArray<uint8> PacketData;
-        PacketData.SetNumUninitialized(packet_size);
-
-        PacketData[0] = connectionHeader;
-        PacketData[1] = packet_size;
-        PacketData[2] = 0;
-
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
+        ConnectionPacket packet;
+        packet.header = connectionHeader;
+        packet.size = sizeof(ConnectionPacket);
+        packet.role = 0;
+        
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&packet), sizeof(ConnectionPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
-            UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
-
+            UE_LOG(LogTemp, Error, TEXT("SetClientSocket failed with error: %ld"), WSAGetLastError());
         }
     }
     else
@@ -110,9 +105,9 @@ void AMySocketCultistActor::ReceiveData()
 {
     AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this]()
         {
+            const int32 BufferSize = 1024;
             while (true)
             {
-                const int32 BufferSize = 1024;
                 char Buffer[BufferSize];
 
                 int32 BytesReceived = recv(ClientSocket, Buffer, BufferSize, 0);
@@ -137,13 +132,13 @@ void AMySocketCultistActor::ReceiveData()
                         //ProcessObjectData(Buffer, BytesReceived);
                         break;
                     case policeHeader:
-                        ProcessPoliceData(Buffer, BytesReceived);
+                        //ProcessPoliceData(Buffer, BytesReceived);
                         break;
                     case particleHeader:
-                        ProcessParticleData(Buffer, BytesReceived);
+                        //ProcessParticleData(Buffer, BytesReceived);
                         break;
                     case hitHeader:
-                        ProcessHitData(Buffer, BytesReceived);
+                        //ProcessHitData(Buffer, BytesReceived);
                         break;
                     case connectionHeader:
                         ProcessConnection(Buffer, BytesReceived);
@@ -388,7 +383,7 @@ void AMySocketCultistActor::SendDisable() {
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
         if (BytesSent == SOCKET_ERROR)
         {
-            UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
+            UE_LOG(LogTemp, Error, TEXT("SendDisable failed with error: %ld"), WSAGetLastError());
         }
     }
     else
@@ -402,19 +397,12 @@ void AMySocketCultistActor::SendPlayerData()
     // 데이터 보내기
     if (ClientSocket != INVALID_SOCKET)
     {
-        // 캐릭터 상태 가져오기
-        FCultistCharacterState CharacterState = GetCharacterState();
+        CultistPacket Packet;
+        Packet.header = cultistHeader;
+        Packet.size = sizeof(CultistPacket);
+        Packet.state = GetCharacterState();
 
-        auto packet_size = 3 + sizeof(FCultistCharacterState);
-
-        TArray<uint8> PacketData;
-        PacketData.SetNumUninitialized(packet_size);
-
-        PacketData[0] = cultistHeader;
-        PacketData[1] = packet_size;
-        PacketData[2] = my_ID;
-        memcpy(PacketData.GetData() + 3, &CharacterState, sizeof(FCultistCharacterState));
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(CultistPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
@@ -1250,7 +1238,7 @@ void AMySocketClientActor::ProcessObjectUpdates(float DeltaTime)
 void AMySocketCultistActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-    SendPlayerData();
+    //SendPlayerData();
     ProcessCharacterUpdates();
     // ProcessObjectUpdates(DeltaTime);
 }

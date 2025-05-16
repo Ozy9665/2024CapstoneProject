@@ -31,62 +31,6 @@ EXP_OVER::EXP_OVER(char* packet)
 	memcpy(send_buffer, packet, packet[0]);
 }
 
-EXP_OVER::EXP_OVER(int header, const void* data, size_t size) 			// player
-{
-	ZeroMemory(&over, sizeof(over));
-	auto packet_size = 2 + size;
-	if (packet_size > sizeof(send_buffer)) {
-		std::cout << "PACKET TOO LARGE\n";
-		exit(-1);
-	}
-	send_buffer[0] = static_cast<unsigned char>(header);
-	send_buffer[1] = static_cast<unsigned char>(packet_size);
-	memcpy(send_buffer + 2, data, size);
-	wsabuf.buf = send_buffer;
-	wsabuf.len = static_cast<ULONG>(packet_size);
-}
-
-EXP_OVER::EXP_OVER(int header, int id, char* mess) : id(id)				// message
-{
-	ZeroMemory(&over, sizeof(over));
-	auto  packet_size = 3 + strlen(mess);
-	if (packet_size > 255) {
-		std::cout << "MESSAGE TOO LONG";
-		exit(-1);
-	}
-	send_buffer[0] = static_cast<unsigned char>(header);
-	send_buffer[1] = static_cast<unsigned char>(packet_size);
-	send_buffer[2] = static_cast<unsigned char>(id);
-	wsabuf.buf = send_buffer;
-	wsabuf.len = static_cast<ULONG>(packet_size);
-	strcpy_s(send_buffer + 3, sizeof(send_buffer) - 3, mess);
-}
-
-EXP_OVER::EXP_OVER(int header, int id, int role) : id(id)				// connection
-{				
-	ZeroMemory(&over, sizeof(over));
-
-	auto packet_size = 4;
-	send_buffer[0] = static_cast<unsigned char>(header);
-	send_buffer[1] = static_cast<unsigned char>(packet_size);
-	send_buffer[2] = static_cast<unsigned char>(id);
-	send_buffer[3] = static_cast<unsigned char>(role);
-	wsabuf.buf = send_buffer;
-	wsabuf.len = static_cast<ULONG>(packet_size);
-}
-
-EXP_OVER::EXP_OVER(int header, int id) : id(id)							// disconnection
-{
-	ZeroMemory(&over, sizeof(over));
-
-	auto packet_size = 3;
-	send_buffer[0] = static_cast<unsigned char>(header);
-	send_buffer[1] = static_cast<unsigned char>(packet_size);
-	send_buffer[2] = static_cast<unsigned char>(id);
-	wsabuf.buf = send_buffer;
-	wsabuf.len = static_cast<ULONG>(packet_size);
-}
-
 void SESSION::do_recv() 
 {
 	if (c_socket == INVALID_SOCKET)
@@ -102,45 +46,37 @@ void SESSION::do_recv()
 	if (0 != ret) {
 		auto err_no = WSAGetLastError();
 		if (WSA_IO_PENDING != err_no) {
+			std::cout << "WSARecv failed! Error code: " << err_no << std::endl;
 			print_error_message(err_no);
 			exit(-1);
 		}
-	}
+	}	
 }
 
 SESSION::SESSION() {
-	std::cout << "DEFAULT SESSION CONSTRUCTOR CALLED!!\n";
-	exit(-1);
+	id = -1;
+	role = -1;
+	c_socket = 0;
+	state = ST_FREE;
+	prev_remain = 0;
 }
 
-SESSION::SESSION(int session_id) : c_socket(INVALID_SOCKET), id(session_id), role(99)	// AI Session
+SESSION::SESSION(int session_id) : c_socket(INVALID_SOCKET), id(session_id), role(99)		// AI Session
 {
 	AiState.PlayerID = id;
 	police_state = AiState;
 	std::cout << "AI SESSION 积己凳. ID: " << AiState.PlayerID << " role: 99 (PoliceAI)" << std::endl;
 }
 
-SESSION::SESSION(int session_id, SOCKET s) : id(session_id), c_socket(s)									// users Session
+SESSION::SESSION(int session_id, SOCKET s) : id(session_id), c_socket(s), prev_remain(0)	// users Session
 {
 	if (c_socket == INVALID_SOCKET) {
 		std::cout << "SESSION 积己 角菩. INVALID_SOCKET\n";
 		return;
 	}
-	do_recv();
 }
 
-SESSION::~SESSION()
-{
-	if (c_socket != INVALID_SOCKET)
-	{
-		closesocket(c_socket);
-		std::cout << "SESSION 力芭. port: " << c_socket << std::endl;
-	}
-	else
-	{
-		std::cout << "SESSION 力芭. 捞固 摧腮 家南.\n";
-	}
-}
+SESSION::~SESSION(){ }
 
 //void SESSION::recv_callback(DWORD err, DWORD num_bytes, LPWSAOVERLAPPED p_over, DWORD flag)
 //{
@@ -324,33 +260,10 @@ SESSION::~SESSION()
 //	do_recv();
 //}
 
-void SESSION::do_send(char header, int id, char* mess)
+void SESSION::do_send_packet(void* packet)
 {
-	EXP_OVER* o = new EXP_OVER(header, id, mess);
-	DWORD size_sent;
-	WSASend(c_socket, o->wsabuf, 1, &size_sent, 0, &(o->over), g_send_callback);
-}
-
-void SESSION::do_send_data(int header, const void* data, size_t size)
-{
-	EXP_OVER* o = new EXP_OVER(header, data, size);
-	DWORD size_sent;
-	WSASend(c_socket, o->wsabuf, 1, &size_sent, 0, &(o->over), g_send_callback);
-}
-
-void SESSION::do_send_connection(char header, int new_player_id, int role) 
-{
-	EXP_OVER* o = new EXP_OVER(header, new_player_id, role);
-	DWORD size_sent;
-	WSASend(c_socket, o->wsabuf, 1, &size_sent, 0, &(o->over), g_send_callback);
-}
-
-void SESSION::do_send_disconnection(char header, int id) 
-{
-	EXP_OVER* o = new EXP_OVER(header, id);
-	DWORD size_sent;
-	std::cout << "disconnetion sended\n";
-	WSASend(c_socket, o->wsabuf, 1, &size_sent, 0, &(o->over), g_send_callback);
+	EXP_OVER* packet_data = new EXP_OVER{ reinterpret_cast<char*>(packet) };
+	WSASend(c_socket, &packet_data->wsabuf, 1, 0, 0, &packet_data->over, 0);
 }
 
 void SESSION::setState(const char st) {
@@ -370,8 +283,16 @@ const FPoliceCharacterState& SESSION::getPoliceState() const
 	return police_state;
 }
 
+void SESSION::setRole(const int r) {
+	role = r;
+}
+
 int SESSION::getRole() const {
 	return role;
+}
+
+SOCKET SESSION::getSocket() const {
+	return c_socket;
 }
 
 bool SESSION::isValidSocket() const

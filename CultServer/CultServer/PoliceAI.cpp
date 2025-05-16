@@ -30,7 +30,7 @@ void InitializeAISession(const int ai_id)
 	{
 		if (id != ai_id && session.isValidSocket())
 		{
-			session.do_send_connection(connectionHeader, ai_id, g_users[ai_id].getRole());
+			//session.do_send_connection(connectionHeader, ai_id, g_users[ai_id].getRole());
 		}
 	}
 
@@ -131,7 +131,7 @@ void BroadcastPoliceAIState()
 		if (session.isValidSocket() && session.isValidState())
 		{
 			std::cout << "[AI Pos] id: " << state.PlayerID << "X: " << state.PositionX << "Y: " << state.PositionY << "\r";
-			session.do_send_data(policeHeader, &state, sizeof(FPoliceCharacterState));
+			//session.do_send_data(policeHeader, &state, sizeof(FPoliceCharacterState));
 		}
 	}
 }

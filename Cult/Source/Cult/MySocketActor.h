@@ -81,6 +81,36 @@ struct FHitPacket {
 	EWeaponType Weapon;
 };
 
+struct CultistPacket {
+	char header;
+	unsigned char size;
+	FCultistCharacterState state;
+};
+
+struct PolicePacket {
+	char header;
+	unsigned char size;
+	FPoliceCharacterState state;
+};
+
+struct ParticlePacket {
+	char header;
+	unsigned char size;
+	FImpactPacket data;
+};
+
+struct HitPacket {
+	char header;
+	unsigned char size;
+	FHitPacket data;
+};
+
+struct ConnectionPacket {
+	char header;
+	unsigned char size;
+	char role;
+};
+
 #pragma pack(pop)
 
 UCLASS()
@@ -101,15 +131,15 @@ public:
 	virtual void Tick(float DeltaTime) override;
 };
 
-constexpr int cultistHeader = 0x00;
-constexpr int objectHeader = 0x01;
-constexpr int policeHeader = 0x02;
-constexpr int particleHeader = 0x03;
-constexpr int hitHeader = 0x04;
-constexpr int connectionHeader = 0x10;
-constexpr int DisconnectionHeader = 0x11;
-constexpr int readyHeader = 0x12;
-constexpr int disableHeader = 0x13;
+constexpr char cultistHeader = 0;
+constexpr char objectHeader = 1;
+constexpr char policeHeader = 2;
+constexpr char particleHeader = 3;
+constexpr char hitHeader = 4;
+constexpr char connectionHeader = 5;
+constexpr char DisconnectionHeader = 6;
+constexpr char readyHeader = 7;
+constexpr char disableHeader = 8;
 
 constexpr FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,

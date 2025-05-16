@@ -10,23 +10,20 @@
 constexpr short SERVER_PORT = 7777;
 constexpr int BUF_SIZE = 200;
 
-constexpr int cultistHeader = 0x00;
-constexpr int objectHeader = 0x01;
-constexpr int policeHeader = 0x02;
-constexpr int particleHeader = 0x03;
-constexpr int hitHeader = 0x04;
-constexpr int connectionHeader = 0x10;
-constexpr int DisconnectionHeader = 0x11;
-constexpr int readyHeader = 0x12;
-constexpr int disableHeader = 0x13;
+constexpr char cultistHeader = 0;
+constexpr char objectHeader = 1;
+constexpr char policeHeader = 2;
+constexpr char particleHeader = 3;
+constexpr char hitHeader = 4;
+constexpr char connectionHeader = 5;
+constexpr char DisconnectionHeader = 6;
+constexpr char readyHeader = 7;
+constexpr char disableHeader = 8;
 
 constexpr char ST_FREE{ 0 };
 constexpr char ST_INGAME{ 1 };
 constexpr char ST_CLOSE{ 2 };
 constexpr char ST_DISABLE{ 3 };
-
-void CALLBACK g_recv_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
-void CALLBACK g_send_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
 
 #pragma pack(push, 1)
 
@@ -144,6 +141,13 @@ struct HitPacket {
 	FHitPacket data;
 };
 
+struct ConnectionPacket {
+	char header;
+	unsigned char size;
+	char role;
+};
+
+
 #pragma pack(pop)
 
 class EXP_OVER {
@@ -151,14 +155,6 @@ public:
 	EXP_OVER();
 
 	EXP_OVER(char* packet);
-
-	EXP_OVER(int , const void* , size_t );			// cultist
-
-	EXP_OVER(int , int , char* );					// message
-
-	EXP_OVER(int , int , int );						// connection
-
-	EXP_OVER(int , int );							// disconnection
 
 	WSAOVERLAPPED	over;
 	int				id;
@@ -189,6 +185,8 @@ public:
 	SESSION(int , SOCKET );	// player
 	~SESSION();
 
+	void do_send_packet(void* packet);
+
 	void do_send(char , int , char* );
 
 	void do_send_data(int , const void* , size_t );
@@ -205,7 +203,11 @@ public:
 
 	const FPoliceCharacterState& getPoliceState() const;
 
+	void setRole(const int r);
+
 	int getRole() const;
+
+	SOCKET getSocket() const;
 
 	bool isValidSocket() const;
 

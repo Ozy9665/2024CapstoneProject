@@ -42,6 +42,14 @@ void CommandWorker()
 	}
 }
 
+void disconnect(int c_id)
+{
+	std::cout << "socket disconnect" << g_users[c_id].c_socket << std::endl;
+	closesocket(g_users[c_id].c_socket);
+	g_users[c_id].state = ST_FREE;
+}
+
+
 void process_packet(int c_id, char* packet) {
 	switch (packet[0]) {
 	case cultistHeader:
@@ -74,7 +82,7 @@ void process_packet(int c_id, char* packet) {
 
 		for (auto& [id, u] : g_users) {
 			if (id != c_id && u.isValidSocket()) {
-				u.do_send_data(particleHeader, p, sizeof(ParticlePacket));
+				u.do_send_packet(p);
 			}
 		}
 		break;
@@ -89,52 +97,54 @@ void process_packet(int c_id, char* packet) {
 
 		for (auto& [id, u] : g_users) {
 			if (id != c_id && u.isValidSocket()) {
-				u.do_send_data(particleHeader, p, sizeof(HitPacket));
+				u.do_send_packet(p);
 			}
 		}
 		break;
 	}
 	case connectionHeader:
 	{
-		if (num_bytes < 3) {
-			std::cout << "Invalid connection packet size\n";
+		auto* p = reinterpret_cast<ConnectionPacket*>(packet);
+		if (p->size != sizeof(ConnectionPacket)) {
+			std::cout << "Invalid ConnectionPacket size\n";
 			break;
 		}
+		
+		int role = static_cast<int>(p->role);
+		g_users[c_id].setRole(role);
 
-		int role = static_cast<unsigned char>(recv_buffer[2]);
-		this->role = role;
+		p->header = connectionHeader;
+		p->size = sizeof(ConnectionPacket);
+		p->role = role;
 
-		std::cout << "Client[" << id << "] connected with role: " << (role == 0 ? "Cultist" : "Police") << std::endl;
+		std::cout << "Client[" << c_id << "] connected with role: " << (role == 0 ? "Cultist" : "Police") << std::endl;
 		// 1. 새로 접속한 유저(id)에게 본인 id와 role 확정 send
-		g_users[id].do_send_connection(connectionHeader, id, role);
+		g_users[c_id].do_send_packet(p);
 		// 2. 새로 접속한 유저(id)에게 기존 유저들 send
-		for (auto& u : g_users)
+		for (auto& [id, u] : g_users)
 		{
-			if ((u.first != id))
-			{
-				g_users[id].do_send_connection(connectionHeader, u.first, u.second.role);
-			}
-		}
-		// 3. 기존 유저들에게 새로 접속한 유저(id) send
-		for (auto& u : g_users)
-		{
-			if (u.first != id && u.second.isValidSocket())
-			{
-				u.second.do_send_connection(connectionHeader, id, role);
-			}
+			if (id != c_id)
+				u.do_send_packet(p);
 		}
 
-		client_id++;
+		// 3. 기존 유저들에게 본인 정보 전송
+		for (auto& [id, u] : g_users)
+		{
+			if (id != c_id && u.isValidSocket())
+				u.do_send_packet(p);
+		}
+
+		//client_id++;
 		break;
 	}
 	case readyHeader:
 	{
-		this->setState(ST_INGAME);
+		g_users[c_id].setState(ST_INGAME);
 		break;
 	}
 	case disableHeader:
 	{
-		this->setState(ST_DISABLE);
+		g_users[c_id].setState(ST_DISABLE);
 
 		bool allCultistsDisabled = true;
 
@@ -158,10 +168,13 @@ void process_packet(int c_id, char* packet) {
 				if (session.isValidSocket())
 				{
 					session.setState(ST_FREE);
-					session.do_send_disconnection(DisconnectionHeader, id);
-					closesocket(c_socket);
-					std::cout << "소켓 수동 종료. ID: " << id << std::endl;
-					c_socket = INVALID_SOCKET;
+					// session.do_send_disconnection(DisconnectionHeader, id);
+					SOCKET s = session.getSocket();
+					if (s != INVALID_SOCKET)
+					{
+						closesocket(s);
+						std::cout << "소켓 수동 종료. ID: " << id << std::endl;
+					}
 				}
 			}
 			std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // 전송 여유 시간
@@ -175,53 +188,60 @@ void process_packet(int c_id, char* packet) {
 
 void mainLoop(HANDLE h_iocp) {
 	while (true) {
-		DWORD io_size;
-		WSAOVERLAPPED* o = nullptr;
+		DWORD num_bytes;
 		ULONG_PTR key;
-		BOOL ret = GetQueuedCompletionStatus(h_iocp, &io_size, &key, &o, INFINITE);
+		WSAOVERLAPPED* o = nullptr;
+		BOOL ret = GetQueuedCompletionStatus(h_iocp, &num_bytes, &key, &o, INFINITE);
 		EXP_OVER* eo = reinterpret_cast<EXP_OVER*>(o);
+
 		if (FALSE == ret) {
-			if (eo->comp_type == OP_ACCEPT)
+			std::cout << "여기가 문제\n";
+			if (eo->comp_type == OP_ACCEPT) 
 				std::cout << "Accept Error";
 			else {
-				auto err_no = WSAGetLastError();
-				print_error_message(err_no);
-				if (g_users.count(key) != 0) {
-					g_users.erase(key);
-				}
-			}
-		}
-		if ((eo->comp_type == OP_RECV || eo->comp_type == OP_SEND) && io_size == 0) {
-			if (g_users.count(key) != 0) {
-				g_users.erase(key);
-				delete eo;
+				std::cout << "GQCS Error on client[" << key << "]\n";
+				disconnect(static_cast<int>(key));
+				if (eo->comp_type == OP_SEND) 
+					delete eo;
 				continue;
 			}
+		}
+		if ((0 == num_bytes) && ((eo->comp_type == OP_RECV) || (eo->comp_type == OP_SEND))) {
+			std::cout << "여기가 문제\n";
+			disconnect(static_cast<int>(key));
+			if (eo->comp_type == OP_SEND) delete eo;
+			continue;
 		}
 		switch (eo->comp_type)
 		{
 		case OP_ACCEPT:
 		{
 			int new_id = client_id++;
-
+			SESSION sess;
+			sess.id = new_id;
+			sess.prev_remain = 0;
+			sess.state = ST_INGAME;
+			sess.c_socket = g_c_socket;
+			g_users.insert(std::make_pair(new_id, sess));
 			CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket), h_iocp, new_id, 0);
-			g_users.emplace(new_id, SESSION(new_id, g_c_socket));
+			sess.do_recv();
 
 			SOCKADDR_IN* client_addr = (SOCKADDR_IN*)(g_a_over.send_buffer + sizeof(SOCKADDR_IN) + 16);
 			std::cout << "클라이언트 접속: IP = " << inet_ntoa(client_addr->sin_addr) << ", Port = " << ntohs(client_addr->sin_port) << std::endl;
+			g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 
 			ZeroMemory(&g_a_over.over, sizeof(g_a_over.over));
 			int addr_size = sizeof(SOCKADDR_IN);
-			g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 			AcceptEx(g_s_socket, g_c_socket, g_a_over.send_buffer, 0, addr_size + 16, addr_size + 16, 0, &g_a_over.over);
 			break;
 		}
 		case OP_RECV: {
-			int remain_data = io_size + g_users[key].prev_remain;
+			int remain_data = num_bytes + g_users[key].prev_remain;
 			char* p = eo->send_buffer;
 			while (remain_data > 0) {
-				int packet_size = p[0];
+				int packet_size = p[1];
 				if (packet_size <= remain_data) {
+					std::cout << "process_packet";
 					process_packet(static_cast<int>(key), p);
 					p = p + packet_size;
 					remain_data = remain_data - packet_size;
