@@ -112,41 +112,47 @@ struct FImpactPacket
 };
 
 struct FHitPacket {
-	int AttackerID;
-	int TargetID;
+	uint8_t AttackerID;
+	uint8_t TargetID;
 	EWeaponType Weapon;
 };
 
 struct CultistPacket {
-	char header;
-	unsigned char size;
+	uint8_t header;
+	uint8_t size;
 	FCultistCharacterState state;
 };
 
 struct PolicePacket {
-	char header;
-	unsigned char size;
+	uint8_t  header;
+	uint8_t size;
 	FPoliceCharacterState state;
 };
 
 struct ParticlePacket {
-	char header;
-	unsigned char size;
+	uint8_t  header;
+	uint8_t size;
 	FImpactPacket data;
 };
 
 struct HitPacket {
-	char header;
-	unsigned char size;
+	uint8_t  header;
+	uint8_t  size;
 	FHitPacket data;
 };
 
 struct ConnectionPacket {
-	char header;
-	unsigned char size;
-	char role;
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
+	uint8_t role;
 };
 
+struct DisablePakcet {
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
+};
 
 #pragma pack(pop)
 

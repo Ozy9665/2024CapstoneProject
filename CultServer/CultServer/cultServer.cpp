@@ -60,6 +60,12 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 		g_users[c_id].cultist_state = p->state;
+
+		for (auto& [id, u] : g_users) {
+			if (id != c_id && u.isValidSocket()) {
+				u.do_send_packet(p);
+			}
+		}
 		break;
 	}
 	case policeHeader:
@@ -70,6 +76,12 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 		g_users[c_id].police_state = p->state;
+
+		for (auto& [id, u] : g_users) {
+			if (id != c_id && u.isValidSocket()) {
+				u.do_send_packet(p);
+			}
+		}
 		break;
 	}
 	case particleHeader:
@@ -112,22 +124,25 @@ void process_packet(int c_id, char* packet) {
 		
 		int role = static_cast<int>(p->role);
 		g_users[c_id].setRole(role);
-
-		p->header = connectionHeader;
-		p->size = sizeof(ConnectionPacket);
-		p->role = role;
+		p->id = c_id;
 
 		std::cout << "Client[" << c_id << "] connected with role: " << (role == 0 ? "Cultist" : "Police") << std::endl;
 		// 1. 새로 접속한 유저(id)에게 본인 id와 role 확정 send
 		g_users[c_id].do_send_packet(p);
 		// 2. 새로 접속한 유저(id)에게 기존 유저들 send
+		ConnectionPacket other;
+		other.header = connectionHeader;
+		other.size = sizeof(ConnectionPacket);
 		for (auto& [id, u] : g_users)
 		{
-			if (id != c_id)
-				u.do_send_packet(p);
+			if (id != c_id) {
+				other.id = static_cast<uint8_t>(id);
+				other.role = static_cast<uint8_t>(u.getRole());
+				g_users[c_id].do_send_packet(&other);
+			}
 		}
 
-		// 3. 기존 유저들에게 본인 정보 전송
+		// 3. 기존 유저들에게 새로 접속한 유저 정보 전송
 		for (auto& [id, u] : g_users)
 		{
 			if (id != c_id && u.isValidSocket())
@@ -241,7 +256,6 @@ void mainLoop(HANDLE h_iocp) {
 			while (remain_data > 0) {
 				int packet_size = p[1];
 				if (packet_size <= remain_data) {
-					std::cout << "process_packet";
 					process_packet(static_cast<int>(key), p);
 					p = p + packet_size;
 					remain_data = remain_data - packet_size;

@@ -24,11 +24,11 @@ EXP_OVER::EXP_OVER()
 
 EXP_OVER::EXP_OVER(char* packet)
 {
-	wsabuf.len = packet[0];
+	wsabuf.len = packet[1];
 	wsabuf.buf = send_buffer;
 	ZeroMemory(&over, sizeof(over));
 	comp_type = OP_SEND;
-	memcpy(send_buffer, packet, packet[0]);
+	memcpy(send_buffer, packet, packet[1]);
 }
 
 void SESSION::do_recv() 
