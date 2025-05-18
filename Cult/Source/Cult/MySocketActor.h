@@ -76,9 +76,52 @@ struct FImpactPacket
 };
 
 struct FHitPacket {
-	int AttackerID;
-	int TargetID;
+	uint8_t AttackerID;
+	uint8_t TargetID;
 	EWeaponType Weapon;
+};
+
+struct CultistPacket {
+	uint8_t header;
+	uint8_t size;
+	FCultistCharacterState state;
+};
+
+struct PolicePacket {
+	uint8_t  header;
+	uint8_t size;
+	FPoliceCharacterState state;
+};
+
+struct ParticlePacket {
+	uint8_t header;
+	uint8_t size;
+	FImpactPacket data;
+};
+
+struct HitPacket {
+	uint8_t  header;
+	uint8_t  size;
+	FHitPacket data;
+};
+
+struct ConnectionPacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
+	uint8_t role;
+};
+
+struct DisconnectionPacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
+};
+
+struct DisablePakcet {
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
 };
 
 #pragma pack(pop)
@@ -101,15 +144,15 @@ public:
 	virtual void Tick(float DeltaTime) override;
 };
 
-constexpr int cultistHeader = 0x00;
-constexpr int objectHeader = 0x01;
-constexpr int policeHeader = 0x02;
-constexpr int particleHeader = 0x03;
-constexpr int hitHeader = 0x04;
-constexpr int connectionHeader = 0x10;
-constexpr int DisconnectionHeader = 0x11;
-constexpr int readyHeader = 0x12;
-constexpr int disableHeader = 0x13;
+constexpr char cultistHeader = 0;
+constexpr char objectHeader = 1;
+constexpr char policeHeader = 2;
+constexpr char particleHeader = 3;
+constexpr char hitHeader = 4;
+constexpr char connectionHeader = 5;
+constexpr char DisconnectionHeader = 6;
+constexpr char readyHeader = 7;
+constexpr char disableHeader = 8;
 
 constexpr FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,

@@ -6,6 +6,7 @@
 #include <ws2tcpip.h>
 #include "Camera/CameraActor.h"
 #include "PoliceCharacter.h"
+#include "Components/TextBlock.h"
 
 #pragma comment(lib, "ws2_32.lib")
 AMySocketPoliceActor* MySocketPoliceActor = nullptr;
@@ -76,19 +77,15 @@ void AMySocketPoliceActor::SetClientSocket(SOCKET InSocket)
         ReceiveData();
         UE_LOG(LogTemp, Log, TEXT("Police Client socket set. Starting ReceiveData."));
 
-        auto packet_size = 3;
+        ConnectionPacket packet;
+        packet.header = connectionHeader;
+        packet.size = sizeof(ConnectionPacket);
+        packet.role = 1;
 
-        TArray<uint8> PacketData;
-        PacketData.SetNumUninitialized(packet_size);
-
-        PacketData[0] = connectionHeader;
-        PacketData[1] = packet_size;
-        PacketData[2] = 1;
-
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&packet), sizeof(ConnectionPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
-            UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
+            UE_LOG(LogTemp, Error, TEXT("SetClientSocket failed with error: %ld"), WSAGetLastError());
 
         }
     }
@@ -113,16 +110,13 @@ void AMySocketPoliceActor::ReceiveData()
 {
     AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this]()
         {
+            const int32 BufferSize = 1024;
             while (true)
             {
-                const int32 BufferSize = 1024;
                 char Buffer[BufferSize];
-
                 int32 BytesReceived = recv(ClientSocket, Buffer, BufferSize, 0);
-
                 if (BytesReceived > 0)
                 {
-                    // 패킷의 첫 바이트는 헤더, 이후는 데이터
                     int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
                     int PacketSize = static_cast<int>(static_cast<unsigned char>(Buffer[1]));
                     if (BytesReceived != PacketSize)
@@ -134,22 +128,22 @@ void AMySocketPoliceActor::ReceiveData()
                     switch (PacketType)
                     {
                     case cultistHeader:
-                        ProcessPlayerData(Buffer, BytesReceived);
+                        ProcessPlayerData(Buffer);
                         break;
                     case objectHeader:
-                        //ProcessObjectData(Buffer, BytesReceived);
+                        //ProcessObjectData(Buffer);
                         break;
                     case particleHeader:
-                        //ProcessParticleData(Buffer, BytesReceived);
+                        //ProcessParticleData(Buffer);
                         break;
                     case hitHeader:
-                        ProcessHitData(Buffer, BytesReceived);
+                        //ProcessHitData(Buffer);
                         break;
                     case connectionHeader:
-                        ProcessConnection(Buffer, BytesReceived);
+                        ProcessConnection(Buffer);
                         break;
                     case DisconnectionHeader:
-                        ProcessDisconnection(Buffer, BytesReceived);
+                        ProcessDisconnection(Buffer);
                         break;
                     default:
                         UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
@@ -172,25 +166,18 @@ void AMySocketPoliceActor::ReceiveData()
         });
 }
 
-void AMySocketPoliceActor::ProcessPlayerData(char* Buffer, int32 BytesReceived)
+void AMySocketPoliceActor::ProcessPlayerData(const char* Buffer)
 {
-    if (BytesReceived < 2 + sizeof(FCultistCharacterState))
-        return;
-
     FCultistCharacterState ReceivedState;
     memcpy(&ReceivedState, Buffer + 2, sizeof(FCultistCharacterState));
-
     {
         FScopeLock Lock(&ReceivedDataMutex);
         ReceivedCultistStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
     }
 }
 
-void AMySocketPoliceActor::ProcessHitData(char* Buffer, int32 BytesReceived)
+void AMySocketPoliceActor::ProcessHitData(const char* Buffer)
 {
-    if (BytesReceived < 2 + sizeof(FHitPacket))
-        return;
-
     FHitPacket ReceivedState;
     memcpy(&ReceivedState, Buffer + 2, sizeof(FHitPacket));
     {
@@ -212,14 +199,7 @@ void AMySocketPoliceActor::ProcessHitData(char* Buffer, int32 BytesReceived)
     }
 }
 
-void AMySocketPoliceActor::ProcessConnection(char* Buffer, int32 BytesReceived) {
-    if (BytesReceived < 4)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Invalid connection packet received."));
-        return;
-    }
-
-    unsigned char packet_size = static_cast<unsigned char>(Buffer[1]);
+void AMySocketPoliceActor::ProcessConnection(const char* Buffer) {
     unsigned char connectedId = static_cast<unsigned char>(Buffer[2]);
     unsigned char role = static_cast<unsigned char>(Buffer[3]);
 
@@ -232,59 +212,42 @@ void AMySocketPoliceActor::ProcessConnection(char* Buffer, int32 BytesReceived) 
         }
     }
     else {
-        TArray<char> BufferCopy;
-        BufferCopy.SetNum(BytesReceived);
-        memcpy(BufferCopy.GetData(), Buffer, BytesReceived);
-
-        AsyncTask(ENamedThreads::GameThread, [this, BufferCopy, role]() mutable
+        AsyncTask(ENamedThreads::GameThread, [this, connectedId, role]() mutable
             {
                 if (role == 0) // Cultist
                 {
-                    this->SpawnCultistCharacter(BufferCopy.GetData());
+                    this->SpawnCultistCharacter(connectedId);
                 }
                 else if (role == 1) // Police
                 {
-                    // this->SpawnPoliceCharacter(BufferCopy.GetData());
+                    UE_LOG(LogTemp, Warning, TEXT("ProcessConnection called with role 1. ID:%d"), my_ID);
+                    // this->SpawnPoliceCharacter(connectedId);
                 }
             });
     }
 }
 
-void AMySocketPoliceActor::ProcessDisconnection(char* Buffer, int32 BytesReceived)
+void AMySocketPoliceActor::ProcessDisconnection(const char* Buffer)
 {
-    if (BytesReceived < 3) {
-        UE_LOG(LogTemp, Error, TEXT("Invalid connection packet received."));
-        return;
-    }
-
     int DisconnectedID = static_cast<int>(static_cast<unsigned char>(Buffer[2]));
-
     if (DisconnectedID == my_ID)
     {
         CloseConnection();
-        return;
     }
-
-    SafeDestroyCharacter(DisconnectedID);
+    else {
+        SafeDestroyCharacter(DisconnectedID);
+    }
 }
 
 void AMySocketPoliceActor::SendPlayerData()
 {
     if (ClientSocket != INVALID_SOCKET)
     {
-        FPoliceCharacterState CharacterState = GetCharacterState();
-
-        auto packet_size = 3 + sizeof(FPoliceCharacterState);
-
-        TArray<uint8> PacketData;
-        PacketData.SetNumUninitialized(packet_size);
-
-        PacketData[0] = policeHeader;
-        PacketData[1] = packet_size;
-        PacketData[2] = my_ID;
-        memcpy(PacketData.GetData() + 3, &CharacterState, sizeof(FPoliceCharacterState));
-
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
+        PolicePacket Packet;
+        Packet.header = policeHeader;
+        Packet.size = sizeof(PolicePacket);
+        Packet.state = GetCharacterState();
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(PolicePacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
@@ -299,16 +262,11 @@ void AMySocketPoliceActor::SendPlayerData()
 void AMySocketPoliceActor::SendHitData(FHitPacket hitPacket) {
     if (ClientSocket != INVALID_SOCKET)
     {
-        auto packet_size = 2 + sizeof(FHitPacket);
-
-        TArray<uint8> PacketData;
-        PacketData.SetNumUninitialized(packet_size);
-
-        PacketData[0] = hitHeader;
-        PacketData[1] = packet_size;
-        memcpy(PacketData.GetData() + 2, &hitPacket, sizeof(FHitPacket));
-
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
+        HitPacket Packet;
+        Packet.header = hitHeader;
+        Packet.size = sizeof(HitPacket);
+        Packet.data = hitPacket;
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(HitPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
@@ -363,17 +321,18 @@ FPoliceCharacterState AMySocketPoliceActor::GetCharacterState()
     return State;
 }
 
-void AMySocketPoliceActor::SpawnCultistCharacter(const char* Buffer)
+void AMySocketPoliceActor::SpawnCultistCharacter(const unsigned char PlayerID)
 {
-    // PlayerID를 기반으로 고유 키 생성
-    int PlayerID = static_cast<int>(static_cast<unsigned char>(Buffer[2]));
     // 이미 캐릭터가 존재하면 아무 작업도 하지 않음
     if (SpawnedCharacters.Contains(PlayerID))
     {
         UE_LOG(LogTemp, Warning, TEXT("Character already exists: %d"), PlayerID);
         return;
     }
-
+    if (PlayerID == my_ID) {
+        UE_LOG(LogTemp, Warning, TEXT("SpawnPoliceCharacter Failed. %d is my_ID"), PlayerID);
+        return;
+    }
     FActorSpawnParameters SpawnParams;
     SpawnParams.Owner = this;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
@@ -429,9 +388,21 @@ void AMySocketPoliceActor::ProcessCharacterUpdates()
 
         if (ACharacter* FoundChar = SpawnedCharacters.FindRef(Pair.Value.PlayerID))
         {
-            UpdateCultistState(FoundChar, State);
+            if (ACultistCharacter* CultistChar = Cast<ACultistCharacter>(FoundChar))
+            {
+                UpdateCultistState(CultistChar, State);
+            }
+        }
+        else {
+            UE_LOG(LogTemp, Warning, TEXT("No PlayerID %d"), Pair.Value.PlayerID);
+            KeysToRemove.Add(Pair.Value.PlayerID);
         }
     }
+    for (int32 Key : KeysToRemove)
+    {
+        ReceivedCultistStates.Remove(Key);
+    }
+    KeysToRemove.Reset();
 }
 
 void AMySocketPoliceActor::UpdateCultistState(ACharacter* Character, const FCultistCharacterState& State)
@@ -549,28 +520,22 @@ void AMySocketPoliceActor::UpdateCultistAnimInstanceProperties(UAnimInstance* An
         BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_IsStunned));
     }
 }
-// 이것도 shoot pistol에서 bhit시 호출하도록 변경.
+
 void AMySocketPoliceActor::CheckImpactEffect()
 {
-    if (MyCharacter->bHit) {
-        // ImpactLocations.Add(MyCharacter->ParticleResult.ImpactPoint);
-        UE_LOG(LogTemp, Log, TEXT("Added ImpactLocation: %s"), *MyCharacter->ParticleResult.ImpactPoint.ToString());
-
-        SpawnImpactEffect(MyCharacter->ParticleResult);
-
-        if (ClientSocket != INVALID_SOCKET)
-        {
-            SendParticleData(MyCharacter->ParticleResult);
-        }
-        else
-        {
-            CloseConnection();
-        }
-
-        MyCharacter->bHit = false;
+    // ImpactLocations.Add(MyCharacter->ParticleResult.ImpactPoint);
+    UE_LOG(LogTemp, Log, TEXT("Added ImpactLocation: %s"), *MyCharacter->ParticleResult.ImpactPoint.ToString());
+    SpawnImpactEffect(MyCharacter->ParticleResult);
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        SendParticleData(MyCharacter->ParticleResult);
     }
-
-
+    else
+    {
+        CloseConnection();
+    }
+    MyCharacter->bHit = false;
+    
 }
 
 void AMySocketPoliceActor::SpawnImpactEffect(FHitResult HitResult) {
@@ -599,43 +564,34 @@ void AMySocketPoliceActor::SendParticleData(FHitResult HitResult) {
     FVector MuzzleLoc = MyCharacter->MuzzleLocation->GetComponentLocation();
     FRotator MuzzleRot = MyCharacter->MuzzleLocation->GetComponentRotation();
 
-    FImpactPacket Packet;
-    Packet.ImpactX = HitResult.ImpactPoint.X;
-    Packet.ImpactY = HitResult.ImpactPoint.Y;
-    Packet.ImpactZ = HitResult.ImpactPoint.Z;
-    Packet.NormalX = HitResult.ImpactNormal.X;
-    Packet.NormalY = HitResult.ImpactNormal.Y;
-    Packet.NormalZ = HitResult.ImpactNormal.Z;
-    Packet.MuzzleX = MuzzleLoc.X;
-    Packet.MuzzleY = MuzzleLoc.Y;
-    Packet.MuzzleZ = MuzzleLoc.Z;
-    Packet.MuzzlePitch = MuzzleRot.Pitch;
-    Packet.MuzzleYaw = MuzzleRot.Yaw;
-    Packet.MuzzleRoll = MuzzleRot.Roll;
-    auto packet_size = 3 + sizeof(FImpactPacket);
+    //FImpactPacket Packet;
 
-    TArray<uint8> PacketData;
-    PacketData.SetNumUninitialized(packet_size);
+    ParticlePacket Packet;
+    Packet.header = particleHeader;
+    Packet.size = sizeof(ParticlePacket);
+    Packet.data.ImpactX = HitResult.ImpactPoint.X;
+    Packet.data.ImpactY = HitResult.ImpactPoint.Y;
+    Packet.data.ImpactZ = HitResult.ImpactPoint.Z;
+    Packet.data.NormalX = HitResult.ImpactNormal.X;
+    Packet.data.NormalY = HitResult.ImpactNormal.Y;
+    Packet.data.NormalZ = HitResult.ImpactNormal.Z;
+    Packet.data.MuzzleX = MuzzleLoc.X;
+    Packet.data.MuzzleY = MuzzleLoc.Y;
+    Packet.data.MuzzleZ = MuzzleLoc.Z;
+    Packet.data.MuzzlePitch = MuzzleRot.Pitch;
+    Packet.data.MuzzleYaw = MuzzleRot.Yaw;
+    Packet.data.MuzzleRoll = MuzzleRot.Roll;
 
-    PacketData[0] = particleHeader;
-    PacketData[1] = packet_size;
-    PacketData[2] = my_ID;
-    memcpy(PacketData.GetData() + 3, &Packet, sizeof(FImpactPacket));
-
-    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(ParticlePacket), 0);
     if (BytesSent == SOCKET_ERROR)
     {
         UE_LOG(LogTemp, Error, TEXT("SendParticleData failed with error: %ld"), WSAGetLastError());
     }
 }
-#include "Components/TextBlock.h"
 
 void AMySocketPoliceActor::CloseConnection() {
-    if (ClientSocket != INVALID_SOCKET)
-    {
-        closesocket(ClientSocket);
-        ClientSocket = INVALID_SOCKET;
-    }
+    closesocket(ClientSocket);
+    ClientSocket = INVALID_SOCKET;
     WSACleanup();
 
     AsyncTask(ENamedThreads::GameThread, [this]()
@@ -711,15 +667,8 @@ void AMySocketPoliceActor::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-    static float AccumulatedTime = 0.0f;
-    AccumulatedTime += DeltaTime;
-
-    if (AccumulatedTime >= 0.0166f) // 60FPS
-    {
-        AccumulatedTime = 0.0f;
-        SendPlayerData();
-        ProcessCharacterUpdates();
-        CheckImpactEffect();
-    }
+    SendPlayerData();
+    ProcessCharacterUpdates();
+    // ProcessObjectUpdates(DeltaTime);
 }
 

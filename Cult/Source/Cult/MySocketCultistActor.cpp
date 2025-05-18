@@ -3,6 +3,7 @@
 #include <ws2tcpip.h>
 #include "Camera/CameraActor.h"
 #include "CultistCharacter.h"
+#include "Components/TextBlock.h"
 
 #pragma comment(lib, "ws2_32.lib")
 AMySocketCultistActor* MySocketCultistActor = nullptr;
@@ -73,20 +74,15 @@ void AMySocketCultistActor::SetClientSocket(SOCKET InSocket)
         ReceiveData();
         UE_LOG(LogTemp, Log, TEXT("Cultist Client socket set. Starting ReceiveData."));
 
-        auto packet_size = 3;
-
-        TArray<uint8> PacketData;
-        PacketData.SetNumUninitialized(packet_size);
-
-        PacketData[0] = connectionHeader;
-        PacketData[1] = packet_size;
-        PacketData[2] = 0;
-
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
+        ConnectionPacket packet;
+        packet.header = connectionHeader;
+        packet.size = sizeof(ConnectionPacket);
+        packet.role = 0;
+        
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&packet), sizeof(ConnectionPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
-            UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
-
+            UE_LOG(LogTemp, Error, TEXT("SetClientSocket failed with error: %ld"), WSAGetLastError());
         }
     }
     else
@@ -110,46 +106,43 @@ void AMySocketCultistActor::ReceiveData()
 {
     AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this]()
         {
+            const int32 BufferSize = 1024;
             while (true)
             {
-                const int32 BufferSize = 1024;
                 char Buffer[BufferSize];
-
                 int32 BytesReceived = recv(ClientSocket, Buffer, BufferSize, 0);
-
                 if (BytesReceived > 0)
                 {
-                    // 패킷의 첫 바이트는 헤더, 이후는 데이터
                     int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
                     int PacketSize = static_cast<int>(static_cast<unsigned char>(Buffer[1]));
                     if (BytesReceived != PacketSize)
                     {
-                        UE_LOG(LogTemp, Warning, TEXT("Invalid packet size: Received %d, Expected %d"), BytesReceived, PacketSize);
+                        UE_LOG(LogTemp, Warning, TEXT("Invalid packet size: Received %d, Expected %d: header:%d"), BytesReceived, PacketSize, PacketType);
                         continue;
                     }
 
                     switch (PacketType)
                     {
                     case cultistHeader:
-                        ProcessCultistData(Buffer, BytesReceived);
+                        ProcessCultistData(Buffer);
                         break;
                     case objectHeader:
-                        //ProcessObjectData(Buffer, BytesReceived);
+                        //ProcessObjectData(Buffer);
                         break;
                     case policeHeader:
-                        ProcessPoliceData(Buffer, BytesReceived);
+                        ProcessPoliceData(Buffer);
                         break;
                     case particleHeader:
-                        ProcessParticleData(Buffer, BytesReceived);
+                        ProcessParticleData(Buffer);
                         break;
                     case hitHeader:
-                        ProcessHitData(Buffer, BytesReceived);
+                        ProcessHitData(Buffer);
                         break;
                     case connectionHeader:
-                        ProcessConnection(Buffer, BytesReceived);
+                        ProcessConnection(Buffer);
                         break;
                     case DisconnectionHeader:
-                        ProcessDisconnection(Buffer, BytesReceived);
+                        ProcessDisconnection(Buffer);
                         break;
                     default:
                         UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
@@ -172,14 +165,8 @@ void AMySocketCultistActor::ReceiveData()
         });
 }
 
-void AMySocketCultistActor::ProcessCultistData(char* Buffer, int32 BytesReceived)
+void AMySocketCultistActor::ProcessCultistData(const char* Buffer)
 {
-    if (BytesReceived < 2 + sizeof(FCultistCharacterState))
-    {
-        UE_LOG(LogTemp, Error, TEXT("Invalid Cultist Data Packet. BytesReceived: %d"), BytesReceived);
-        return;
-    }
-
     FCultistCharacterState ReceivedState;
     memcpy(&ReceivedState, Buffer + 2, sizeof(FCultistCharacterState));
     {
@@ -188,14 +175,8 @@ void AMySocketCultistActor::ProcessCultistData(char* Buffer, int32 BytesReceived
     }
 }
 
-void AMySocketCultistActor::ProcessPoliceData(char* Buffer, int32 BytesReceived)
+void AMySocketCultistActor::ProcessPoliceData(const char* Buffer)
 {
-    if (BytesReceived < 2 + sizeof(FPoliceCharacterState))
-    {
-        UE_LOG(LogTemp, Error, TEXT("Invalid Police Data Packet. BytesReceived: %d"), BytesReceived);
-        return;
-    }
-
     FPoliceCharacterState ReceivedState;
     memcpy(&ReceivedState, Buffer + 2, sizeof(FPoliceCharacterState));
     {
@@ -204,11 +185,8 @@ void AMySocketCultistActor::ProcessPoliceData(char* Buffer, int32 BytesReceived)
     }
 }
 
-void AMySocketCultistActor::ProcessHitData(char* Buffer, int32 BytesReceived)
+void AMySocketCultistActor::ProcessHitData(const char* Buffer)
 {
-    if (BytesReceived < 2 + sizeof(FHitPacket))
-        return;
-
     FHitPacket ReceivedState;
     memcpy(&ReceivedState, Buffer + 2, sizeof(FHitPacket));
     {
@@ -315,14 +293,7 @@ void AMySocketCultistActor::ProcessHitData(char* Buffer, int32 BytesReceived)
     }
 }
 
-void AMySocketCultistActor::ProcessConnection(char* Buffer, int32 BytesReceived) {
-    if (BytesReceived < 4)
-    {
-        UE_LOG(LogTemp, Error, TEXT("Invalid connection packet received."));
-        return;
-    }
-
-    unsigned char packet_size = static_cast<unsigned char>(Buffer[1]);
+void AMySocketCultistActor::ProcessConnection(const char* Buffer) {
     unsigned char connectedId = static_cast<unsigned char>(Buffer[2]);
     unsigned char role = static_cast<unsigned char>(Buffer[3]);
     
@@ -335,60 +306,47 @@ void AMySocketCultistActor::ProcessConnection(char* Buffer, int32 BytesReceived)
         }
     }
     else {
-        TArray<char> BufferCopy;
-        BufferCopy.SetNum(BytesReceived);
-        memcpy(BufferCopy.GetData(), Buffer, BytesReceived);
-
-        AsyncTask(ENamedThreads::GameThread, [this, BufferCopy, role]() mutable
+        AsyncTask(ENamedThreads::GameThread, [this, connectedId, role]() mutable
             {
                 if (role == 0) // Cultist
                 {
-                    this->SpawnCultistCharacter(BufferCopy.GetData());
+                    this->SpawnCultistCharacter(connectedId);
                 }
                 else if (role == 1) // Police
                 {
-                    this->SpawnPoliceCharacter(BufferCopy.GetData());
+                    this->SpawnPoliceCharacter(connectedId);
                 }
                 else if (role == 99) { //PoliceAi
-                    this->SpawnPoliceAICharacter(BufferCopy.GetData());
+                    this->SpawnPoliceAICharacter(connectedId);
                 }
             });
     }
 }
 
-void AMySocketCultistActor::ProcessDisconnection(char* Buffer, int32 BytesReceived)
+void AMySocketCultistActor::ProcessDisconnection(const char* Buffer)
 {
-    if (BytesReceived < 3) {
-        UE_LOG(LogTemp, Error, TEXT("Invalid connection packet received."));
-        return;
-    }
-
     int DisconnectedID = static_cast<int>(static_cast<unsigned char>(Buffer[2]));
-
     if (DisconnectedID == my_ID)
     {
         CloseConnection();
-        return;
     }
-
-    SafeDestroyCharacter(DisconnectedID);
+    else {
+        SafeDestroyCharacter(DisconnectedID);
+    }
 }
 
-void AMySocketCultistActor::SendDisable() {
+void AMySocketCultistActor::SendDisable() 
+{
     if (ClientSocket != INVALID_SOCKET)
     {
-        auto packet_size = 3;
-
-        TArray<uint8> PacketData;
-        PacketData.SetNumUninitialized(packet_size);
-
-        PacketData[0] = disableHeader;
-        PacketData[1] = packet_size;
-        PacketData[2] = my_ID;
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
+        DisablePakcet Packet;
+        Packet.header = disableHeader;
+        Packet.size = sizeof(DisablePakcet);
+        Packet.id = my_ID;
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(DisablePakcet), 0);
         if (BytesSent == SOCKET_ERROR)
         {
-            UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
+            UE_LOG(LogTemp, Error, TEXT("SendDisable failed with error: %ld"), WSAGetLastError());
         }
     }
     else
@@ -399,22 +357,14 @@ void AMySocketCultistActor::SendDisable() {
 
 void AMySocketCultistActor::SendPlayerData()
 {
-    // 데이터 보내기
     if (ClientSocket != INVALID_SOCKET)
     {
-        // 캐릭터 상태 가져오기
-        FCultistCharacterState CharacterState = GetCharacterState();
+        CultistPacket Packet;
+        Packet.header = cultistHeader;
+        Packet.size = sizeof(CultistPacket);
+        Packet.state = GetCharacterState();
 
-        auto packet_size = 3 + sizeof(FCultistCharacterState);
-
-        TArray<uint8> PacketData;
-        PacketData.SetNumUninitialized(packet_size);
-
-        PacketData[0] = cultistHeader;
-        PacketData[1] = packet_size;
-        PacketData[2] = my_ID;
-        memcpy(PacketData.GetData() + 3, &CharacterState, sizeof(FCultistCharacterState));
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(PacketData.GetData()), PacketData.Num(), 0);
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(CultistPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
@@ -425,7 +375,7 @@ void AMySocketCultistActor::SendPlayerData()
         CloseConnection();
     }
 }
-
+    
 FCultistCharacterState AMySocketCultistActor::GetCharacterState()
 {
     FCultistCharacterState State;
@@ -477,13 +427,22 @@ void AMySocketCultistActor::ProcessCharacterUpdates()
 
             if (ACharacter* FoundChar = SpawnedCharacters.FindRef(Pair.Value.PlayerID))
             {
-                UpdateCultistState(FoundChar, State);
+                if (ACultistCharacter* CultistChar = Cast<ACultistCharacter>(FoundChar)) 
+                {
+                    UpdateCultistState(CultistChar, State);
+                }
             }
             else {
                 UE_LOG(LogTemp, Warning, TEXT("No Cultist PlayerID %d"), Pair.Value.PlayerID);
+                KeysToRemove.Add(Pair.Value.PlayerID);
             }
         }
+    }   
+    for (int32 Key : KeysToRemove)
+    {
+        ReceivedCultistStates.Remove(Key);
     }
+    KeysToRemove.Reset();
     {
         FScopeLock Lock(&PoliceDataMutex);
         for (auto& Pair : ReceivedPoliceStates)
@@ -619,17 +578,18 @@ void AMySocketCultistActor::UpdateCultistAnimInstanceProperties(UAnimInstance* A
     }
 }
 
-void AMySocketCultistActor::SpawnCultistCharacter(const char* Buffer)
+void AMySocketCultistActor::SpawnCultistCharacter(const unsigned char PlayerID)
 {
-    // PlayerID를 기반으로 고유 키 생성
-    int PlayerID = static_cast<int>(static_cast<unsigned char>(Buffer[2]));
     // 이미 캐릭터가 존재하면 아무 작업도 하지 않음
     if (SpawnedCharacters.Contains(PlayerID))
     {
         UE_LOG(LogTemp, Warning, TEXT("Character already exists: %d"), PlayerID);
         return;
     }
-
+    if (PlayerID == my_ID) {
+        UE_LOG(LogTemp, Warning, TEXT("SpawnPoliceCharacter Failed. %d is my_ID"), PlayerID);
+        return;
+    }
     FActorSpawnParameters SpawnParams;
     SpawnParams.Owner = this;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
@@ -638,7 +598,7 @@ void AMySocketCultistActor::SpawnCultistCharacter(const char* Buffer)
 
     if (BP_ClientCharacter)
     {
-        ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
+        ACultistCharacter* NewCharacter = GetWorld()->SpawnActor<ACultistCharacter>(
             BP_ClientCharacter,
             FVector(CultistDummyState.PositionX, CultistDummyState.PositionY, CultistDummyState.PositionZ),
             FRotator(CultistDummyState.RotationPitch, CultistDummyState.RotationYaw, CultistDummyState.RotationRoll),
@@ -648,7 +608,7 @@ void AMySocketCultistActor::SpawnCultistCharacter(const char* Buffer)
         {
             SpawnedCharacters.Add(PlayerID, NewCharacter);
             ReceivedCultistStates.Add(PlayerID, CultistDummyState);
-            UE_LOG(LogTemp, Log, TEXT("Spawned new character for PlayerID=%d"), PlayerID);
+            UE_LOG(LogTemp, Log, TEXT("Spawned new cultist character for PlayerID=%d"), PlayerID);
 
             APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
             if (PC && PC->IsLocalController())
@@ -958,17 +918,18 @@ void AMySocketCultistActor::UpdatePoliceAnimInstanceProperties(UAnimInstance* An
     }
 }
 
-void AMySocketCultistActor::SpawnPoliceCharacter(const char* Buffer)
+void AMySocketCultistActor::SpawnPoliceCharacter(const unsigned char PlayerID)
 {
-    // PlayerID를 기반으로 고유 키 생성
-    int PlayerID = static_cast<int>(static_cast<unsigned char>(Buffer[2]));
     // 이미 캐릭터가 존재하면 아무 작업도 하지 않음
     if (SpawnedCharacters.Contains(PlayerID))
     {
         UE_LOG(LogTemp, Warning, TEXT("Character already exists: %d"), PlayerID);
         return;
     }
-
+    if (PlayerID == my_ID) {
+        UE_LOG(LogTemp, Warning, TEXT("SpawnPoliceCharacter Failed. %d is my_ID"), PlayerID);
+        return;
+    }
     FActorSpawnParameters SpawnParams;
     SpawnParams.Owner = this;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
@@ -987,7 +948,7 @@ void AMySocketCultistActor::SpawnPoliceCharacter(const char* Buffer)
         {
             SpawnedCharacters.Add(PlayerID, NewCharacter);
             ReceivedPoliceStates.Add(PlayerID, PoliceDummyState);
-            UE_LOG(LogTemp, Log, TEXT("Spawned new character for PlayerID=%d"), PlayerID);
+            UE_LOG(LogTemp, Log, TEXT("Spawned new police character for PlayerID=%d"), PlayerID);
 
             APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
             if (PC && PC->IsLocalController())
@@ -1015,10 +976,8 @@ void AMySocketCultistActor::SpawnPoliceCharacter(const char* Buffer)
     }
 }
 
-void AMySocketCultistActor::SpawnPoliceAICharacter(const char* Buffer)
+void AMySocketCultistActor::SpawnPoliceAICharacter(const unsigned char PlayerID)
 {
-    // PlayerID를 기반으로 고유 키 생성
-    int PlayerID = static_cast<int>(static_cast<unsigned char>(Buffer[2]));
     // 이미 캐릭터가 존재하면 아무 작업도 하지 않음
     if (SpawnedCharacters.Contains(PlayerID))
     {
@@ -1060,13 +1019,7 @@ void AMySocketCultistActor::SpawnPoliceAICharacter(const char* Buffer)
     }
 }
 
-void AMySocketCultistActor::ProcessParticleData(char* Buffer, int32 BytesReceived) {
-    if (BytesReceived < 2 + sizeof(FImpactPacket))
-    {
-        UE_LOG(LogTemp, Error, TEXT("Invalid Particle Data Packet. BytesReceived: %d"), BytesReceived);
-        return;
-    }
-
+void AMySocketCultistActor::ProcessParticleData(char* Buffer) {
     FImpactPacket ReceivedImpact;
     memcpy(&ReceivedImpact, Buffer + 2, sizeof(FImpactPacket));
     // Particles.Add(ReceivedImpact);
@@ -1111,14 +1064,10 @@ void AMySocketCultistActor::SpawnImpactEffect(const FImpactPacket& ReceivedImpac
         MuzzleRot
     );
 }
-#include "Components/TextBlock.h"
 
 void AMySocketCultistActor::CloseConnection() {
-    if (ClientSocket != INVALID_SOCKET)
-    {
-        closesocket(ClientSocket);
-        ClientSocket = INVALID_SOCKET;
-    }
+    closesocket(ClientSocket);
+    ClientSocket = INVALID_SOCKET;
     WSACleanup();
 
     AsyncTask(ENamedThreads::GameThread, [this]()

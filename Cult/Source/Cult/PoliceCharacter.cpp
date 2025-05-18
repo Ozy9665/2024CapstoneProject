@@ -387,6 +387,7 @@ void APoliceCharacter::ShootPistol()
 
 					if (MySocketPoliceActor)
 					{
+						MySocketPoliceActor->CheckImpactEffect();
 						MySocketPoliceActor->SendHitData(HitPacket);
 					}
 					return;

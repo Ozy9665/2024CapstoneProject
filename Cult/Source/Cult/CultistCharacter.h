@@ -17,7 +17,7 @@ class AMySocketCultistActor;
 UENUM(BlueprintType)
 enum class ESpecialAbility : uint8
 {
-	Vision UMETA(DisplayName = "Vision"),
+	Vision UMETA(DisplayName = "Growth"),
 	Healing UMETA(DisplayName = "Healing"),
 	Rolling UMETA(DisplayName = "Rolling")
 };
@@ -78,8 +78,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 	class USpringArmComponent* SpringArmComp;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Abilities")
-	ESpecialAbility SpecialAbility;
+
 
 	// Damage
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
@@ -158,6 +157,29 @@ public:
 	// 바인딩할 애니메이션
 	UPROPERTY(meta = (BindWidgetAnim), Transient)
 	UWidgetAnimation* HitBloodEffect;
+
+
+	// Ability
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Abilities")
+	ESpecialAbility SpecialAbility;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	TSubclassOf<class AGrowthPreviewActor> GrowthPreviewActorClass;
+
+	UPROPERTY()
+	AGrowthPreviewActor* SpawnedPreviewActor;
+
+	UPROPERTY(EditDefaultsOnly, Category ="Abilities")
+	float PreviewTraceDistance = 1000.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	TEnumAsByte<ECollisionChannel> PlacementCheckChannel = ECC_WorldStatic;
+
+	UFUNCTION(BlueprintCallable, Category="Abilities")
+	void StartPreviewPlacement();
+
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void UpdatePreviewPlacement();
 
 	int my_ID = -1;
 	int GetPlayerID() const;
