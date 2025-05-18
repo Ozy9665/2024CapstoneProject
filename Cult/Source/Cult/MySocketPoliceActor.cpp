@@ -233,9 +233,10 @@ void AMySocketPoliceActor::ProcessDisconnection(const char* Buffer)
     if (DisconnectedID == my_ID)
     {
         CloseConnection();
-        return;
     }
-    SafeDestroyCharacter(DisconnectedID);
+    else {
+        SafeDestroyCharacter(DisconnectedID);
+    }
 }
 
 void AMySocketPoliceActor::SendPlayerData()
@@ -394,8 +395,14 @@ void AMySocketPoliceActor::ProcessCharacterUpdates()
         }
         else {
             UE_LOG(LogTemp, Warning, TEXT("No PlayerID %d"), Pair.Value.PlayerID);
+            KeysToRemove.Add(Pair.Value.PlayerID);
         }
     }
+    for (int32 Key : KeysToRemove)
+    {
+        ReceivedCultistStates.Remove(Key);
+    }
+    KeysToRemove.Reset();
 }
 
 void AMySocketPoliceActor::UpdateCultistState(ACharacter* Character, const FCultistCharacterState& State)
@@ -516,25 +523,19 @@ void AMySocketPoliceActor::UpdateCultistAnimInstanceProperties(UAnimInstance* An
 
 void AMySocketPoliceActor::CheckImpactEffect()
 {
-    if (MyCharacter->bHit) {
-        // ImpactLocations.Add(MyCharacter->ParticleResult.ImpactPoint);
-        UE_LOG(LogTemp, Log, TEXT("Added ImpactLocation: %s"), *MyCharacter->ParticleResult.ImpactPoint.ToString());
-
-        SpawnImpactEffect(MyCharacter->ParticleResult);
-
-        if (ClientSocket != INVALID_SOCKET)
-        {
-            SendParticleData(MyCharacter->ParticleResult);
-        }
-        else
-        {
-            CloseConnection();
-        }
-
-        MyCharacter->bHit = false;
+    // ImpactLocations.Add(MyCharacter->ParticleResult.ImpactPoint);
+    UE_LOG(LogTemp, Log, TEXT("Added ImpactLocation: %s"), *MyCharacter->ParticleResult.ImpactPoint.ToString());
+    SpawnImpactEffect(MyCharacter->ParticleResult);
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        SendParticleData(MyCharacter->ParticleResult);
     }
-
-
+    else
+    {
+        CloseConnection();
+    }
+    MyCharacter->bHit = false;
+    
 }
 
 void AMySocketPoliceActor::SpawnImpactEffect(FHitResult HitResult) {
@@ -589,11 +590,8 @@ void AMySocketPoliceActor::SendParticleData(FHitResult HitResult) {
 }
 
 void AMySocketPoliceActor::CloseConnection() {
-    if (ClientSocket != INVALID_SOCKET)
-    {
-        closesocket(ClientSocket);
-        ClientSocket = INVALID_SOCKET;
-    }
+    closesocket(ClientSocket);
+    ClientSocket = INVALID_SOCKET;
     WSACleanup();
 
     AsyncTask(ENamedThreads::GameThread, [this]()
@@ -671,6 +669,6 @@ void AMySocketPoliceActor::Tick(float DeltaTime)
 
     SendPlayerData();
     ProcessCharacterUpdates();
-    CheckImpactEffect();    // 이거 수정하기
+    // ProcessObjectUpdates(DeltaTime);
 }
 

@@ -46,9 +46,10 @@ void disconnect(int c_id)
 {
 	std::cout << "socket disconnect" << g_users[c_id].c_socket << std::endl;
 	closesocket(g_users[c_id].c_socket);
-	g_users[c_id].state = ST_FREE;
+	//g_users[c_id].c_socket = INVALID_SOCKET;
+	//g_users[c_id].state = ST_FREE;
+	g_users.erase(c_id);
 }
-
 
 void process_packet(int c_id, char* packet) {
 	switch (packet[0]) {
@@ -61,9 +62,9 @@ void process_packet(int c_id, char* packet) {
 		}
 		g_users[c_id].cultist_state = p->state;
 
-		for (auto& [id, u] : g_users) {
-			if (id != c_id && u.isValidSocket()) {
-				u.do_send_packet(p);
+		for (auto& [id, session] : g_users) {
+			if (id != c_id && session.isValidSocket()) {
+				session.do_send_packet(p);
 			}
 		}
 		break;
@@ -77,9 +78,9 @@ void process_packet(int c_id, char* packet) {
 		}
 		g_users[c_id].police_state = p->state;
 
-		for (auto& [id, u] : g_users) {
-			if (id != c_id && u.isValidSocket()) {
-				u.do_send_packet(p);
+		for (auto& [id, session] : g_users) {
+			if (id != c_id && session.isValidSocket()) {
+				session.do_send_packet(p);
 			}
 		}
 		break;
@@ -92,9 +93,9 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		for (auto& [id, u] : g_users) {
-			if (id != c_id && u.isValidSocket()) {
-				u.do_send_packet(p);
+		for (auto& [id, session] : g_users) {
+			if (id != c_id && session.isValidSocket()) {
+				session.do_send_packet(p);
 			}
 		}
 		break;
@@ -107,9 +108,9 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		for (auto& [id, u] : g_users) {
-			if (id != c_id && u.isValidSocket()) {
-				u.do_send_packet(p);
+		for (auto& [id, session] : g_users) {
+			if (id != c_id && session.isValidSocket()) {
+				session.do_send_packet(p);
 			}
 		}
 		break;
@@ -133,20 +134,20 @@ void process_packet(int c_id, char* packet) {
 		ConnectionPacket other;
 		other.header = connectionHeader;
 		other.size = sizeof(ConnectionPacket);
-		for (auto& [id, u] : g_users)
+		for (auto& [id, session] : g_users)
 		{
 			if (id != c_id) {
 				other.id = static_cast<uint8_t>(id);
-				other.role = static_cast<uint8_t>(u.getRole());
+				other.role = static_cast<uint8_t>(session.getRole());
 				g_users[c_id].do_send_packet(&other);
 			}
 		}
 
 		// 3. 기존 유저들에게 새로 접속한 유저 정보 전송
-		for (auto& [id, u] : g_users)
+		for (auto& [id, session] : g_users)
 		{
-			if (id != c_id && u.isValidSocket())
-				u.do_send_packet(p);
+			if (id != c_id && session.isValidSocket())
+				session.do_send_packet(p);
 		}
 
 		//client_id++;
@@ -177,24 +178,26 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "[Server] All cultists are disabled!\n";
 			std::cout << "[Server] Police Win!\n";
 
+			DisconnectionPacket newPacket;
+			newPacket.header = DisconnectionHeader;
+			newPacket.size = sizeof(DisconnectionPacket);
+
 			// TODO: 경찰 승리 처리 or 게임 종료 로직 추가
+			std::vector<int> ids_to_disconnect;
 			for (auto& [id, session] : g_users)
 			{
 				if (session.isValidSocket())
 				{
-					session.setState(ST_FREE);
-					// session.do_send_disconnection(DisconnectionHeader, id);
-					SOCKET s = session.getSocket();
-					if (s != INVALID_SOCKET)
-					{
-						closesocket(s);
-						std::cout << "소켓 수동 종료. ID: " << id << std::endl;
-					}
+					newPacket.id = id;
+					session.do_send_packet(&newPacket);
+					ids_to_disconnect.push_back(id);
 				}
 			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(1000)); // 전송 여유 시간
 
-			g_users.clear(); // 서버 상태 리셋
+			for (int id : ids_to_disconnect)
+			{
+				disconnect(id);
+			}
 		}
 		break;
 	}
@@ -237,7 +240,7 @@ void mainLoop(HANDLE h_iocp) {
 			sess.prev_remain = 0;
 			sess.state = ST_INGAME;
 			sess.c_socket = g_c_socket;
-			g_users.insert(std::make_pair(new_id, sess));
+			g_users.insert(std::make_pair(new_id, sess));	// 여기 emplace로 바꿀 순 없을까?
 			CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket), h_iocp, new_id, 0);
 			sess.do_recv();
 

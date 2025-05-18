@@ -329,9 +329,10 @@ void AMySocketCultistActor::ProcessDisconnection(const char* Buffer)
     if (DisconnectedID == my_ID)
     {
         CloseConnection();
-        return;
     }
-    SafeDestroyCharacter(DisconnectedID);
+    else {
+        SafeDestroyCharacter(DisconnectedID);
+    }
 }
 
 void AMySocketCultistActor::SendDisable() 
@@ -433,9 +434,15 @@ void AMySocketCultistActor::ProcessCharacterUpdates()
             }
             else {
                 UE_LOG(LogTemp, Warning, TEXT("No Cultist PlayerID %d"), Pair.Value.PlayerID);
+                KeysToRemove.Add(Pair.Value.PlayerID);
             }
         }
     }   
+    for (int32 Key : KeysToRemove)
+    {
+        ReceivedCultistStates.Remove(Key);
+    }
+    KeysToRemove.Reset();
     {
         FScopeLock Lock(&PoliceDataMutex);
         for (auto& Pair : ReceivedPoliceStates)
@@ -1059,11 +1066,8 @@ void AMySocketCultistActor::SpawnImpactEffect(const FImpactPacket& ReceivedImpac
 }
 
 void AMySocketCultistActor::CloseConnection() {
-    if (ClientSocket != INVALID_SOCKET)
-    {
-        closesocket(ClientSocket);
-        ClientSocket = INVALID_SOCKET;
-    }
+    closesocket(ClientSocket);
+    ClientSocket = INVALID_SOCKET;
     WSACleanup();
 
     AsyncTask(ENamedThreads::GameThread, [this]()

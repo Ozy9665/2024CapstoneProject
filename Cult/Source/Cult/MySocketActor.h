@@ -112,6 +112,12 @@ struct ConnectionPacket {
 	uint8_t role;
 };
 
+struct DisconnectionPacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
+};
+
 struct DisablePakcet {
 	uint8_t header;
 	uint8_t size;

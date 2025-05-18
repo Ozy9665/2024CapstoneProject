@@ -42,38 +42,16 @@ void SESSION::do_recv()
 	memset(&recv_over.over, 0, sizeof(recv_over.over));
 	recv_over.wsabuf.len = BUF_SIZE - prev_remain;
 	recv_over.wsabuf.buf = recv_over.send_buffer + prev_remain;
-	auto ret = WSARecv(c_socket, &recv_over.wsabuf, 1, 0, &recv_flag, &recv_over.over, 0);
-	if (0 != ret) {
-		auto err_no = WSAGetLastError();
-		if (WSA_IO_PENDING != err_no) {
-			std::cout << "WSARecv failed! Error code: " << err_no << std::endl;
-			print_error_message(err_no);
-			exit(-1);
-		}
-	}	
+	WSARecv(c_socket, &recv_over.wsabuf, 1, 0, &recv_flag, &recv_over.over, 0);
 }
 
-SESSION::SESSION() {
-	id = -1;
-	role = -1;
-	c_socket = 0;
-	state = ST_FREE;
-	prev_remain = 0;
-}
+SESSION::SESSION() {}
 
 SESSION::SESSION(int session_id) : c_socket(INVALID_SOCKET), id(session_id), role(99)		// AI Session
 {
 	AiState.PlayerID = id;
 	police_state = AiState;
 	std::cout << "AI SESSION 积己凳. ID: " << AiState.PlayerID << " role: 99 (PoliceAI)" << std::endl;
-}
-
-SESSION::SESSION(int session_id, SOCKET s) : id(session_id), c_socket(s), prev_remain(0)	// users Session
-{
-	if (c_socket == INVALID_SOCKET) {
-		std::cout << "SESSION 积己 角菩. INVALID_SOCKET\n";
-		return;
-	}
 }
 
 SESSION::~SESSION(){ }

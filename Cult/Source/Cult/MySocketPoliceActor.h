@@ -37,6 +37,7 @@ private:
 	TArray<FVector> ImpactLocations;
 	UNiagaraSystem* NG_ImpactParticle;
 	UNiagaraSystem* MuzzleImpactParticle;
+	TArray<int32> KeysToRemove;
 
 public:	
 	// Called every frame
