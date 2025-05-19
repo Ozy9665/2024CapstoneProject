@@ -169,6 +169,8 @@ public:
 	// Attack Hit
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	void OnAttackHit(AActor* HitActor);
+	UFUNCTION(BlueprintImplementableEvent, Category="Combat")
+	void OnShootPistol(const FHitResult& HitResult);
 	
 	// Particle
 
