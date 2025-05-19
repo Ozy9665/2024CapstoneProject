@@ -169,14 +169,18 @@ public:
 	UPROPERTY()
 	AGrowthPreviewActor* SpawnedPreviewActor;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Abilities")
+	class UStaticMeshComponent* RangeVisualizer;
+
 	UPROPERTY(EditDefaultsOnly, Category ="Abilities")
 	float PreviewTraceDistance = 1000.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
-	float MaxPlacementDistance = 500.f;
+	float MaxPlacementDistance = 100.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TEnumAsByte<ECollisionChannel> PlacementCheckChannel = ECC_WorldStatic;
+
 
 	UFUNCTION(BlueprintCallable, Category="Abilities")
 	void StartPreviewPlacement();

@@ -38,6 +38,13 @@ ACultistCharacter::ACultistCharacter()
 	TaskRitualProgress = 0.0f;
 	TaskRitualSpeed = 20.0f;
 
+	RangeVisualizer = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RangeVisualizer"));
+	RangeVisualizer->SetupAttachment(RootComponent);
+
+	RangeVisualizer->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	RangeVisualizer->SetCastShadow(false);
+	RangeVisualizer->SetRelativeRotation(FRotator(-90.f, 0.f, 0.f)); // XY 평면으로 눕힘
+	RangeVisualizer->SetRelativeLocation(FVector(0.f, 0.f, 1.f));     // 약간 위에 표시
 
 }
 
@@ -321,6 +328,22 @@ void ACultistCharacter::Tick(float DeltaTime)
 	if(SpawnedPreviewActor)
 	{
 		UpdatePreviewPlacement();
+
+		// 사정거리 시각화 원
+		DrawDebugCircle(
+			GetWorld(),
+			GetActorLocation(),
+			MaxPlacementDistance,
+			64,
+			FColor::Green,
+			false,
+			0.01f,
+			0,
+			1.f,
+			FVector(1, 0, 0),
+			FVector(0, 1, 0),
+			false
+		);
 	}
 }
 
@@ -618,6 +641,7 @@ void ACultistCharacter::UpdatePreviewPlacement()
 {
 	if(!SpawnedPreviewActor) {
 		UE_LOG(LogTemp, Warning, TEXT("No SpawnPreviewActor"));
+		return;
 	}
 
 	FHitResult Hit;
@@ -629,33 +653,24 @@ void ACultistCharacter::UpdatePreviewPlacement()
 
 	if (Hit.bBlockingHit)
 	{
+		FVector TargetLocation = Hit.Location;
 		AActor* HitActor = Hit.GetActor();
-		bool bValidSurface = HitActor && HitActor->IsA(ALandscape::StaticClass());
 
-		if (!bValidSurface)
-		{
-			SpawnedPreviewActor->SetActorHiddenInGame(true);
-			return;
-		}
-		else
-		{
-			SpawnedPreviewActor->SetActorHiddenInGame(false);
-		}
+		bool bWithinRange = FVector::Dist(GetActorLocation(), TargetLocation) <= MaxPlacementDistance;
+		//bool bValidSurface = (HitActor && HitActor->IsA(ALandscape::StaticClass()) || HitActor->ActorHasTag(TEXT("Ground")));
 
+		SpawnedPreviewActor->UpdatePreviewLocation(TargetLocation);
 
-		FVector ToTarget = Hit.Location - GetActorLocation();
-		if (ToTarget.Size() > MaxPlacementDistance)
-		{
-			ToTarget = ToTarget.GetSafeNormal() * MaxPlacementDistance;
-		}
-		FVector ClampedLocation = GetActorLocation() + ToTarget;
-		SpawnedPreviewActor->UpdatePreviewLocation(ClampedLocation);
-
-		bool bCanPlace = !GetWorld()->OverlapBlockingTestByChannel(
-			ClampedLocation, FQuat::Identity,
+		bool bHasCollision = GetWorld()->OverlapBlockingTestByChannel(
+			TargetLocation, FQuat::Identity,
 			ECC_Visibility, FCollisionShape::MakeSphere(50.f)
 		);
+
+		bool bCanPlace = bWithinRange; //&& !bHasCollision;	// && bValideSurface
 		SpawnedPreviewActor->SetValidPlacement(bCanPlace);
+
+		// 가시성 설정 
+		SpawnedPreviewActor->SetActorHiddenInGame(false);
 	}
 	else
 	{
