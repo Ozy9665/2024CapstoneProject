@@ -173,6 +173,9 @@ public:
 	float PreviewTraceDistance = 1000.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	float MaxPlacementDistance = 500.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TEnumAsByte<ECollisionChannel> PlacementCheckChannel = ECC_WorldStatic;
 
 	UFUNCTION(BlueprintCallable, Category="Abilities")

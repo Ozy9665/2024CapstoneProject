@@ -7,8 +7,11 @@
 #include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "GrowthPreviewActor.h"
+#include "GameFramework/PlayerController.h"
 #include "Components/ProgressBar.h"
 #include "Components/InputComponent.h"
+#include "Landscape.h"
+#include "DrawDebugHelpers.h"
 
 extern AMySocketCultistActor* MySocketCultistActor;
 
@@ -613,6 +616,10 @@ void ACultistCharacter::StartPreviewPlacement()
 
 void ACultistCharacter::UpdatePreviewPlacement()
 {
+	if(!SpawnedPreviewActor) {
+		UE_LOG(LogTemp, Warning, TEXT("No SpawnPreviewActor"));
+	}
+
 	FHitResult Hit;
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC)return;
@@ -622,15 +629,37 @@ void ACultistCharacter::UpdatePreviewPlacement()
 
 	if (Hit.bBlockingHit)
 	{
-		FVector Location = Hit.Location;
-		SpawnedPreviewActor->UpdatePreviewLocation(Location);
+		AActor* HitActor = Hit.GetActor();
+		bool bValidSurface = HitActor && HitActor->IsA(ALandscape::StaticClass());
 
-		// 충돌체크
+		if (!bValidSurface)
+		{
+			SpawnedPreviewActor->SetActorHiddenInGame(true);
+			return;
+		}
+		else
+		{
+			SpawnedPreviewActor->SetActorHiddenInGame(false);
+		}
+
+
+		FVector ToTarget = Hit.Location - GetActorLocation();
+		if (ToTarget.Size() > MaxPlacementDistance)
+		{
+			ToTarget = ToTarget.GetSafeNormal() * MaxPlacementDistance;
+		}
+		FVector ClampedLocation = GetActorLocation() + ToTarget;
+		SpawnedPreviewActor->UpdatePreviewLocation(ClampedLocation);
+
 		bool bCanPlace = !GetWorld()->OverlapBlockingTestByChannel(
-			Location, FQuat::Identity,
-			PlacementCheckChannel, FCollisionShape::MakeSphere(50.0f)	// 기둥 반경
+			ClampedLocation, FQuat::Identity,
+			ECC_Visibility, FCollisionShape::MakeSphere(50.f)
 		);
 		SpawnedPreviewActor->SetValidPlacement(bCanPlace);
+	}
+	else
+	{
+		SpawnedPreviewActor->SetActorHiddenInGame(true);
 	}
 }
 
