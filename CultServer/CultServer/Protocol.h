@@ -19,11 +19,16 @@ constexpr char connectionHeader = 5;
 constexpr char DisconnectionHeader = 6;
 constexpr char readyHeader = 7;
 constexpr char disableHeader = 8;
+constexpr char enterHeader = 9;
+constexpr char leaveHeader = 10;
 
 constexpr char ST_FREE{ 0 };
-constexpr char ST_INGAME{ 1 };
-constexpr char ST_CLOSE{ 2 };
+constexpr char ST_READY{ 1 };
+constexpr char ST_INGAME{ 2 };
 constexpr char ST_DISABLE{ 3 };
+// player가 ST_FREE로 입장
+// 방에 들어가서 ready버튼 누르면 ST_READY
+// 게임에 들어가면 ST_INGAME으로 바꾸면서 room도 isIngame
 
 #pragma pack(push, 1)
 
@@ -155,6 +160,24 @@ struct DisconnectionPacket {
 };
 
 struct DisablePakcet {
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
+};
+
+struct EnterPacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
+};
+
+struct LeavePacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
+};
+
+struct ReadyPacket {
 	uint8_t header;
 	uint8_t size;
 	uint8_t id;

@@ -124,6 +124,24 @@ struct DisablePakcet {
 	uint8_t id;
 };
 
+struct EnterPacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
+};
+
+struct LeavePacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
+};
+
+struct ReadyPacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
+};
+
 #pragma pack(pop)
 
 UCLASS()
@@ -153,6 +171,8 @@ constexpr char connectionHeader = 5;
 constexpr char DisconnectionHeader = 6;
 constexpr char readyHeader = 7;
 constexpr char disableHeader = 8;
+constexpr char enterHeader = 9;
+constexpr char leaveHeader = 10;
 
 constexpr FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,

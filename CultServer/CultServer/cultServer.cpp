@@ -46,8 +46,6 @@ void disconnect(int c_id)
 {
 	std::cout << "socket disconnect" << g_users[c_id].c_socket << std::endl;
 	closesocket(g_users[c_id].c_socket);
-	//g_users[c_id].c_socket = INVALID_SOCKET;
-	//g_users[c_id].state = ST_FREE;
 	g_users.erase(c_id);
 }
 
@@ -201,6 +199,10 @@ void process_packet(int c_id, char* packet) {
 		}
 		break;
 	}
+	case enterHeader: { break; }
+	case leaveHeader: { break; }
+	default:
+		std::cout << "invalidHeader From id: " << c_id << std::endl;
 	}
 }
 
@@ -238,7 +240,7 @@ void mainLoop(HANDLE h_iocp) {
 			SESSION sess;
 			sess.id = new_id;
 			sess.prev_remain = 0;
-			sess.state = ST_INGAME;
+			sess.state = ST_FREE;
 			sess.c_socket = g_c_socket;
 			g_users.insert(std::make_pair(new_id, sess));	// 여기 emplace로 바꿀 순 없을까?
 			CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket), h_iocp, new_id, 0);
