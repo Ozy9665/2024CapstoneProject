@@ -166,6 +166,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TSubclassOf<class AGrowthPreviewActor> GrowthPreviewActorClass;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	TSubclassOf<class ATreeObstacleActor> TreeObstacleActorClass;
+
 	UPROPERTY()
 	AGrowthPreviewActor* SpawnedPreviewActor;
 
@@ -193,6 +196,7 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void ConfirmPlacement();
+
 
 	int my_ID = -1;
 	int GetPlayerID() const;

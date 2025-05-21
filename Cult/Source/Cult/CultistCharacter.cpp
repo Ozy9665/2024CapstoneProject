@@ -7,6 +7,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "GrowthPreviewActor.h"
+#include "TreeObstacleActor.h"
 #include "GameFramework/PlayerController.h"
 #include "Components/ProgressBar.h"
 #include "Components/InputComponent.h"
@@ -687,13 +688,13 @@ void ACultistCharacter::ConfirmPlacement()
 	FVector SpawnLocation = SpawnedPreviewActor->GetActorLocation();
 	FRotator SpawnRotation = SpawnedPreviewActor->GetActorRotation();
 
-	//if (TreeObstacleActorClass)
-	//{
-	//	FActorSpawnParameters SpawnParams;
-	//	SpawnParams.Owner = this;
+	if (TreeObstacleActorClass)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.Owner = this;
 
-	//	GetWorld()->SpawnActor<ATreeObstacleActor>(TreeObstacleActorClass, SpawnLocation, SpawnRotation, SpawnParams);
-	//}
+		GetWorld()->SpawnActor<ATreeObstacleActor>(TreeObstacleActorClass, SpawnLocation, SpawnRotation, SpawnParams);
+	}
 
 	SpawnedPreviewActor->Destroy();
 	SpawnedPreviewActor = nullptr;
