@@ -110,7 +110,6 @@ void AMySocketPoliceActor::ReceiveData()
 {
     AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this]()
         {
-            const int32 BufferSize = 1024;
             while (true)
             {
                 char Buffer[BufferSize];

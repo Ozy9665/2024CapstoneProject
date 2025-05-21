@@ -18,13 +18,21 @@ class CULT_API AMyNetworkManagerActor : public AActor
 public:	
 	// Sets default values for this actor's properties
 	AMyNetworkManagerActor();
-	~AMyNetworkManagerActor();
 
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 	SOCKET CanConnectToServer(const FString& ServerIP, int32 ServerPort);
-	void CheckAndSpawnActor();
+	void CheckServer();
+	void RequestRoomInfo();
+	void ProcessRoomInfo(const char* Buffer);
+	void ReceiveData();
+
+	void SpawnActor();
+
+private:
+	SOCKET ClientSocket;
+	std::array<room, 100> rooms;
 
 public:	
 	// Called every frame

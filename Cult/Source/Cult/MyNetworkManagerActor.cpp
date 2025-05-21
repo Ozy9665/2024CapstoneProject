@@ -24,17 +24,12 @@ AMyNetworkManagerActor::AMyNetworkManagerActor()
     }
 }
 
-AMyNetworkManagerActor::~AMyNetworkManagerActor()
-{
-    WSACleanup();
-}
-
 // Called when the game starts or when spawned
 void AMyNetworkManagerActor::BeginPlay()
 {
     Super::BeginPlay();
     UE_LOG(LogTemp, Error, TEXT("Actor Spawned"));
-    CheckAndSpawnActor();
+    CheckServer();
 }
 
 // Called every frame
@@ -46,7 +41,7 @@ void AMyNetworkManagerActor::Tick(float DeltaTime)
 
 SOCKET AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32 ServerPort)
 {
-    SOCKET ClientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ClientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (ClientSocket == INVALID_SOCKET)
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to create socket: %d"), WSAGetLastError());
@@ -72,7 +67,7 @@ SOCKET AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32
     }
 }
 
-void AMyNetworkManagerActor::CheckAndSpawnActor()
+void AMyNetworkManagerActor::CheckServer()
 {
     FString ServerIP = TEXT("127.0.0.1");  // 서버 IP 주소
     int32 ServerPort = 7777;               // 포트 번호
@@ -84,6 +79,74 @@ void AMyNetworkManagerActor::CheckAndSpawnActor()
         return;
     }
 
+
+    // 접속 되면 Actor Spawn
+    SpawnActor();
+}
+
+void AMyNetworkManagerActor::RequestRoomInfo() 
+{
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        RequestPacket Packet;
+        Packet.header = disableHeader;
+        Packet.size = sizeof(RequestPacket);
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(DisablePakcet), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("RequestRoomInfo failed with error: %ld"), WSAGetLastError());
+        }
+    }
+    else
+    {
+        CheckServer();
+    }
+}
+
+void AMyNetworkManagerActor::ProcessRoomInfo(const char* Buffer) 
+{
+
+}
+
+void AMyNetworkManagerActor::ReceiveData() 
+{
+    char Buffer[BufferSize];
+    int32 BytesReceived = recv(ClientSocket, Buffer, BufferSize, 0);
+    if (BytesReceived > 0)
+    {
+        int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
+        int PacketSize = static_cast<int>(static_cast<unsigned char>(Buffer[1]));
+        if (BytesReceived != PacketSize)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Invalid packet size: Received %d, Expected %d: header:%d"), BytesReceived, PacketSize, PacketType);
+            return;
+        }
+
+        switch (PacketType)
+        {
+        case requestHeader:
+            ProcessRoomInfo(Buffer);
+            break;
+        default:
+            UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
+            break;
+        }
+    }
+    else if (BytesReceived == 0 || WSAGetLastError() == WSAECONNRESET)
+    {
+        UE_LOG(LogTemp, Log, TEXT("Connection closed by server."));
+        CheckServer();
+        return;
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("recv failed with error: %ld"), WSAGetLastError());
+        CheckServer();
+        return;
+    }
+}
+
+void AMyNetworkManagerActor::SpawnActor() {
     APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
     if (not PC) {
         UE_LOG(LogTemp, Log, TEXT("GetPlayerController Failed."));
@@ -96,7 +159,7 @@ void AMyNetworkManagerActor::CheckAndSpawnActor()
         return;
     }
 
-    if (MyGI->bIsCultist) 
+    if (MyGI->bIsCultist)
     {
         APawn* DefaultPawn = PC->GetPawn();
         if (not DefaultPawn)
@@ -228,7 +291,7 @@ void AMyNetworkManagerActor::CheckAndSpawnActor()
         PoliceActor->SetClientSocket(ConnectedSocket);
         UE_LOG(LogTemp, Error, TEXT("Cultist Actor Spawned & Socket Passed."));
     }
-    
-    
+
+
     Destroy();
 }

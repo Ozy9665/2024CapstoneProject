@@ -19,14 +19,6 @@ EXP_OVER g_a_over;
 
 std::atomic<int> client_id = 0;
 std::unordered_map<int, SESSION> g_users;
-
-struct room {
-	std::array<int, 5> player_ids{ -1, -1, -1, -1, -1 };
-	int police = 0;
-	int cultist = 0;
-	bool isIngame = false;
-};
-
 std::array<room, 100> rooms;
 
 void CommandWorker()
@@ -228,7 +220,11 @@ void process_packet(int c_id, char* packet) {
 		// 5. 세션 state = ST_FREE
 		break;
 	}
-
+	case gameStartHeader: {
+		// 1. 원래 connectionHeader에서 하던 user데이터 broadCast를 수행
+		// 2. connectionHeader에서는 접속했으면 방 데이터를 send
+		break;
+	}
 	default:
 		std::cout << "invalidHeader From id: " << c_id << std::endl;
 	}

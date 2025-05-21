@@ -3,9 +3,17 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "PoliceCharacter.h"
+#include <array>
 #include "MySocketActor.generated.h"
 
 #pragma pack(push, 1)
+
+struct room {
+	std::array<int, 5> player_ids;
+	int police;
+	int cultist;
+	bool isIngame;
+};
 
 struct FPoliceCharacterState
 {
@@ -124,6 +132,16 @@ struct DisablePakcet {
 	uint8_t id;
 };
 
+struct RequestPacket {
+	uint8_t header;
+	uint8_t size;
+};
+
+struct RoomdataPakcet {
+	uint8_t header;
+	uint8_t size;
+};
+
 struct EnterPacket {
 	uint8_t header;
 	uint8_t size;
@@ -162,6 +180,8 @@ public:
 	virtual void Tick(float DeltaTime) override;
 };
 
+constexpr int32 BufferSize{ 1024 };
+//-- ingame header
 constexpr char cultistHeader = 0;
 constexpr char objectHeader = 1;
 constexpr char policeHeader = 2;
@@ -169,10 +189,13 @@ constexpr char particleHeader = 3;
 constexpr char hitHeader = 4;
 constexpr char connectionHeader = 5;
 constexpr char DisconnectionHeader = 6;
-constexpr char readyHeader = 7;
-constexpr char disableHeader = 8;
+constexpr char disableHeader = 7;
+//-- room header
+constexpr char requestHeader = 8;
 constexpr char enterHeader = 9;
 constexpr char leaveHeader = 10;
+constexpr char readyHeader = 11;
+constexpr char gameStartHeader = 12;
 
 constexpr FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,

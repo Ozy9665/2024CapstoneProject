@@ -10,6 +10,7 @@
 constexpr short SERVER_PORT = 7777;
 constexpr int BUF_SIZE = 200;
 
+//-- ingame header
 constexpr char cultistHeader = 0;
 constexpr char objectHeader = 1;
 constexpr char policeHeader = 2;
@@ -17,10 +18,13 @@ constexpr char particleHeader = 3;
 constexpr char hitHeader = 4;
 constexpr char connectionHeader = 5;
 constexpr char DisconnectionHeader = 6;
-constexpr char readyHeader = 7;
-constexpr char disableHeader = 8;
+constexpr char disableHeader = 7;
+//-- room header
+constexpr char requestHeader = 8;
 constexpr char enterHeader = 9;
 constexpr char leaveHeader = 10;
+constexpr char readyHeader = 11;
+constexpr char gameStartHeader = 12;
 
 constexpr char ST_FREE{ 0 };
 constexpr char ST_READY{ 1 };
@@ -31,6 +35,13 @@ constexpr char ST_DISABLE{ 3 };
 // 게임에 들어가면 ST_INGAME으로 바꾸면서 room도 isIngame
 
 #pragma pack(push, 1)
+
+struct room {
+	std::array<int, 5> player_ids{ -1, -1, -1, -1, -1 };
+	int police = 0;
+	int cultist = 0;
+	bool isIngame = false;
+};
 
 enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND };
 
@@ -163,6 +174,16 @@ struct DisablePakcet {
 	uint8_t header;
 	uint8_t size;
 	uint8_t id;
+};
+
+struct requestPacket {
+	uint8_t header;
+	uint8_t size;
+};
+
+struct roomdataPakcet {
+	uint8_t header;
+	uint8_t size;
 };
 
 struct EnterPacket {
