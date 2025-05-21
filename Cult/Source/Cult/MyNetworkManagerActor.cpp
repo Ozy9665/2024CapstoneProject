@@ -221,7 +221,7 @@ void AMyNetworkManagerActor::SpawnActor() {
             AMySocketCultistActor::StaticClass(), GetActorLocation(), GetActorRotation());
         if (CultistActor)
         {
-            CultistActor->SetClientSocket(ConnectedSocket);
+            CultistActor->SetClientSocket(ClientSocket);
             UE_LOG(LogTemp, Error, TEXT("Cultist Actor Spawned & Socket Passed."));
         }
     }
@@ -288,7 +288,7 @@ void AMyNetworkManagerActor::SpawnActor() {
             UE_LOG(LogTemp, Error, TEXT("Failed to spawn PoliceActor."));
             return;
         }
-        PoliceActor->SetClientSocket(ConnectedSocket);
+        PoliceActor->SetClientSocket(ClientSocket);
         UE_LOG(LogTemp, Error, TEXT("Cultist Actor Spawned & Socket Passed."));
     }
 
