@@ -249,6 +249,4 @@ public:
 	bool isValidState() const;
 };
 
-extern std::unordered_map<int, SESSION> g_users;
-extern std::atomic<int> client_id;
 extern FPoliceCharacterState AiState;

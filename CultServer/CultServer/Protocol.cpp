@@ -1,17 +1,6 @@
 #include "Protocol.h"
 #include <thread>
-#include <array>
 
-std::unordered_map<int, SESSION> g_users;
-
-struct room {
-	std::array<int, 5> player_ids{ -1, -1, -1, -1, -1 };
-	int police = 0;
-	int cultist = 0;
-	bool isIngame = false;
-};
-
-std::atomic<int> client_id = 0;
 FPoliceCharacterState AiState{ -1,
 	110.f, -1100.f, 2770.f,
 	0.f, 90.f, 0.f,

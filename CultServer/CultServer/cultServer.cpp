@@ -17,6 +17,18 @@
 SOCKET g_s_socket, g_c_socket;
 EXP_OVER g_a_over;
 
+std::atomic<int> client_id = 0;
+std::unordered_map<int, SESSION> g_users;
+
+struct room {
+	std::array<int, 5> player_ids{ -1, -1, -1, -1, -1 };
+	int police = 0;
+	int cultist = 0;
+	bool isIngame = false;
+};
+
+std::array<room, 100> rooms;
+
 void CommandWorker()
 {
 	while (true)
@@ -27,7 +39,7 @@ void CommandWorker()
 		if (command == "add_ai")
 		{
 			int ai_id = client_id++;
-			InitializeAISession(ai_id);
+			//InitializeAISession(ai_id);
 			std::cout << "[Command] New AI added. ID: " << ai_id << "\n";
 		}
 		else if (command == "exit")
@@ -199,8 +211,24 @@ void process_packet(int c_id, char* packet) {
 		}
 		break;
 	}
-	case enterHeader: { break; }
-	case leaveHeader: { break; }
+	case enterHeader: {
+		// 1. 빈 방 탐색 (isIngame == false && 인원 < 5)
+		// 2. 빈 슬롯 탐색 후 player_id 삽입
+		// 3. 역할(POLICE/CULTIST) 따라 room.police 또는 room.cultist++
+		// 4. 성공 시 세션 state = ST_READY
+		// 5. 실패 시 에러 패킷 전송
+		break;
+	}
+
+	case leaveHeader: {
+		// 1. 세션이 들어간 방 ID 찾기 (세션에 room_id 저장돼 있어야 편함)
+		// 2. room.player_ids에서 해당 id 제거 (=-1)
+		// 3. 역할에 따라 room.police 또는 cultist--
+		// 4. 모두 나갔으면 room 초기화
+		// 5. 세션 state = ST_FREE
+		break;
+	}
+
 	default:
 		std::cout << "invalidHeader From id: " << c_id << std::endl;
 	}
@@ -289,7 +317,7 @@ int main()
 	WSADATA WSAData;
 	WSAStartup(MAKEWORD(2, 0), &WSAData);
 
-	std::thread CommandThread(CommandWorker);
+	//std::thread CommandThread(CommandWorker);
 
 	g_s_socket = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
 	if (g_s_socket <= 0) {
@@ -317,8 +345,8 @@ int main()
 	
 	mainLoop(h_iocp);
 
-	CommandThread.join();
-	StopAIWorker();
+	//CommandThread.join();
+	//StopAIWorker();
 	closesocket(g_s_socket);
 	WSACleanup();
 }
