@@ -174,6 +174,7 @@ void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &ACultistCharacter::ToggleCrouch);
 	
 	PlayerInputComponent->BindAction("SpecialAbility", IE_Pressed, this, &ACultistCharacter::StartPreviewPlacement);
+	PlayerInputComponent->BindAction("ConfirmPlacement", IE_Pressed, this, &ACultistCharacter::ConfirmPlacement);
 	UE_LOG(LogTemp, Warning, TEXT("Binding  input"));
 
 }
@@ -666,7 +667,7 @@ void ACultistCharacter::UpdatePreviewPlacement()
 			ECC_Visibility, FCollisionShape::MakeSphere(50.f)
 		);
 
-		bool bCanPlace = bWithinRange; //&& !bHasCollision;	// && bValideSurface
+		bCanPlace = bWithinRange; //&& !bHasCollision;	// && bValideSurface
 		SpawnedPreviewActor->SetValidPlacement(bCanPlace);
 
 		// 가시성 설정 
@@ -676,6 +677,26 @@ void ACultistCharacter::UpdatePreviewPlacement()
 	{
 		SpawnedPreviewActor->SetActorHiddenInGame(true);
 	}
+}
+
+void ACultistCharacter::ConfirmPlacement()
+{
+	if (!SpawnedPreviewActor)return;
+	if (!bCanPlace) return;
+
+	FVector SpawnLocation = SpawnedPreviewActor->GetActorLocation();
+	FRotator SpawnRotation = SpawnedPreviewActor->GetActorRotation();
+
+	//if (TreeObstacleActorClass)
+	//{
+	//	FActorSpawnParameters SpawnParams;
+	//	SpawnParams.Owner = this;
+
+	//	GetWorld()->SpawnActor<ATreeObstacleActor>(TreeObstacleActorClass, SpawnLocation, SpawnRotation, SpawnParams);
+	//}
+
+	SpawnedPreviewActor->Destroy();
+	SpawnedPreviewActor = nullptr;
 }
 
 
