@@ -176,6 +176,9 @@ public:
 	float PreviewTraceDistance = 1000.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	bool bCanPlace = false;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	float MaxPlacementDistance = 100.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
@@ -187,6 +190,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void UpdatePreviewPlacement();
+
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void ConfirmPlacement();
 
 	int my_ID = -1;
 	int GetPlayerID() const;
