@@ -668,7 +668,14 @@ void ACultistCharacter::UpdatePreviewPlacement()
 			ECC_Visibility, FCollisionShape::MakeSphere(50.f)
 		);
 
-		bCanPlace = bWithinRange; //&& !bHasCollision;	// && bValideSurface
+		FCollisionQueryParams Params;
+		Params.AddIgnoredActor(this);
+		bool bOverlap = GetWorld()->OverlapBlockingTestByChannel(
+			TargetLocation, FQuat::Identity, ECC_Pawn,
+			FCollisionShape::MakeSphere(50.f), Params
+		);
+
+		bCanPlace = bWithinRange && !bOverlap; //&& !bHasCollision;	// && bValideSurface
 		SpawnedPreviewActor->SetValidPlacement(bCanPlace);
 
 		// 가시성 설정 
