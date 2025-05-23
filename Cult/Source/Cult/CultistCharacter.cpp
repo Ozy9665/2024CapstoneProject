@@ -675,7 +675,7 @@ void ACultistCharacter::UpdatePreviewPlacement()
 			FCollisionShape::MakeSphere(50.f), Params
 		);
 
-		bCanPlace = bWithinRange && !bOverlap; //&& !bHasCollision;	// && bValideSurface
+		bCanPlace = bWithinRange && bOverlap; //&& !bHasCollision;	// && bValideSurface
 		SpawnedPreviewActor->SetValidPlacement(bCanPlace);
 
 		// 가시성 설정 
