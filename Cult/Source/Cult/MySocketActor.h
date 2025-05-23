@@ -8,11 +8,26 @@
 
 #pragma pack(push, 1)
 
-struct room {
-	std::array<int, 5> player_ids;
-	int police;
-	int cultist;
-	bool isIngame;
+USTRUCT(BlueprintType)
+struct Froom
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadWrite)
+	uint8 room_id;
+
+	UPROPERTY(BlueprintReadWrite)
+	uint8 police = 0;
+
+	UPROPERTY(BlueprintReadWrite)
+	uint8 cultist = 0;
+
+	UPROPERTY(BlueprintReadWrite)
+	bool isIngame = false;
+
+	// Note: TArray로 바꾸면 블루프린트에서도 다룰 수 있음
+	UPROPERTY(BlueprintReadWrite)
+	TArray<int32> player_ids;
 };
 
 struct FPoliceCharacterState
@@ -140,12 +155,13 @@ struct RequestPacket {
 struct RoomdataPakcet {
 	uint8_t header;
 	uint8_t size;
+	std::array<Froom, 10> rooms;
 };
 
 struct EnterPacket {
 	uint8_t header;
 	uint8_t size;
-	uint8_t id;
+	uint8_t room_number;
 };
 
 struct LeavePacket {

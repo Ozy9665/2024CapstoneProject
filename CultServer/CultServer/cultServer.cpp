@@ -155,11 +155,6 @@ void process_packet(int c_id, char* packet) {
 		//client_id++;
 		break;
 	}
-	case readyHeader:
-	{
-		g_users[c_id].setState(ST_INGAME);
-		break;
-	}
 	case disableHeader:
 	{
 		g_users[c_id].setState(ST_DISABLE);
@@ -203,30 +198,49 @@ void process_packet(int c_id, char* packet) {
 		}
 		break;
 	}
-	case enterHeader: {
-		// 1. 빈 방 탐색 (isIngame == false && 인원 < 5)
-		// 2. 빈 슬롯 탐색 후 player_id 삽입
-		// 3. 역할(POLICE/CULTIST) 따라 room.police 또는 room.cultist++
-		// 4. 성공 시 세션 state = ST_READY
+	case requestHeader: 
+	{ 
+		std::cout << "requestHeader recved" << std::endl;
+		// 1. 클라이언트가 room data를 request했음.
+		// 2. 앞에서부터 ingame이 false이고, 
+		//	  g_users[c_id].role의 플레이어가 full이 아닌 room을 RoomdataPakcet로 10개 전송
+		break; 
+	}
+	case enterHeader: 
+	{
+		// 1. room number를 보고 비어있으면 InRoomPacket 전송
+		// 1. 업데이트되어 룸이 입장 불가능하면 leaveHeader 전송
+		// 2. 클라에서는 먼저 보내져있던 InRoomPacket를 기반으로 room 업데이트
+		// 3. 입장 했다면, 그 room의 데이터 업데이트.
+		// 4. 역할(POLICE/CULTIST) 따라 room.police 또는 room.cultist++
 		// 5. 실패 시 에러 패킷 전송
 		break;
 	}
-
-	case leaveHeader: {
-		// 1. 세션이 들어간 방 ID 찾기 (세션에 room_id 저장돼 있어야 편함)
+	case leaveHeader: 
+	{
+		// 1. 방에서 나갔으니까 page가 0인 RoomdataPakcet 전송.
 		// 2. room.player_ids에서 해당 id 제거 (=-1)
 		// 3. 역할에 따라 room.police 또는 cultist--
-		// 4. 모두 나갔으면 room 초기화
-		// 5. 세션 state = ST_FREE
+		// 4. isIngame = false;
 		break;
 	}
-	case gameStartHeader: {
+	case readyHeader:
+	{
+		// 1. player 상태를 ready로 변경
+		// 2. InRoomPacket으로 방 상태 업데이트를 방 전원에게 broadcast
+		g_users[c_id].setState(ST_READY);
+		break;
+	}
+	case gameStartHeader: 
+	{
 		// 1. 원래 connectionHeader에서 하던 user데이터 broadCast를 수행
-		// 2. connectionHeader에서는 접속했으면 방 데이터를 send
+		// 2. connectionHeader에서는 접속했으면 방 데이터(RoomdataPakcet.page = 1)를 send하는걸로 수정.
+		// 3. room의 isIngame을 true로
 		break;
 	}
 	default:
-		std::cout << "invalidHeader From id: " << c_id << std::endl;
+		char header = packet[0];
+		std::cout << "invalidHeader From id: " << c_id << "header: " << header << std::endl;
 	}
 }
 

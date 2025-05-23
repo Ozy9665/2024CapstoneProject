@@ -32,9 +32,11 @@ protected:
 
 private:
 	SOCKET ClientSocket;
-	std::array<room, 100> rooms;
 
 public:	
+    UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
+    TArray<Froom> rooms;
+
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 };

@@ -36,7 +36,6 @@ void AMyNetworkManagerActor::BeginPlay()
 void AMyNetworkManagerActor::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
-
 }
 
 SOCKET AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32 ServerPort)
@@ -79,7 +78,7 @@ void AMyNetworkManagerActor::CheckServer()
         return;
     }
 
-
+    RequestRoomInfo();
     // 접속 되면 Actor Spawn
     SpawnActor();
 }
@@ -89,13 +88,14 @@ void AMyNetworkManagerActor::RequestRoomInfo()
     if (ClientSocket != INVALID_SOCKET)
     {
         RequestPacket Packet;
-        Packet.header = disableHeader;
+        Packet.header = requestHeader;
         Packet.size = sizeof(RequestPacket);
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(DisablePakcet), 0);
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RequestPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("RequestRoomInfo failed with error: %ld"), WSAGetLastError());
         }
+        // ReceiveData();
     }
     else
     {
@@ -105,7 +105,13 @@ void AMyNetworkManagerActor::RequestRoomInfo()
 
 void AMyNetworkManagerActor::ProcessRoomInfo(const char* Buffer) 
 {
+    RoomdataPakcet Packet;
+    memcpy(&Packet, Buffer, sizeof(RoomdataPakcet));
 
+    for (int i = 0; i < Packet.rooms.size(); ++i) {
+        rooms[i] = Packet.rooms[i];
+        // UE_LOG(LogTemp, Log, TEXT("Room %d: Police=%d, Cultist=%d, InGame=%d"), r.room_id, r.police, r.cultist, r.isIngame);
+    }
 }
 
 void AMyNetworkManagerActor::ReceiveData() 
