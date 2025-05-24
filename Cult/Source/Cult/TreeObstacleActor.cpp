@@ -15,6 +15,10 @@ ATreeObstacleActor::ATreeObstacleActor()
 	TreeMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 	TreeMesh->SetCollisionResponseToAllChannels(ECR_Block);
 	TreeMesh->SetSimulatePhysics(false);
+
+	// Spline √ ±‚»≠
+	Spline = CreateDefaultSubobject<USplineComponent>(TEXT("Spline"));
+	Spline->SetupAttachment(RootComponent);
 }
 
 // Called when the game starts or when spawned

@@ -3,6 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Components/SplineComponent.h"
+#include "Components/SplineMeshComponent.h"
 #include "GameFramework/Actor.h"
 #include "TreeObstacleActor.generated.h"
 
@@ -26,6 +28,8 @@ public:
 	UPROPERTY(VisibleAnywhere)
 	UStaticMeshComponent* TreeMesh;
 
+
+	// Growth
 	UPROPERTY(EditAnywhere, Category = "Growth")
 	float GrowHeight = 200.f;
 
@@ -37,4 +41,13 @@ public:
 
 	float ElapsedTime = 0.f;
 	bool bIsGrowing = true;
+
+	// Spline
+	UPROPERTY(VisibleAnywhere)
+	USplineComponent* Spline;
+
+	UPROPERTY(EditAnywhere)
+	UStaticMesh* BranchMesh;
+
+	TArray<USplineMeshComponent*> SpawnedBranches;
 };
