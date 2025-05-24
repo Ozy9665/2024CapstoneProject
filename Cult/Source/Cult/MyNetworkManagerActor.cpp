@@ -84,14 +84,11 @@ void AMyNetworkManagerActor::CheckServer()
 
     ReceiveData();
     GI->ClientSocket = ClientSocket;
-    uint8 role = GI->bIsCultist ? 0 : 1;
-    UE_LOG(LogTemp, Error, TEXT("CheckServer sended role %d, %d."), role, GI->bIsCultist);
-    ConnectionPacket packet;
+    IdOnlyPacket packet;
     packet.header = connectionHeader;
-    packet.size = sizeof(ConnectionPacket);
-    packet.role = role;
+    packet.size = sizeof(IdOnlyPacket);
 
-    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&packet), sizeof(ConnectionPacket), 0);
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&packet), sizeof(IdOnlyPacket), 0);
     if (BytesSent == SOCKET_ERROR)
     {
         UE_LOG(LogTemp, Error, TEXT("SetClientSocket failed with error: %ld"), WSAGetLastError());
@@ -100,14 +97,20 @@ void AMyNetworkManagerActor::CheckServer()
 
 void AMyNetworkManagerActor::RequestRoomInfo() 
 {
+    UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
+    if (not GI) {
+        UE_LOG(LogTemp, Error, TEXT("Gl cast failed."));
+        return;
+    }
+
     if (ClientSocket != INVALID_SOCKET)
     {
         ReceiveData();
-        RequestPacket Packet;
+        RoleOnlyPacket Packet;
         Packet.header = requestHeader;
-        Packet.size = sizeof(RequestPacket);
-        Packet.role = my_Role;
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RequestPacket), 0);
+        Packet.size = sizeof(RoleOnlyPacket);
+        Packet.role = GI->bIsCultist ? 0 : 1;
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RoleOnlyPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("RequestRoomInfo failed with error: %ld"), WSAGetLastError());
@@ -121,8 +124,8 @@ void AMyNetworkManagerActor::RequestRoomInfo()
 
 void AMyNetworkManagerActor::ProcessRoomInfo(const char* Buffer) 
 {
-    RoomdataPakcet Packet;
-    memcpy(&Packet, Buffer, sizeof(RoomdataPakcet));
+    RoomsPakcet Packet;
+    memcpy(&Packet, Buffer, sizeof(RoomsPakcet));
 
     rooms.Empty();
     rooms.Reserve(10);
@@ -130,7 +133,7 @@ void AMyNetworkManagerActor::ProcessRoomInfo(const char* Buffer)
     for (int i = 0; i < 10; ++i)
     {
         const PacketRoom& pr = Packet.rooms[i];
-
+            
         Froom fr;
         fr.room_id = pr.room_id;
         fr.police = pr.police;
@@ -170,7 +173,6 @@ void AMyNetworkManagerActor::ReceiveData()
             case connectionHeader:
             {
                 my_ID = static_cast<unsigned char>(Buffer[2]);
-                my_Role = static_cast<unsigned char>(Buffer[3]);
                 break;
             }
             case requestHeader:

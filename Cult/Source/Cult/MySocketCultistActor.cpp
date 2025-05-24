@@ -74,12 +74,12 @@ void AMySocketCultistActor::SetClientSocket(SOCKET InSocket, int32 RoomNumber)
         ReceiveData();
         UE_LOG(LogTemp, Log, TEXT("Cultist Client socket set. Starting ReceiveData."));
 
-        EnterPacket packet;
+        RoomNumberPacket packet;
         packet.header = gameStartHeader;
-        packet.size = sizeof(EnterPacket);
+        packet.size = sizeof(RoomNumberPacket);
         packet.room_number = RoomNumber;
         
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&packet), sizeof(EnterPacket), 0);
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&packet), sizeof(RoomNumberPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("SetClientSocket failed with error: %ld"), WSAGetLastError());
@@ -338,11 +338,11 @@ void AMySocketCultistActor::SendDisable()
 {
     if (ClientSocket != INVALID_SOCKET)
     {
-        DisablePakcet Packet;
+        IdOnlyPacket Packet;
         Packet.header = disableHeader;
-        Packet.size = sizeof(DisablePakcet);
+        Packet.size = sizeof(IdOnlyPacket);
         Packet.id = my_ID;
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(DisablePakcet), 0);
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(IdOnlyPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("SendDisable failed with error: %ld"), WSAGetLastError());

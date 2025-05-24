@@ -162,59 +162,41 @@ struct HitPacket {
 	FHitPacket data;
 };
 
-struct ConnectionPacket {
+struct IdOnlyPacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
+};
+
+struct RoleOnlyPacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t role;
+};
+
+struct IdRolePacket {
 	uint8_t header;
 	uint8_t size;
 	uint8_t id;
 	uint8_t role;
 };
 
-struct DisconnectionPacket {
-	uint8_t header;
-	uint8_t size;
-	uint8_t id;
-};
-
-struct DisablePakcet {
-	uint8_t header;
-	uint8_t size;
-	uint8_t id;
-};
-
-struct RequestPacket {
-	uint8_t header;
-	uint8_t size;
-	uint8_t role;
-};
-
-struct InRoomPacket {
+struct RoomDataPacket {
 	uint8_t header;
 	uint8_t size;
 	room room_data;
 };
 
-struct RoomdataPakcet {
+struct RoomsPakcet {
 	uint8_t header;
 	uint8_t size;
 	room rooms[10];
 };
 
-struct EnterPacket {
+struct RoomNumberPacket {
 	uint8_t header;
 	uint8_t size;
 	uint8_t room_number;
-};
-
-struct LeavePacket {
-	uint8_t header;
-	uint8_t size;
-	uint8_t id;
-};
-
-struct ReadyPacket {
-	uint8_t header;
-	uint8_t size;
-	uint8_t id;
 };
 
 #pragma pack(pop)

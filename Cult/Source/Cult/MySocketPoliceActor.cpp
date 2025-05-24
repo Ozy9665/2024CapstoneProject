@@ -77,12 +77,12 @@ void AMySocketPoliceActor::SetClientSocket(SOCKET InSocket, int32 RoomNumber)
         ReceiveData();
         UE_LOG(LogTemp, Log, TEXT("Police Client socket set. Starting ReceiveData."));
 
-        EnterPacket packet;
+        RoomNumberPacket packet;
         packet.header = gameStartHeader;
-        packet.size = sizeof(EnterPacket);
+        packet.size = sizeof(RoomNumberPacket);
         packet.room_number = RoomNumber;
 
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&packet), sizeof(EnterPacket), 0);
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&packet), sizeof(RoomNumberPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("SetClientSocket failed with error: %ld"), WSAGetLastError());

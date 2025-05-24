@@ -119,18 +119,14 @@ void process_packet(int c_id, char* packet) {
 	}
 	case connectionHeader:
 	{
-		auto* p = reinterpret_cast<ConnectionPacket*>(packet);
-		if (p->size != sizeof(ConnectionPacket)) {
+		auto* p = reinterpret_cast<IdOnlyPacket*>(packet);
+		if (p->size != sizeof(IdOnlyPacket)) {
 			std::cout << "Invalid ConnectionPacket size\n";
 			break;
 		}
 		
-		int role = static_cast<int>(p->role);
-		g_users[c_id].setRole(role);
-		p->id = c_id;
-
-		std::cout << "Client[" << c_id << "] connected with role: " << (role == 0 ? "Cultist" : "Police") << std::endl;
-		// 새로 접속한 유저(id)에게 본인 id와 role 확정 send
+		std::cout << "Client[" << c_id << "] connected" << std::endl;
+		// 새로 접속한 유저(id)에게 본인 id 확정 send
 		g_users[c_id].do_send_packet(p);
 		break;
 	}
@@ -154,9 +150,9 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "[Server] All cultists are disabled!\n";
 			std::cout << "[Server] Police Win!\n";
 
-			DisconnectionPacket newPacket;
+			IdOnlyPacket newPacket;
 			newPacket.header = DisconnectionHeader;
-			newPacket.size = sizeof(DisconnectionPacket);
+			newPacket.size = sizeof(IdOnlyPacket);
 
 			// TODO: 경찰 승리 처리 or 게임 종료 로직 추가
 			std::vector<int> ids_to_disconnect;
@@ -180,18 +176,18 @@ void process_packet(int c_id, char* packet) {
 	case requestHeader: 
 	{ 
 		// 1. 클라이언트가 room data를 request했음.
-		std::cout << "requestHeader recved" << std::endl;
-		auto* p = reinterpret_cast<RequestPacket*>(packet);
-		if (p->size != sizeof(RequestPacket)) {
+		auto* p = reinterpret_cast<RoleOnlyPacket*>(packet);
+		if (p->size != sizeof(RoleOnlyPacket)) {
 			std::cout << "Invalid requestPacket size\n";
 			break;
 		}
 		int role = static_cast<int>(p->role);
+		g_users[c_id].setRole(role);
 		// 2. 앞에서부터 ingame이 false이고, 
 		//	  g_users[c_id].role의 플레이어가 full이 아닌 room을 RoomdataPakcet로 10개 전송
-		RoomdataPakcet packet;
+		RoomsPakcet packet;
 		packet.header = requestHeader;
-		packet.size = sizeof(RoomdataPakcet);
+		packet.size = sizeof(RoomsPakcet);
 
 		int inserted = 0;
 		for (const room& room : g_rooms) {
@@ -207,7 +203,29 @@ void process_packet(int c_id, char* packet) {
 				}
 			}
 		}
+
+		std::cout << "Sending RoomsPakcet with " << inserted << " rooms:" << std::endl;
+		for (int i = 0; i < inserted; ++i)
+		{
+			const room& r = packet.rooms[i];
+			std::cout << "Room[" << i << "] "
+				<< "room_id: " << static_cast<int>(r.room_id)
+				<< ", police: " << static_cast<int>(r.police)
+				<< ", cultist: " << static_cast<int>(r.cultist)
+				<< ", isIngame: " << (r.isIngame ? "true" : "false")
+				<< ", player_ids: [";
+
+			for (int j = 0; j < MAX_PLAYERS_PER_ROOM; ++j)
+			{
+				std::cout << static_cast<int>(r.player_ids[j]);
+				if (j < MAX_PLAYERS_PER_ROOM - 1) std::cout << ", ";
+			}
+
+			std::cout << "]" << std::endl;
+		}
 		g_users[c_id].do_send_packet(&packet);
+
+
 		break; 
 	}
 	case enterHeader: 
@@ -238,8 +256,8 @@ void process_packet(int c_id, char* packet) {
 	case gameStartHeader: 
 	{
 		std::cout << "gameStartHeader recved" << std::endl;
-		auto* p = reinterpret_cast<EnterPacket*>(packet);
-		if (p->size != sizeof(EnterPacket)) {
+		auto* p = reinterpret_cast<RoomNumberPacket*>(packet);
+		if (p->size != sizeof(RoomNumberPacket)) {
 			std::cout << "Invalid requestPacket size\n";
 			break;
 		}
@@ -247,9 +265,9 @@ void process_packet(int c_id, char* packet) {
 		// 1. room의 isIngame을 true로
 		g_rooms[room_id].isIngame = true;
 		// 2. room의 모든 유저(id)에게 유저 데이터 broadcast
-		ConnectionPacket packet;
+		IdRolePacket packet;
 		packet.header = connectionHeader;
-		packet.size = sizeof(ConnectionPacket);
+		packet.size = sizeof(IdRolePacket);
 		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
 			uint8_t targetId = g_rooms[room_id].player_ids[i];
 			if (targetId == UINT8_MAX || targetId == c_id)
@@ -286,7 +304,6 @@ void mainLoop(HANDLE h_iocp) {
 		EXP_OVER* eo = reinterpret_cast<EXP_OVER*>(o);
 
 		if (FALSE == ret) {
-			std::cout << "여기가 문제\n";
 			if (eo->comp_type == OP_ACCEPT) 
 				std::cout << "Accept Error";
 			else {
@@ -298,7 +315,6 @@ void mainLoop(HANDLE h_iocp) {
 			}
 		}
 		if ((0 == num_bytes) && ((eo->comp_type == OP_RECV) || (eo->comp_type == OP_SEND))) {
-			std::cout << "여기가 문제\n";
 			disconnect(static_cast<int>(key));
 			if (eo->comp_type == OP_SEND) delete eo;
 			continue;
@@ -386,6 +402,10 @@ int main()
 	g_a_over.comp_type = OP_ACCEPT;
 	AcceptEx(g_s_socket, g_c_socket, g_a_over.send_buffer, 0, addr_size + 16, addr_size + 16, 0, &g_a_over.over);
 	
+	for (int i = 0; i < 100; ++i) {
+		g_rooms[i].room_id = i;
+	}
+
 	mainLoop(h_iocp);
 
 	//CommandThread.join();
