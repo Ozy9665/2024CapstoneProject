@@ -19,7 +19,7 @@ EXP_OVER g_a_over;
 
 std::atomic<int> client_id = 0;
 std::unordered_map<int, SESSION> g_users;
-std::array<room, 100> rooms;
+std::array<room, 100> g_rooms;
 
 void CommandWorker()
 {
@@ -130,29 +130,8 @@ void process_packet(int c_id, char* packet) {
 		p->id = c_id;
 
 		std::cout << "Client[" << c_id << "] connected with role: " << (role == 0 ? "Cultist" : "Police") << std::endl;
-		// 1. 새로 접속한 유저(id)에게 본인 id와 role 확정 send
+		// 새로 접속한 유저(id)에게 본인 id와 role 확정 send
 		g_users[c_id].do_send_packet(p);
-		// 2. 새로 접속한 유저(id)에게 기존 유저들 send
-		ConnectionPacket other;
-		other.header = connectionHeader;
-		other.size = sizeof(ConnectionPacket);
-		for (auto& [id, session] : g_users)
-		{
-			if (id != c_id) {
-				other.id = static_cast<uint8_t>(id);
-				other.role = static_cast<uint8_t>(session.getRole());
-				g_users[c_id].do_send_packet(&other);
-			}
-		}
-
-		// 3. 기존 유저들에게 새로 접속한 유저 정보 전송
-		for (auto& [id, session] : g_users)
-		{
-			if (id != c_id && session.isValidSocket())
-				session.do_send_packet(p);
-		}
-
-		//client_id++;
 		break;
 	}
 	case disableHeader:
@@ -200,10 +179,35 @@ void process_packet(int c_id, char* packet) {
 	}
 	case requestHeader: 
 	{ 
-		std::cout << "requestHeader recved" << std::endl;
 		// 1. 클라이언트가 room data를 request했음.
+		std::cout << "requestHeader recved" << std::endl;
+		auto* p = reinterpret_cast<RequestPacket*>(packet);
+		if (p->size != sizeof(RequestPacket)) {
+			std::cout << "Invalid requestPacket size\n";
+			break;
+		}
+		int role = static_cast<int>(p->role);
 		// 2. 앞에서부터 ingame이 false이고, 
 		//	  g_users[c_id].role의 플레이어가 full이 아닌 room을 RoomdataPakcet로 10개 전송
+		RoomdataPakcet packet;
+		packet.header = requestHeader;
+		packet.size = sizeof(RoomdataPakcet);
+
+		int inserted = 0;
+		for (const room& room : g_rooms) {
+			if (inserted >= 10)
+				break;
+
+			if (!room.isIngame)
+			{
+				if ((role == 1 && room.police < 1) ||
+					(role == 0 && room.cultist < 4))
+				{
+					packet.rooms[inserted++] = room;
+				}
+			}
+		}
+		g_users[c_id].do_send_packet(&packet);
 		break; 
 	}
 	case enterHeader: 
@@ -236,6 +240,29 @@ void process_packet(int c_id, char* packet) {
 		// 1. 원래 connectionHeader에서 하던 user데이터 broadCast를 수행
 		// 2. connectionHeader에서는 접속했으면 방 데이터(RoomdataPakcet.page = 1)를 send하는걸로 수정.
 		// 3. room의 isIngame을 true로
+		
+
+		// 2. 새로 접속한 유저(id)에게 기존 유저들 send
+		ConnectionPacket other;
+		other.header = connectionHeader;
+		other.size = sizeof(ConnectionPacket);
+		for (auto& [id, session] : g_users)
+		{
+			if (id != c_id) {
+				other.id = static_cast<uint8_t>(id);
+				other.role = static_cast<uint8_t>(session.getRole());
+				g_users[c_id].do_send_packet(&other);
+			}
+		}
+
+		// 3. 기존 유저들에게 새로 접속한 유저 정보 전송
+		for (auto& [id, session] : g_users)
+		{
+			//if (id != c_id && session.isValidSocket())
+				//session.do_send_packet(p);
+		}
+
+		//client_id++;
 		break;
 	}
 	default:

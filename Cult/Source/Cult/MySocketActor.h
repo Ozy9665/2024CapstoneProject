@@ -6,30 +6,18 @@
 #include <array>
 #include "MySocketActor.generated.h"
 
-#pragma pack(push, 1)
 
 USTRUCT(BlueprintType)
-struct Froom
-{
+struct Froom {
 	GENERATED_BODY()
-
-	UPROPERTY(BlueprintReadWrite)
-	uint8 room_id;
-
-	UPROPERTY(BlueprintReadWrite)
-	uint8 police = 0;
-
-	UPROPERTY(BlueprintReadWrite)
-	uint8 cultist = 0;
-
-	UPROPERTY(BlueprintReadWrite)
-	bool isIngame = false;
-
-	// Note: TArray로 바꾸면 블루프린트에서도 다룰 수 있음
-	UPROPERTY(BlueprintReadWrite)
-	TArray<int32> player_ids;
+	UPROPERTY(BlueprintReadWrite) uint8 room_id;
+	UPROPERTY(BlueprintReadWrite) uint8 police;
+	UPROPERTY(BlueprintReadWrite) uint8 cultist;
+	UPROPERTY(BlueprintReadWrite) bool isIngame;
+	UPROPERTY(BlueprintReadWrite) TArray<int32> player_ids;
 };
 
+#pragma pack(push, 1)
 struct FPoliceCharacterState
 {
 	int32 PlayerID;
@@ -150,12 +138,21 @@ struct DisablePakcet {
 struct RequestPacket {
 	uint8_t header;
 	uint8_t size;
+	uint8_t role;
+};
+
+struct PacketRoom {
+	uint8_t room_id;
+	uint8_t police;
+	uint8_t cultist;
+	bool isIngame;
+	uint8_t player_ids[5];
 };
 
 struct RoomdataPakcet {
 	uint8_t header;
 	uint8_t size;
-	std::array<Froom, 10> rooms;
+	PacketRoom rooms[10];
 };
 
 struct EnterPacket {

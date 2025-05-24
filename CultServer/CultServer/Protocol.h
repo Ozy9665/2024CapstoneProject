@@ -42,7 +42,10 @@ struct room {
 	uint8_t police = 0;
 	uint8_t cultist = 0;
 	bool isIngame = false;
-	std::array<int, 5> player_ids{ -1, -1, -1, -1, -1 };
+	uint8_t  player_ids[5] = {
+		UINT8_MAX, UINT8_MAX, UINT8_MAX,
+		UINT8_MAX, UINT8_MAX
+	};
 };
 
 enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND };
@@ -178,9 +181,10 @@ struct DisablePakcet {
 	uint8_t id;
 };
 
-struct requestPacket {
+struct RequestPacket {
 	uint8_t header;
 	uint8_t size;
+	uint8_t role;
 };
 
 struct InRoomPacket {
@@ -192,7 +196,7 @@ struct InRoomPacket {
 struct RoomdataPakcet {
 	uint8_t header;
 	uint8_t size;
-	std::array<room, 10> rooms;
+	room rooms[10];
 };
 
 struct EnterPacket {

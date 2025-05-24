@@ -38,13 +38,13 @@ void AMyNetworkManagerActor::Tick(float DeltaTime)
     Super::Tick(DeltaTime);
 }
 
-SOCKET AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32 ServerPort)
+bool AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32 ServerPort)
 {
     ClientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (ClientSocket == INVALID_SOCKET)
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to create socket: %d"), WSAGetLastError());
-        return INVALID_SOCKET;
+        return false;
     }
 
     sockaddr_in ServerAddr;
@@ -57,12 +57,12 @@ SOCKET AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32
     if (connect(ClientSocket, (SOCKADDR*)&ServerAddr, sizeof(ServerAddr)) != SOCKET_ERROR)
     {
         UE_LOG(LogTemp, Log, TEXT("Connected to server."));
-        return ClientSocket;
+        return true;
     }
     else {
         UE_LOG(LogTemp, Error, TEXT("Failed to connect to server: %d"), WSAGetLastError());
         closesocket(ClientSocket);
-        return INVALID_SOCKET;
+        return false;
     }
 }
 
@@ -71,31 +71,46 @@ void AMyNetworkManagerActor::CheckServer()
     FString ServerIP = TEXT("127.0.0.1");  // 서버 IP 주소
     int32 ServerPort = 7777;               // 포트 번호
 
-    SOCKET ConnectedSocket = CanConnectToServer(ServerIP, ServerPort);
-    if (ConnectedSocket == INVALID_SOCKET)
+    if(!CanConnectToServer(ServerIP, ServerPort))
     {
         UE_LOG(LogTemp, Error, TEXT("Server Is Closed."));
         return;
     }
 
-    RequestRoomInfo();
-    // 접속 되면 Actor Spawn
-    SpawnActor();
+    UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
+    if (not GI) {
+        UE_LOG(LogTemp, Error, TEXT("Gl cast failed."));
+        return;
+    }
+
+    ReceiveData();
+    uint8 role = GI->bIsCultist ? 0 : 1;
+    ConnectionPacket packet;
+    packet.header = connectionHeader;
+    packet.size = sizeof(ConnectionPacket);
+    packet.role = role;
+
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&packet), sizeof(ConnectionPacket), 0);
+    if (BytesSent == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("SetClientSocket failed with error: %ld"), WSAGetLastError());
+    }
 }
 
 void AMyNetworkManagerActor::RequestRoomInfo() 
 {
     if (ClientSocket != INVALID_SOCKET)
     {
+        ReceiveData();
         RequestPacket Packet;
         Packet.header = requestHeader;
         Packet.size = sizeof(RequestPacket);
+        Packet.role = my_Role;
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RequestPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("RequestRoomInfo failed with error: %ld"), WSAGetLastError());
         }
-        // ReceiveData();
     }
     else
     {
@@ -108,47 +123,98 @@ void AMyNetworkManagerActor::ProcessRoomInfo(const char* Buffer)
     RoomdataPakcet Packet;
     memcpy(&Packet, Buffer, sizeof(RoomdataPakcet));
 
-    for (int i = 0; i < Packet.rooms.size(); ++i) {
-        rooms[i] = Packet.rooms[i];
-        // UE_LOG(LogTemp, Log, TEXT("Room %d: Police=%d, Cultist=%d, InGame=%d"), r.room_id, r.police, r.cultist, r.isIngame);
+    rooms.Empty();
+    rooms.Reserve(10);
+
+    for (int i = 0; i < 10; ++i)
+    {
+        const PacketRoom& pr = Packet.rooms[i];
+
+        Froom fr;
+        fr.room_id = pr.room_id;
+        fr.police = pr.police;
+        fr.cultist = pr.cultist;
+        fr.isIngame = pr.isIngame;
+
+        fr.player_ids.Empty();
+        fr.player_ids.Reserve(5);
+        for (int j = 0; j < 5; ++j)
+            fr.player_ids.Add(pr.player_ids[j]);
+
+        rooms.Add(MoveTemp(fr));
     }
+    AsyncTask(ENamedThreads::GameThread, [this]()
+        {
+            OnRoomListUpdated.Broadcast();
+        });
 }
 
 void AMyNetworkManagerActor::ReceiveData() 
 {
-    char Buffer[BufferSize];
-    int32 BytesReceived = recv(ClientSocket, Buffer, BufferSize, 0);
-    if (BytesReceived > 0)
-    {
-        int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
-        int PacketSize = static_cast<int>(static_cast<unsigned char>(Buffer[1]));
-        if (BytesReceived != PacketSize)
+    AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this]() {
+        char Buffer[BufferSize];
+        int32 BytesReceived = recv(ClientSocket, Buffer, BufferSize, 0);
+        if (BytesReceived > 0)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Invalid packet size: Received %d, Expected %d: header:%d"), BytesReceived, PacketSize, PacketType);
+            int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
+            int PacketSize = static_cast<int>(static_cast<unsigned char>(Buffer[1]));
+            if (BytesReceived != PacketSize)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Invalid packet size: Received %d, Expected %d: header:%d"), BytesReceived, PacketSize, PacketType);
+                return;
+            }
+
+            switch (PacketType)
+            {
+            case connectionHeader:
+            {
+                my_ID = static_cast<unsigned char>(Buffer[2]);
+                my_Role = static_cast<unsigned char>(Buffer[3]);
+                RequestRoomInfo();
+                break;
+            }
+            case requestHeader:
+            {
+                ProcessRoomInfo(Buffer);
+                break;
+            }
+            default:
+                UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
+                break;
+            }
+        }
+        else if (BytesReceived == 0 || WSAGetLastError() == WSAECONNRESET)
+        {
+            UE_LOG(LogTemp, Log, TEXT("Connection closed by server."));
+            CheckServer();
             return;
         }
-
-        switch (PacketType)
+        else
         {
-        case requestHeader:
-            ProcessRoomInfo(Buffer);
-            break;
-        default:
-            UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
-            break;
+            UE_LOG(LogTemp, Error, TEXT("recv failed with error: %ld"), WSAGetLastError());
+            CheckServer();
+            return;
         }
-    }
-    else if (BytesReceived == 0 || WSAGetLastError() == WSAECONNRESET)
+        });
+}
+
+void AMyNetworkManagerActor::SendGameStart(int32 RoomNumber)
+{
+    if (ClientSocket != INVALID_SOCKET)
     {
-        UE_LOG(LogTemp, Log, TEXT("Connection closed by server."));
-        CheckServer();
-        return;
+        EnterPacket Packet;
+        Packet.header = gameStartHeader;
+        Packet.size = sizeof(EnterPacket);
+        Packet.room_number = RoomNumber;
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(EnterPacket), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendGameStart failed with error: %ld"), WSAGetLastError());
+        }
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("recv failed with error: %ld"), WSAGetLastError());
         CheckServer();
-        return;
     }
 }
 

@@ -6,6 +6,8 @@
 #include "Engine/GameInstance.h"
 #include "MyGameInstance.generated.h"
 
+class AMyNetworkManagerActor;
+
 UCLASS()
 class CULT_API UMyGameInstance : public UGameInstance
 {
@@ -17,4 +19,7 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, Category = "Role Selection")
 	bool bIsPolice = false;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Network")
+	AMyNetworkManagerActor* NetworkManagerActorRef = nullptr;
 };
