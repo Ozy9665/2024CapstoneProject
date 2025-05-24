@@ -25,4 +25,16 @@ public:
 
 	UPROPERTY(VisibleAnywhere)
 	UStaticMeshComponent* TreeMesh;
+
+	UPROPERTY(EditAnywhere, Category = "Growth")
+	float GrowHeight = 200.f;
+
+	UPROPERTY(EditAnywhere, Category = "Growth")
+	float GrowTime = 1.0f;
+
+	FVector InitialLocation;
+	FVector TargetLocation;
+
+	float ElapsedTime = 0.f;
+	bool bIsGrowing = true;
 };
