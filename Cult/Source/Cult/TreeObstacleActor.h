@@ -50,4 +50,7 @@ public:
 	UStaticMesh* BranchMesh;
 
 	TArray<USplineMeshComponent*> SpawnedBranches;
+
+	UFUNCTION()
+	void SetupBranches();
 };

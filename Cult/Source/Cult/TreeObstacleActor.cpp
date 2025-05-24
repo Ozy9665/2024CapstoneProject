@@ -47,7 +47,47 @@ void ATreeObstacleActor::Tick(float DeltaTime)
 		if (Alpha >= 1.f)
 		{
 			bIsGrowing = false;
+			SetupBranches();
 		}
 	}
 }
 
+void ATreeObstacleActor::SetupBranches()
+{
+	// 길이 방향 설정
+	const float BranchLength = 200.f;
+
+	TArray<FVector>Directions = {
+		FVector(1,0,0),	// X
+		FVector(-1,0,0),
+		FVector(0,1,0),	// Y
+		FVector(0,-1,0)
+	};
+
+	for (FVector Dir : Directions)
+	{
+		FVector Start = GetActorLocation();
+		FVector End = Start + Dir * BranchLength;
+
+		// spline 포인트 추가
+		Spline->ClearSplinePoints(false);
+		Spline->AddSplinePoint(Start, ESplineCoordinateSpace::World, false);
+		Spline->AddSplinePoint(End, ESplineCoordinateSpace::World, true);
+
+		// spline 메시생성
+		USplineMeshComponent* SplineMesh = NewObject<USplineMeshComponent>(this);
+		SplineMesh->RegisterComponent();
+		SplineMesh->SetMobility(EComponentMobility::Movable);
+		SplineMesh->SetStaticMesh(BranchMesh);
+		SplineMesh->SetForwardAxis(ESplineMeshAxis::X);
+		SplineMesh->AttachToComponent(Spline, FAttachmentTransformRules::KeepRelativeTransform);
+
+		FVector StartPos, StartTangent, EndPos, EndTangent;
+		Spline->GetLocalLocationAndTangentAtSplinePoint(0, StartPos, StartTangent);
+		Spline->GetLocalLocationAndTangentAtSplinePoint(1, EndPos, EndTangent);
+
+		SplineMesh->SetStartAndEnd(StartPos, StartTangent, EndPos, EndTangent);
+		SpawnedBranches.Add(SplineMesh);
+	}
+
+}
