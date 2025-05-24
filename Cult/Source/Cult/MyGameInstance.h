@@ -4,9 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "Engine/GameInstance.h"
+#include <winsock2.h>
 #include "MyGameInstance.generated.h"
-
-class AMyNetworkManagerActor;
 
 UCLASS()
 class CULT_API UMyGameInstance : public UGameInstance
@@ -21,5 +20,7 @@ public:
 	bool bIsPolice = false;
 
 	UPROPERTY(BlueprintReadWrite, Category = "Network")
-	AMyNetworkManagerActor* NetworkManagerActorRef = nullptr;
+	int32 PendingRoomNumber = -1;
+
+	SOCKET ClientSocket = INVALID_SOCKET;
 };

@@ -10,7 +10,7 @@
 
 constexpr short SERVER_PORT = 7777;
 constexpr int BUF_SIZE = 200;
-
+constexpr int MAX_PLAYERS_PER_ROOM = 5;
 //-- ingame header
 constexpr char cultistHeader = 0;
 constexpr char objectHeader = 1;
@@ -42,7 +42,7 @@ struct room {
 	uint8_t police = 0;
 	uint8_t cultist = 0;
 	bool isIngame = false;
-	uint8_t  player_ids[5] = {
+	uint8_t  player_ids[MAX_PLAYERS_PER_ROOM] = {
 		UINT8_MAX, UINT8_MAX, UINT8_MAX,
 		UINT8_MAX, UINT8_MAX
 	};

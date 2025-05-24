@@ -66,7 +66,7 @@ void AMySocketCultistActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
     UE_LOG(LogTemp, Log, TEXT("Client socket closed and cleaned up."));
 }
 
-void AMySocketCultistActor::SetClientSocket(SOCKET InSocket)
+void AMySocketCultistActor::SetClientSocket(SOCKET InSocket, int32 RoomNumber)
 {
     ClientSocket = InSocket;
     if (ClientSocket != INVALID_SOCKET)
@@ -74,12 +74,12 @@ void AMySocketCultistActor::SetClientSocket(SOCKET InSocket)
         ReceiveData();
         UE_LOG(LogTemp, Log, TEXT("Cultist Client socket set. Starting ReceiveData."));
 
-        ConnectionPacket packet;
-        packet.header = connectionHeader;
-        packet.size = sizeof(ConnectionPacket);
-        packet.role = 0;
+        EnterPacket packet;
+        packet.header = gameStartHeader;
+        packet.size = sizeof(EnterPacket);
+        packet.room_number = RoomNumber;
         
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&packet), sizeof(ConnectionPacket), 0);
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&packet), sizeof(EnterPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("SetClientSocket failed with error: %ld"), WSAGetLastError());

@@ -45,7 +45,7 @@ private:
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
-	void SetClientSocket(SOCKET InSocket);
+	void SetClientSocket(SOCKET InSocket, int32 RoomNumber);
 	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);
 	void ReceiveData();
 	void ProcessCultistData(const char* Buffer);

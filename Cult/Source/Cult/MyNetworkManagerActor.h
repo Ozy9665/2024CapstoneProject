@@ -5,8 +5,6 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "MySocketActor.h"
-#include "MySocketCultistActor.h"
-#include "MySocketPoliceActor.h"
 #include "Blueprint/UserWidget.h"
 #include "MyGameInstance.h"
 #include "MyNetworkManagerActor.generated.h"
@@ -25,17 +23,6 @@ public:
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
-	bool CanConnectToServer(const FString& ServerIP, int32 ServerPort);
-	void CheckServer();
-	void RequestRoomInfo();
-	void ProcessRoomInfo(const char* Buffer);
-	void ReceiveData();
-
-	UFUNCTION(BlueprintCallable, Category = "Network")
-	void SendGameStart(int32 RoomNumber);
-
-	void SpawnActor();
-
 
 private:
 	SOCKET ClientSocket;
@@ -53,4 +40,13 @@ public:
 
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
+
+	bool CanConnectToServer(const FString& ServerIP, int32 ServerPort);
+	void CheckServer();
+	void ReceiveData();
+
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	void RequestRoomInfo();
+	void ProcessRoomInfo(const char* Buffer);
+
 };

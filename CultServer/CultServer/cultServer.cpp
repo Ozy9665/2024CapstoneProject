@@ -237,31 +237,37 @@ void process_packet(int c_id, char* packet) {
 	}
 	case gameStartHeader: 
 	{
-		// 1. 원래 connectionHeader에서 하던 user데이터 broadCast를 수행
-		// 2. connectionHeader에서는 접속했으면 방 데이터(RoomdataPakcet.page = 1)를 send하는걸로 수정.
-		// 3. room의 isIngame을 true로
-		
+		std::cout << "gameStartHeader recved" << std::endl;
+		auto* p = reinterpret_cast<EnterPacket*>(packet);
+		if (p->size != sizeof(EnterPacket)) {
+			std::cout << "Invalid requestPacket size\n";
+			break;
+		}
+		int room_id = p->room_number;
+		// 1. room의 isIngame을 true로
+		g_rooms[room_id].isIngame = true;
+		// 2. room의 모든 유저(id)에게 유저 데이터 broadcast
+		ConnectionPacket packet;
+		packet.header = connectionHeader;
+		packet.size = sizeof(ConnectionPacket);
+		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
+			uint8_t targetId = g_rooms[room_id].player_ids[i];
+			if (targetId == UINT8_MAX || targetId == c_id)
+				continue;
 
-		// 2. 새로 접속한 유저(id)에게 기존 유저들 send
-		ConnectionPacket other;
-		other.header = connectionHeader;
-		other.size = sizeof(ConnectionPacket);
-		for (auto& [id, session] : g_users)
-		{
-			if (id != c_id) {
-				other.id = static_cast<uint8_t>(id);
-				other.role = static_cast<uint8_t>(session.getRole());
-				g_users[c_id].do_send_packet(&other);
+			for (int j = 0; j < MAX_PLAYERS_PER_ROOM; ++j)
+			{
+				uint8_t otherId = g_rooms[room_id].player_ids[j];
+				// invalid 또는 자기 자신 스킵
+				if (otherId == UINT8_MAX || otherId == targetId)
+					continue;
+
+				packet.id = otherId;
+				packet.role = static_cast<uint8_t>(g_users[targetId].getRole());
+				// 실제 전송은 targetId 쪽 세션에
+				g_users[targetId].do_send_packet(&packet);
 			}
 		}
-
-		// 3. 기존 유저들에게 새로 접속한 유저 정보 전송
-		for (auto& [id, session] : g_users)
-		{
-			//if (id != c_id && session.isValidSocket())
-				//session.do_send_packet(p);
-		}
-
 		//client_id++;
 		break;
 	}
