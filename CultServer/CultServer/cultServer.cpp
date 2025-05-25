@@ -346,27 +346,27 @@ void process_packet(int c_id, char* packet) {
 				break;
 			}
 		}
-		// 2. room의 모든 유저(id)에게 유저 데이터 broadcast
+		// 2.내 아이디를 send해서 확정시켜주기
 		IdRolePacket packet;
 		packet.header = connectionHeader;
 		packet.size = sizeof(IdRolePacket);
+		packet.id = static_cast<uint8_t>(c_id);
+		packet.role = static_cast<uint8_t>(g_users[c_id].getRole());
+		g_users[c_id].do_send_packet(&packet);
+
 		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-			uint8_t targetId = g_rooms[room_id].player_ids[i];
-			if (targetId == UINT8_MAX || targetId == c_id)
+			uint8_t otherId = g_rooms[room_id].player_ids[i];
+			if (otherId == UINT8_MAX || otherId == c_id)
 				continue;
+			// 다른 유저들에게 내 정보 전송
+			packet.id = static_cast<uint8_t>(c_id);
+			packet.role = static_cast<uint8_t>(g_users[c_id].getRole());
+			g_users[otherId].do_send_packet(&packet);
 
-			for (int j = 0; j < MAX_PLAYERS_PER_ROOM; ++j)
-			{
-				uint8_t otherId = g_rooms[room_id].player_ids[j];
-				// invalid 또는 자기 자신 스킵
-				if (otherId == UINT8_MAX || otherId == targetId)
-					continue;
-
-				packet.id = otherId;
-				packet.role = static_cast<uint8_t>(g_users[targetId].getRole());
-				// 실제 전송은 targetId 쪽 세션에
-				g_users[targetId].do_send_packet(&packet);
-			}
+			// 나에게 다른 유저들 전송
+			packet.id = otherId;
+			packet.role = static_cast<uint8_t>(g_users[otherId].getRole());
+			g_users[c_id].do_send_packet(&packet);
 		}
 		//client_id++;
 		break;
