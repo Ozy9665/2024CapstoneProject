@@ -43,7 +43,7 @@ public:
 	bool bIsGrowing = true;
 
 	// Spline
-	UPROPERTY(VisibleAnywhere)
+	UPROPERTY(VisibleAnywhere, Category = "Branches", meta = (AllowPrivateAccess = "true"))
 	USplineComponent* Spline;
 
 	UPROPERTY(EditAnywhere)

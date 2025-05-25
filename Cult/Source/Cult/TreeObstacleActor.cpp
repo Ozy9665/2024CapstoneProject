@@ -18,7 +18,9 @@ ATreeObstacleActor::ATreeObstacleActor()
 
 	// Spline 초기화
 	Spline = CreateDefaultSubobject<USplineComponent>(TEXT("Spline"));
+	Spline->SetMobility(EComponentMobility::Movable);
 	Spline->SetupAttachment(RootComponent);
+
 }
 
 // Called when the game starts or when spawned
@@ -54,40 +56,34 @@ void ATreeObstacleActor::Tick(float DeltaTime)
 
 void ATreeObstacleActor::SetupBranches()
 {
-	// 길이 방향 설정
-	const float BranchLength = 200.f;
+	UE_LOG(LogTemp, Warning, TEXT(">>> SetupBranches CALLED"));
 
-	TArray<FVector>Directions = {
-		FVector(1,0,0),	// X
-		FVector(-1,0,0),
-		FVector(0,1,0),	// Y
-		FVector(0,-1,0)
-	};
-
-	for (FVector Dir : Directions)
+	if (!BranchMesh || !Spline)
 	{
-		FVector Start = GetActorLocation();
-		FVector End = Start + Dir * BranchLength;
-
-		// spline 포인트 추가
-		Spline->ClearSplinePoints(false);
-		Spline->AddSplinePoint(Start, ESplineCoordinateSpace::World, false);
-		Spline->AddSplinePoint(End, ESplineCoordinateSpace::World, true);
-
-		// spline 메시생성
-		USplineMeshComponent* SplineMesh = NewObject<USplineMeshComponent>(this);
-		SplineMesh->RegisterComponent();
-		SplineMesh->SetMobility(EComponentMobility::Movable);
-		SplineMesh->SetStaticMesh(BranchMesh);
-		SplineMesh->SetForwardAxis(ESplineMeshAxis::X);
-		SplineMesh->AttachToComponent(Spline, FAttachmentTransformRules::KeepRelativeTransform);
-
-		FVector StartPos, StartTangent, EndPos, EndTangent;
-		Spline->GetLocalLocationAndTangentAtSplinePoint(0, StartPos, StartTangent);
-		Spline->GetLocalLocationAndTangentAtSplinePoint(1, EndPos, EndTangent);
-
-		SplineMesh->SetStartAndEnd(StartPos, StartTangent, EndPos, EndTangent);
-		SpawnedBranches.Add(SplineMesh);
+		UE_LOG(LogTemp, Warning, TEXT("BranchMesh or Spline is nullptr"));
+		return;
 	}
 
+	Spline->SetMobility(EComponentMobility::Movable);
+	Spline->ClearSplinePoints();
+	Spline->AddSplinePoint(FVector(0.f, 0.f, 0.f), ESplineCoordinateSpace::Local, false);
+	Spline->AddSplinePoint(FVector(0.f, 200.f, 0.f), ESplineCoordinateSpace::Local, true); // Y축으로 가지
+	Spline->UpdateSpline();
+
+	USplineMeshComponent* SplineMesh = NewObject<USplineMeshComponent>(this);
+	SplineMesh->SetMobility(EComponentMobility::Movable);
+	SplineMesh->SetStaticMesh(BranchMesh);
+	SplineMesh->RegisterComponent();
+	SplineMesh->AttachToComponent(Spline, FAttachmentTransformRules::KeepRelativeTransform);
+	SplineMesh->SetForwardAxis(ESplineMeshAxis::X); // 메시가 Z축 기준일 경우
+
+	FVector Start, StartTangent, End, EndTangent;
+	Spline->GetLocalLocationAndTangentAtSplinePoint(0, Start, StartTangent);
+	Spline->GetLocalLocationAndTangentAtSplinePoint(1, End, EndTangent);
+
+	UE_LOG(LogTemp, Warning, TEXT("Start: %s, End: %s"), *Start.ToString(), *End.ToString());
+
+	SplineMesh->SetStartAndEnd(Start, StartTangent, End, EndTangent);
+
+	UE_LOG(LogTemp, Warning, TEXT("Start: %s, End: %s"), *Start.ToString(), *End.ToString());
 }
