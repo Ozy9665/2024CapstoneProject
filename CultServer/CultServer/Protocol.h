@@ -222,6 +222,7 @@ public:
 	int				role;
 	char			state;
 	int				prev_remain;
+	int				room_id;
 
 	union {
 		FCultistCharacterState cultist_state;

@@ -64,9 +64,24 @@ void process_packet(int c_id, char* packet) {
 		}
 		g_users[c_id].cultist_state = p->state;
 
-		for (auto& [id, session] : g_users) {
-			if (id != c_id && session.isValidSocket()) {
-				session.do_send_packet(p);
+		// room 번호로 broadcast
+		int room_id = g_users[c_id].room_id;
+		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
+		{
+			std::cout << "Invalid room ID: " << room_id << std::endl;
+			break;
+		}
+
+		const room& r = g_rooms[room_id];
+		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
+		{
+			uint8_t other_id = r.player_ids[i];
+			if (other_id == UINT8_MAX || other_id == c_id)
+				continue;
+
+			if (g_users.count(other_id) && g_users[other_id].isValidSocket())
+			{
+				g_users[other_id].do_send_packet(p);
 			}
 		}
 		break;
@@ -80,9 +95,24 @@ void process_packet(int c_id, char* packet) {
 		}
 		g_users[c_id].police_state = p->state;
 
-		for (auto& [id, session] : g_users) {
-			if (id != c_id && session.isValidSocket()) {
-				session.do_send_packet(p);
+		// room 번호로 broadcast
+		int room_id = g_users[c_id].room_id;
+		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
+		{
+			std::cout << "Invalid room ID: " << room_id << std::endl;
+			break;
+		}
+
+		const room& r = g_rooms[room_id];
+		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
+		{
+			uint8_t other_id = r.player_ids[i];
+			if (other_id == UINT8_MAX || other_id == c_id)
+				continue;
+
+			if (g_users.count(other_id) && g_users[other_id].isValidSocket())
+			{
+				g_users[other_id].do_send_packet(p);
 			}
 		}
 		break;
@@ -95,9 +125,23 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		for (auto& [id, session] : g_users) {
-			if (id != c_id && session.isValidSocket()) {
-				session.do_send_packet(p);
+		int room_id = g_users[c_id].room_id;
+		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
+		{
+			std::cout << "Invalid room ID: " << room_id << std::endl;
+			break;
+		}
+
+		const room& r = g_rooms[room_id];
+		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
+		{
+			uint8_t other_id = r.player_ids[i];
+			if (other_id == UINT8_MAX || other_id == c_id)
+				continue;
+
+			if (g_users.count(other_id) && g_users[other_id].isValidSocket())
+			{
+				g_users[other_id].do_send_packet(p);
 			}
 		}
 		break;
@@ -110,9 +154,23 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		for (auto& [id, session] : g_users) {
-			if (id != c_id && session.isValidSocket()) {
-				session.do_send_packet(p);
+		int room_id = g_users[c_id].room_id;
+		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
+		{
+			std::cout << "Invalid room ID: " << room_id << std::endl;
+			break;
+		}
+
+		const room& r = g_rooms[room_id];
+		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
+		{
+			uint8_t other_id = r.player_ids[i];
+			if (other_id == UINT8_MAX || other_id == c_id)
+				continue;
+
+			if (g_users.count(other_id) && g_users[other_id].isValidSocket())
+			{
+				g_users[other_id].do_send_packet(p);
 			}
 		}
 		break;
@@ -134,12 +192,21 @@ void process_packet(int c_id, char* packet) {
 	{
 		g_users[c_id].setState(ST_DISABLE);
 
+		int room_id = g_users[c_id].room_id;
+		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size())) {
+			std::cout << "Invalid room ID in disableHeader\n";
+			break;
+		}
+
 		bool allCultistsDisabled = true;
 
-		for (const auto& [id, session] : g_users)
+		const room& r = g_rooms[room_id];
+		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
 		{
-			if (session.getRole() == 0 && session.getState() != ST_DISABLE) /* Cultist */
-			{
+			uint8_t pid = r.player_ids[i];
+			if (pid == UINT8_MAX) continue;
+
+			if (g_users.count(pid) && g_users[pid].getRole() == 0 && g_users[pid].getState() != ST_DISABLE) {
 				allCultistsDisabled = false;
 				break;
 			}
@@ -147,22 +214,24 @@ void process_packet(int c_id, char* packet) {
 
 		if (allCultistsDisabled)
 		{
-			std::cout << "[Server] All cultists are disabled!\n";
+			std::cout << "[Server] All cultists are disabled in Room[" << room_id << "]\n";
 			std::cout << "[Server] Police Win!\n";
 
 			IdOnlyPacket newPacket;
 			newPacket.header = DisconnectionHeader;
 			newPacket.size = sizeof(IdOnlyPacket);
 
-			// TODO: 경찰 승리 처리 or 게임 종료 로직 추가
 			std::vector<int> ids_to_disconnect;
-			for (auto& [id, session] : g_users)
+			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
 			{
-				if (session.isValidSocket())
+				uint8_t pid = r.player_ids[i];
+				if (pid == UINT8_MAX) continue;
+
+				if (g_users.count(pid) && g_users[pid].isValidSocket())
 				{
-					newPacket.id = id;
-					session.do_send_packet(&newPacket);
-					ids_to_disconnect.push_back(id);
+					newPacket.id = pid;
+					g_users[pid].do_send_packet(&newPacket);
+					ids_to_disconnect.push_back(pid);
 				}
 			}
 
@@ -204,25 +273,24 @@ void process_packet(int c_id, char* packet) {
 			}
 		}
 
-		std::cout << "Sending RoomsPakcet with " << inserted << " rooms:" << std::endl;
-		for (int i = 0; i < inserted; ++i)
-		{
-			const room& r = packet.rooms[i];
-			std::cout << "Room[" << i << "] "
-				<< "room_id: " << static_cast<int>(r.room_id)
-				<< ", police: " << static_cast<int>(r.police)
-				<< ", cultist: " << static_cast<int>(r.cultist)
-				<< ", isIngame: " << (r.isIngame ? "true" : "false")
-				<< ", player_ids: [";
+		//std::cout << "Sending RoomsPakcet with " << inserted << " rooms:" << std::endl;
+		//for (int i = 0; i < inserted; ++i)
+		//{
+		//	const room& r = packet.rooms[i];
+		//	std::cout << "Room[" << i << "] "
+		//		<< "room_id: " << static_cast<int>(r.room_id)
+		//		<< ", police: " << static_cast<int>(r.police)
+		//		<< ", cultist: " << static_cast<int>(r.cultist)
+		//		<< ", isIngame: " << (r.isIngame ? "true" : "false")
+		//		<< ", player_ids: [";
 
-			for (int j = 0; j < MAX_PLAYERS_PER_ROOM; ++j)
-			{
-				std::cout << static_cast<int>(r.player_ids[j]);
-				if (j < MAX_PLAYERS_PER_ROOM - 1) std::cout << ", ";
-			}
-
-			std::cout << "]" << std::endl;
-		}
+		//	for (int j = 0; j < MAX_PLAYERS_PER_ROOM; ++j)
+		//	{
+		//		std::cout << static_cast<int>(r.player_ids[j]);
+		//		if (j < MAX_PLAYERS_PER_ROOM - 1) std::cout << ", ";
+		//	}
+		//	std::cout << "]" << std::endl;
+		//}
 		g_users[c_id].do_send_packet(&packet);
 
 
@@ -255,15 +323,29 @@ void process_packet(int c_id, char* packet) {
 	}
 	case gameStartHeader: 
 	{
-		std::cout << "gameStartHeader recved" << std::endl;
 		auto* p = reinterpret_cast<RoomNumberPacket*>(packet);
 		if (p->size != sizeof(RoomNumberPacket)) {
 			std::cout << "Invalid requestPacket size\n";
 			break;
 		}
 		int room_id = p->room_number;
-		// 1. room의 isIngame을 true로
-		g_rooms[room_id].isIngame = true;
+		// 1. room이 꽉차면 isIngame을 true로, 유저의 방번호 업데이트
+		if (1 == g_users[c_id].role) {
+			g_rooms[room_id].police++;
+		}
+		else if (0 == g_users[c_id].role) {
+			g_rooms[room_id].cultist++;
+		}
+		if (g_rooms[room_id].cultist >= 4 && g_rooms[room_id].police >= 1) {
+			g_rooms[room_id].isIngame = true;
+		}
+		g_users[c_id].room_id = room_id;
+		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
+			if (g_rooms[room_id].player_ids[i] == UINT8_MAX) {
+				g_rooms[room_id].player_ids[i] = static_cast<uint8_t>(c_id);
+				break;
+			}
+		}
 		// 2. room의 모든 유저(id)에게 유저 데이터 broadcast
 		IdRolePacket packet;
 		packet.header = connectionHeader;
@@ -329,6 +411,7 @@ void mainLoop(HANDLE h_iocp) {
 			sess.prev_remain = 0;
 			sess.state = ST_FREE;
 			sess.c_socket = g_c_socket;
+			sess.room_id = -1;
 			g_users.insert(std::make_pair(new_id, sess));	// 여기 emplace로 바꿀 순 없을까?
 			CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket), h_iocp, new_id, 0);
 			sess.do_recv();
