@@ -2,7 +2,7 @@
 
 
 #include "MyGameBeginActor.h"
-#include "Camera/CameraActor.h"
+#include "Camera/CameraActor.h" 
 
 // Sets default values
 AMyGameBeginActor::AMyGameBeginActor()
