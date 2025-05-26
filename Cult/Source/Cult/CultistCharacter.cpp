@@ -176,6 +176,8 @@ void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	
 	PlayerInputComponent->BindAction("SpecialAbility", IE_Pressed, this, &ACultistCharacter::StartPreviewPlacement);
 	PlayerInputComponent->BindAction("ConfirmPlacement", IE_Pressed, this, &ACultistCharacter::ConfirmPlacement);
+
+	PlayerInputComponent->BindAction("SkillCheckInput", IE_Pressed, this, &ACultistCharacter::TriggerSkillCheckInput);
 	UE_LOG(LogTemp, Warning, TEXT("Binding  input"));
 
 }
@@ -268,6 +270,16 @@ void ACultistCharacter::StartRitual()
 		UE_LOG(LogTemp, Warning, TEXT("No altar Here!"));
 		//UE_LOG(LogTemp, Warning, TEXT("%f"), GetCharacterMovement()->MaxWalkSpeed);
 		return;
+	}
+	if (SkillCheckWidgetClass) {
+		SkillCheckWidget = CreateWidget<UCultistSkillCheckWidget>(GetWorld(), SkillCheckWidgetClass);
+		if (SkillCheckWidget)
+		{
+			SkillCheckWidget->AddToViewport();
+			SkillCheckWidget->StartSkillCheck(180.f); // 속도
+
+			SkillCheckWidget->OnSkillCheckResult.AddDynamic(this, &ACultistCharacter::OnSkillCheckResult);
+		}
 	}
 
 	bIsPerformingRitual = true;
@@ -726,6 +738,63 @@ void ACultistCharacter::TurnCamera(float Value)
 void ACultistCharacter::LookUpCamera(float Value)
 {
 	AddControllerPitchInput(Value);
+}
+
+void ACultistCharacter::TriggerSkillCheckInput()
+{
+	if (SkillCheckWidget)
+	{
+		SkillCheckWidget->OnInputPressed();
+	}
+}
+
+void ACultistCharacter::OnSkillCheckResult(bool bSuccess)
+{
+	if (!bIsPerformingRitual) return;
+
+	if (bSuccess)
+	{
+		TaskRitualProgress += TaskRitualSpeed;  // 성공 시 진행도 증가
+	}
+	else
+	{
+		TaskRitualProgress = FMath::Max(0.f, TaskRitualProgress - 10.f);  // 실패 시 감소
+	}
+
+	// UI 업데이트
+	if (TaskRitualWidget)
+	{
+		if (UProgressBar* Bar = Cast<UProgressBar>(TaskRitualWidget->GetWidgetFromName(TEXT("RitualProgressBar"))))
+		{
+			Bar->SetPercent(TaskRitualProgress / 100.f);
+		}
+	}
+
+	// 완료 판정
+	if (TaskRitualProgress >= 100.f)
+	{
+		if (CurrentAltar) CurrentAltar->IncreaseRitualGauge();
+		StopRitual();
+	}
+	else
+	{
+		// 다음 스킬체크 바로 실행 (연속 처리)
+		GetWorld()->GetTimerManager().SetTimerForNextTick(this, &ACultistCharacter::StartNextSkillCheck);
+	}
+}
+
+void ACultistCharacter::StartNextSkillCheck()
+{
+	if (SkillCheckWidgetClass)
+	{
+		SkillCheckWidget = CreateWidget<UCultistSkillCheckWidget>(GetWorld(), SkillCheckWidgetClass);
+		if (SkillCheckWidget)
+		{
+			SkillCheckWidget->AddToViewport();
+			SkillCheckWidget->StartSkillCheck(180.f);
+			SkillCheckWidget->OnSkillCheckResult.AddDynamic(this, &ACultistCharacter::OnSkillCheckResult);
+		}
+	}
 }
 
 int ACultistCharacter::GetPlayerID() const {
