@@ -691,6 +691,7 @@ void ACultistCharacter::ConfirmPlacement()
 {
 	if (!SpawnedPreviewActor)return;
 	if (!bCanPlace) return;
+	if (!bTreeSkillReady) return;
 
 	FVector SpawnLocation = SpawnedPreviewActor->GetActorLocation();
 	FRotator SpawnRotation = SpawnedPreviewActor->GetActorRotation();
@@ -699,15 +700,23 @@ void ACultistCharacter::ConfirmPlacement()
 	{
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.Owner = this;
+		
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
 		GetWorld()->SpawnActor<ATreeObstacleActor>(TreeObstacleActorClass, SpawnLocation, SpawnRotation, SpawnParams);
 	}
 
 	SpawnedPreviewActor->Destroy();
 	SpawnedPreviewActor = nullptr;
+
+	bTreeSkillReady = false;
+	GetWorld()->GetTimerManager().SetTimer(TreeSkillCooldownHandle, this, &ACultistCharacter::ResetTreeSkillCooldown, TreeSkillCooldownTime, false);
 }
 
-
+void ACultistCharacter::ResetTreeSkillCooldown()
+{
+	bTreeSkillReady = true;
+}
 
 
 void ACultistCharacter::TurnCamera(float Value)
