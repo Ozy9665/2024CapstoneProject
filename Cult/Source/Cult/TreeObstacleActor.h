@@ -8,6 +8,50 @@
 #include "GameFramework/Actor.h"
 #include "TreeObstacleActor.generated.h"
 
+UENUM()
+enum class ETreeGrowState : uint8
+{
+	GrowingTrunk,
+	GrowingBranches,
+	Done
+};
+
+USTRUCT()
+struct FBranchMeshGroup
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TArray<USplineMeshComponent*> Meshes;
+};
+
+
+USTRUCT()
+struct FBranchData
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	USplineComponent* Spline;
+
+	UPROPERTY()
+	TArray<USplineMeshComponent*> Meshes;
+
+	UPROPERTY()
+	float CurrentLength = 0.f;
+
+	UPROPERTY()
+	int32 Depth = 0; // 뿌리에서 얼마나 멀리 떨어졌는지
+
+	UPROPERTY()
+	FVector InitialDirection = FVector::ZeroVector;
+
+	// 이후 자식 분기들을 위해
+	TArray<FBranchData> Children;
+};
+
+
+
 UCLASS()
 class CULT_API ATreeObstacleActor : public AActor
 {
@@ -43,13 +87,40 @@ public:
 	bool bIsGrowing = true;
 
 	// Spline
-	UPROPERTY(VisibleAnywhere, Category = "Branches", meta = (AllowPrivateAccess = "true"))
-	USplineComponent* Spline;
-
 	UPROPERTY(EditAnywhere)
 	UStaticMesh* BranchMesh;
 
+	UPROPERTY(EditAnywhere, Category = "Branches")
+	float BranchGrowSpeed = 500.f;
+
+	UPROPERTY(EditAnywhere, Category = "Branches")
+	float BranchMaxLength = 3000.f;
+
+	TArray<USplineComponent*> BranchSplines;
+	TArray<USplineMeshComponent*> BranchMeshes;
+	TArray<float> CurrentBranchLengths;
+
 	TArray<USplineMeshComponent*> SpawnedBranches;
+	ETreeGrowState GrowState = ETreeGrowState::GrowingTrunk;
+
+	UPROPERTY()
+	TArray<FBranchMeshGroup> BranchMeshGroups;
+
+	UPROPERTY()
+	TArray<FBranchData> AllBranches;
+
+	void CreateBranch(const FVector& StartLocation, const FRotator& Rotation, int32 Depth);
+
+	UPROPERTY(EditAnywhere, Category = "Branches")
+	int32 MaxBranchDepth = 2;
+	//UPROPERTY(EditAnywhere, Category = "Branches")
+	//int32 NumFirstBranches = 10;
+
+	// CoolTime
+	FTimerHandle CooldownHandle;
+
+
+
 
 	UFUNCTION()
 	void SetupBranches();

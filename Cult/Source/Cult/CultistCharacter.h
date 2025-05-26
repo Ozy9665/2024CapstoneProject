@@ -197,6 +197,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void ConfirmPlacement();
 
+	bool bTreeSkillReady = true;
+	FTimerHandle TreeSkillCooldownHandle;
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void ResetTreeSkillCooldown();
+	UPROPERTY(EditAnywhere, Category = "Abilities")
+	float TreeSkillCooldownTime = 3.f;
 
 	int my_ID = -1;
 	int GetPlayerID() const;
