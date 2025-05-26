@@ -409,7 +409,8 @@ FCultistCharacterState AMySocketCultistActor::GetCharacterState()
         State.ABP_TTGetUp = CultistChar->TurnToGetUp;
         State.ABP_IsDead = CultistChar->bIsDead;
         State.ABP_IsStunned = CultistChar->bIsStunned;
-        
+        State.bIsPakour = CultistChar->bIsPakour;
+
         //UE_LOG(LogTemp, Error, TEXT("Client ABP_TTStun: %d, ABP_IsDead: %d"), State.ABP_TTStun, CultistChar->bIsDead);
         State.CurrentHealth = CultistChar->CurrentHealth;
     }

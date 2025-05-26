@@ -114,6 +114,7 @@ struct FCultistCharacterState
 	uint8_t ABP_TTGetUp;
 	uint8_t ABP_IsDead;
 	uint8_t ABP_IsStunned;
+	uint8_t bIsPakour;
 };
 
 struct FImpactPacket

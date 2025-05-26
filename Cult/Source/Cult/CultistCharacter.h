@@ -8,6 +8,7 @@
 #include"GameFramework/SpringArmComponent.h"
 #include "BaseCharacter.h"
 #include "Altar.h"
+#include "CultistSkillCheckWidget.h"
 #include "RitualPerformer.h"
 #include "CultistCharacter.generated.h"
 
@@ -78,8 +79,19 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 	class USpringArmComponent* SpringArmComp;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
+	TSubclassOf<class UCultistSkillCheckWidget> SkillCheckWidgetClass;
 
+	UPROPERTY()
+	UCultistSkillCheckWidget* SkillCheckWidget;
 
+	void TriggerSkillCheckInput();
+
+	UFUNCTION()
+	void OnSkillCheckResult(bool bSuccess);
+
+	UFUNCTION()
+	void StartNextSkillCheck();
 	// Damage
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
 	float CurrentHealth;

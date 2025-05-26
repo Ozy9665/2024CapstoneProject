@@ -35,13 +35,21 @@ void ATreeObstacleActor::Tick(float DeltaTime)
 	{
 		ElapsedTime += DeltaTime;
 		float Alpha = FMath::Clamp(ElapsedTime / GrowTime, 0.f, 1.f);
-		SetActorLocation(FMath::Lerp(InitialLocation - FVector(0, 0, GrowHeight), InitialLocation, Alpha));
+
+		// Z스케일
+		FVector NewScale = FMath::Lerp(FVector(0.01f, 0.01f, 0.01f), FVector(1.f, 1.f, 1.f), Alpha);
+		TreeMesh->SetWorldScale3D(NewScale * 0.1f) ;
+
+		// 위로만 자라도록 
+		FVector BaseLocation = InitialLocation;
+		FVector ScaleOffset = FVector(0.f, 0.f, GrowHeight * (0.5f * (1 - NewScale.Z)));  // 중간점 보정
+		SetActorLocation(BaseLocation - ScaleOffset);
 
 		if (Alpha >= 1.f)
 		{
-			SetupBranches();
 			GrowState = ETreeGrowState::GrowingBranches;
 			ElapsedTime = 0.f;
+			SetupBranches();
 		}
 	}
 	else if (GrowState == ETreeGrowState::GrowingBranches)
