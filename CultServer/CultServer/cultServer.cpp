@@ -277,8 +277,12 @@ void process_packet(int c_id, char* packet) {
 				disconnect(id);
 			}
 			// 매치가 끝났으니 room을 초기화
-
-
+			g_rooms[room_id].cultist = 0;
+			g_rooms[room_id].police = 0;
+			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
+				g_rooms[room_id].player_ids[i] = UINT8_MAX;
+			}
+			g_rooms[room_id].isIngame = false;
 		}
 		break;
 	}
