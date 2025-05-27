@@ -200,6 +200,11 @@ struct RoomNumberPacket {
 	uint8_t room_number;
 };
 
+struct NoticePacket {
+	uint8_t header;
+	uint8_t size;
+};
+
 #pragma pack(pop)
 
 class EXP_OVER {

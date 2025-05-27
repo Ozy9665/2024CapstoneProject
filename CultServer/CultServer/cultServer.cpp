@@ -190,15 +190,15 @@ void process_packet(int c_id, char* packet) {
 	}
 	case DisconnectionHeader: 
 	{
-		auto* p = reinterpret_cast<RoomNumberPacket*>(packet);
-		if (p->size != sizeof(RoomNumberPacket)) {
+		auto* p = reinterpret_cast<NoticePacket*>(packet);
+		if (p->size != sizeof(NoticePacket)) {
 			std::cout << "Invalid RoomNumberPacket size\n";
 			break;
 		}
 		// 1. 받은 room_id의 c_id유저를 room에서 빼는 작업.
 		// g_uers에서 빼는 작업은 mainloop에서 disconnect를 호출.
 		// rooms에서 유저 role에 해당하는 role도 --
-		int room_id = p->room_number;
+		int room_id = g_users[c_id].room_id;
 		if (0 == g_users[c_id].role) {
 			g_rooms[room_id].cultist--;
 		}
@@ -291,7 +291,7 @@ void process_packet(int c_id, char* packet) {
 		// 1. 클라이언트가 room data를 request했음.
 		auto* p = reinterpret_cast<RoleOnlyPacket*>(packet);
 		if (p->size != sizeof(RoleOnlyPacket)) {
-			std::cout << "Invalid requestPacket size\n";
+			std::cout << "Invalid requestHeader size\n";
 			break;
 		}
 		int role = static_cast<int>(p->role);
@@ -317,27 +317,7 @@ void process_packet(int c_id, char* packet) {
 			}
 		}
 
-		//std::cout << "Sending RoomsPakcet with " << inserted << " rooms:" << std::endl;
-		//for (int i = 0; i < inserted; ++i)
-		//{
-		//	const room& r = packet.rooms[i];
-		//	std::cout << "Room[" << i << "] "
-		//		<< "room_id: " << static_cast<int>(r.room_id)
-		//		<< ", police: " << static_cast<int>(r.police)
-		//		<< ", cultist: " << static_cast<int>(r.cultist)
-		//		<< ", isIngame: " << (r.isIngame ? "true" : "false")
-		//		<< ", player_ids: [";
-
-		//	for (int j = 0; j < MAX_PLAYERS_PER_ROOM; ++j)
-		//	{
-		//		std::cout << static_cast<int>(r.player_ids[j]);
-		//		if (j < MAX_PLAYERS_PER_ROOM - 1) std::cout << ", ";
-		//	}
-		//	std::cout << "]" << std::endl;
-		//}
 		g_users[c_id].do_send_packet(&packet);
-
-
 		break; 
 	}
 	case enterHeader: 
@@ -369,7 +349,7 @@ void process_packet(int c_id, char* packet) {
 	{
 		auto* p = reinterpret_cast<RoomNumberPacket*>(packet);
 		if (p->size != sizeof(RoomNumberPacket)) {
-			std::cout << "Invalid requestPacket size\n";
+			std::cout << "Invalid gameStartHeader size\n";
 			break;
 		}
 		int room_id = p->room_number;

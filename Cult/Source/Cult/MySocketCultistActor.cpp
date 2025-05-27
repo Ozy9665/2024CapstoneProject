@@ -1074,21 +1074,14 @@ void AMySocketCultistActor::SpawnImpactEffect(const FImpactPacket& ReceivedImpac
 }
 
 void AMySocketCultistActor::SendDisconnection() {
-    UMyGameInstance* MyGI = Cast<UMyGameInstance>(GetGameInstance());
-    if (MyGI == nullptr) {
-        UE_LOG(LogTemp, Error, TEXT("SendDisconnection failed with error: Cast MyGameInstance failed."));
-        return;
-    }
-
-    RoomNumberPacket Packet;
+    NoticePacket Packet;
     Packet.header = DisconnectionHeader;
-    Packet.size = sizeof(RoomNumberPacket);
-    Packet.room_number = MyGI->PendingRoomNumber;
+    Packet.size = sizeof(NoticePacket);
 
-    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RoomNumberPacket), 0);
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(NoticePacket), 0);
     if (BytesSent == SOCKET_ERROR)
     {
-        UE_LOG(LogTemp, Error, TEXT("SendParticleData failed with error: %ld"), WSAGetLastError());
+        UE_LOG(LogTemp, Error, TEXT("SendDisconnection failed with error: %ld"), WSAGetLastError());
     }
 }
 
