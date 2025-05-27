@@ -61,6 +61,7 @@ void AMySocketPoliceActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
     if (ClientSocket != INVALID_SOCKET)
     {
+        SendDisconnection();
         closesocket(ClientSocket);
         ClientSocket = INVALID_SOCKET;
     }
@@ -569,8 +570,6 @@ void AMySocketPoliceActor::SendParticleData(FHitResult HitResult) {
     FVector MuzzleLoc = MyCharacter->MuzzleLocation->GetComponentLocation();
     FRotator MuzzleRot = MyCharacter->MuzzleLocation->GetComponentRotation();
 
-    //FImpactPacket Packet;
-
     ParticlePacket Packet;
     Packet.header = particleHeader;
     Packet.size = sizeof(ParticlePacket);
@@ -588,6 +587,25 @@ void AMySocketPoliceActor::SendParticleData(FHitResult HitResult) {
     Packet.data.MuzzleRoll = MuzzleRot.Roll;
 
     int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(ParticlePacket), 0);
+    if (BytesSent == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("SendParticleData failed with error: %ld"), WSAGetLastError());
+    }
+}
+
+void AMySocketPoliceActor::SendDisconnection() {
+    UMyGameInstance* MyGI = Cast<UMyGameInstance>(GetGameInstance());
+    if (MyGI == nullptr) {
+        UE_LOG(LogTemp, Error, TEXT("SendDisconnection failed with error: Cast MyGameInstance failed."));
+        return;
+    }
+
+    RoomNumberPacket Packet;
+    Packet.header = DisconnectionHeader;
+    Packet.size = sizeof(RoomNumberPacket);
+    Packet.room_number = MyGI->PendingRoomNumber;
+
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RoomNumberPacket), 0);
     if (BytesSent == SOCKET_ERROR)
     {
         UE_LOG(LogTemp, Error, TEXT("SendParticleData failed with error: %ld"), WSAGetLastError());

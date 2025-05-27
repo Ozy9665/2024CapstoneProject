@@ -188,6 +188,43 @@ void process_packet(int c_id, char* packet) {
 		g_users[c_id].do_send_packet(p);
 		break;
 	}
+	case DisconnectionHeader: 
+	{
+		auto* p = reinterpret_cast<RoomNumberPacket*>(packet);
+		if (p->size != sizeof(RoomNumberPacket)) {
+			std::cout << "Invalid RoomNumberPacket size\n";
+			break;
+		}
+		// 1. 받은 room_id의 c_id유저를 room에서 빼는 작업.
+		// g_uers에서 빼는 작업은 mainloop에서 disconnect를 호출.
+		// rooms에서 유저 role에 해당하는 role도 --
+		int room_id = p->room_number;
+		if (0 == g_users[c_id].role) {
+			g_rooms[room_id].cultist--;
+		}
+		else if (1 == g_users[c_id].role) {
+			g_rooms[room_id].police--;
+		}
+		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
+			if (g_rooms[room_id].player_ids[i] == static_cast<uint8_t>(c_id)) {
+				g_rooms[room_id].player_ids[i] = UINT8_MAX;
+				break;
+			}
+		}
+		// 2. room 멤버들에게 disconncection header로 유저의 접속을 알림.
+		IdOnlyPacket packet;
+		packet.header = DisconnectionHeader;
+		packet.size = sizeof(IdOnlyPacket);
+		packet.id = static_cast<uint8_t>(c_id);
+		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
+			if (g_rooms[room_id].player_ids[i] == UINT8_MAX) {
+				continue;
+			}
+			uint8_t otherId = g_rooms[room_id].player_ids[i];
+			g_users[otherId].do_send_packet(&packet);
+		}
+		break;
+	}
 	case disableHeader:
 	{
 		g_users[c_id].setState(ST_DISABLE);
@@ -239,6 +276,9 @@ void process_packet(int c_id, char* packet) {
 			{
 				disconnect(id);
 			}
+			// 매치가 끝났으니 room을 초기화
+
+
 		}
 		break;
 	}
@@ -329,13 +369,14 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 		int room_id = p->room_number;
-		// 1. room이 꽉차면 isIngame을 true로, 유저의 방번호 업데이트
+		// 0. 유저 role에 따라 room의 유저 수 증가
 		if (1 == g_users[c_id].role) {
 			g_rooms[room_id].police++;
 		}
 		else if (0 == g_users[c_id].role) {
 			g_rooms[room_id].cultist++;
 		}
+		// 1. room이 꽉차면 isIngame을 true로, 유저의 방번호 업데이트
 		if (g_rooms[room_id].cultist >= 4 && g_rooms[room_id].police >= 1) {
 			g_rooms[room_id].isIngame = true;
 		}

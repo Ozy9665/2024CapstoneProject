@@ -8,6 +8,7 @@
 #include <ws2tcpip.h>
 #include <Kismet/GameplayStatics.h>
 #include "MySocketActor.h"
+#include "MyGameInstance.h"
 #include "CultistCharacter.h"
 #include "MySocketCultistActor.generated.h"
 
@@ -66,6 +67,7 @@ public:
 	void SpawnPoliceAICharacter(const unsigned char PlayerID);
 	void ProcessParticleData(char* Buffer);
 	void SpawnImpactEffect(const FImpactPacket& ReceivedImpact);
+	void SendDisconnection();
 	void CloseConnection();
 	void SafeDestroyCharacter(int PlayerID);
 };
