@@ -7,6 +7,31 @@
 #include "ProceduralMeshComponent.h"
 #include "ProceduralBranchActor.generated.h"
 
+USTRUCT()
+struct FBranchNode
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TArray<FVector> SplinePoints;
+
+	UPROPERTY()
+	float RadiusStart = 10.f;
+
+	UPROPERTY()
+	float RadiusEnd = 2.f;
+
+	UPROPERTY()
+	int32 Depth = 0;
+
+	UPROPERTY()
+	FVector Direction = FVector::ForwardVector;
+
+	UPROPERTY()
+	FVector StartLocation = FVector::ZeroVector;
+};
+
+
 UCLASS()
 class CULT_API AProceduralBranchActor : public AActor
 {
@@ -27,10 +52,26 @@ public:
 	UPROPERTY(VisibleAnywhere)
 	UProceduralMeshComponent* ProcMesh;
 
-	//UFUNCTION(BlueprintCallable)
+	UPROPERTY(EditAnywhere)
+	int32 MaxDepth = 2;
 
-	void GenerateCurvedBranch(float Length = 300.f, float RadiusStart = 12.f, float RadiusEnd = 2.f, int32 Segments = 16);
+	UPROPERTY(EditAnywhere)
+	int32 BranchSegmentCount = 6;
 
-private:
+	UPROPERTY(EditAnywhere)
+	float BranchLength = 200.f;
+
+	UPROPERTY(EditAnywhere)
+	float BranchAngleRange = 30.f;
+
+	UPROPERTY()
+	TArray<FBranchNode> AllBranches;
+
+
+	//void CreateBranch(const FVector& Start, const FVector& Direction, int32 Depth);
+
+	//void BuildAllBranches();
+
 	void GenerateCylinderAlongSpline(const TArray<FVector>& SplinePoints, float RadiusStart, float RadiusEnd);
+	void GenerateCurvedBranch(float Length = 300.f, float RadiusStart = 12.f, float RadiusEnd = 2.f, int32 Segments = 16);
 };
