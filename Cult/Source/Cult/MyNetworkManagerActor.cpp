@@ -3,7 +3,6 @@
 
 #include "MyNetworkManagerActor.h"
 #include "Engine/Engine.h"
-#include "Camera/CameraActor.h"
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <Kismet/GameplayStatics.h>
@@ -24,33 +23,27 @@ AMyNetworkManagerActor::AMyNetworkManagerActor()
     }
 }
 
-AMyNetworkManagerActor::~AMyNetworkManagerActor()
-{
-    WSACleanup();
-}
-
 // Called when the game starts or when spawned
 void AMyNetworkManagerActor::BeginPlay()
 {
     Super::BeginPlay();
     UE_LOG(LogTemp, Error, TEXT("Actor Spawned"));
-    CheckAndSpawnActor();
+    CheckServer();
 }
 
 // Called every frame
 void AMyNetworkManagerActor::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
-
 }
 
-SOCKET AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32 ServerPort)
+bool AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32 ServerPort)
 {
-    SOCKET ClientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    ClientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (ClientSocket == INVALID_SOCKET)
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to create socket: %d"), WSAGetLastError());
-        return INVALID_SOCKET;
+        return false;
     }
 
     sockaddr_in ServerAddr;
@@ -63,172 +56,146 @@ SOCKET AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32
     if (connect(ClientSocket, (SOCKADDR*)&ServerAddr, sizeof(ServerAddr)) != SOCKET_ERROR)
     {
         UE_LOG(LogTemp, Log, TEXT("Connected to server."));
-        return ClientSocket;
+        return true;
     }
     else {
         UE_LOG(LogTemp, Error, TEXT("Failed to connect to server: %d"), WSAGetLastError());
         closesocket(ClientSocket);
-        return INVALID_SOCKET;
+        return false;
     }
 }
 
-void AMyNetworkManagerActor::CheckAndSpawnActor()
+void AMyNetworkManagerActor::CheckServer()
 {
     FString ServerIP = TEXT("127.0.0.1");  // 서버 IP 주소
     int32 ServerPort = 7777;               // 포트 번호
 
-    SOCKET ConnectedSocket = CanConnectToServer(ServerIP, ServerPort);
-    if (ConnectedSocket == INVALID_SOCKET)
+    if(!CanConnectToServer(ServerIP, ServerPort))
     {
         UE_LOG(LogTemp, Error, TEXT("Server Is Closed."));
         return;
     }
 
-    APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
-    if (not PC) {
-        UE_LOG(LogTemp, Log, TEXT("GetPlayerController Failed."));
+    UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
+    if (not GI) {
+        UE_LOG(LogTemp, Error, TEXT("Gl cast failed."));
         return;
     }
 
-    UMyGameInstance* MyGI = Cast<UMyGameInstance>(GetGameInstance());
-    if (not MyGI) {
-        UE_LOG(LogTemp, Error, TEXT("GameInstance 캐스팅 실패."));
+    ReceiveData();
+    GI->ClientSocket = ClientSocket;
+    IdOnlyPacket packet;
+    packet.header = connectionHeader;
+    packet.size = sizeof(IdOnlyPacket);
+
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&packet), sizeof(IdOnlyPacket), 0);
+    if (BytesSent == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("SetClientSocket failed with error: %ld"), WSAGetLastError());
+    }
+}
+
+void AMyNetworkManagerActor::RequestRoomInfo() 
+{
+    UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
+    if (not GI) {
+        UE_LOG(LogTemp, Error, TEXT("Gl cast failed."));
         return;
     }
 
-    if (MyGI->bIsCultist) 
+    if (ClientSocket != INVALID_SOCKET)
     {
-        APawn* DefaultPawn = PC->GetPawn();
-        if (not DefaultPawn)
+        ReceiveData();
+        RoleOnlyPacket Packet;
+        Packet.header = requestHeader;
+        Packet.size = sizeof(RoleOnlyPacket);
+        Packet.role = GI->bIsCultist ? 0 : 1;
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RoleOnlyPacket), 0);
+        if (BytesSent == SOCKET_ERROR)
         {
-            UE_LOG(LogTemp, Log, TEXT("Default pawn is not a Police pawn or is null."));
-            return;
+            UE_LOG(LogTemp, Error, TEXT("RequestRoomInfo failed with error: %ld"), WSAGetLastError());
         }
+    }
+    else
+    {
+        CheckServer();
+    }
+}
 
-        UClass* CultistClass = LoadClass<APawn>(nullptr,
-            TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A.BP_Cultist_A_C"));
-        if (not CultistClass)
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to load BP_Cultist_A class"));
-            return;
-        }
+void AMyNetworkManagerActor::ProcessRoomInfo(const char* Buffer) 
+{
+    RoomsPakcet Packet;
+    memcpy(&Packet, Buffer, sizeof(RoomsPakcet));
 
-        FActorSpawnParameters SpawnParams;
-        SpawnParams.Owner = this;
-        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-        FVector SpawnLocation = DefaultPawn->GetActorLocation();
-        FRotator SpawnRotation = DefaultPawn->GetActorRotation();
-        APawn* CultistPawn = GetWorld()->SpawnActor<APawn>(CultistClass, SpawnLocation, SpawnRotation, SpawnParams);
-        if (not CultistPawn)
+    rooms.Empty();
+    rooms.Reserve(10);
+
+    for (int i = 0; i < 10; ++i)
+    {
+        const PacketRoom& pr = Packet.rooms[i];
+            
+        Froom fr;
+        fr.room_id = pr.room_id;
+        fr.police = pr.police;
+        fr.cultist = pr.cultist;
+        fr.isIngame = pr.isIngame;
+
+        fr.player_ids.Empty();
+        fr.player_ids.Reserve(5);
+        for (int j = 0; j < 5; ++j)
+            fr.player_ids.Add(pr.player_ids[j]);
+
+        rooms.Add(MoveTemp(fr));
+    }
+    AsyncTask(ENamedThreads::GameThread, [this]()
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to spawn Cultist pawn."));
-            return;
+            OnRoomListUpdated.Broadcast();
+        });
+}
+
+void AMyNetworkManagerActor::ReceiveData() 
+{
+    AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this]() {
+        char Buffer[BufferSize];
+        int32 BytesReceived = recv(ClientSocket, Buffer, BufferSize, 0);
+        if (BytesReceived > 0)
+        {
+            int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
+            int PacketSize = static_cast<int>(static_cast<unsigned char>(Buffer[1]));
+            if (BytesReceived != PacketSize)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("Invalid packet size: Received %d, Expected %d: header:%d"), BytesReceived, PacketSize, PacketType);
+                return;
+            }
+
+            switch (PacketType)
+            {
+            case connectionHeader:
+            {
+                my_ID = static_cast<unsigned char>(Buffer[2]);
+                break;
+            }
+            case requestHeader:
+            {
+                ProcessRoomInfo(Buffer);
+                break;
+            }
+            default:
+                UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
+                break;
+            }
         }
-        PC->Possess(CultistPawn);
-        PC->SetInputMode(FInputModeGameOnly());
-        PC->bShowMouseCursor = false;
-        UChildActorComponent* CAC = CultistPawn->FindComponentByClass<UChildActorComponent>();
-        if (not CAC)
+        else if (BytesReceived == 0 || WSAGetLastError() == WSAECONNRESET)
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to FindComponentByClass"));
+            UE_LOG(LogTemp, Log, TEXT("Connection closed by server."));
+            CheckServer();
             return;
-        }
-        AActor* Spawned = CAC->GetChildActor();
-        if (not Spawned)
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to GetChildActor"));
-            return;
-        }
-        ACameraActor* CamActor = Cast<ACameraActor>(Spawned);
-        if (CamActor)
-        {
-            PC->SetViewTargetWithBlend(CamActor, 0.f);
         }
         else
         {
-            UE_LOG(LogTemp, Error, TEXT("ChildActor wasn't a CameraActor"));
+            UE_LOG(LogTemp, Error, TEXT("recv failed with error: %ld"), WSAGetLastError());
+            CheckServer();
             return;
         }
-
-        DefaultPawn->Destroy();
-        UE_LOG(LogTemp, Log, TEXT("Spawned Cultist pawn and possessed it, default pawn destroyed."));
-
-        // 컬트 액터 스폰
-        AMySocketCultistActor* CultistActor = GetWorld()->SpawnActor<AMySocketCultistActor>(
-            AMySocketCultistActor::StaticClass(), GetActorLocation(), GetActorRotation());
-        if (CultistActor)
-        {
-            CultistActor->SetClientSocket(ConnectedSocket);
-            UE_LOG(LogTemp, Error, TEXT("Cultist Actor Spawned & Socket Passed."));
-        }
-    }
-    else if (MyGI->bIsPolice)
-    {
-        APawn* DefaultPawn = PC->GetPawn();
-        if (not DefaultPawn)
-        {
-            UE_LOG(LogTemp, Log, TEXT("Default pawn is not a Police pawn or is null."));
-        }
-
-        UClass* PoliceClass = LoadClass<APawn>(nullptr,
-            TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter.BP_PoliceCharacter_C"));
-        if (not PoliceClass)
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to load BP_Police class! Check path."));
-            return;
-        }
-
-        FActorSpawnParameters SpawnParams;
-        SpawnParams.Owner = this;
-        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-        FVector SpawnLocation = DefaultPawn->GetActorLocation();
-        FRotator SpawnRotation = DefaultPawn->GetActorRotation();
-        APawn* PolicePawn = GetWorld()->SpawnActor<APawn>(PoliceClass, SpawnLocation, SpawnRotation, SpawnParams);
-        if (not PolicePawn)
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to spawn Police pawn."));
-            return;
-        }
-        PC->Possess(PolicePawn);
-        PC->SetInputMode(FInputModeGameOnly());
-        PC->bShowMouseCursor = false;
-        UChildActorComponent* CAC = PolicePawn->FindComponentByClass<UChildActorComponent>();
-        if (not CAC)
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to FindComponentByClass"));
-            return;
-        }
-        AActor* Spawned = CAC->GetChildActor();
-        if (not Spawned)
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to GetChildActor"));
-            return;
-        }
-        ACameraActor* CamActor = Cast<ACameraActor>(Spawned);
-        if (CamActor)
-        {
-            PC->SetViewTargetWithBlend(CamActor, 0.f);
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("ChildActor wasn't a CameraActor"));
-            return;
-        }
-
-        DefaultPawn->Destroy();
-        UE_LOG(LogTemp, Log, TEXT("Spawned Police pawn and possessed it, default pawn destroyed."));
-
-        AMySocketPoliceActor* PoliceActor = GetWorld()->SpawnActor<AMySocketPoliceActor>(
-            AMySocketPoliceActor::StaticClass(), GetActorLocation(), GetActorRotation());
-        if (not PoliceActor)
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to spawn PoliceActor."));
-            return;
-        }
-        PoliceActor->SetClientSocket(ConnectedSocket);
-        UE_LOG(LogTemp, Error, TEXT("Cultist Actor Spawned & Socket Passed."));
-    }
-    
-    
-    Destroy();
+        });
 }

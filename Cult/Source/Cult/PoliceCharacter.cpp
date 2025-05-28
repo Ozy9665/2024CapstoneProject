@@ -379,9 +379,10 @@ void APoliceCharacter::ShootPistol()
 			{
 				if (Pair.Value == HitActor)
 				{
+					OnShootPistol(ParticleResult);
 					UE_LOG(LogTemp, Warning, TEXT("Shot Cultist"));
 					FHitPacket HitPacket;
-					HitPacket.AttackerID = my_ID;
+				 	HitPacket.AttackerID = my_ID;
 					HitPacket.TargetID = Pair.Key;
 					HitPacket.Weapon = EWeaponType::Pistol;
 

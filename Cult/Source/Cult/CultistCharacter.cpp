@@ -7,8 +7,12 @@
 #include "Components/CapsuleComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "GrowthPreviewActor.h"
+#include "TreeObstacleActor.h"
+#include "GameFramework/PlayerController.h"
 #include "Components/ProgressBar.h"
 #include "Components/InputComponent.h"
+#include "Landscape.h"
+#include "DrawDebugHelpers.h"
 
 extern AMySocketCultistActor* MySocketCultistActor;
 
@@ -35,6 +39,13 @@ ACultistCharacter::ACultistCharacter()
 	TaskRitualProgress = 0.0f;
 	TaskRitualSpeed = 20.0f;
 
+	RangeVisualizer = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RangeVisualizer"));
+	RangeVisualizer->SetupAttachment(RootComponent);
+
+	RangeVisualizer->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	RangeVisualizer->SetCastShadow(false);
+	RangeVisualizer->SetRelativeRotation(FRotator(-90.f, 0.f, 0.f)); // XY 평면으로 눕힘
+	RangeVisualizer->SetRelativeLocation(FVector(0.f, 0.f, 1.f));     // 약간 위에 표시
 
 }
 
@@ -164,6 +175,9 @@ void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction("Crouch", IE_Pressed, this, &ACultistCharacter::ToggleCrouch);
 	
 	PlayerInputComponent->BindAction("SpecialAbility", IE_Pressed, this, &ACultistCharacter::StartPreviewPlacement);
+	PlayerInputComponent->BindAction("ConfirmPlacement", IE_Pressed, this, &ACultistCharacter::ConfirmPlacement);
+
+	PlayerInputComponent->BindAction("SkillCheckInput", IE_Pressed, this, &ACultistCharacter::TriggerSkillCheckInput);
 	UE_LOG(LogTemp, Warning, TEXT("Binding  input"));
 
 }
@@ -257,6 +271,16 @@ void ACultistCharacter::StartRitual()
 		//UE_LOG(LogTemp, Warning, TEXT("%f"), GetCharacterMovement()->MaxWalkSpeed);
 		return;
 	}
+	if (SkillCheckWidgetClass) {
+		SkillCheckWidget = CreateWidget<UCultistSkillCheckWidget>(GetWorld(), SkillCheckWidgetClass);
+		if (SkillCheckWidget)
+		{
+			SkillCheckWidget->AddToViewport();
+			SkillCheckWidget->StartSkillCheck(180.f); // 속도
+
+			SkillCheckWidget->OnSkillCheckResult.AddDynamic(this, &ACultistCharacter::OnSkillCheckResult);
+		}
+	}
 
 	bIsPerformingRitual = true;
 	TaskRitualProgress = 0.0f;
@@ -318,6 +342,22 @@ void ACultistCharacter::Tick(float DeltaTime)
 	if(SpawnedPreviewActor)
 	{
 		UpdatePreviewPlacement();
+
+		// 사정거리 시각화 원
+		DrawDebugCircle(
+			GetWorld(),
+			GetActorLocation(),
+			MaxPlacementDistance,
+			64,
+			FColor::Green,
+			false,
+			0.01f,
+			0,
+			1.f,
+			FVector(1, 0, 0),
+			FVector(0, 1, 0),
+			false
+		);
 	}
 }
 
@@ -613,6 +653,11 @@ void ACultistCharacter::StartPreviewPlacement()
 
 void ACultistCharacter::UpdatePreviewPlacement()
 {
+	if(!SpawnedPreviewActor) {
+		UE_LOG(LogTemp, Warning, TEXT("No SpawnPreviewActor"));
+		return;
+	}
+
 	FHitResult Hit;
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC)return;
@@ -622,19 +667,68 @@ void ACultistCharacter::UpdatePreviewPlacement()
 
 	if (Hit.bBlockingHit)
 	{
-		FVector Location = Hit.Location;
-		SpawnedPreviewActor->UpdatePreviewLocation(Location);
+		FVector TargetLocation = Hit.Location;
+		AActor* HitActor = Hit.GetActor();
 
-		// 충돌체크
-		bool bCanPlace = !GetWorld()->OverlapBlockingTestByChannel(
-			Location, FQuat::Identity,
-			PlacementCheckChannel, FCollisionShape::MakeSphere(50.0f)	// 기둥 반경
+		bool bWithinRange = FVector::Dist(GetActorLocation(), TargetLocation) <= MaxPlacementDistance;
+		//bool bValidSurface = (HitActor && HitActor->IsA(ALandscape::StaticClass()) || HitActor->ActorHasTag(TEXT("Ground")));
+
+		SpawnedPreviewActor->UpdatePreviewLocation(TargetLocation);
+
+		bool bHasCollision = GetWorld()->OverlapBlockingTestByChannel(
+			TargetLocation, FQuat::Identity,
+			ECC_Visibility, FCollisionShape::MakeSphere(50.f)
 		);
+
+		FCollisionQueryParams Params;
+		Params.AddIgnoredActor(this);
+		bool bOverlap = GetWorld()->OverlapBlockingTestByChannel(
+			TargetLocation, FQuat::Identity, ECC_Pawn,
+			FCollisionShape::MakeSphere(50.f), Params
+		);
+
+		bCanPlace = bWithinRange && bOverlap; //&& !bHasCollision;	// && bValideSurface
 		SpawnedPreviewActor->SetValidPlacement(bCanPlace);
+
+		// 가시성 설정 
+		SpawnedPreviewActor->SetActorHiddenInGame(false);
+	}
+	else
+	{
+		SpawnedPreviewActor->SetActorHiddenInGame(true);
 	}
 }
 
+void ACultistCharacter::ConfirmPlacement()
+{
+	if (!SpawnedPreviewActor)return;
+	if (!bCanPlace) return;
+	if (!bTreeSkillReady) return;
 
+	FVector SpawnLocation = SpawnedPreviewActor->GetActorLocation();
+	FRotator SpawnRotation = SpawnedPreviewActor->GetActorRotation();
+
+	if (TreeObstacleActorClass)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.Owner = this;
+		
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		GetWorld()->SpawnActor<ATreeObstacleActor>(TreeObstacleActorClass, SpawnLocation, SpawnRotation, SpawnParams);
+	}
+
+	SpawnedPreviewActor->Destroy();
+	SpawnedPreviewActor = nullptr;
+
+	bTreeSkillReady = false;
+	GetWorld()->GetTimerManager().SetTimer(TreeSkillCooldownHandle, this, &ACultistCharacter::ResetTreeSkillCooldown, TreeSkillCooldownTime, false);
+}
+
+void ACultistCharacter::ResetTreeSkillCooldown()
+{
+	bTreeSkillReady = true;
+}
 
 
 void ACultistCharacter::TurnCamera(float Value)
@@ -644,6 +738,63 @@ void ACultistCharacter::TurnCamera(float Value)
 void ACultistCharacter::LookUpCamera(float Value)
 {
 	AddControllerPitchInput(Value);
+}
+
+void ACultistCharacter::TriggerSkillCheckInput()
+{
+	if (SkillCheckWidget)
+	{
+		SkillCheckWidget->OnInputPressed();
+	}
+}
+
+void ACultistCharacter::OnSkillCheckResult(bool bSuccess)
+{
+	if (!bIsPerformingRitual) return;
+
+	if (bSuccess)
+	{
+		TaskRitualProgress += TaskRitualSpeed;  // 성공 시 진행도 증가
+	}
+	else
+	{
+		TaskRitualProgress = FMath::Max(0.f, TaskRitualProgress - 10.f);  // 실패 시 감소
+	}
+
+	// UI 업데이트
+	if (TaskRitualWidget)
+	{
+		if (UProgressBar* Bar = Cast<UProgressBar>(TaskRitualWidget->GetWidgetFromName(TEXT("RitualProgressBar"))))
+		{
+			Bar->SetPercent(TaskRitualProgress / 100.f);
+		}
+	}
+
+	// 완료 판정
+	if (TaskRitualProgress >= 100.f)
+	{
+		if (CurrentAltar) CurrentAltar->IncreaseRitualGauge();
+		StopRitual();
+	}
+	else
+	{
+		// 다음 스킬체크 바로 실행 (연속 처리)
+		GetWorld()->GetTimerManager().SetTimerForNextTick(this, &ACultistCharacter::StartNextSkillCheck);
+	}
+}
+
+void ACultistCharacter::StartNextSkillCheck()
+{
+	if (SkillCheckWidgetClass)
+	{
+		SkillCheckWidget = CreateWidget<UCultistSkillCheckWidget>(GetWorld(), SkillCheckWidgetClass);
+		if (SkillCheckWidget)
+		{
+			SkillCheckWidget->AddToViewport();
+			SkillCheckWidget->StartSkillCheck(180.f);
+			SkillCheckWidget->OnSkillCheckResult.AddDynamic(this, &ACultistCharacter::OnSkillCheckResult);
+		}
+	}
 }
 
 int ACultistCharacter::GetPlayerID() const {

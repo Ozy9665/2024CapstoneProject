@@ -5,11 +5,13 @@
 #include <WS2tcpip.h>
 #include <unordered_map>
 #include <atomic>
+#include <array>
 #include "error.h"
 
 constexpr short SERVER_PORT = 7777;
 constexpr int BUF_SIZE = 200;
-
+constexpr int MAX_PLAYERS_PER_ROOM = 5;
+//-- ingame header
 constexpr char cultistHeader = 0;
 constexpr char objectHeader = 1;
 constexpr char policeHeader = 2;
@@ -17,15 +19,34 @@ constexpr char particleHeader = 3;
 constexpr char hitHeader = 4;
 constexpr char connectionHeader = 5;
 constexpr char DisconnectionHeader = 6;
-constexpr char readyHeader = 7;
-constexpr char disableHeader = 8;
+constexpr char disableHeader = 7;
+//-- room header
+constexpr char requestHeader = 8;
+constexpr char enterHeader = 9;
+constexpr char leaveHeader = 10;
+constexpr char readyHeader = 11;
+constexpr char gameStartHeader = 12;
 
 constexpr char ST_FREE{ 0 };
-constexpr char ST_INGAME{ 1 };
-constexpr char ST_CLOSE{ 2 };
+constexpr char ST_READY{ 1 };
+constexpr char ST_INGAME{ 2 };
 constexpr char ST_DISABLE{ 3 };
+// player가 ST_FREE로 입장
+// 방에 들어가서 ready버튼 누르면 ST_READY
+// 게임에 들어가면 ST_INGAME으로 바꾸면서 room도 isIngame
 
 #pragma pack(push, 1)
+
+struct room {
+	uint8_t room_id;
+	uint8_t police = 0;
+	uint8_t cultist = 0;
+	bool isIngame = false;
+	uint8_t  player_ids[MAX_PLAYERS_PER_ROOM] = {
+		UINT8_MAX, UINT8_MAX, UINT8_MAX,
+		UINT8_MAX, UINT8_MAX
+	};
+};
 
 enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND };
 
@@ -93,6 +114,7 @@ struct FCultistCharacterState
 	uint8_t ABP_TTGetUp;
 	uint8_t ABP_IsDead;
 	uint8_t ABP_IsStunned;
+	uint8_t bIsPakour;
 };
 
 struct FImpactPacket
@@ -130,7 +152,7 @@ struct PolicePacket {
 };
 
 struct ParticlePacket {
-	uint8_t  header;
+	uint8_t header;
 	uint8_t size;
 	FImpactPacket data;
 };
@@ -141,23 +163,46 @@ struct HitPacket {
 	FHitPacket data;
 };
 
-struct ConnectionPacket {
+struct IdOnlyPacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
+};
+
+struct RoleOnlyPacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t role;
+};
+
+struct IdRolePacket {
 	uint8_t header;
 	uint8_t size;
 	uint8_t id;
 	uint8_t role;
 };
 
-struct DisconnectionPacket {
+struct RoomDataPacket {
 	uint8_t header;
 	uint8_t size;
-	uint8_t id;
+	room room_data;
 };
 
-struct DisablePakcet {
+struct RoomsPakcet {
 	uint8_t header;
 	uint8_t size;
-	uint8_t id;
+	room rooms[10];
+};
+
+struct RoomNumberPacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t room_number;
+};
+
+struct NoticePacket {
+	uint8_t header;
+	uint8_t size;
 };
 
 #pragma pack(pop)
@@ -183,6 +228,7 @@ public:
 	int				role;
 	char			state;
 	int				prev_remain;
+	int				room_id;
 
 	union {
 		FCultistCharacterState cultist_state;
@@ -226,6 +272,4 @@ public:
 	bool isValidState() const;
 };
 
-extern std::unordered_map<int, SESSION> g_users;
-extern std::atomic<int> client_id;
 extern FPoliceCharacterState AiState;

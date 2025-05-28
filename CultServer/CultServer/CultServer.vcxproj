@@ -130,7 +130,9 @@
   <ItemGroup>
     <ClCompile Include="cultServer.cpp" />
     <ClCompile Include="error.cpp" />
-    <ClCompile Include="PoliceAI.cpp" />
+    <ClCompile Include="PoliceAI.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="Protocol.cpp" />
   </ItemGroup>
   <ItemGroup>

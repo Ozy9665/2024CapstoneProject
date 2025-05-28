@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/GameInstance.h"
+#include <winsock2.h>
 #include "MyGameInstance.generated.h"
 
 UCLASS()
@@ -17,4 +18,9 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, Category = "Role Selection")
 	bool bIsPolice = false;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Network")
+	int32 PendingRoomNumber = -1;
+
+	SOCKET ClientSocket = INVALID_SOCKET;
 };

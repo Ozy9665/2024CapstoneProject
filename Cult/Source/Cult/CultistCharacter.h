@@ -8,6 +8,7 @@
 #include"GameFramework/SpringArmComponent.h"
 #include "BaseCharacter.h"
 #include "Altar.h"
+#include "CultistSkillCheckWidget.h"
 #include "RitualPerformer.h"
 #include "CultistCharacter.generated.h"
 
@@ -78,8 +79,19 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite)
 	class USpringArmComponent* SpringArmComp;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
+	TSubclassOf<class UCultistSkillCheckWidget> SkillCheckWidgetClass;
 
+	UPROPERTY()
+	UCultistSkillCheckWidget* SkillCheckWidget;
 
+	void TriggerSkillCheckInput();
+
+	UFUNCTION()
+	void OnSkillCheckResult(bool bSuccess);
+
+	UFUNCTION()
+	void StartNextSkillCheck();
 	// Damage
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
 	float CurrentHealth;
@@ -166,20 +178,43 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TSubclassOf<class AGrowthPreviewActor> GrowthPreviewActorClass;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	TSubclassOf<class ATreeObstacleActor> TreeObstacleActorClass;
+
 	UPROPERTY()
 	AGrowthPreviewActor* SpawnedPreviewActor;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Abilities")
+	class UStaticMeshComponent* RangeVisualizer;
 
 	UPROPERTY(EditDefaultsOnly, Category ="Abilities")
 	float PreviewTraceDistance = 1000.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	bool bCanPlace = false;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	float MaxPlacementDistance = 100.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TEnumAsByte<ECollisionChannel> PlacementCheckChannel = ECC_WorldStatic;
+
 
 	UFUNCTION(BlueprintCallable, Category="Abilities")
 	void StartPreviewPlacement();
 
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void UpdatePreviewPlacement();
+
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void ConfirmPlacement();
+
+	bool bTreeSkillReady = true;
+	FTimerHandle TreeSkillCooldownHandle;
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void ResetTreeSkillCooldown();
+	UPROPERTY(EditAnywhere, Category = "Abilities")
+	float TreeSkillCooldownTime = 3.f;
 
 	int my_ID = -1;
 	int GetPlayerID() const;

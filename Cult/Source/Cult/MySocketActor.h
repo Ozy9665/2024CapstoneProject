@@ -3,10 +3,21 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "PoliceCharacter.h"
+#include <array>
 #include "MySocketActor.generated.h"
 
-#pragma pack(push, 1)
 
+USTRUCT(BlueprintType)
+struct Froom {
+	GENERATED_BODY()
+	UPROPERTY(BlueprintReadWrite) uint8 room_id;
+	UPROPERTY(BlueprintReadWrite) uint8 police;
+	UPROPERTY(BlueprintReadWrite) uint8 cultist;
+	UPROPERTY(BlueprintReadWrite) bool isIngame;
+	UPROPERTY(BlueprintReadWrite) TArray<int32> player_ids;
+};
+
+#pragma pack(push, 1)
 struct FPoliceCharacterState
 {
 	int32 PlayerID;
@@ -41,11 +52,19 @@ struct FCultistCharacterState
 {
 	int32 PlayerID;
 	// 위치
-	float PositionX, PositionY, PositionZ;
+	float PositionX;
+	float PositionY;
+	float PositionZ;
 	// 회전
-	float RotationPitch, RotationYaw, RotationRoll;
+	float RotationPitch;
+	float RotationYaw;
+	float RotationRoll;
 	// 속도
-	float VelocityX, VelocityY, VelocityZ, Speed;
+	float VelocityX; 
+	float VelocityY;
+	float VelocityZ;
+	float Speed;
+
 	float CurrentHealth;
 	// 상태
 	uint8_t Crouch;
@@ -57,6 +76,7 @@ struct FCultistCharacterState
 	uint8_t ABP_TTGetUp;
 	uint8_t ABP_IsDead;
 	uint8_t ABP_IsStunned;
+	uint8_t bIsPakour;
 };
 
 struct FImpactPacket
@@ -105,23 +125,47 @@ struct HitPacket {
 	FHitPacket data;
 };
 
-struct ConnectionPacket {
+struct IdOnlyPacket {
 	uint8_t header;
 	uint8_t size;
 	uint8_t id;
+};
+
+struct RoleOnlyPacket {
+	uint8_t header;
+	uint8_t size;
 	uint8_t role;
 };
 
-struct DisconnectionPacket {
-	uint8_t header;
-	uint8_t size;
-	uint8_t id;
+struct PacketRoom {
+	uint8_t room_id;
+	uint8_t police;
+	uint8_t cultist;
+	bool isIngame;
+	uint8_t player_ids[5];
 };
 
-struct DisablePakcet {
+struct RoomsPakcet {
 	uint8_t header;
 	uint8_t size;
-	uint8_t id;
+	PacketRoom rooms[10];
+};
+
+struct RoomDataPacket {
+	uint8_t header;
+	uint8_t size;
+	PacketRoom room_data;
+};
+
+struct RoomNumberPacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t room_number;
+};
+
+struct NoticePacket {
+	uint8_t header;
+	uint8_t size;
 };
 
 #pragma pack(pop)
@@ -144,6 +188,8 @@ public:
 	virtual void Tick(float DeltaTime) override;
 };
 
+constexpr int32 BufferSize{ 1024 };
+//-- ingame header
 constexpr char cultistHeader = 0;
 constexpr char objectHeader = 1;
 constexpr char policeHeader = 2;
@@ -151,8 +197,13 @@ constexpr char particleHeader = 3;
 constexpr char hitHeader = 4;
 constexpr char connectionHeader = 5;
 constexpr char DisconnectionHeader = 6;
-constexpr char readyHeader = 7;
-constexpr char disableHeader = 8;
+constexpr char disableHeader = 7;
+//-- room header
+constexpr char requestHeader = 8;
+constexpr char enterHeader = 9;
+constexpr char leaveHeader = 10;
+constexpr char readyHeader = 11;
+constexpr char gameStartHeader = 12;
 
 constexpr FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,

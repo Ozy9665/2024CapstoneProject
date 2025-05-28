@@ -58,6 +58,7 @@ void AMySocketCultistActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
     if (ClientSocket != INVALID_SOCKET)
     {
+        SendDisconnection();
         closesocket(ClientSocket);
         ClientSocket = INVALID_SOCKET;
     }
@@ -66,7 +67,7 @@ void AMySocketCultistActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
     UE_LOG(LogTemp, Log, TEXT("Client socket closed and cleaned up."));
 }
 
-void AMySocketCultistActor::SetClientSocket(SOCKET InSocket)
+void AMySocketCultistActor::SetClientSocket(SOCKET InSocket, int32 RoomNumber)
 {
     ClientSocket = InSocket;
     if (ClientSocket != INVALID_SOCKET)
@@ -74,12 +75,12 @@ void AMySocketCultistActor::SetClientSocket(SOCKET InSocket)
         ReceiveData();
         UE_LOG(LogTemp, Log, TEXT("Cultist Client socket set. Starting ReceiveData."));
 
-        ConnectionPacket packet;
-        packet.header = connectionHeader;
-        packet.size = sizeof(ConnectionPacket);
-        packet.role = 0;
+        RoomNumberPacket packet;
+        packet.header = gameStartHeader;
+        packet.size = sizeof(RoomNumberPacket);
+        packet.room_number = RoomNumber;
         
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&packet), sizeof(ConnectionPacket), 0);
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&packet), sizeof(RoomNumberPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("SetClientSocket failed with error: %ld"), WSAGetLastError());
@@ -106,7 +107,6 @@ void AMySocketCultistActor::ReceiveData()
 {
     AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this]()
         {
-            const int32 BufferSize = 1024;
             while (true)
             {
                 char Buffer[BufferSize];
@@ -339,11 +339,11 @@ void AMySocketCultistActor::SendDisable()
 {
     if (ClientSocket != INVALID_SOCKET)
     {
-        DisablePakcet Packet;
+        IdOnlyPacket Packet;
         Packet.header = disableHeader;
-        Packet.size = sizeof(DisablePakcet);
+        Packet.size = sizeof(IdOnlyPacket);
         Packet.id = my_ID;
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(DisablePakcet), 0);
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(IdOnlyPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("SendDisable failed with error: %ld"), WSAGetLastError());
@@ -410,7 +410,8 @@ FCultistCharacterState AMySocketCultistActor::GetCharacterState()
         State.ABP_TTGetUp = CultistChar->TurnToGetUp;
         State.ABP_IsDead = CultistChar->bIsDead;
         State.ABP_IsStunned = CultistChar->bIsStunned;
-        
+        State.bIsPakour = CultistChar->bIsPakour;
+
         //UE_LOG(LogTemp, Error, TEXT("Client ABP_TTStun: %d, ABP_IsDead: %d"), State.ABP_TTStun, CultistChar->bIsDead);
         State.CurrentHealth = CultistChar->CurrentHealth;
     }
@@ -575,6 +576,13 @@ void AMySocketCultistActor::UpdateCultistAnimInstanceProperties(UAnimInstance* A
     {
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsStunnedProperty);
         BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_IsStunned));
+    }
+
+    FProperty* IsABP_IsPakourProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsPakour"));
+    if (IsABP_IsPakourProperty && IsABP_IsPakourProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsPakourProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.bIsPakour));
     }
 }
 
@@ -1063,6 +1071,18 @@ void AMySocketCultistActor::SpawnImpactEffect(const FImpactPacket& ReceivedImpac
         MuzzleLoc,
         MuzzleRot
     );
+}
+
+void AMySocketCultistActor::SendDisconnection() {
+    NoticePacket Packet;
+    Packet.header = DisconnectionHeader;
+    Packet.size = sizeof(NoticePacket);
+
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(NoticePacket), 0);
+    if (BytesSent == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("SendDisconnection failed with error: %ld"), WSAGetLastError());
+    }
 }
 
 void AMySocketCultistActor::CloseConnection() {

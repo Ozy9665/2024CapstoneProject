@@ -28,18 +28,18 @@ public:
 
 private:
 	UPROPERTY(VisibleAnywhere)
-	UStaticMeshComponent* PreviewMesh;
+	class UStaticMeshComponent* PreviewMesh;
 	
 	UPROPERTY(EditDefaultsOnly)
-	UMaterialInterface* ValidMaterial;
-	UPROPERTY(EditDefaultsOnly)
-	UMaterialInterface* InvalidMaterial;
+	class UMaterialInstanceDynamic* DynamicMaterial;
 
-	UPROPERTY(EditDefaultsOnly)
-	UMaterialInstanceDynamic* DynamicMaterial;
+	UPROPERTY(EditDefaultsOnly, Category = "Material")
+	FLinearColor ValidColor = FLinearColor::Green;
 
-	FLinearColor ValidColor = FLinearColor(0.f, 1.f, 0.f, 0.5f);	// 반투명 초록
-	FLinearColor InvalidColor = FLinearColor(1.f, 0.f, 0.f, 0.5f);	// 반투명 빨강
+	UPROPERTY(EditDefaultsOnly, Category = "Material")
+	FLinearColor InvalidColor = FLinearColor::Red;
+
+
 
 	bool bIsPlacementValid = true;
 

@@ -7,6 +7,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include "MySocketActor.h"
+#include "MyGameInstance.h"
 #include <Kismet/GameplayStatics.h>
 #include "MySocketPoliceActor.generated.h"
 
@@ -43,7 +44,7 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	void SetClientSocket(SOCKET InSocket);
+	void SetClientSocket(SOCKET InSocket, int32 RoomNumber);
 	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);
 	void ReceiveData();
 	void ProcessPlayerData(const char* Buffer);
@@ -60,6 +61,7 @@ public:
 	void CheckImpactEffect();
 	void SpawnImpactEffect(FHitResult HitResult);
 	void SendParticleData(FHitResult HitResult);
+	void SendDisconnection();
 	void CloseConnection();
 	void SafeDestroyCharacter(int PlayerID);
 	const TMap<int, ACharacter*>& GetSpawnedCharacters() const;
