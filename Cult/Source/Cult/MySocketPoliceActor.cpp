@@ -7,6 +7,7 @@
 #include "Camera/CameraActor.h"
 #include "PoliceCharacter.h"
 #include "Components/TextBlock.h"
+#include "TreeObstacleActor.h"
 
 #pragma comment(lib, "ws2_32.lib")
 AMySocketPoliceActor* MySocketPoliceActor = nullptr;
@@ -130,8 +131,8 @@ void AMySocketPoliceActor::ReceiveData()
                     case cultistHeader:
                         ProcessPlayerData(Buffer);
                         break;
-                    case objectHeader:
-                        //ProcessObjectData(Buffer);
+                    case skillHeader:
+                        ProcessSkillData(Buffer);
                         break;
                     case particleHeader:
                         //ProcessParticleData(Buffer);
@@ -197,6 +198,35 @@ void AMySocketPoliceActor::ProcessHitData(const char* Buffer)
             break;
         }
     }
+}
+
+void AMySocketPoliceActor::ProcessSkillData(const char* Buffer) 
+{
+    if (!MyCharacter)
+    {
+        UE_LOG(LogTemp, Error, TEXT("MyCharacter is null"));
+        return;
+    }
+
+    if (!MyCharacter->TreeObstacleActorClass)
+    {
+        UE_LOG(LogTemp, Error, TEXT("TreeObstacleActorClass is null"));
+        return;
+    }
+    FVector ReceivedVector;
+    memcpy(&ReceivedVector, Buffer + 2, sizeof(FVector));
+    FRotator ReceivedRotator;
+    memcpy(&ReceivedRotator, Buffer + 2 + sizeof(FVector), sizeof(FRotator));
+    UE_LOG(LogTemp, Warning, TEXT("Spawn Pos: %s, Rot: %s"), *ReceivedVector.ToString(), *ReceivedRotator.ToString());
+    UE_LOG(LogTemp, Warning, TEXT("Spawning with class: %s"), *MyCharacter->TreeObstacleActorClass->GetName());
+
+    AsyncTask(ENamedThreads::GameThread, [this, ReceivedVector, ReceivedRotator]() {
+        FActorSpawnParameters SpawnParams;
+        SpawnParams.Owner = this;
+        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+        GetWorld()->SpawnActor<ATreeObstacleActor>(MyCharacter->TreeObstacleActorClass, ReceivedVector, ReceivedRotator, SpawnParams);
+        });
 }
 
 void AMySocketPoliceActor::ProcessConnection(const char* Buffer) {

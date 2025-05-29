@@ -710,12 +710,7 @@ void ACultistCharacter::ConfirmPlacement()
 
 	if (TreeObstacleActorClass)
 	{
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.Owner = this;
-		
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-		GetWorld()->SpawnActor<ATreeObstacleActor>(TreeObstacleActorClass, SpawnLocation, SpawnRotation, SpawnParams);
+		MySocketCultistActor->SendSkill(SpawnLocation, SpawnRotation);
 	}
 
 	SpawnedPreviewActor->Destroy();

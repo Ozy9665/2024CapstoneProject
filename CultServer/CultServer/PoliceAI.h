@@ -7,17 +7,6 @@
 
 constexpr float ÆÄÀÌ{ 3.14 };
 
-struct FVector {
-	float x, y, z;
-};
-
-struct FRotator {
-	float pitch;
-	float yaw;
-	float roll;
-
-};
-
 void InitializeAISession(const int);
 void StartAIWorker();
 void StopAIWorker();

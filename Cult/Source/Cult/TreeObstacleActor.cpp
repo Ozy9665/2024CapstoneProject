@@ -4,7 +4,6 @@
 #include "Components/SplineComponent.h"
 #include "Components/SplineMeshComponent.h"
 #include "Engine/World.h"
-#include "TimerManager.h"
 
 ATreeObstacleActor::ATreeObstacleActor()
 {
@@ -32,7 +31,7 @@ void ATreeObstacleActor::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	if (GrowState == ETreeGrowState::GrowingTrunk)
-	{
+	{	
 		ElapsedTime += DeltaTime;
 		float Alpha = FMath::Clamp(ElapsedTime / GrowTime, 0.f, 1.f);
 

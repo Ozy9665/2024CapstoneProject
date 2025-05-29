@@ -4,6 +4,7 @@
 #include "Camera/CameraActor.h"
 #include "CultistCharacter.h"
 #include "Components/TextBlock.h"
+#include "TreeObstacleActor.h"
 
 #pragma comment(lib, "ws2_32.lib")
 AMySocketCultistActor* MySocketCultistActor = nullptr;
@@ -126,7 +127,7 @@ void AMySocketCultistActor::ReceiveData()
                     case cultistHeader:
                         ProcessCultistData(Buffer);
                         break;
-                    case objectHeader:
+                    case skillHeader:
                         //ProcessObjectData(Buffer);
                         break;
                     case policeHeader:
@@ -348,6 +349,35 @@ void AMySocketCultistActor::SendDisable()
         {
             UE_LOG(LogTemp, Error, TEXT("SendDisable failed with error: %ld"), WSAGetLastError());
         }
+    }
+    else
+    {
+        CloseConnection();
+    }
+}
+
+void AMySocketCultistActor::SendSkill(FVector SpawnLoc, FRotator SpawnRot)
+{
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        SkillPacket Packet;
+        Packet.header = skillHeader;
+        Packet.size = sizeof(SkillPacket);
+        Packet.SpawnLoc = SpawnLoc;
+        Packet.SpawnRot = SpawnRot;
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(SkillPacket), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendSkill failed with error: %ld"), WSAGetLastError());
+        }
+
+        AsyncTask(ENamedThreads::GameThread, [this, SpawnLoc, SpawnRot]() {
+            FActorSpawnParameters SpawnParams;
+            SpawnParams.Owner = this;
+            SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+            GetWorld()->SpawnActor<ATreeObstacleActor>(MyCharacter->TreeObstacleActorClass, SpawnLoc, SpawnRot, SpawnParams);
+            });
     }
     else
     {

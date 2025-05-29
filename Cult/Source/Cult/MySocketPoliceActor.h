@@ -49,6 +49,7 @@ public:
 	void ReceiveData();
 	void ProcessPlayerData(const char* Buffer);
 	void ProcessHitData(const char* Buffer);
+	void ProcessSkillData(const char* Buffer);
 	void ProcessConnection(const char* Buffer);
 	void ProcessDisconnection(const char* Buffer);
 	void SendPlayerData();

@@ -13,7 +13,7 @@ constexpr int BUF_SIZE = 200;
 constexpr int MAX_PLAYERS_PER_ROOM = 5;
 //-- ingame header
 constexpr char cultistHeader = 0;
-constexpr char objectHeader = 1;
+constexpr char skillHeader = 1;
 constexpr char policeHeader = 2;
 constexpr char particleHeader = 3;
 constexpr char hitHeader = 4;
@@ -203,6 +203,25 @@ struct RoomNumberPacket {
 struct NoticePacket {
 	uint8_t header;
 	uint8_t size;
+};
+
+struct FVector {
+	double x;
+	double y;
+	double z;
+};
+
+struct FRotator {
+	double pitch;
+	double yaw;
+	double roll;
+};
+
+struct SkillPacket {
+	uint8_t header;
+	uint8_t size;
+	FVector SpawnLoc;
+	FRotator SpawnRot;
 };
 
 #pragma pack(pop)

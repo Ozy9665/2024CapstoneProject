@@ -54,6 +54,7 @@ public:
 	void ProcessHitData(const char* Buffer);
 	void ProcessConnection(const char* Buffer);
 	void ProcessDisconnection(const char* Buffer);
+	void SendSkill(FVector, FRotator);
 	void SendDisable();
 	void SendPlayerData();
 	FCultistCharacterState GetCharacterState();

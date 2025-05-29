@@ -168,6 +168,13 @@ struct NoticePacket {
 	uint8_t size;
 };
 
+struct SkillPacket {
+	uint8_t header;
+	uint8_t size;
+	FVector SpawnLoc;
+	FRotator SpawnRot;
+};
+
 #pragma pack(pop)
 
 UCLASS()
@@ -191,7 +198,7 @@ public:
 constexpr int32 BufferSize{ 1024 };
 //-- ingame header
 constexpr char cultistHeader = 0;
-constexpr char objectHeader = 1;
+constexpr char skillHeader = 1;
 constexpr char policeHeader = 2;
 constexpr char particleHeader = 3;
 constexpr char hitHeader = 4;
