@@ -98,12 +98,12 @@ void ACultistCharacter::BeginPlay()
 			UE_LOG(LogTemp, Warning, TEXT("So make SpringArm"));
 		}
 		else {
-			UE_LOG(LogTemp, Error, TEXT("Still Null SpringArm"));
+			UE_LOG(LogTemp, Warning, TEXT("Still Null SpringArm"));
 		}
 	}
 	if (!TaskRitualWidgetClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("TaskRitualWidgetClass is NULL! Make sure it's set in Blueprint."));
+		UE_LOG(LogTemp, Warning, TEXT("TaskRitualWidgetClass is NULL! Make sure it's set in Blueprint."));
 	}
 	if (TaskRitualWidgetClass)
 	{
@@ -116,7 +116,7 @@ void ACultistCharacter::BeginPlay()
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("Failed to create widget"));
+			UE_LOG(LogTemp, Warning, TEXT("Failed to create widget"));
 		}
 	}
 	// 컨트롤러 확인
@@ -127,7 +127,7 @@ void ACultistCharacter::BeginPlay()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("NO PlayerController OR NO Pawn"));
+		UE_LOG(LogTemp, Warning, TEXT("NO PlayerController OR NO Pawn"));
 	}
 
 	AController* CController = GetController();
@@ -137,7 +137,7 @@ void ACultistCharacter::BeginPlay()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("No Controller found on BeginPlay"));
+		UE_LOG(LogTemp, Warning, TEXT("No Controller found on BeginPlay"));
 	}
 
 	if (PC)

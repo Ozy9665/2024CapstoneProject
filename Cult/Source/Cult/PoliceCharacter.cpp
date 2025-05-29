@@ -49,7 +49,7 @@ APoliceCharacter::APoliceCharacter(const FObjectInitializer& ObjectInitializer)
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("AttackMontage Load Fail"));
+			UE_LOG(LogTemp, Warning, TEXT("AttackMontage Load Fail"));
 		}
 	}
 	else {
@@ -129,7 +129,7 @@ void APoliceCharacter::BeginPlay()	// 초기화
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("NO PlayerController"));
+		UE_LOG(LogTemp, Warning, TEXT("NO PlayerController"));
 	}
 
 	// 조준점 위젯 생성
@@ -152,7 +152,7 @@ void APoliceCharacter::BeginPlay()	// 초기화
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("Failed to get BuildingBlockComponent from %s"), *TestTargetActor->GetName());
+			UE_LOG(LogTemp, Warning, TEXT("Failed to get BuildingBlockComponent from %s"), *TestTargetActor->GetName());
 		}
 	}
 
@@ -414,7 +414,7 @@ void APoliceCharacter::BatonAttack()
 {
 	if (!this)
 	{
-		UE_LOG(LogTemp, Error, TEXT("BatonAttack: this is NULL"));
+		UE_LOG(LogTemp, Warning, TEXT("BatonAttack: this is NULL"));
 		return;
 	}
 	UE_LOG(LogTemp, Warning, TEXT("BatonAttackStart"));
@@ -460,7 +460,7 @@ void APoliceCharacter::BatonAttack()
 				}
 			}
 
-			UE_LOG(LogTemp, Error, TEXT("HitActor is not in SpawnedCharacters!"));
+			UE_LOG(LogTemp, Warning, TEXT("HitActor is not in SpawnedCharacters!"));
 		}
 	}
 }
