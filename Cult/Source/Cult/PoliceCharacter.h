@@ -222,5 +222,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
 	float ImpulseAmount = 1200.0f;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+	TSubclassOf<class ATreeObstacleActor> TreeObstacleActorClass;
+
 	int my_ID = -1;
 };
