@@ -17,31 +17,6 @@ AMySocketPoliceActor::AMySocketPoliceActor()
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
-
-   // 파티클 코드
-    ConstructorHelpers::FObjectFinder<UNiagaraSystem> NGParticleAsset(TEXT("/Game/MixedVFX/Particles/Explosions/NS_ExplosionMidAirSmall.NS_ExplosionMidAirSmall"));
-    if (NGParticleAsset.Succeeded())
-    {
-        NG_ImpactParticle = NGParticleAsset.Object;
-        UE_LOG(LogTemp, Log, TEXT("Successfully loaded NG_ImpactParticle!"));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to load NG_ImpactParticle! Check path."));
-        NG_ImpactParticle = nullptr;
-    }
-
-    ConstructorHelpers::FObjectFinder<UNiagaraSystem> MuzzleAsset(TEXT("/Game/MixedVFX/Particles/Projectiles/Hits/NS_CursedArrow_Hit.NS_CursedArrow_Hit"));
-    if (MuzzleAsset.Succeeded())
-    {
-        MuzzleImpactParticle = MuzzleAsset.Object;
-        UE_LOG(LogTemp, Log, TEXT("Successfully loaded MuzzleImpactParticle!"));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to load MuzzleImpactParticle! Check path."));
-        MuzzleImpactParticle = nullptr;
-    }
 }
 
 // Called when the game starts or when spawned
@@ -53,6 +28,10 @@ void AMySocketPoliceActor::BeginPlay()
     if (!MyCharacter)
     {
         UE_LOG(LogTemp, Error, TEXT("My character not found!"));
+    }
+    GI = Cast<UMyGameInstance>(GetGameInstance());
+    if (!GI) {
+        UE_LOG(LogTemp, Error, TEXT("My Socket Police Actor GetGameInstance Failed!"));
     }
 }
 
@@ -363,50 +342,51 @@ void AMySocketPoliceActor::SpawnCultistCharacter(const unsigned char PlayerID)
         UE_LOG(LogTemp, Warning, TEXT("SpawnPoliceCharacter Failed. %d is my_ID"), PlayerID);
         return;
     }
+    if (!GI || !GI->CultistClientClass)
+    {
+        UE_LOG(LogTemp, Error, TEXT("GI or PoliceClientClass is null"));
+        return;
+    }
     FActorSpawnParameters SpawnParams;
     SpawnParams.Owner = this;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A_Client.BP_Cultist_A_Client_C"));
-
-    if (BP_ClientCharacter)
+    ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
+        GI->CultistClientClass,
+        FVector(CultistDummyState.PositionX, CultistDummyState.PositionY, CultistDummyState.PositionZ),
+        FRotator(CultistDummyState.RotationPitch, CultistDummyState.RotationYaw, CultistDummyState.RotationRoll),
+        SpawnParams
+    );
+    if (NewCharacter)
     {
-        ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
-            BP_ClientCharacter,
-            FVector(CultistDummyState.PositionX, CultistDummyState.PositionY, CultistDummyState.PositionZ),
-            FRotator(CultistDummyState.RotationPitch, CultistDummyState.RotationYaw, CultistDummyState.RotationRoll),
-            SpawnParams
-        );
-        if (NewCharacter)
-        {
-            SpawnedCharacters.Add(PlayerID, NewCharacter);
-            ReceivedCultistStates.Add(PlayerID, CultistDummyState);
-            UE_LOG(LogTemp, Log, TEXT("Spawned new character for PlayerID=%d"), PlayerID);
+        SpawnedCharacters.Add(PlayerID, NewCharacter);
+        ReceivedCultistStates.Add(PlayerID, CultistDummyState);
+        UE_LOG(LogTemp, Log, TEXT("Spawned new character for PlayerID=%d"), PlayerID);
 
-            APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
-            if (PC && PC->IsLocalController())
+        APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+        if (PC && PC->IsLocalController())
+        {
+            APawn* MyPawn = PC->GetPawn();
+            if (MyPawn)
             {
-                APawn* MyPawn = PC->GetPawn();
-                if (MyPawn)
+                // ChildActorComponent 찾아서
+                UChildActorComponent* CAC = MyPawn->FindComponentByClass<UChildActorComponent>();
+                if (CAC)
                 {
-                    // ChildActorComponent 찾아서
-                    UChildActorComponent* CAC = MyPawn->FindComponentByClass<UChildActorComponent>();
-                    if (CAC)
+                    ACameraActor* CamActor = Cast<ACameraActor>(CAC->GetChildActor());
+                    if (CamActor)
                     {
-                        ACameraActor* CamActor = Cast<ACameraActor>(CAC->GetChildActor());
-                        if (CamActor)
-                        {
-                            PC->SetViewTargetWithBlend(CamActor, 0.f);
-                        }
+                        PC->SetViewTargetWithBlend(CamActor, 0.f);
                     }
                 }
             }
         }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), PlayerID);
-        }
     }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), PlayerID);
+    }
+    
 }
 
 void AMySocketPoliceActor::ProcessCharacterUpdates()
@@ -575,10 +555,10 @@ void AMySocketPoliceActor::CheckImpactEffect()
 }
 
 void AMySocketPoliceActor::SpawnImpactEffect(FHitResult HitResult) {
-    if (NG_ImpactParticle)
+    if (GI->NGParticleAsset)
     {
         UNiagaraFunctionLibrary::SpawnSystemAtLocation(
-            GetWorld(), NG_ImpactParticle,
+            GetWorld(), GI->NGParticleAsset,
             HitResult.ImpactPoint,
             HitResult.ImpactNormal.Rotation(),
             FVector(1.0f), true, true,
@@ -586,10 +566,10 @@ void AMySocketPoliceActor::SpawnImpactEffect(FHitResult HitResult) {
         );
     }
 
-    if (MuzzleImpactParticle)
+    if (GI->MuzzleEffect)
     {
         UNiagaraFunctionLibrary::SpawnSystemAtLocation(
-            GetWorld(), MuzzleImpactParticle,
+            GetWorld(), GI->MuzzleEffect,
             MyCharacter->MuzzleLocation->GetComponentLocation(),
             MyCharacter->MuzzleLocation->GetComponentRotation()
         );

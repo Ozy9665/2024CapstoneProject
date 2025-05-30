@@ -9,13 +9,16 @@ AMyGameBeginActor::AMyGameBeginActor()
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
     PrimaryActorTick.bCanEverTick = false;
-
 }
 
 // Called when the game starts or when spawned
 void AMyGameBeginActor::BeginPlay()
 {
 	Super::BeginPlay();
+    GI = Cast<UMyGameInstance>(GetGameInstance());
+    if (!GI) {
+        UE_LOG(LogTemp, Error, TEXT("My Game Begin Actor GetGameInstance Failed!"));
+    }
     SpawnActor();
 }
 
@@ -26,13 +29,7 @@ void AMyGameBeginActor::SpawnActor() {
         return;
     }
 
-    UMyGameInstance* MyGI = Cast<UMyGameInstance>(GetGameInstance());
-    if (not MyGI) {
-        UE_LOG(LogTemp, Error, TEXT("GameInstance 캐스팅 실패."));
-        return;
-    }
-
-    if (MyGI->bIsCultist)
+    if (GI->bIsCultist)
     {
         APawn* DefaultPawn = PC->GetPawn();
         if (not DefaultPawn)
@@ -40,12 +37,11 @@ void AMyGameBeginActor::SpawnActor() {
             UE_LOG(LogTemp, Log, TEXT("Default pawn is not a Police pawn or is null."));
             return;
         }
-
-        UClass* CultistClass = LoadClass<APawn>(nullptr,
-            TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A.BP_Cultist_A_C"));
-        if (not CultistClass)
+        if (!GI->CultistClass)
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to load BP_Cultist_A class"));
+            UE_LOG(LogTemp, Warning, TEXT("GI Class: %s"), *GI->GetClass()->GetName());
+
+            UE_LOG(LogTemp, Error, TEXT("CultistClass in GI is null."));
             return;
         }
 
@@ -54,7 +50,7 @@ void AMyGameBeginActor::SpawnActor() {
         SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
         FVector SpawnLocation = DefaultPawn->GetActorLocation();
         FRotator SpawnRotation = DefaultPawn->GetActorRotation();
-        APawn* CultistPawn = GetWorld()->SpawnActor<APawn>(CultistClass, SpawnLocation, SpawnRotation, SpawnParams);
+        APawn* CultistPawn = GetWorld()->SpawnActor<APawn>(GI->CultistClass, SpawnLocation, SpawnRotation, SpawnParams);
         if (not CultistPawn)
         {
             UE_LOG(LogTemp, Error, TEXT("Failed to spawn Cultist pawn."));
@@ -94,23 +90,20 @@ void AMyGameBeginActor::SpawnActor() {
             AMySocketCultistActor::StaticClass(), GetActorLocation(), GetActorRotation());
         if (CultistActor)
         {
-            CultistActor->SetClientSocket(MyGI->ClientSocket, MyGI->PendingRoomNumber);
+            CultistActor->SetClientSocket(GI->ClientSocket, GI->PendingRoomNumber);
             UE_LOG(LogTemp, Error, TEXT("Cultist Actor Spawned & Socket Passed."));
         }
     }
-    else if (MyGI->bIsPolice)
+    else if (GI->bIsPolice)
     {
         APawn* DefaultPawn = PC->GetPawn();
         if (not DefaultPawn)
         {
             UE_LOG(LogTemp, Log, TEXT("Default pawn is not a Police pawn or is null."));
         }
-
-        UClass* PoliceClass = LoadClass<APawn>(nullptr,
-            TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter.BP_PoliceCharacter_C"));
-        if (not PoliceClass)
+        if (!GI->PoliceClass)
         {
-            UE_LOG(LogTemp, Error, TEXT("Failed to load BP_Police class! Check path."));
+            UE_LOG(LogTemp, Error, TEXT("PoliceClass in GI is null."));
             return;
         }
 
@@ -119,7 +112,7 @@ void AMyGameBeginActor::SpawnActor() {
         SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
         FVector SpawnLocation = DefaultPawn->GetActorLocation();
         FRotator SpawnRotation = DefaultPawn->GetActorRotation();
-        APawn* PolicePawn = GetWorld()->SpawnActor<APawn>(PoliceClass, SpawnLocation, SpawnRotation, SpawnParams);
+        APawn* PolicePawn = GetWorld()->SpawnActor<APawn>(GI->PoliceClass, SpawnLocation, SpawnRotation, SpawnParams);
         if (not PolicePawn)
         {
             UE_LOG(LogTemp, Error, TEXT("Failed to spawn Police pawn."));
@@ -128,6 +121,7 @@ void AMyGameBeginActor::SpawnActor() {
         PC->Possess(PolicePawn);
         PC->SetInputMode(FInputModeGameOnly());
         PC->bShowMouseCursor = false;
+
         UChildActorComponent* CAC = PolicePawn->FindComponentByClass<UChildActorComponent>();
         if (not CAC)
         {
@@ -161,32 +155,12 @@ void AMyGameBeginActor::SpawnActor() {
             UE_LOG(LogTemp, Error, TEXT("Failed to spawn PoliceActor."));
             return;
         }
-        PoliceActor->SetClientSocket(MyGI->ClientSocket, MyGI->PendingRoomNumber);
+        PoliceActor->SetClientSocket(GI->ClientSocket, GI->PendingRoomNumber);
         UE_LOG(LogTemp, Error, TEXT("Cultist Actor Spawned & Socket Passed."));
     }
 
     Destroy();
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 // Called every frame
 void AMyGameBeginActor::Tick(float DeltaTime)

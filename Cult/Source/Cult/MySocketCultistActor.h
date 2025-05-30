@@ -39,8 +39,7 @@ private:
 	TMap<int, FPoliceCharacterState> ReceivedPoliceStates;
 	TMap<int32, FTransform> LastReceivedTransform;
 	TArray<FImpactPacket> Particles;
-	UNiagaraSystem* NG_ImpactParticle;
-	UNiagaraSystem* MuzzleImpactParticle;
+	UMyGameInstance* GI;
 	TArray<int32> KeysToRemove;
 
 public:	

@@ -36,8 +36,7 @@ private:
 	TMap<int, FCultistCharacterState> ReceivedCultistStates;
 	TMap<int32, FTransform> LastReceivedTransform;
 	TArray<FVector> ImpactLocations;
-	UNiagaraSystem* NG_ImpactParticle;
-	UNiagaraSystem* MuzzleImpactParticle;
+	UMyGameInstance* GI;
 	TArray<int32> KeysToRemove;
 
 public:	
