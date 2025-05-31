@@ -321,9 +321,7 @@ FPoliceCharacterState AMySocketPoliceActor::GetCharacterState()
 
     // 파쿠르 관련 상태
     State.bIsPakour = MyCharacter->IsPakour;
-    State.bIsNearEnoughToPakour = MyCharacter->bIsNearEnoughToPakour;
     State.CurrentVaultType = MyCharacter->CurrentVaultType;
-
     // IsShooting 상태
     State.bIsShooting = MyCharacter->bIsShooting;
 

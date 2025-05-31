@@ -40,7 +40,6 @@ struct FPoliceCharacterState
 	bool bIsAttacking;
 	EWeaponType CurrentWeapon;
 	bool bIsPakour;
-	bool bIsNearEnoughToPakour;
 	EVaultingType CurrentVaultType;
 	bool bIsOneHand;
 	bool bIsTwoHand;
@@ -214,7 +213,7 @@ constexpr char gameStartHeader = 12;
 
 constexpr FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,
-	false, false, false, EWeaponType::Baton, false, false, EVaultingType::OneHandVault, false, false, false, false };
+	false, false, false, EWeaponType::Baton, false, EVaultingType::OneHandVault, false, false, false, false };
 
 constexpr float BatonAttackDamage = 50.0f;
 constexpr float PistolAttackDamage = 50.0f;

@@ -7,7 +7,7 @@ FPoliceCharacterState AiState{ -1,
 	0.f, 0.f, 0.f, 0.f,
 	false, false, false,
 	EWeaponType::Baton,
-	false, false,
+	false,
 	EVaultingType::OneHandVault,
 	false, false, false, false
 };
