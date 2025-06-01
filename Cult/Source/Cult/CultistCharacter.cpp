@@ -237,8 +237,10 @@ void ACultistCharacter::PerformRitual()
 {
 	if (!bIsPerformingRitual) return;
 
-	TaskRitualProgress += TaskRitualSpeed * 0.1f; // 의식 작업 진행도
-	
+	TaskRitualProgress += TaskRitualSpeed * 0.01f; // 의식 작업 진행도
+	TaskRitualProgress = FMath::Clamp(TaskRitualProgress, 0.f, 100.f);
+
+
 	if (TaskRitualWidget)
 	{
 		UProgressBar* ProgressBar = Cast<UProgressBar>(TaskRitualWidget->GetWidgetFromName(TEXT("RitualProgressBar")));
@@ -271,29 +273,38 @@ void ACultistCharacter::PerformRitual()
 
 void ACultistCharacter::StartRitual()
 {
-	if (bIsPerformingRitual)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Already Performing.."));
-		return;
-	}
-	if (!CurrentAltar) { 
+	if (!CurrentAltar) {
 		UE_LOG(LogTemp, Warning, TEXT("No altar Here!"));
 		//UE_LOG(LogTemp, Warning, TEXT("%f"), GetCharacterMovement()->MaxWalkSpeed);
 		return;
 	}
 
+	if (!bIsPerformingRitual)
+	{
+		bIsPerformingRitual = true;
+		TaskRitualProgress = 0.0f;
+		GetWorld()->GetTimerManager().SetTimer(RitualTimerHandle, this, &ACultistCharacter::PerformRitual, 0.1f, true);
+		UE_LOG(LogTemp, Warning, TEXT("Ritual Started."));
 
-	bIsPerformingRitual = true;
-	TaskRitualProgress = 0.0f;
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Already Performing.."));
+	}
+
+
+
+
 	if (TaskRitualWidget)
 	{
 		TaskRitualWidget->SetVisibility(ESlateVisibility::Visible);
 	}
-	
+	if (!GetWorld()->GetTimerManager().IsTimerActive(SkillCheckTimerHandle))
+	{
+		GetWorld()->GetTimerManager().SetTimer(SkillCheckTimerHandle, this, &ACultistCharacter::StartNextSkillCheck, SkilCheckIntervalTime, false);
+		UE_LOG(LogTemp, Warning, TEXT("SkillCheck Timer Set"));
+	}
 	StartNextSkillCheck();
-	//GetWorld()->GetTimerManager().SetTimer(RitualTimerHandle, this, &ACultistCharacter::PerformRitual, 0.1f, true);
-	UE_LOG(LogTemp, Warning, TEXT("Ritual Started"));
-
 	//GetCharacterMovement()->DisableMovement();
 
 	// Animation
@@ -325,6 +336,7 @@ void ACultistCharacter::CancelRitual()
 	UE_LOG(LogTemp, Warning, TEXT("Ritual Canceled"));
 
 	bIsPerformingRitual = false;
+
 	GetWorld()->GetTimerManager().ClearTimer(RitualTimerHandle);
 	GetWorld()->GetTimerManager().ClearTimer(TaskRitualTimerHandle);
 
@@ -349,7 +361,9 @@ void ACultistCharacter::StartNextSkillCheck()
 	if (!SkillCheckWidgetClass)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("SkillCheckWidgetClass is NULL. Check Cultist setting"));
+		return;
 	}
+
 	// 이전 위젯이 남아있다면 제거
 	if (SkillCheckWidget)
 	{
@@ -360,27 +374,41 @@ void ACultistCharacter::StartNextSkillCheck()
 	SkillCheckWidget = CreateWidget<UCultistSkillCheckWidget>(GetWorld(), SkillCheckWidgetClass);
 	if (SkillCheckWidget)
 	{
-		SkillCheckWidget->AddToViewport();
-		SkillCheckWidget->StartSkillCheck(180.0f); // 회전 속도
-
+		SkillCheckWidget->AddToViewport(999);
+		SkillCheckWidget->StartSkillCheck(240.0f); // 회전 속도
+		SkillCheckWidget->SetVisibility(ESlateVisibility::Visible);
 		SkillCheckWidget->OnSkillCheckResult.AddDynamic(this, &ACultistCharacter::OnSkillCheckResult);
 		UE_LOG(LogTemp, Warning, TEXT("SkillChecking"));
-
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("SkillCheckWidget Create Failed!"));
+		return;
 	}
 }
 
 void ACultistCharacter::OnSkillCheckResult(bool bSuccess)
 {
-	if (!bIsPerformingRitual) return;
+	if (SkillCheckWidget)
+	{
+		SkillCheckWidget->SetVisibility(ESlateVisibility::Hidden); // 위젯 숨김
+	}
 
 	if (bSuccess)
 	{
-		TaskRitualProgress += TaskRitualSpeed;
+		TaskRitualProgress += SkillCheckBonus;
+		SkillCheckAttemptCount = 0;
 	}
 	else
 	{
-		TaskRitualProgress -= 10.0f;
-		TaskRitualProgress = FMath::Clamp(TaskRitualProgress, 0.f, 100.f);
+		SkillCheckAttemptCount++;
+		if (SkillCheckAttemptCount >= 2)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("SkillCheck Failed Twice"));
+			TaskRitualProgress -= SkillCheckPenalty;
+			TaskRitualProgress = FMath::Clamp(TaskRitualProgress, 0.f, 100.f);
+			SkillCheckAttemptCount = 0; // 실패 처리 후 초기화
+		}
 	}
 
 	// 게이지 업데이트
@@ -404,7 +432,7 @@ void ACultistCharacter::OnSkillCheckResult(bool bSuccess)
 	{
 		// 약간 딜레이 후 다음 스킬체크
 		GetWorld()->GetTimerManager().SetTimer(
-			RitualTimerHandle, this, &ACultistCharacter::StartNextSkillCheck, 0.8f, false
+			SkillCheckTimerHandle, this, &ACultistCharacter::StartNextSkillCheck, SkilCheckIntervalTime, false
 		);
 	}
 }

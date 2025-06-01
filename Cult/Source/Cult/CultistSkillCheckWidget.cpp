@@ -2,20 +2,23 @@
 
 
 #include "CultistSkillCheckWidget.h"
-
-#include "CultistSkillCheckWidget.h"
 #include "Components/Image.h"
 
 void UCultistSkillCheckWidget::NativeConstruct()
 {
     Super::NativeConstruct();
     CursorAngle = 0.f;
+    LastRotation = 0.f;
+    AccumulatedRotation = 0.f;
+    bIsRunning = false;
 }
 
 void UCultistSkillCheckWidget::StartSkillCheck(float InRotationSpeed)
 {
     RotationSpeed = InRotationSpeed;
     CursorAngle = 0.f;
+    AccumulatedRotation = 0.f;
+    LastRotation = 0.f;
     bIsRunning = true;
 }
 
@@ -33,9 +36,9 @@ void UCultistSkillCheckWidget::OnInputPressed()
     if (NormalizedAngle < 0) NormalizedAngle += 360.0f;
 
     bool bSuccess = (NormalizedAngle >= SuccessAngleMin && NormalizedAngle <= SuccessAngleMax);
-
     OnSkillCheckResult.Broadcast(bSuccess);
     StopSkillCheck();
+    RemoveFromParent();
 }
 
 void UCultistSkillCheckWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -43,6 +46,20 @@ void UCultistSkillCheckWidget::NativeTick(const FGeometry& MyGeometry, float InD
     Super::NativeTick(MyGeometry, InDeltaTime);
 
     if (!bIsRunning || !Image_Cursor) return;
+
+    // 커서 각도 갱신
+    float DeltaRotation = FMath::FindDeltaAngleDegrees(LastRotation, CursorAngle);
+    AccumulatedRotation += FMath::Abs(DeltaRotation);
+    LastRotation = CursorAngle;
+
+    // 바퀴 제한 초과 시 강제 실패 처리
+    if (AccumulatedRotation >= MaxAllowedRotation)
+    {
+        OnSkillCheckResult.Broadcast(false); // 강제 실패
+        StopSkillCheck();
+        RemoveFromParent();
+        return;
+    }
 
     CursorAngle += RotationSpeed * InDeltaTime;
     if (CursorAngle >= 360.f)

@@ -26,10 +26,18 @@ public:
 
     DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSkillCheckResult, bool, bSuccess);
 
-    UPROPERTY(BlueprintAssignable)
+    UPROPERTY(BlueprintAssignable, Category = "SkillCheck")
     FOnSkillCheckResult OnSkillCheckResult;
 
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SkillCheck")
+    float RotationSpeed = 180.f; // 회전속도 (도/초)
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SkillCheck")
+    float SuccessAngleMin = 45.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SkillCheck")
+    float SuccessAngleMax = 90.0f;
 protected:
     virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
     virtual void NativeConstruct() override;
@@ -40,9 +48,16 @@ protected:
 private:
     bool bIsRunning = false;
     float CursorAngle = 0.f; // 현재 회전각
-    float RotationSpeed = 180.f; // 회전속도 (도/초)
+    
+    // 총 누적 회전 각도 (360도 = 1바퀴)
+    float AccumulatedRotation = 0.0f;
 
-    // 성공 각도 범위
-    float SuccessAngleMin = 30.f; // 예시: 우측 상단 기준
-    float SuccessAngleMax = 60.f;
+
+    // 마지막 프레임의 회전값
+    float LastRotation = 0.0f;
+
+    // 최대 허용 회전 바퀴 수
+    float MaxAllowedRotation = 720.0f; // 2바퀴
+
+    FTimerHandle SkillCheckFailTimerHandle;
 };
