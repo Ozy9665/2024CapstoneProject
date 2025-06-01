@@ -98,12 +98,12 @@ void ACultistCharacter::BeginPlay()
 			UE_LOG(LogTemp, Warning, TEXT("So make SpringArm"));
 		}
 		else {
-			UE_LOG(LogTemp, Error, TEXT("Still Null SpringArm"));
+			UE_LOG(LogTemp, Warning, TEXT("Still Null SpringArm"));
 		}
 	}
 	if (!TaskRitualWidgetClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("TaskRitualWidgetClass is NULL! Make sure it's set in Blueprint."));
+		UE_LOG(LogTemp, Warning, TEXT("TaskRitualWidgetClass is NULL! Make sure it's set in Blueprint."));
 	}
 	if (TaskRitualWidgetClass)
 	{
@@ -116,7 +116,7 @@ void ACultistCharacter::BeginPlay()
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("Failed to create widget"));
+			UE_LOG(LogTemp, Warning, TEXT("Failed to create widget"));
 		}
 	}
 	// 컨트롤러 확인
@@ -127,7 +127,7 @@ void ACultistCharacter::BeginPlay()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("NO PlayerController OR NO Pawn"));
+		UE_LOG(LogTemp, Warning, TEXT("NO PlayerController OR NO Pawn"));
 	}
 
 	AController* CController = GetController();
@@ -137,7 +137,7 @@ void ACultistCharacter::BeginPlay()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("No Controller found on BeginPlay"));
+		UE_LOG(LogTemp, Warning, TEXT("No Controller found on BeginPlay"));
 	}
 
 	if (PC)
@@ -186,6 +186,11 @@ void ACultistCharacter::MoveForward(float Value)
 {
 	if (Value != 0.0f)
 	{
+		if (bIsPerformingRitual)
+		{
+			CancelRitual(); // 의식 중단
+		}
+
 		FRotator ControlRotation = GetControlRotation();
 		FRotator YawRotation(0, ControlRotation.Yaw, 0);
 
@@ -203,6 +208,11 @@ void ACultistCharacter::MoveRight(float Value)
 {
 	if (Value != 0.0f)
 	{
+		if (bIsPerformingRitual)
+		{
+			CancelRitual(); // 의식 중단
+		}
+
 		FRotator ControlRotation = GetControlRotation();
 		FRotator YawRotation(0, ControlRotation.Yaw, 0);
 
@@ -271,16 +281,7 @@ void ACultistCharacter::StartRitual()
 		//UE_LOG(LogTemp, Warning, TEXT("%f"), GetCharacterMovement()->MaxWalkSpeed);
 		return;
 	}
-	if (SkillCheckWidgetClass) {
-		SkillCheckWidget = CreateWidget<UCultistSkillCheckWidget>(GetWorld(), SkillCheckWidgetClass);
-		if (SkillCheckWidget)
-		{
-			SkillCheckWidget->AddToViewport();
-			SkillCheckWidget->StartSkillCheck(180.f); // 속도
 
-			SkillCheckWidget->OnSkillCheckResult.AddDynamic(this, &ACultistCharacter::OnSkillCheckResult);
-		}
-	}
 
 	bIsPerformingRitual = true;
 	TaskRitualProgress = 0.0f;
@@ -289,10 +290,11 @@ void ACultistCharacter::StartRitual()
 		TaskRitualWidget->SetVisibility(ESlateVisibility::Visible);
 	}
 	
-	GetWorld()->GetTimerManager().SetTimer(RitualTimerHandle, this, &ACultistCharacter::PerformRitual, 0.1f, true);
+	StartNextSkillCheck();
+	//GetWorld()->GetTimerManager().SetTimer(RitualTimerHandle, this, &ACultistCharacter::PerformRitual, 0.1f, true);
 	UE_LOG(LogTemp, Warning, TEXT("Ritual Started"));
 
-	GetCharacterMovement()->DisableMovement();
+	//GetCharacterMovement()->DisableMovement();
 
 	// Animation
 }
@@ -331,8 +333,80 @@ void ACultistCharacter::CancelRitual()
 		TaskRitualWidget->SetVisibility(ESlateVisibility::Hidden);
 		TaskRitualProgress = 0.0f;
 	}
+	// 스킬체크 위젯 제거
+	if (SkillCheckWidget)
+	{
+		SkillCheckWidget->RemoveFromParent();
+		SkillCheckWidget = nullptr;
+	}
 
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+}
+
+void ACultistCharacter::StartNextSkillCheck()
+{
+	if (!bIsPerformingRitual) return;
+	if (!SkillCheckWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SkillCheckWidgetClass is NULL. Check Cultist setting"));
+	}
+	// 이전 위젯이 남아있다면 제거
+	if (SkillCheckWidget)
+	{
+		SkillCheckWidget->RemoveFromParent();
+		SkillCheckWidget = nullptr;
+	}
+
+	SkillCheckWidget = CreateWidget<UCultistSkillCheckWidget>(GetWorld(), SkillCheckWidgetClass);
+	if (SkillCheckWidget)
+	{
+		SkillCheckWidget->AddToViewport();
+		SkillCheckWidget->StartSkillCheck(180.0f); // 회전 속도
+
+		SkillCheckWidget->OnSkillCheckResult.AddDynamic(this, &ACultistCharacter::OnSkillCheckResult);
+		UE_LOG(LogTemp, Warning, TEXT("SkillChecking"));
+
+	}
+}
+
+void ACultistCharacter::OnSkillCheckResult(bool bSuccess)
+{
+	if (!bIsPerformingRitual) return;
+
+	if (bSuccess)
+	{
+		TaskRitualProgress += TaskRitualSpeed;
+	}
+	else
+	{
+		TaskRitualProgress -= 10.0f;
+		TaskRitualProgress = FMath::Clamp(TaskRitualProgress, 0.f, 100.f);
+	}
+
+	// 게이지 업데이트
+	if (TaskRitualWidget)
+	{
+		if (UProgressBar* Bar = Cast<UProgressBar>(TaskRitualWidget->GetWidgetFromName(TEXT("RitualProgressBar"))))
+		{
+			Bar->SetPercent(TaskRitualProgress / 100.f);
+		}
+	}
+
+	if (TaskRitualProgress >= 100.f)
+	{
+		if (CurrentAltar)
+		{
+			CurrentAltar->IncreaseRitualGauge(); // 혹은 알타를 완료 처리
+		}
+		StopRitual();
+	}
+	else
+	{
+		// 약간 딜레이 후 다음 스킬체크
+		GetWorld()->GetTimerManager().SetTimer(
+			RitualTimerHandle, this, &ACultistCharacter::StartNextSkillCheck, 0.8f, false
+		);
+	}
 }
 
 void ACultistCharacter::Tick(float DeltaTime)
@@ -710,12 +784,7 @@ void ACultistCharacter::ConfirmPlacement()
 
 	if (TreeObstacleActorClass)
 	{
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.Owner = this;
-		
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-		GetWorld()->SpawnActor<ATreeObstacleActor>(TreeObstacleActorClass, SpawnLocation, SpawnRotation, SpawnParams);
+		MySocketCultistActor->SendSkill(SpawnLocation, SpawnRotation);
 	}
 
 	SpawnedPreviewActor->Destroy();
@@ -748,54 +817,7 @@ void ACultistCharacter::TriggerSkillCheckInput()
 	}
 }
 
-void ACultistCharacter::OnSkillCheckResult(bool bSuccess)
-{
-	if (!bIsPerformingRitual) return;
 
-	if (bSuccess)
-	{
-		TaskRitualProgress += TaskRitualSpeed;  // 성공 시 진행도 증가
-	}
-	else
-	{
-		TaskRitualProgress = FMath::Max(0.f, TaskRitualProgress - 10.f);  // 실패 시 감소
-	}
-
-	// UI 업데이트
-	if (TaskRitualWidget)
-	{
-		if (UProgressBar* Bar = Cast<UProgressBar>(TaskRitualWidget->GetWidgetFromName(TEXT("RitualProgressBar"))))
-		{
-			Bar->SetPercent(TaskRitualProgress / 100.f);
-		}
-	}
-
-	// 완료 판정
-	if (TaskRitualProgress >= 100.f)
-	{
-		if (CurrentAltar) CurrentAltar->IncreaseRitualGauge();
-		StopRitual();
-	}
-	else
-	{
-		// 다음 스킬체크 바로 실행 (연속 처리)
-		GetWorld()->GetTimerManager().SetTimerForNextTick(this, &ACultistCharacter::StartNextSkillCheck);
-	}
-}
-
-void ACultistCharacter::StartNextSkillCheck()
-{
-	if (SkillCheckWidgetClass)
-	{
-		SkillCheckWidget = CreateWidget<UCultistSkillCheckWidget>(GetWorld(), SkillCheckWidgetClass);
-		if (SkillCheckWidget)
-		{
-			SkillCheckWidget->AddToViewport();
-			SkillCheckWidget->StartSkillCheck(180.f);
-			SkillCheckWidget->OnSkillCheckResult.AddDynamic(this, &ACultistCharacter::OnSkillCheckResult);
-		}
-	}
-}
 
 int ACultistCharacter::GetPlayerID() const {
 	return my_ID;

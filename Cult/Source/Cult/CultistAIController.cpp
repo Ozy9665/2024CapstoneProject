@@ -34,11 +34,11 @@ ACultistAIController::ACultistAIController()
 	UAIPerceptionComponent* PerceptionComp = FindComponentByClass<UAIPerceptionComponent>();
 	if (!PerceptionComp)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Perception Component None!"));
+		UE_LOG(LogTemp, Warning, TEXT("Perception Component None!"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("Perception Component Exist!"));
+		UE_LOG(LogTemp, Warning, TEXT("Perception Component Exist!"));
 	}
 }
 
@@ -126,7 +126,7 @@ void ACultistAIController::FindAndSetNearestAltar()
 
 	if (FoundAltars.Num() == 0)
 	{
-		UE_LOG(LogTemp, Error, TEXT("No Altar found in the level"));
+		UE_LOG(LogTemp, Warning, TEXT("No Altar found in the level"));
 		return;
 	}
 

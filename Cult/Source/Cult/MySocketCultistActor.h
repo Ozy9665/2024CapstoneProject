@@ -39,8 +39,7 @@ private:
 	TMap<int, FPoliceCharacterState> ReceivedPoliceStates;
 	TMap<int32, FTransform> LastReceivedTransform;
 	TArray<FImpactPacket> Particles;
-	UNiagaraSystem* NG_ImpactParticle;
-	UNiagaraSystem* MuzzleImpactParticle;
+	UMyGameInstance* GI;
 	TArray<int32> KeysToRemove;
 
 public:	
@@ -54,6 +53,7 @@ public:
 	void ProcessHitData(const char* Buffer);
 	void ProcessConnection(const char* Buffer);
 	void ProcessDisconnection(const char* Buffer);
+	void SendSkill(FVector, FRotator);
 	void SendDisable();
 	void SendPlayerData();
 	FCultistCharacterState GetCharacterState();

@@ -4,6 +4,7 @@
 #include "Camera/CameraActor.h"
 #include "CultistCharacter.h"
 #include "Components/TextBlock.h"
+#include "TreeObstacleActor.h"
 
 #pragma comment(lib, "ws2_32.lib")
 AMySocketCultistActor* MySocketCultistActor = nullptr;
@@ -13,31 +14,6 @@ AMySocketCultistActor::AMySocketCultistActor()
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
-
-   // 파티클 코드
-    ConstructorHelpers::FObjectFinder<UNiagaraSystem> NGParticleAsset(TEXT("/Game/MixedVFX/Particles/Explosions/NS_ExplosionMidAirSmall.NS_ExplosionMidAirSmall"));
-    if (NGParticleAsset.Succeeded())
-    {
-        NG_ImpactParticle = NGParticleAsset.Object;
-        UE_LOG(LogTemp, Log, TEXT("Successfully loaded NG_ImpactParticle!"));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to load NG_ImpactParticle! Check path."));
-        NG_ImpactParticle = nullptr;
-    }
-
-    ConstructorHelpers::FObjectFinder<UNiagaraSystem> MuzzleAsset(TEXT("/Game/MixedVFX/Particles/Projectiles/Hits/NS_CursedArrow_Hit.NS_CursedArrow_Hit"));
-    if (MuzzleAsset.Succeeded())
-    {
-        MuzzleImpactParticle = MuzzleAsset.Object;
-        UE_LOG(LogTemp, Log, TEXT("Successfully loaded MuzzleImpactParticle!"));
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Failed to load MuzzleImpactParticle! Check path."));
-        MuzzleImpactParticle = nullptr;
-    }
 }
 
 // Called when the game starts or when spawned
@@ -49,6 +25,10 @@ void AMySocketCultistActor::BeginPlay()
     if (!MyCharacter)
     {
         UE_LOG(LogTemp, Error, TEXT("My character not found!"));
+    }
+    GI = Cast<UMyGameInstance>(GetGameInstance());
+    if (!GI) {
+        UE_LOG(LogTemp, Error, TEXT("My Socket Cultist Actor Failed!"));
     }
 }
 
@@ -126,7 +106,7 @@ void AMySocketCultistActor::ReceiveData()
                     case cultistHeader:
                         ProcessCultistData(Buffer);
                         break;
-                    case objectHeader:
+                    case skillHeader:
                         //ProcessObjectData(Buffer);
                         break;
                     case policeHeader:
@@ -348,6 +328,35 @@ void AMySocketCultistActor::SendDisable()
         {
             UE_LOG(LogTemp, Error, TEXT("SendDisable failed with error: %ld"), WSAGetLastError());
         }
+    }
+    else
+    {
+        CloseConnection();
+    }
+}
+
+void AMySocketCultistActor::SendSkill(FVector SpawnLoc, FRotator SpawnRot)
+{
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        SkillPacket Packet;
+        Packet.header = skillHeader;
+        Packet.size = sizeof(SkillPacket);
+        Packet.SpawnLoc = SpawnLoc;
+        Packet.SpawnRot = SpawnRot;
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(SkillPacket), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendSkill failed with error: %ld"), WSAGetLastError());
+        }
+
+        AsyncTask(ENamedThreads::GameThread, [this, SpawnLoc, SpawnRot]() {
+            FActorSpawnParameters SpawnParams;
+            SpawnParams.Owner = this;
+            SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+            GetWorld()->SpawnActor<ATreeObstacleActor>(MyCharacter->TreeObstacleActorClass, SpawnLoc, SpawnRot, SpawnParams);
+            });
     }
     else
     {
@@ -598,50 +607,52 @@ void AMySocketCultistActor::SpawnCultistCharacter(const unsigned char PlayerID)
         UE_LOG(LogTemp, Warning, TEXT("SpawnPoliceCharacter Failed. %d is my_ID"), PlayerID);
         return;
     }
+    if (!GI || !GI->CultistClientClass)
+    {
+        UE_LOG(LogTemp, Error, TEXT("GI or CultistClientClass is null"));
+        return;
+    }
     FActorSpawnParameters SpawnParams;
     SpawnParams.Owner = this;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/BP_Cultist_A_Client.BP_Cultist_A_Client_C"));
+    ACultistCharacter* NewCharacter = GetWorld()->SpawnActor<ACultistCharacter>(
+        GI->CultistClientClass,
+        FVector(CultistDummyState.PositionX, CultistDummyState.PositionY, CultistDummyState.PositionZ),
+        FRotator(CultistDummyState.RotationPitch, CultistDummyState.RotationYaw, CultistDummyState.RotationRoll),
+        SpawnParams
+    );
 
-    if (BP_ClientCharacter)
+    if (NewCharacter)
     {
-        ACultistCharacter* NewCharacter = GetWorld()->SpawnActor<ACultistCharacter>(
-            BP_ClientCharacter,
-            FVector(CultistDummyState.PositionX, CultistDummyState.PositionY, CultistDummyState.PositionZ),
-            FRotator(CultistDummyState.RotationPitch, CultistDummyState.RotationYaw, CultistDummyState.RotationRoll),
-            SpawnParams
-        );
-        if (NewCharacter)
-        {
-            SpawnedCharacters.Add(PlayerID, NewCharacter);
-            ReceivedCultistStates.Add(PlayerID, CultistDummyState);
-            UE_LOG(LogTemp, Log, TEXT("Spawned new cultist character for PlayerID=%d"), PlayerID);
+        SpawnedCharacters.Add(PlayerID, NewCharacter);
+        ReceivedCultistStates.Add(PlayerID, CultistDummyState);
+        UE_LOG(LogTemp, Log, TEXT("Spawned new cultist character for PlayerID=%d"), PlayerID);
 
-            APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
-            if (PC && PC->IsLocalController())
+        APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+        if (PC && PC->IsLocalController())
+        {
+            APawn* MyPawn = PC->GetPawn();
+            if (MyPawn)
             {
-                APawn* MyPawn = PC->GetPawn();
-                if (MyPawn)
+                // ChildActorComponent 찾아서
+                UChildActorComponent* CAC = MyPawn->FindComponentByClass<UChildActorComponent>();
+                if (CAC)
                 {
-                    // ChildActorComponent 찾아서
-                    UChildActorComponent* CAC = MyPawn->FindComponentByClass<UChildActorComponent>();
-                    if (CAC)
+                    ACameraActor* CamActor = Cast<ACameraActor>(CAC->GetChildActor());
+                    if (CamActor)
                     {
-                        ACameraActor* CamActor = Cast<ACameraActor>(CAC->GetChildActor());
-                        if (CamActor)
-                        {
-                            PC->SetViewTargetWithBlend(CamActor, 0.f);
-                        }
+                        PC->SetViewTargetWithBlend(CamActor, 0.f);
                     }
                 }
             }
         }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), PlayerID);
-        }
     }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), PlayerID);
+    }
+    
 }
 
 void AMySocketCultistActor::UpdatePoliceState(ACharacter* Character, const FPoliceCharacterState& State)
@@ -823,14 +834,6 @@ void AMySocketCultistActor::UpdatePoliceAnimInstanceProperties(UAnimInstance* An
         BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsPakour);
     }
 
-    // ABP_IsNearToPakour 업데이트
-    FProperty* ABP_IsNearToPakourProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_IsNearToPakour"));
-    if (ABP_IsNearToPakourProperty && ABP_IsNearToPakourProperty->IsA<FBoolProperty>())
-    {
-        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(ABP_IsNearToPakourProperty);
-        BoolProp->SetPropertyValue_InContainer(AnimInstance, State.bIsNearEnoughToPakour);
-    }
-
     // EVaultingType 업데이트
     if (State.CurrentVaultType == EVaultingType::OneHandVault)
     {
@@ -938,50 +941,51 @@ void AMySocketCultistActor::SpawnPoliceCharacter(const unsigned char PlayerID)
         UE_LOG(LogTemp, Warning, TEXT("SpawnPoliceCharacter Failed. %d is my_ID"), PlayerID);
         return;
     }
+    if (!GI || !GI->PoliceClientClass)
+    {
+        UE_LOG(LogTemp, Error, TEXT("GI or PoliceClientClass is null"));
+        return;
+    }
     FActorSpawnParameters SpawnParams;
     SpawnParams.Owner = this;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-    UClass* BP_ClientCharacter = LoadClass<ACharacter>(nullptr, TEXT("/Game/Cult_Custom/Characters/Police/BP_PoliceCharacter_Client.BP_PoliceCharacter_Client_C"));
-
-    if (BP_ClientCharacter)
+    APoliceCharacter* NewCharacter = GetWorld()->SpawnActor<APoliceCharacter>(
+        GI->PoliceClientClass,
+        FVector(PoliceDummyState.PositionX, PoliceDummyState.PositionY, PoliceDummyState.PositionZ),
+        FRotator(PoliceDummyState.RotationPitch, PoliceDummyState.RotationYaw, PoliceDummyState.RotationRoll),
+        SpawnParams
+    );
+    if (NewCharacter)
     {
-        APoliceCharacter* NewCharacter = GetWorld()->SpawnActor<APoliceCharacter>(
-            BP_ClientCharacter,
-            FVector(PoliceDummyState.PositionX, PoliceDummyState.PositionY, PoliceDummyState.PositionZ),
-            FRotator(PoliceDummyState.RotationPitch, PoliceDummyState.RotationYaw, PoliceDummyState.RotationRoll),
-            SpawnParams
-        );
-        if (NewCharacter)
-        {
-            SpawnedCharacters.Add(PlayerID, NewCharacter);
-            ReceivedPoliceStates.Add(PlayerID, PoliceDummyState);
-            UE_LOG(LogTemp, Log, TEXT("Spawned new police character for PlayerID=%d"), PlayerID);
+        SpawnedCharacters.Add(PlayerID, NewCharacter);
+        ReceivedPoliceStates.Add(PlayerID, PoliceDummyState);
+        UE_LOG(LogTemp, Log, TEXT("Spawned new police character for PlayerID=%d"), PlayerID);
 
-            APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
-            if (PC && PC->IsLocalController())
+        APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+        if (PC && PC->IsLocalController())
+        {
+            APawn* MyPawn = PC->GetPawn();
+            if (MyPawn)
             {
-                APawn* MyPawn = PC->GetPawn();
-                if (MyPawn)
+                // ChildActorComponent 찾아서
+                UChildActorComponent* CAC = MyPawn->FindComponentByClass<UChildActorComponent>();
+                if (CAC)
                 {
-                    // ChildActorComponent 찾아서
-                    UChildActorComponent* CAC = MyPawn->FindComponentByClass<UChildActorComponent>();
-                    if (CAC)
+                    ACameraActor* CamActor = Cast<ACameraActor>(CAC->GetChildActor());
+                    if (CamActor)
                     {
-                        ACameraActor* CamActor = Cast<ACameraActor>(CAC->GetChildActor());
-                        if (CamActor)
-                        {
-                            PC->SetViewTargetWithBlend(CamActor, 0.f);
-                        }
+                        PC->SetViewTargetWithBlend(CamActor, 0.f);
                     }
                 }
             }
         }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), PlayerID);
-        }
     }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to spawn character for PlayerID=%d"), PlayerID);
+    }
+    
 }
 
 void AMySocketCultistActor::SpawnPoliceAICharacter(const unsigned char PlayerID)
@@ -1059,7 +1063,7 @@ void AMySocketCultistActor::SpawnImpactEffect(const FImpactPacket& ReceivedImpac
     }
 
     UNiagaraFunctionLibrary::SpawnSystemAtLocation(
-        GetWorld(), NG_ImpactParticle,
+        GetWorld(), GI->NGParticleAsset,
         ImpactPoint,
         ImpactRotation,
         FVector(1.0f), true, true,
@@ -1067,7 +1071,7 @@ void AMySocketCultistActor::SpawnImpactEffect(const FImpactPacket& ReceivedImpac
     );
 
     UNiagaraFunctionLibrary::SpawnSystemAtLocation(
-        GetWorld(), MuzzleImpactParticle,
+        GetWorld(), GI->MuzzleEffect,
         MuzzleLoc,
         MuzzleRot
     );
