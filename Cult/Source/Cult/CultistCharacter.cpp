@@ -394,6 +394,8 @@ void ACultistCharacter::OnSkillCheckResult(bool bSuccess)
 		SkillCheckWidget->SetVisibility(ESlateVisibility::Hidden); // À§Á¬ ¼û±è
 	}
 
+	PlayRitualMontage(bSuccess);
+
 	if (bSuccess)
 	{
 		TaskRitualProgress += SkillCheckBonus;
@@ -434,6 +436,15 @@ void ACultistCharacter::OnSkillCheckResult(bool bSuccess)
 		GetWorld()->GetTimerManager().SetTimer(
 			SkillCheckTimerHandle, this, &ACultistCharacter::StartNextSkillCheck, SkilCheckIntervalTime, false
 		);
+	}
+}
+
+void ACultistCharacter::PlayRitualMontage(bool bSuccess)
+{
+	UAnimMontage* MontageToPlay = bSuccess ? RitualSuccessMontage : RitualFailMontage;
+	if (MontageToPlay && GetMesh()->GetAnimInstance())
+	{
+		GetMesh()->GetAnimInstance()->Montage_Play(MontageToPlay);
 	}
 }
 

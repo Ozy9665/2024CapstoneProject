@@ -70,6 +70,16 @@ public:
 	float SkilCheckIntervalTime = 10.0f;
 	int32 SkillCheckAttemptCount = 0;	// 스킬체크 바퀴
 
+	UPROPERTY(EditAnywhere, Category = "SkillCheck|Animation")
+	UAnimMontage* RitualSuccessMontage;
+
+	UFUNCTION()
+	void PlayRitualMontage(bool bSuccess);
+
+	UPROPERTY(EditAnywhere, Category = "SkillCheck|Animation")
+	UAnimMontage* RitualFailMontage;
+
+
 	// UI
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> TaskRitualWidgetClass;
@@ -77,6 +87,8 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual")
 	float RitualProgress = 0.0f;
+
+
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual")
 	float RitualSpeed = 50.0f;
