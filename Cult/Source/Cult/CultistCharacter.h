@@ -65,6 +65,7 @@ public:
 	float TaskRitualSpeed;
 	FTimerHandle TaskRitualTimerHandle;
 
+
 	// UI
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> TaskRitualWidgetClass;
@@ -87,10 +88,10 @@ public:
 
 	void TriggerSkillCheckInput();
 
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable, Category = "Ritual")
 	void OnSkillCheckResult(bool bSuccess);
 
-	UFUNCTION()
+	UFUNCTION(BlueprintCallable, Category = "Ritual")
 	void StartNextSkillCheck();
 	// Damage
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
