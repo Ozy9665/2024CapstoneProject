@@ -38,12 +38,20 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SkillCheck")
     float SuccessAngleMax = 90.0f;
+
+    FVector2D CircleCenter = FVector2D(0.f, 0.f); // 중심 위치
+    float Radius = 150.f;                         // 원의 반지름
+
+
 protected:
     virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
     virtual void NativeConstruct() override;
 
     UPROPERTY(meta = (BindWidget))
     class UImage* Image_Cursor;
+
+    UPROPERTY(meta = (BindWidget))
+    class UImage* Image_SuccessZone;
 
 private:
     bool bIsRunning = false;

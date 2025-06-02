@@ -17,9 +17,30 @@ void UCultistSkillCheckWidget::StartSkillCheck(float InRotationSpeed)
 {
     RotationSpeed = InRotationSpeed;
     CursorAngle = 0.f;
+    bIsRunning = true;
+
+    float BaseAngle = FMath::RandRange(30.f, 330.f);
+    float RangeSize = 60.f;
+
+    SuccessAngleMin = BaseAngle;
+    SuccessAngleMax = BaseAngle + RangeSize;
+
+    if (Image_SuccessZone)
+    {
+        FWidgetTransform Transform = Image_SuccessZone->RenderTransform;
+        Transform.Angle = BaseAngle;
+        Image_SuccessZone->SetRenderTransform(Transform);
+    }
+
+    //if (Image_Cursor)
+    //{
+    //    FWidgetTransform Transform = Image_Cursor->RenderTransform;
+    //    Transform.Translation = FVector2D(0.f, -150); 
+    //    Image_Cursor->SetRenderTransform(Transform);
+    //}
+
     AccumulatedRotation = 0.f;
     LastRotation = 0.f;
-    bIsRunning = true;
 }
 
 void UCultistSkillCheckWidget::StopSkillCheck()
@@ -47,6 +68,10 @@ void UCultistSkillCheckWidget::NativeTick(const FGeometry& MyGeometry, float InD
 
     if (!bIsRunning || !Image_Cursor) return;
 
+    CursorAngle += RotationSpeed * InDeltaTime;
+    if (CursorAngle >= 360.f)
+        CursorAngle -= 360.f;
+
     // 커서 각도 갱신
     float DeltaRotation = FMath::FindDeltaAngleDegrees(LastRotation, CursorAngle);
     AccumulatedRotation += FMath::Abs(DeltaRotation);
@@ -60,13 +85,8 @@ void UCultistSkillCheckWidget::NativeTick(const FGeometry& MyGeometry, float InD
         RemoveFromParent();
         return;
     }
-
-    CursorAngle += RotationSpeed * InDeltaTime;
-    if (CursorAngle >= 360.f)
-        CursorAngle -= 360.f;
-
-    // 커서 회전 적용
-    FWidgetTransform NewTransform = Image_Cursor->RenderTransform;
-    NewTransform.Angle = CursorAngle;
+    // 커서 회전만 적용 (위치 계산 제거!)
+    FWidgetTransform NewTransform;
+    NewTransform.Angle = CursorAngle + 90.f; // 막대 세워서 원형 돌리기
     Image_Cursor->SetRenderTransform(NewTransform);
 }
