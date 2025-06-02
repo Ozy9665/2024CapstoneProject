@@ -177,6 +177,8 @@ void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction("SpecialAbility", IE_Pressed, this, &ACultistCharacter::StartPreviewPlacement);
 	PlayerInputComponent->BindAction("ConfirmPlacement", IE_Pressed, this, &ACultistCharacter::ConfirmPlacement);
 
+	PlayerInputComponent->BindAction("CancelPreview", IE_Pressed, this, &ACultistCharacter::CancelPreview);
+
 	PlayerInputComponent->BindAction("SkillCheckInput", IE_Pressed, this, &ACultistCharacter::TriggerSkillCheckInput);
 	UE_LOG(LogTemp, Warning, TEXT("Binding  input"));
 
@@ -529,6 +531,27 @@ void ACultistCharacter::TakeDamage(float DamageAmount)
 	if (bIsStunned)return;
 	bIsHitByAnAttack = true;
 	
+	// Ritual 상태 해제
+	bIsPerformingRitual = false;
+
+	// Ritual 진행 중이면 타이머 정지
+	GetWorld()->GetTimerManager().ClearTimer(RitualTimerHandle);
+	GetWorld()->GetTimerManager().ClearTimer(SkillCheckTimerHandle);
+
+	// 스킬체크 위젯 제거
+	if (SkillCheckWidget)
+	{
+		SkillCheckWidget->RemoveFromParent();
+		SkillCheckWidget = nullptr;
+	}
+
+	// UI 위젯 (게이지 바) 제거
+	if (TaskRitualWidget)
+	{
+		TaskRitualWidget->RemoveFromParent();
+		TaskRitualWidget = nullptr;
+	}
+
 	if (bIsPerformingRitual)
 	{
 		CancelRitual();
@@ -735,6 +758,27 @@ void ACultistCharacter::GotHitTaser(AActor* Attacker)
 	// 이동불가 (감전->기절과정 중)
 	GetCharacterMovement()->DisableMovement();
 
+	// Ritual 상태 해제
+	bIsPerformingRitual = false;
+
+	// Ritual 진행 중이면 타이머 정지
+	GetWorld()->GetTimerManager().ClearTimer(RitualTimerHandle);
+	GetWorld()->GetTimerManager().ClearTimer(SkillCheckTimerHandle);
+
+	// 스킬체크 위젯 제거
+	if (SkillCheckWidget)
+	{
+		SkillCheckWidget->RemoveFromParent();
+		SkillCheckWidget = nullptr;
+	}
+
+	// UI 위젯 (게이지 바) 제거
+	if (TaskRitualWidget)
+	{
+		TaskRitualWidget->RemoveFromParent();
+		TaskRitualWidget = nullptr;
+	}
+
 	// 노티파이로 감전애니메이션에 Stun
 	// 
 	// 감전
@@ -854,6 +898,19 @@ void ACultistCharacter::UpdatePreviewPlacement()
 	else
 	{
 		SpawnedPreviewActor->SetActorHiddenInGame(true);
+	}
+}
+
+void ACultistCharacter::CancelPreview()
+{
+	if (!SpawnedPreviewActor) {
+		UE_LOG(LogTemp, Warning, TEXT("No SpawnPreviewActor"));
+		return;
+	}
+	else
+	{
+		SpawnedPreviewActor->Destroy();
+		SpawnedPreviewActor = nullptr;
 	}
 }
 

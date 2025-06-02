@@ -226,6 +226,8 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void UpdatePreviewPlacement();
+	UFUNCTION(BlueprintCallable, Category = "Abilities")
+	void CancelPreview();
 
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 	void ConfirmPlacement();
