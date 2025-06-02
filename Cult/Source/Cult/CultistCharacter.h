@@ -67,7 +67,7 @@ public:
 	FTimerHandle SkillCheckTimerHandle;
 	float SkillCheckBonus = 10.0f;
 	float SkillCheckPenalty = 10.0f;
-	float SkilCheckIntervalTime = 10.0f;
+	float SkilCheckIntervalTime = 8.0f;
 	int32 SkillCheckAttemptCount = 0;	// 스킬체크 바퀴
 
 	UPROPERTY(EditAnywhere, Category = "SkillCheck|Animation")
