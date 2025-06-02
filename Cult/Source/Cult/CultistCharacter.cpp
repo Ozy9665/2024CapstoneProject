@@ -392,9 +392,18 @@ void ACultistCharacter::OnSkillCheckResult(bool bSuccess)
 	if (SkillCheckWidget)
 	{
 		SkillCheckWidget->SetVisibility(ESlateVisibility::Hidden); // 위젯 숨김
+		SkillCheckWidget->RemoveFromParent();
+		SkillCheckWidget = nullptr;
 	}
+	GetCharacterMovement()->DisableMovement();
 
-	PlayRitualMontage(bSuccess);
+	// 몽타주 재생 및 타이머 예약
+	float MontageLength = PlayRitualMontage(bSuccess);
+
+	// 몽타주 종료 후 호출될 함수 등록
+	GetWorld()->GetTimerManager().SetTimer(
+		MontageEndTimerHandle, this, &ACultistCharacter::OnRitualMontageFinished, MontageLength, false
+	);
 
 	if (bSuccess)
 	{
@@ -413,7 +422,51 @@ void ACultistCharacter::OnSkillCheckResult(bool bSuccess)
 		}
 	}
 
-	// 게이지 업데이트
+	//// 게이지 업데이트
+	//if (TaskRitualWidget)
+	//{
+	//	if (UProgressBar* Bar = Cast<UProgressBar>(TaskRitualWidget->GetWidgetFromName(TEXT("RitualProgressBar"))))
+	//	{
+	//		Bar->SetPercent(TaskRitualProgress / 100.f);
+	//	}
+	//}
+
+	//if (TaskRitualProgress >= 100.f)
+	//{
+	//	if (CurrentAltar)
+	//	{
+	//		CurrentAltar->IncreaseRitualGauge(); // 혹은 알타를 완료 처리
+	//	}
+	//	StopRitual();
+	//}
+	//else
+	//{
+	//	// 약간 딜레이 후 다음 스킬체크
+	//	GetWorld()->GetTimerManager().SetTimer(
+	//		SkillCheckTimerHandle, this, &ACultistCharacter::StartNextSkillCheck, SkilCheckIntervalTime, false
+	//	);
+	//}
+
+
+}
+
+float ACultistCharacter::PlayRitualMontage(bool bSuccess)
+{
+	UAnimMontage* MontageToPlay = bSuccess ? RitualSuccessMontage : RitualFailMontage;
+	if (MontageToPlay && GetMesh()->GetAnimInstance())
+	{
+		GetMesh()->GetAnimInstance()->Montage_Play(MontageToPlay);
+		return MontageToPlay->GetPlayLength();
+	}
+	return 1.0f;
+}
+
+void ACultistCharacter::OnRitualMontageFinished()
+{
+	// 이동 복구
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+
+	// 게이지 UI 업데이트
 	if (TaskRitualWidget)
 	{
 		if (UProgressBar* Bar = Cast<UProgressBar>(TaskRitualWidget->GetWidgetFromName(TEXT("RitualProgressBar"))))
@@ -422,29 +475,21 @@ void ACultistCharacter::OnSkillCheckResult(bool bSuccess)
 		}
 	}
 
+	// 성공 시 Ritual 완료
 	if (TaskRitualProgress >= 100.f)
 	{
 		if (CurrentAltar)
 		{
-			CurrentAltar->IncreaseRitualGauge(); // 혹은 알타를 완료 처리
+			CurrentAltar->IncreaseRitualGauge();
 		}
 		StopRitual();
 	}
 	else
 	{
-		// 약간 딜레이 후 다음 스킬체크
+		//  다음 스킬체크 예약
 		GetWorld()->GetTimerManager().SetTimer(
 			SkillCheckTimerHandle, this, &ACultistCharacter::StartNextSkillCheck, SkilCheckIntervalTime, false
 		);
-	}
-}
-
-void ACultistCharacter::PlayRitualMontage(bool bSuccess)
-{
-	UAnimMontage* MontageToPlay = bSuccess ? RitualSuccessMontage : RitualFailMontage;
-	if (MontageToPlay && GetMesh()->GetAnimInstance())
-	{
-		GetMesh()->GetAnimInstance()->Montage_Play(MontageToPlay);
 	}
 }
 

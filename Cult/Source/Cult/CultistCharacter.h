@@ -64,6 +64,7 @@ public:
 	float TaskRitualProgress;
 	float TaskRitualSpeed;
 	FTimerHandle TaskRitualTimerHandle;
+	FTimerHandle MontageEndTimerHandle;
 	FTimerHandle SkillCheckTimerHandle;
 	float SkillCheckBonus = 10.0f;
 	float SkillCheckPenalty = 10.0f;
@@ -74,7 +75,10 @@ public:
 	UAnimMontage* RitualSuccessMontage;
 
 	UFUNCTION()
-	void PlayRitualMontage(bool bSuccess);
+	float PlayRitualMontage(bool bSuccess);
+
+	UFUNCTION()
+	void OnRitualMontageFinished();
 
 	UPROPERTY(EditAnywhere, Category = "SkillCheck|Animation")
 	UAnimMontage* RitualFailMontage;
