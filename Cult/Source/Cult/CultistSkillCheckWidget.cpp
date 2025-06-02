@@ -20,10 +20,11 @@ void UCultistSkillCheckWidget::StartSkillCheck(float InRotationSpeed)
     bIsRunning = true;
 
     float BaseAngle = FMath::RandRange(30.f, 330.f);
-    float RangeSize = 60.f;
+    float RangeSize = 100.f;
 
     SuccessAngleMin = BaseAngle;
     SuccessAngleMax = BaseAngle + RangeSize;
+
 
     if (Image_SuccessZone)
     {
@@ -53,10 +54,24 @@ void UCultistSkillCheckWidget::OnInputPressed()
     if (!bIsRunning) return;
 
     // 0~360 범위로 정규화
-    float NormalizedAngle = FMath::Fmod(CursorAngle, 360.0f);
+    float NormalizedAngle = FMath::Fmod(CursorAngle+ AngleOffset, 360.0f);
     if (NormalizedAngle < 0) NormalizedAngle += 360.0f;
 
-    bool bSuccess = (NormalizedAngle >= SuccessAngleMin && NormalizedAngle <= SuccessAngleMax);
+    bool bSuccess = false;
+
+    if (SuccessAngleMin <= SuccessAngleMax)
+    {
+        bSuccess = (NormalizedAngle >= SuccessAngleMin && NormalizedAngle <= SuccessAngleMax);
+    }
+    else
+    {
+        // 영역이 330도 ~ 30도처럼 범위를 넘는 경우
+        bSuccess = (NormalizedAngle >= SuccessAngleMin || NormalizedAngle <= SuccessAngleMax);
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("Angle: %.1f | Success: [%0.1f ~ %0.1f] | Result: %s"), NormalizedAngle, SuccessAngleMin, SuccessAngleMax, bSuccess ? TEXT("TRUE") : TEXT("FALSE"));
+
+
     OnSkillCheckResult.Broadcast(bSuccess);
     StopSkillCheck();
     RemoveFromParent();
@@ -72,21 +87,19 @@ void UCultistSkillCheckWidget::NativeTick(const FGeometry& MyGeometry, float InD
     if (CursorAngle >= 360.f)
         CursorAngle -= 360.f;
 
-    // 커서 각도 갱신
-    float DeltaRotation = FMath::FindDeltaAngleDegrees(LastRotation, CursorAngle);
-    AccumulatedRotation += FMath::Abs(DeltaRotation);
-    LastRotation = CursorAngle;
 
-    // 바퀴 제한 초과 시 강제 실패 처리
-    if (AccumulatedRotation >= MaxAllowedRotation)
-    {
-        OnSkillCheckResult.Broadcast(false); // 강제 실패
-        StopSkillCheck();
-        RemoveFromParent();
-        return;
-    }
-    // 커서 회전만 적용 (위치 계산 제거!)
+    float Radians = FMath::DegreesToRadians(CursorAngle);
+    FVector2D LocalCenter = MyGeometry.GetLocalSize() * 0.5f;
+
+
+    float X = Radius * FMath::Cos(Radians);
+    float Y = Radius * FMath::Sin(Radians);  
+
     FWidgetTransform NewTransform;
-    NewTransform.Angle = CursorAngle + 90.f; // 막대 세워서 원형 돌리기
+    NewTransform.Translation = FVector2D(X, Y);  // 중심 기준 상대 좌표
+    //NewTransform.Translation = FVector2D(X - LocalCenter.X, -(Y - LocalCenter.Y)); // 중심 기준 좌표로 보정
+    NewTransform.Angle = CursorAngle + 90.f;
+
+
     Image_Cursor->SetRenderTransform(NewTransform);
 }

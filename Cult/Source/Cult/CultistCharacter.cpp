@@ -304,7 +304,7 @@ void ACultistCharacter::StartRitual()
 		GetWorld()->GetTimerManager().SetTimer(SkillCheckTimerHandle, this, &ACultistCharacter::StartNextSkillCheck, SkilCheckIntervalTime, false);
 		UE_LOG(LogTemp, Warning, TEXT("SkillCheck Timer Set"));
 	}
-	StartNextSkillCheck();
+	//StartNextSkillCheck();
 	//GetCharacterMovement()->DisableMovement();
 
 	// Animation
