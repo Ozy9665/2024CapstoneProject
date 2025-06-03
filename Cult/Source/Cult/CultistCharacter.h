@@ -202,6 +202,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TSubclassOf<class ATreeObstacleActor> TreeObstacleActorClass;
 
+	UPROPERTY(EditAnywhere, Category = "Abilities")
+	TSubclassOf<class AProceduralBranchActor> ProceduralBranchActorClass;
+
 	UPROPERTY()
 	AGrowthPreviewActor* SpawnedPreviewActor;
 

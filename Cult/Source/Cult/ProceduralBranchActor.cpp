@@ -22,8 +22,16 @@ void AProceduralBranchActor::BeginPlay()
 {
 	Super::BeginPlay();
 	
+	if (bIsMainTrunk)
+	{
+		GenerateCurvedBranch(300.f, 16.f, 4.f);
+		GetWorldTimerManager().SetTimer(BranchSpawnHandle, this, &AProceduralBranchActor::SpawnBranches, 0.8f, false);
+	}
+	else
+	{
+		GenerateCurvedBranch(150.f, 6.f, 2.f);
 
-	GenerateCurvedBranch();
+	}
 }
 
 // Called every frame
@@ -106,4 +114,35 @@ void AProceduralBranchActor::GenerateCylinderAlongSpline(const TArray<FVector>& 
 
 	ProcMesh->CreateMeshSection_LinearColor(0, Vertices, Triangles, Normals, UVs, {}, {}, true);
 	ProcMesh->SetMaterial(0, ProcMesh->GetMaterial(0)); // 머티리얼 유지
+}
+
+void AProceduralBranchActor::SpawnBranches()
+{
+	const int32 NumBranches = 8;
+
+	for (int32 i = 0; i < NumBranches; ++i)
+	{
+		float Height = FMath::FRandRange(100.f, 250.f);
+		FVector SpawnPoint = GetActorLocation() + FVector(Height, 0, 0);
+
+		FRotator SpawnRot = FRotator(0, FMath::FRandRange(0.f, 360.f), 0);
+		FVector UpwardBias = FVector::UpVector * 0.4f;
+
+		FVector Dir = SpawnRot.RotateVector(FVector::ForwardVector + UpwardBias);
+		FRotator FinalRot = Dir.Rotation();
+
+		FActorSpawnParameters Params;
+		AProceduralBranchActor* Branch = GetWorld()->SpawnActor<AProceduralBranchActor>(
+			AProceduralBranchActor::StaticClass(),
+			SpawnPoint,
+			FinalRot,
+			Params
+		);
+
+		if (Branch)
+		{
+			Branch->bIsMainTrunk = false;
+		}
+
+	}
 }

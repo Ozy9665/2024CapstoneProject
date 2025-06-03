@@ -5,6 +5,7 @@
 #include "CultistCharacter.h"
 #include "Components/TextBlock.h"
 #include "TreeObstacleActor.h"
+#include "ProceduralBranchActor.h"
 
 #pragma comment(lib, "ws2_32.lib")
 AMySocketCultistActor* MySocketCultistActor = nullptr;
@@ -355,7 +356,7 @@ void AMySocketCultistActor::SendSkill(FVector SpawnLoc, FRotator SpawnRot)
             SpawnParams.Owner = this;
             SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-            GetWorld()->SpawnActor<ATreeObstacleActor>(MyCharacter->TreeObstacleActorClass, SpawnLoc, SpawnRot, SpawnParams);
+            GetWorld()->SpawnActor<AProceduralBranchActor>(MyCharacter->ProceduralBranchActorClass, SpawnLoc, SpawnRot, SpawnParams);
             });
     }
     else

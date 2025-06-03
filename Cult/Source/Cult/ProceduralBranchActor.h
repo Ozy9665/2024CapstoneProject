@@ -67,6 +67,8 @@ public:
 	UPROPERTY()
 	TArray<FBranchNode> AllBranches;
 
+	UPROPERTY(EditAnywhere)
+	bool bIsMainTrunk = true;
 
 	//void CreateBranch(const FVector& Start, const FVector& Direction, int32 Depth);
 
@@ -74,4 +76,7 @@ public:
 
 	void GenerateCylinderAlongSpline(const TArray<FVector>& SplinePoints, float RadiusStart, float RadiusEnd);
 	void GenerateCurvedBranch(float Length = 300.f, float RadiusStart = 12.f, float RadiusEnd = 2.f, int32 Segments = 16);
+	FTimerHandle BranchSpawnHandle;
+	void SpawnBranches();
+
 };
