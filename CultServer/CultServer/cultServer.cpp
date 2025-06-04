@@ -351,12 +351,49 @@ void process_packet(int c_id, char* packet) {
 	}
 	case enterHeader: 
 	{
-		// 1. room number를 보고 비어있으면 InRoomPacket 전송
+		// 0. room number를 보고 비어있으면 Packet 전송
 		// 1. 업데이트되어 룸이 입장 불가능하면 leaveHeader 전송
-		// 2. 클라에서는 먼저 보내져있던 InRoomPacket를 기반으로 room 업데이트
-		// 3. 입장 했다면, 그 room의 데이터 업데이트.
-		// 4. 역할(POLICE/CULTIST) 따라 room.police 또는 room.cultist++
-		// 5. 실패 시 에러 패킷 전송
+		auto* p = reinterpret_cast<RoomNumberPacket*>(packet);
+		if (p->size != sizeof(RoomNumberPacket)) {
+			std::cout << "Invalid enterPacket size\n";
+			break;
+		}
+		int room_id = p->room_number;
+		NoticePacket packet;
+		std::cout << "role: " << static_cast<int>(g_users[c_id].role);
+		std::cout << "room: " << static_cast<int>(p->room_number);
+		switch (g_users[c_id].role)
+		{
+		case 0: // cultist
+		{
+			if (g_rooms[room_id].cultist >= MAX_CULTIST_PER_ROOM) {
+				packet.header = leaveHeader;
+				packet.size = sizeof(NoticePacket);
+			}
+			else {
+				packet.header = enterHeader;
+				packet.size = sizeof(NoticePacket);
+			}
+			break;
+		}
+		case 1: // police
+		{
+			if (g_rooms[room_id].police >= MAX_POLICE_PER_ROOM) {
+				packet.header = leaveHeader;
+				packet.size = sizeof(NoticePacket);
+			}
+			else {
+				packet.header = enterHeader;
+				packet.size = sizeof(NoticePacket);
+			}
+			break;
+			
+		}
+		default:
+			std::cout << "User " << c_id << " Has Strange role : " << g_users[c_id].role << std::endl;
+			break;
+		}
+		g_users[c_id].do_send_packet(&packet);
 		break;
 	}
 	case leaveHeader: 
@@ -390,7 +427,7 @@ void process_packet(int c_id, char* packet) {
 			g_rooms[room_id].cultist++;
 		}
 		// 1. room이 꽉차면 isIngame을 true로, 유저의 방번호 업데이트
-		if (g_rooms[room_id].cultist >= 4 && g_rooms[room_id].police >= 1) {
+		if (g_rooms[room_id].cultist >= MAX_CULTIST_PER_ROOM && g_rooms[room_id].police >= MAX_POLICE_PER_ROOM) {
 			g_rooms[room_id].isIngame = true;
 		}
 		g_users[c_id].room_id = room_id;

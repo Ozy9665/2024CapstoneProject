@@ -10,6 +10,8 @@
 #include "MyNetworkManagerActor.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnRoomListUpdated);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameStartConfirmed);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameStartUnConfirmed);
 
 UCLASS()
 class CULT_API AMyNetworkManagerActor : public AActor
@@ -27,7 +29,8 @@ protected:
 private:
 	SOCKET ClientSocket;
 	int my_ID = -1;
-	int my_Role = -1;
+	UMyGameInstance* GI;
+
 
 public:		
     UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
@@ -36,7 +39,11 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnRoomListUpdated OnRoomListUpdated;
 
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FOnGameStartConfirmed OnGameStartConfirmed;
 
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FOnGameStartConfirmed OnGameStartUnConfirmed;
 
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
@@ -48,5 +55,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void RequestRoomInfo();
 	void ProcessRoomInfo(const char* Buffer);
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	void SendEnterPacket();
 
 };

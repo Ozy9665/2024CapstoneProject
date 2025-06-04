@@ -27,8 +27,15 @@ AMyNetworkManagerActor::AMyNetworkManagerActor()
 void AMyNetworkManagerActor::BeginPlay()
 {
     Super::BeginPlay();
+    GI = Cast<UMyGameInstance>(GetGameInstance());
+    if (not GI) {
+        UE_LOG(LogTemp, Error, TEXT("Gl cast failed."));
+        return;
+    }
     UE_LOG(LogTemp, Error, TEXT("Actor Spawned"));
     CheckServer();
+
+
 }
 
 // Called every frame
@@ -76,12 +83,6 @@ void AMyNetworkManagerActor::CheckServer()
         return;
     }
 
-    UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
-    if (not GI) {
-        UE_LOG(LogTemp, Error, TEXT("Gl cast failed."));
-        return;
-    }
-
     ReceiveData();
     GI->ClientSocket = ClientSocket;
     IdOnlyPacket packet;
@@ -97,12 +98,6 @@ void AMyNetworkManagerActor::CheckServer()
 
 void AMyNetworkManagerActor::RequestRoomInfo() 
 {
-    UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
-    if (not GI) {
-        UE_LOG(LogTemp, Error, TEXT("Gl cast failed."));
-        return;
-    }
-
     if (ClientSocket != INVALID_SOCKET)
     {
         ReceiveData();
@@ -153,6 +148,22 @@ void AMyNetworkManagerActor::ProcessRoomInfo(const char* Buffer)
         });
 }
 
+void AMyNetworkManagerActor::SendEnterPacket() {
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        ReceiveData();
+        RoomNumberPacket Packet;
+        Packet.header = enterHeader;
+        Packet.size = sizeof(RoomNumberPacket);
+        Packet.room_number = GI->PendingRoomNumber;
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RoomNumberPacket), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendEnterPacket failed with error: %ld"), WSAGetLastError());
+        }
+    }
+}
+
 void AMyNetworkManagerActor::ReceiveData() 
 {
     AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this]() {
@@ -167,7 +178,6 @@ void AMyNetworkManagerActor::ReceiveData()
                 UE_LOG(LogTemp, Warning, TEXT("Invalid packet size: Received %d, Expected %d: header:%d"), BytesReceived, PacketSize, PacketType);
                 return;
             }
-
             switch (PacketType)
             {
             case connectionHeader:
@@ -178,6 +188,22 @@ void AMyNetworkManagerActor::ReceiveData()
             case requestHeader:
             {
                 ProcessRoomInfo(Buffer);
+                break;
+            }
+            case enterHeader: 
+            {
+                AsyncTask(ENamedThreads::GameThread, [this]() {
+                    OnGameStartConfirmed.Broadcast();
+                    UE_LOG(LogTemp, Warning, TEXT("OnGameStartConfirmed"));
+                    });
+                break;
+            }
+            case leaveHeader: 
+            {
+                AsyncTask(ENamedThreads::GameThread, [this]() {
+                    OnGameStartUnConfirmed.Broadcast();
+                    UE_LOG(LogTemp, Warning, TEXT("OnGameStartUnConfirmed"));
+                    });
                 break;
             }
             default:

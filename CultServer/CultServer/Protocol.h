@@ -11,6 +11,8 @@
 constexpr short SERVER_PORT = 7777;
 constexpr int BUF_SIZE = 200;
 constexpr int MAX_PLAYERS_PER_ROOM = 5;
+constexpr int MAX_CULTIST_PER_ROOM = 4;
+constexpr int MAX_POLICE_PER_ROOM = 1;
 //-- ingame header
 constexpr char cultistHeader = 0;
 constexpr char skillHeader = 1;
