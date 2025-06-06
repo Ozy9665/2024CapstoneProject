@@ -34,8 +34,6 @@ void AMyNetworkManagerActor::BeginPlay()
     }
     UE_LOG(LogTemp, Error, TEXT("Actor Spawned"));
     CheckServer();
-
-
 }
 
 // Called every frame
@@ -164,6 +162,38 @@ void AMyNetworkManagerActor::SendEnterPacket() {
     }
 }
 
+void AMyNetworkManagerActor::RequestRitualData() {
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        ReceiveData();
+        NoticePacket Packet;
+        Packet.header = ritualHeader;
+        Packet.size = sizeof(NoticePacket);
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(NoticePacket), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendEnterPacket failed with error: %ld"), WSAGetLastError());
+        }
+    }
+}
+
+void AMyNetworkManagerActor::ProcessRitualData(const char* Buffer)
+{
+    RitualPacket Packet;
+    memcpy(&Packet, Buffer, sizeof(RitualPacket));
+
+    AsyncTask(ENamedThreads::GameThread, [this, Packet]() {
+        GI->RutialSpawnLocations.Empty();
+        GI->RutialSpawnLocations.Add(Packet.Loc1);
+        GI->RutialSpawnLocations.Add(Packet.Loc2);
+        GI->RutialSpawnLocations.Add(Packet.Loc3);
+
+        // 5) 위치 저장이 끝났음을 알리는 브로드캐스트
+        OnGameStartConfirmed.Broadcast();
+        UE_LOG(LogTemp, Warning, TEXT("OnGameStartConfirmed: Ritual Saved."));
+        });
+}
+
 void AMyNetworkManagerActor::ReceiveData() 
 {
     AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this]() {
@@ -192,10 +222,7 @@ void AMyNetworkManagerActor::ReceiveData()
             }
             case enterHeader: 
             {
-                AsyncTask(ENamedThreads::GameThread, [this]() {
-                    OnGameStartConfirmed.Broadcast();
-                    UE_LOG(LogTemp, Warning, TEXT("OnGameStartConfirmed"));
-                    });
+                RequestRitualData();
                 break;
             }
             case leaveHeader: 
@@ -204,6 +231,11 @@ void AMyNetworkManagerActor::ReceiveData()
                     OnGameStartUnConfirmed.Broadcast();
                     UE_LOG(LogTemp, Warning, TEXT("OnGameStartUnConfirmed"));
                     });
+                break;
+            }
+            case ritualHeader:
+            {
+                ProcessRitualData(Buffer);
                 break;
             }
             default:

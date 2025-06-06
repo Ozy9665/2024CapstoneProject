@@ -42,4 +42,7 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character")
 	TSubclassOf<class APawn> PoliceClass;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Network")
+	TArray<FVector> RutialSpawnLocations;
 };

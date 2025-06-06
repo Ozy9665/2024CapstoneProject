@@ -57,5 +57,6 @@ public:
 	void ProcessRoomInfo(const char* Buffer);
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void SendEnterPacket();
-
+	void RequestRitualData();
+	void ProcessRitualData(const char* Buffer);
 };
