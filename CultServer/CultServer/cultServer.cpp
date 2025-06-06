@@ -464,7 +464,28 @@ void process_packet(int c_id, char* packet) {
 	}
 	case ritualHeader: 
 	{
+		RitualPacket packet;
+		packet.header = ritualHeader;
+		packet.size = sizeof(RitualPacket);
 
+		auto randFloat = [](float minVal, float maxVal) -> float {
+			float t = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+			return minVal + t * (maxVal - minVal);
+			};
+
+		packet.Loc1.x = baseX + randFloat(-200.f, 200.f);
+		packet.Loc1.y = baseY + randFloat(-200.f, 200.f);
+		packet.Loc1.z = baseZ + randFloat(-50.f, 50.f);
+
+		packet.Loc2.x = baseX + randFloat(-200.f, 200.f);
+		packet.Loc2.y = baseY + randFloat(-200.f, 200.f);
+		packet.Loc2.z = baseZ + randFloat(-50.f, 50.f);
+
+		packet.Loc3.x = baseX + randFloat(-200.f, 200.f);
+		packet.Loc3.y = baseY + randFloat(-200.f, 200.f);
+		packet.Loc3.z = baseZ + randFloat(-50.f, 50.f);
+		g_users[c_id].do_send_packet(&packet);
+		break;
 	}
 	default:
 		char header = packet[0];

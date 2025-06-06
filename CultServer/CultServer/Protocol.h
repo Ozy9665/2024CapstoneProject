@@ -13,6 +13,11 @@ constexpr int BUF_SIZE = 200;
 constexpr int MAX_PLAYERS_PER_ROOM = 5;
 constexpr int MAX_CULTIST_PER_ROOM = 4;
 constexpr int MAX_POLICE_PER_ROOM = 1;
+
+constexpr float baseX = 110.f;
+constexpr float baseY = -1100.f;
+constexpr float baseZ = 2770.f;
+
 //-- ingame header
 constexpr char cultistHeader = 0;
 constexpr char skillHeader = 1;

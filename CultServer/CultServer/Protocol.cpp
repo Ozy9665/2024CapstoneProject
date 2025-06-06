@@ -2,7 +2,7 @@
 #include <thread>
 
 FPoliceCharacterState AiState{ -1,
-	110.f, -1100.f, 2770.f,
+	baseX, baseY, baseZ,
 	0.f, 90.f, 0.f,
 	0.f, 0.f, 0.f, 0.f,
 	false, false, false,
