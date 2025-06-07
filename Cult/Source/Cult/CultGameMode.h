@@ -41,9 +41,6 @@ public:
 
 	// 제단 생성
 	UPROPERTY(EditAnywhere, Category = "Altar Spawn")
-	TArray<FVector> AltarSpawnLocations;
-
-	UPROPERTY(EditAnywhere, Category = "Altar Spawn")
 	TSubclassOf<AActor>AltarClass;
 	
 	// 페이드인 위젯 클래스

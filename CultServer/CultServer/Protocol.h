@@ -241,6 +241,14 @@ struct RitualPacket {
 
 #pragma pack(pop)
 
+constexpr FVector kPredefinedLocations[5] = {
+	{ -10740.0f, 10460.0f, -3124.0f },
+	{ -11450.0f,  4640.0f, -3076.0f },
+	{   1530.0f,  6070.0f, -3124.0f },
+	{   1450.0f, -1925.0f, -3124.0f },
+	{  -5730.0f,  1330.0f, -3110.0f }
+};
+
 class EXP_OVER {
 public:
 	EXP_OVER();

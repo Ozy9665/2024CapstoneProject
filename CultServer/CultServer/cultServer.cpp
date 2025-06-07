@@ -20,6 +20,7 @@ EXP_OVER g_a_over;
 std::atomic<int> client_id = 0;
 std::unordered_map<int, SESSION> g_users;
 std::array<room, 100> g_rooms;
+int altar_locs[100][5];
 
 void CommandWorker()
 {
@@ -468,22 +469,10 @@ void process_packet(int c_id, char* packet) {
 		packet.header = ritualHeader;
 		packet.size = sizeof(RitualPacket);
 
-		auto randFloat = [](float minVal, float maxVal) -> float {
-			float t = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
-			return minVal + t * (maxVal - minVal);
-			};
+		packet.Loc1 = kPredefinedLocations[altar_locs[g_users[c_id].room_id][0]];
+		packet.Loc2 = kPredefinedLocations[altar_locs[g_users[c_id].room_id][1]];
+		packet.Loc3 = kPredefinedLocations[altar_locs[g_users[c_id].room_id][2]];
 
-		packet.Loc1.x = baseX + randFloat(-200.f, 200.f);
-		packet.Loc1.y = baseY + randFloat(-200.f, 200.f);
-		packet.Loc1.z = baseZ + randFloat(-50.f, 50.f);
-
-		packet.Loc2.x = baseX + randFloat(-200.f, 200.f);
-		packet.Loc2.y = baseY + randFloat(-200.f, 200.f);
-		packet.Loc2.z = baseZ + randFloat(-50.f, 50.f);
-
-		packet.Loc3.x = baseX + randFloat(-200.f, 200.f);
-		packet.Loc3.y = baseY + randFloat(-200.f, 200.f);
-		packet.Loc3.z = baseZ + randFloat(-50.f, 50.f);
 		g_users[c_id].do_send_packet(&packet);
 		break;
 	}
@@ -567,6 +556,22 @@ void mainLoop(HANDLE h_iocp) {
 	}
 }
 
+void InitializeAltarLoc(int room_num) {
+	if (room_num < 0 || room_num >= 100)
+		return;
+
+	for (int i = 0; i < 5; ++i)
+	{
+		altar_locs[room_num][i] = i;
+	}
+
+	for (int i = 0; i < 4; ++i)
+	{
+	    int j = i + rand() % (5 - i);
+	    std::swap(altar_locs[room_num][i], altar_locs[room_num][j]);
+	}
+}
+
 int main()
 {
 	HANDLE h_iocp;
@@ -603,6 +608,7 @@ int main()
 	
 	for (int i = 0; i < 100; ++i) {
 		g_rooms[i].room_id = i;
+		InitializeAltarLoc(i);
 	}
 
 	mainLoop(h_iocp);

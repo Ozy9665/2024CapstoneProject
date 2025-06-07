@@ -184,14 +184,19 @@ void AMyNetworkManagerActor::ProcessRitualData(const char* Buffer)
 
     AsyncTask(ENamedThreads::GameThread, [this, Packet]() {
         GI->RutialSpawnLocations.Empty();
-        GI->RutialSpawnLocations.Add(Packet.Loc1);
-        GI->RutialSpawnLocations.Add(Packet.Loc2);
-        GI->RutialSpawnLocations.Add(Packet.Loc3);
-
-        // 5) 위치 저장이 끝났음을 알리는 브로드캐스트
-        OnGameStartConfirmed.Broadcast();
+        GI->RutialSpawnLocations = {
+            Packet.Loc1,
+            Packet.Loc2,
+            Packet.Loc3
+        };
+        for (int32 i = 0; i < GI->RutialSpawnLocations.Num(); ++i)
+        {
+            const FVector& Loc = GI->RutialSpawnLocations[i];
+            UE_LOG(LogTemp, Warning, TEXT("RitualLocation[%d]: %s"), i, *Loc.ToString());
+        }
         UE_LOG(LogTemp, Warning, TEXT("OnGameStartConfirmed: Ritual Saved."));
-        });
+        OnGameStartConfirmed.Broadcast();
+    });
 }
 
 void AMyNetworkManagerActor::ReceiveData() 

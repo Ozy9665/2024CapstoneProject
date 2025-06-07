@@ -18,6 +18,7 @@
 #include "FadeWidget.h"
 // TextBlock
 #include "Components/TextBlock.h"
+#include "MyGameInstance.h"
 
 ACultGameMode::ACultGameMode()
 {
@@ -36,8 +37,9 @@ void ACultGameMode::BeginPlay()
 	
 	// 현재 레벨
 	FString CurrentLevelName = UGameplayStatics::GetCurrentLevelName(this, true);
-	if (CurrentLevelName == "NewWorld")
+	if (CurrentLevelName == "NewMap_LandMass")
 	{
+		UE_LOG(LogTemp, Error, TEXT("SpawnAltars Called"));
 		SpawnAltars();
 	}
 
@@ -122,31 +124,34 @@ void ACultGameMode::RestartGame()
 
 void ACultGameMode::SpawnAltars()
 {
-	if (!AltarClass) return;
-
-	int32 Index1 = FMath::RandRange(0, 3);	// 현재는 n 개중 랜덤 조절
-	int32 Index2;
-
-	do {
-		Index2 = FMath::RandRange(0, 3);
-	} while (Index1 == Index2);		// 중복 방지
-
-	// 두 인덱스에 스폰
-	FVector SpawnLocation1 = AltarSpawnLocations[Index1];
-	FVector SpawnLocation2 = AltarSpawnLocations[Index2];
-
-	FRotator SpawnRotation = FRotator::ZeroRotator;
-
-	AActor* SpawnedAltar1 = GetWorld()->SpawnActor<AActor>(AltarClass, SpawnLocation1, SpawnRotation);
-	AActor* SpawnedAltar2 = GetWorld()->SpawnActor<AActor>(AltarClass, SpawnLocation2, SpawnRotation);
-
-	// 스케일
-	if (SpawnedAltar1) {
-		SpawnedAltar1->SetActorScale3D(FVector(5.0f));
-	}
-	if (SpawnedAltar2)
+	if (!AltarClass)
 	{
-		SpawnedAltar2->SetActorScale3D(FVector(5.0f));
+		UE_LOG(LogTemp, Error, TEXT("AltarClass is nullptr"));
+		return;
+	}
+
+	UMyGameInstance* GI = Cast<UMyGameInstance>(GetGameInstance());
+	if (!GI || GI->RutialSpawnLocations.Num() <= 0)
+	{
+		UE_LOG(LogTemp, Error, TEXT("GI->RutialSpawnLocations is empty or GI null"));
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("SpawnAltars() using GI: %d locations"), GI->RutialSpawnLocations.Num());
+
+	for (int32 i = 0; i < GI->RutialSpawnLocations.Num(); ++i)
+	{	
+		AActor* SpawnedAltar = GetWorld()->SpawnActor<AActor>(AltarClass, GI->RutialSpawnLocations[i], FRotator::ZeroRotator);
+
+		if (SpawnedAltar)
+		{
+			SpawnedAltar->SetActorScale3D(FVector(5.0f));
+			UE_LOG(LogTemp, Warning, TEXT("Spawned Altar[%d] at %s"), i, *GI->RutialSpawnLocations[i].ToString());
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Failed to spawn Altar[%d] at %s"), i, *GI->RutialSpawnLocations[i].ToString());
+		}
 	}
 }
 
