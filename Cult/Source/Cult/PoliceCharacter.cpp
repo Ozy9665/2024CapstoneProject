@@ -20,6 +20,7 @@
 #include "Perception/AIPerceptionStimuliSourceComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "BuildingBlockComponent.h"
+#include "Animation/AnimInstance.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/World.h"
 
@@ -532,6 +533,8 @@ void APoliceCharacter::EndAttack()
 	UE_LOG(LogTemp, Warning, TEXT("EndAttack"));
 	GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::SetCoolTimeDone, fCoolTime, false);
 
+	GetMesh()->GetAnimInstance()->Montage_Stop(0.1f); // 혹시라도 몽타주 잔존하면 정지
+	GetMesh()->GetAnimInstance()->UpdateAnimation(0.0f, true); // 강제 업데이트
 }
 
 
