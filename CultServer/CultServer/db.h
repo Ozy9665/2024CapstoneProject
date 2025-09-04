@@ -1,11 +1,12 @@
 #pragma once
 
+#include <iostream>
+#include <windows.h>
 #include <sqlext.h>  
 #include <locale.h>
-#include <stdio.h>
 
 void show_error() {
-	printf("error\n");
+	std::cout << "error" << std::endl;
 }
 
 /************************************************************************

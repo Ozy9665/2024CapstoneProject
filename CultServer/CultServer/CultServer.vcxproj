@@ -129,6 +129,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="cultServer.cpp" />
+    <ClCompile Include="db.cpp" />
     <ClCompile Include="error.cpp" />
     <ClCompile Include="PoliceAI.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
@@ -136,6 +137,7 @@
     <ClCompile Include="Protocol.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="db.h" />
     <ClInclude Include="error.h" />
     <ClInclude Include="PoliceAI.h" />
     <ClInclude Include="Protocol.h" />

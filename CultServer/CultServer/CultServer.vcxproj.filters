@@ -27,6 +27,9 @@
     <ClCompile Include="PoliceAI.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="db.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Protocol.h">
@@ -36,6 +39,9 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="PoliceAI.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="db.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
