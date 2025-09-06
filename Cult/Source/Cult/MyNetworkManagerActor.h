@@ -12,6 +12,8 @@
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnRoomListUpdated);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameStartConfirmed);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameStartUnConfirmed);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FLoginSuccess);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FLoginFailed);
 
 UCLASS()
 class CULT_API AMyNetworkManagerActor : public AActor
@@ -52,6 +54,8 @@ public:
 	void CheckServer();
 	void ReceiveData();
 
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	void TryLogin();
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void RequestRoomInfo();
 	void ProcessRoomInfo(const char* Buffer);

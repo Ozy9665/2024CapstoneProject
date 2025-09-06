@@ -182,6 +182,13 @@ struct RitualPacket {
 	FVector Loc3;
 };
 
+struct LoginPacket {
+	uint8_t header;
+	uint8_t size;
+	FString Id;
+	FString Password;
+};
+
 #pragma pack(pop)
 
 UCLASS()

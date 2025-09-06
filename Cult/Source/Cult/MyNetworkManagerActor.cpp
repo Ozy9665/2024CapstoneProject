@@ -79,6 +79,7 @@ void AMyNetworkManagerActor::CheckServer()
     {
         UE_LOG(LogTemp, Error, TEXT("Server Is Closed."));
         return;
+        // 서버 접속 실패시 게임 종료로 수정
     }
 
     ReceiveData();
@@ -91,6 +92,26 @@ void AMyNetworkManagerActor::CheckServer()
     if (BytesSent == SOCKET_ERROR)
     {
         UE_LOG(LogTemp, Error, TEXT("SetClientSocket failed with error: %ld"), WSAGetLastError());
+    }
+}
+
+void AMyNetworkManagerActor::TryLogin() {
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        ReceiveData();
+        RoleOnlyPacket Packet;
+        Packet.header = loginHeader;
+        Packet.size = sizeof(RoleOnlyPacket);
+        Packet.role = GI->bIsCultist ? 0 : 1;
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RoleOnlyPacket), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("RequestRoomInfo failed with error: %ld"), WSAGetLastError());
+        }
+    }
+    else
+    {
+        CheckServer();
     }
 }
 

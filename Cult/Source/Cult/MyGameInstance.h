@@ -21,6 +21,12 @@ public:
 	bool bIsPolice = false;
 
 	UPROPERTY(BlueprintReadWrite, Category = "Network")
+	FString Id;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Network")
+	FString Password;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Network")
 	int32 PendingRoomNumber = -1;
 
 	SOCKET ClientSocket = INVALID_SOCKET;
