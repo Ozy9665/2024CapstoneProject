@@ -1,4 +1,5 @@
 #include "db.h"
+#include <string>
 
 SQLHENV  henv;
 SQLHDBC  hdbc;
@@ -24,7 +25,7 @@ void HandleDiagnosticRecord(SQLHANDLE hHandle, SQLSMALLINT hType, RETCODE RetCod
 	}
 }
 
-void InitializeThreadDB() {
+void InitializeDB() {
 	SQLRETURN retcode;
 
 	retcode = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &henv);
@@ -41,7 +42,7 @@ void InitializeThreadDB() {
 
 	SQLSetConnectAttr(hdbc, SQL_LOGIN_TIMEOUT, (SQLPOINTER)5, 0);
 
-	retcode = SQLConnect(hdbc, (SQLWCHAR*)L"2019184015", SQL_NTS, (SQLWCHAR*)NULL, 0, NULL, 0);
+	retcode = SQLConnect(hdbc, (SQLWCHAR*)L"Cult", SQL_NTS, (SQLWCHAR*)NULL, 0, NULL, 0);
 	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
 		return;
 
@@ -50,15 +51,15 @@ void InitializeThreadDB() {
 		return;
 }
 
-bool checkValidID(long long user_id)
+bool checkValidID(std::string user_id_str)
 {
 	if (hstmt == SQL_NULL_HSTMT)
 		return false;
 
 	SQLFreeStmt(hstmt, SQL_CLOSE);
 
-	SQLWCHAR szQuery[128];
-	swprintf_s(szQuery, 128, L"EXEC isValidID %I64d", user_id);
+	SQLWCHAR szQuery[256];
+	swprintf_s(szQuery, 256, L"EXEC isValidID '%S'", user_id_str.c_str());
 
 	SQLRETURN ret = SQLExecDirect(hstmt, szQuery, SQL_NTS);
 	if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
@@ -88,7 +89,7 @@ bool checkValidID(long long user_id)
 bool createNewID(long long user_id, short x, short y)
 {
 	if (hstmt == SQL_NULL_HSTMT) {
-		InitializeThreadDB();
+		InitializeDB();
 		if (hstmt == SQL_NULL_HSTMT) {
 			std::cout << "[createNewID] ERROR: hstmt == SQL_NULL_HSTMT after Init\n";
 		}

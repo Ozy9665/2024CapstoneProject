@@ -34,6 +34,7 @@ constexpr char leaveHeader = 10;
 constexpr char readyHeader = 11;
 constexpr char gameStartHeader = 12;
 constexpr char ritualHeader = 13;
+constexpr char loginHeader = 14;
 
 constexpr char ST_FREE{ 0 };
 constexpr char ST_READY{ 1 };
@@ -243,7 +244,6 @@ struct LoginPacket {
 	uint8_t header;
 	uint8_t size;
 	std::string Id;
-	std::string Password;
 };
 
 #pragma pack(pop)

@@ -99,11 +99,15 @@ void AMyNetworkManagerActor::TryLogin() {
     if (ClientSocket != INVALID_SOCKET)
     {
         ReceiveData();
-        RoleOnlyPacket Packet;
+        LoginPacket Packet;
         Packet.header = loginHeader;
-        Packet.size = sizeof(RoleOnlyPacket);
-        Packet.role = GI->bIsCultist ? 0 : 1;
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RoleOnlyPacket), 0);
+        Packet.size = sizeof(LoginPacket);
+        FMemory::Memzero(Packet.Id, sizeof(Packet.Id));
+        FTCHARToUTF8 IdUtf8(*GI->Id);
+        FCStringAnsi::Strncpy(Packet.Id, IdUtf8.Get(), sizeof(Packet.Id) - 1); // -1
+        Packet.Id[sizeof(Packet.Id) - 1] = '\0'; // 마지막에 널 종료
+
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(LoginPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("RequestRoomInfo failed with error: %ld"), WSAGetLastError());

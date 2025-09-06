@@ -185,8 +185,7 @@ struct RitualPacket {
 struct LoginPacket {
 	uint8_t header;
 	uint8_t size;
-	FString Id;
-	FString Password;
+	char Id[32];
 };
 
 #pragma pack(pop)
@@ -226,6 +225,7 @@ constexpr char leaveHeader = 10;
 constexpr char readyHeader = 11;
 constexpr char gameStartHeader = 12;
 constexpr char ritualHeader = 13;
+constexpr char loginHeader = 14;
 
 constexpr FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,

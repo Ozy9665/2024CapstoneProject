@@ -5,10 +5,6 @@
 #include <sqlext.h>  
 #include <locale.h>
 
-void show_error() {
-	std::cout << "error" << std::endl;
-}
-
 /************************************************************************
 /* HandleDiagnosticRecord : display error/warning information
 /*
@@ -20,8 +16,8 @@ void show_error() {
 
 void HandleDiagnosticRecord(SQLHANDLE, SQLSMALLINT, RETCODE);
 
-void InitializeThreadDB();
+void InitializeDB();
 
-bool checkValidID(int);
+bool checkValidID(std::string);
 
 bool createNewID(long long , short , short );

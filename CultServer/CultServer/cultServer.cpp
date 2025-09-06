@@ -10,6 +10,7 @@
 #include "Protocol.h"
 #include "error.h"
 #include "PoliceAI.h"
+#include "db.h"
 
 #pragma comment(lib, "MSWSock.lib")
 #pragma comment (lib, "WS2_32.LIB")
@@ -476,6 +477,26 @@ void process_packet(int c_id, char* packet) {
 		g_users[c_id].do_send_packet(&packet);
 		break;
 	}
+	case loginHeader:
+	{
+		auto* p = reinterpret_cast<LoginPacket*>(packet);
+		std::cout << "Raw bytes: ";
+		for (int i = 0; i < sizeof(LoginPacket); ++i) {
+			std::cout << std::hex << (0xff & ((unsigned char*)p)[i]) << " ";
+		}
+		std::cout << "\n";
+		std::string user_id_str(p->Id);
+
+		if (checkValidID(user_id_str)) {
+			std::cout << user_id_str << "is Valid ID\n";
+			// 로그인 성공 처리
+		}
+		else {
+			std::cout << p->Id << "is Invalid ID\n";
+			// 로그인 실패 처리
+		}
+		break;
+	}
 	default:
 		char header = packet[0];
 		std::cout << "invalidHeader From id: " << c_id << "header: " << header << std::endl;
@@ -576,6 +597,8 @@ int main()
 {
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));	// 한국어로 출력
+	// db초기화
+	InitializeDB();
 
 	WSADATA WSAData;
 	WSAStartup(MAKEWORD(2, 0), &WSAData);
