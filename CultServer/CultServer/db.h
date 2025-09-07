@@ -16,7 +16,7 @@
 
 void HandleDiagnosticRecord(SQLHANDLE, SQLSMALLINT, RETCODE);
 
-void InitializeDB();
+bool InitializeDB();
 
 bool checkValidID(std::string);
 

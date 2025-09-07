@@ -480,19 +480,18 @@ void process_packet(int c_id, char* packet) {
 	case loginHeader:
 	{
 		auto* p = reinterpret_cast<LoginPacket*>(packet);
-		std::cout << "Raw bytes: ";
-		for (int i = 0; i < sizeof(LoginPacket); ++i) {
-			std::cout << std::hex << (0xff & ((unsigned char*)p)[i]) << " ";
+		if (p->size != sizeof(LoginPacket)) {
+			std::cout << "Invalid LoginPacket size\n";
+			break;
 		}
-		std::cout << "\n";
 		std::string user_id_str(p->Id);
 
 		if (checkValidID(user_id_str)) {
-			std::cout << user_id_str << "is Valid ID\n";
+			std::cout << user_id_str << " is Valid ID\n";
 			// 로그인 성공 처리
 		}
 		else {
-			std::cout << p->Id << "is Invalid ID\n";
+			std::cout << p->Id << " is Invalid ID\n";
 			// 로그인 실패 처리
 		}
 		break;
@@ -598,7 +597,10 @@ int main()
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));	// 한국어로 출력
 	// db초기화
-	InitializeDB();
+	if (!InitializeDB()) {
+		std::cout << "DB 초기화 실패, 프로그램 종료\n";
+		return 0;
+	}
 
 	WSADATA WSAData;
 	WSAStartup(MAKEWORD(2, 0), &WSAData);

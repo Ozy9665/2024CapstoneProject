@@ -112,6 +112,9 @@ void AMyNetworkManagerActor::TryLogin() {
         {
             UE_LOG(LogTemp, Error, TEXT("RequestRoomInfo failed with error: %ld"), WSAGetLastError());
         }
+        else {
+            UE_LOG(LogTemp, Warning, TEXT("send success, bytes = %d"), BytesSent);
+        }
     }
     else
     {

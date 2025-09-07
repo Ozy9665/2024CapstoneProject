@@ -1,5 +1,6 @@
 #include "db.h"
 #include <string>
+#include <codecvt>
 
 SQLHENV  henv;
 SQLHDBC  hdbc;
@@ -25,41 +26,67 @@ void HandleDiagnosticRecord(SQLHANDLE hHandle, SQLSMALLINT hType, RETCODE RetCod
 	}
 }
 
-void InitializeDB() {
-	SQLRETURN retcode;
+bool InitializeDB() {
+    SQLRETURN retcode;
 
-	retcode = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &henv);
-	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
-		return;
+    retcode = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &henv);
+    if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO) {
+        std::cout << "[DB] SQLAllocHandle ENV failed\n";
+        return false;
+    }
 
-	retcode = SQLSetEnvAttr(henv, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)SQL_OV_ODBC3, 0);
-	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
-		return;
+    retcode = SQLSetEnvAttr(henv, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)SQL_OV_ODBC3, 0);
+    if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO) {
+        std::cout << "[DB] SQLSetEnvAttr failed\n";
+        return false;
+    }
 
-	retcode = SQLAllocHandle(SQL_HANDLE_DBC, henv, &hdbc);
-	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
-		return;
+    retcode = SQLAllocHandle(SQL_HANDLE_DBC, henv, &hdbc);
+    if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO) {
+        std::cout << "[DB] SQLAllocHandle DBC failed\n";
+        return false;
+    }
 
-	SQLSetConnectAttr(hdbc, SQL_LOGIN_TIMEOUT, (SQLPOINTER)5, 0);
+    SQLSetConnectAttr(hdbc, SQL_LOGIN_TIMEOUT, (SQLPOINTER)5, 0);
 
-	retcode = SQLConnect(hdbc, (SQLWCHAR*)L"Cult", SQL_NTS, (SQLWCHAR*)NULL, 0, NULL, 0);
-	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
-		return;
+    retcode = SQLConnect(hdbc, (SQLWCHAR*)L"Cult", SQL_NTS, (SQLWCHAR*)NULL, 0, NULL, 0);
+    if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO) {
+        HandleDiagnosticRecord(hdbc, SQL_HANDLE_DBC, retcode);
+        std::cout << "[DB] SQLConnect failed\n";
+        return false;
+    }
 
-	retcode = SQLAllocHandle(SQL_HANDLE_STMT, hdbc, &hstmt);
-	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO)
-		return;
+    retcode = SQLAllocHandle(SQL_HANDLE_STMT, hdbc, &hstmt);
+    if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO) {
+        std::cout << "[DB] SQLAllocHandle STMT failed\n";
+        return false;
+    }
+
+	retcode = SQLExecDirect(hstmt, (SQLWCHAR*)L"USE Cult", SQL_NTS);
+	if (retcode != SQL_SUCCESS && retcode != SQL_SUCCESS_WITH_INFO) {
+		std::cout << "[DB] Failed to USE Cult database\n";
+		HandleDiagnosticRecord(hstmt, SQL_HANDLE_STMT, retcode);
+		return false;
+	}
+
+    std::cout << "[DB] InitializeDB success\n";
+    return true;
 }
 
 bool checkValidID(std::string user_id_str)
 {
-	if (hstmt == SQL_NULL_HSTMT)
+	if (hstmt == SQL_NULL_HSTMT) {
+		std::cout << "SQL_NULL_HSTMT" << std::endl;
 		return false;
+	}
 
 	SQLFreeStmt(hstmt, SQL_CLOSE);
 
 	SQLWCHAR szQuery[256];
-	swprintf_s(szQuery, 256, L"EXEC isValidID '%S'", user_id_str.c_str());
+	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+	std::wstring wUserId = conv.from_bytes(user_id_str);
+
+	swprintf_s(szQuery, 256, L"EXEC dbo.isValidID N'%s'", wUserId.c_str());
 
 	SQLRETURN ret = SQLExecDirect(hstmt, szQuery, SQL_NTS);
 	if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {

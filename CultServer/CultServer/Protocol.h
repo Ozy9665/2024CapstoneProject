@@ -243,7 +243,7 @@ struct RitualPacket {
 struct LoginPacket {
 	uint8_t header;
 	uint8_t size;
-	std::string Id;
+	char Id[32];
 };
 
 #pragma pack(pop)
