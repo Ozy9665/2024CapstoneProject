@@ -188,6 +188,12 @@ struct LoginPacket {
 	char Id[32];
 };
 
+struct BoolPacket {
+	uint8_t header;
+	uint8_t size;
+	bool result;
+};
+
 #pragma pack(pop)
 
 UCLASS()

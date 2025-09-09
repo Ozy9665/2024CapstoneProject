@@ -489,10 +489,20 @@ void process_packet(int c_id, char* packet) {
 		if (checkValidID(user_id_str)) {
 			std::cout << user_id_str << " is Valid ID\n";
 			// 로그인 성공 처리
+			BoolPacket packet;
+			packet.header = loginHeader;
+			packet.size = sizeof(BoolPacket);
+			packet.result = true;
+			g_users[c_id].do_send_packet(&packet);
 		}
 		else {
 			std::cout << p->Id << " is Invalid ID\n";
 			// 로그인 실패 처리
+			BoolPacket packet;
+			packet.header = loginHeader;
+			packet.size = sizeof(BoolPacket);
+			packet.result = false;
+			g_users[c_id].do_send_packet(&packet);
 		}
 		break;
 	}

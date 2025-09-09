@@ -47,6 +47,12 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnGameStartConfirmed OnGameStartUnConfirmed;
 
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FLoginSuccess OnLoginSuccess;
+
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FLoginFailed OnLoginFailed;
+
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 

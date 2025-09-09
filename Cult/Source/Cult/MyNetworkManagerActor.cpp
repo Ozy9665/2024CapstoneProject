@@ -271,6 +271,24 @@ void AMyNetworkManagerActor::ReceiveData()
                 ProcessRitualData(Buffer);
                 break;
             }
+            case loginHeader:
+            {
+                BoolPacket* p = reinterpret_cast<BoolPacket*>(Buffer);
+                bool bSuccess = p->result;
+                AsyncTask(ENamedThreads::GameThread, [this, bSuccess]() {
+                    if (bSuccess)
+                    {
+                        OnLoginSuccess.Broadcast();
+                        UE_LOG(LogTemp, Warning, TEXT("Login Success"));
+                    }
+                    else
+                    {
+                        OnLoginFailed.Broadcast();
+                        UE_LOG(LogTemp, Warning, TEXT("Login Failed"));
+                    }
+                    });
+                break;
+            }
             default:
                 UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
                 break;
