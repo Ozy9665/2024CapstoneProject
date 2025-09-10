@@ -14,6 +14,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameStartConfirmed);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnGameStartUnConfirmed);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FLoginSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FLoginFailed);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FIdIsExist);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FIdIsNotExist);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FSignUpSuccess);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FSignUpFailed);
 
 UCLASS()
 class CULT_API AMyNetworkManagerActor : public AActor
@@ -53,6 +57,18 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FLoginFailed OnLoginFailed;
 
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FIdIsExist OnIdIsExist;
+
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FIdIsNotExist OnIdIsNotExist;
+
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FSignUpSuccess OnSignUpSuccess;
+
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FSignUpFailed OnSignUpFailed;
+
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
@@ -62,9 +78,17 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void TryLogin();
+
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	void CheckIDValidation();
+
+	UFUNCTION(BlueprintCallable, Category = "Network")
+	void TrySignUp();
+
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void RequestRoomInfo();
 	void ProcessRoomInfo(const char* Buffer);
+
 	UFUNCTION(BlueprintCallable, Category = "Network")
 	void SendEnterPacket();
 	void RequestRitualData();

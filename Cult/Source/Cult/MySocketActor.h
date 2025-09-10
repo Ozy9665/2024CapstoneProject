@@ -182,10 +182,17 @@ struct RitualPacket {
 	FVector Loc3;
 };
 
-struct LoginPacket {
+struct IdPacket {
 	uint8_t header;
 	uint8_t size;
-	char Id[32];
+	char id[32];
+};
+
+struct IdPwPacket {
+	uint8_t header;
+	uint8_t size;
+	char id[32];
+	char pw[32];
 };
 
 struct BoolPacket {
@@ -232,6 +239,8 @@ constexpr char readyHeader = 11;
 constexpr char gameStartHeader = 12;
 constexpr char ritualHeader = 13;
 constexpr char loginHeader = 14;
+constexpr char idExistHeader = 15;
+constexpr char signUpHeader = 16;
 
 constexpr FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,

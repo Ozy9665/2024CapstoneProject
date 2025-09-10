@@ -99,15 +99,15 @@ void AMyNetworkManagerActor::TryLogin() {
     if (ClientSocket != INVALID_SOCKET)
     {
         ReceiveData();
-        LoginPacket Packet;
+        IdPacket Packet;
         Packet.header = loginHeader;
-        Packet.size = sizeof(LoginPacket);
-        FMemory::Memzero(Packet.Id, sizeof(Packet.Id));
+        Packet.size = sizeof(IdPacket);
+        FMemory::Memzero(Packet.id, sizeof(Packet.id));
         FTCHARToUTF8 IdUtf8(*GI->Id);
-        FCStringAnsi::Strncpy(Packet.Id, IdUtf8.Get(), sizeof(Packet.Id) - 1); // -1
-        Packet.Id[sizeof(Packet.Id) - 1] = '\0'; // 마지막에 널 종료
+        FCStringAnsi::Strncpy(Packet.id, IdUtf8.Get(), sizeof(Packet.id) - 1); // -1
+        Packet.id[sizeof(Packet.id) - 1] = '\0'; // 마지막에 널 종료
 
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(LoginPacket), 0);
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(IdPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("RequestRoomInfo failed with error: %ld"), WSAGetLastError());
@@ -120,6 +120,37 @@ void AMyNetworkManagerActor::TryLogin() {
     {
         CheckServer();
     }
+}
+
+void AMyNetworkManagerActor::CheckIDValidation() {
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        ReceiveData();
+        IdPacket Packet;
+        Packet.header = idExistHeader;
+        Packet.size = sizeof(IdPacket);
+        FMemory::Memzero(Packet.id, sizeof(Packet.id));
+        FTCHARToUTF8 IdUtf8(*GI->Id);
+        FCStringAnsi::Strncpy(Packet.id, IdUtf8.Get(), sizeof(Packet.id) - 1); // -1
+        Packet.id[sizeof(Packet.id) - 1] = '\0'; // 마지막에 널 종료
+
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(IdPacket), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("RequestRoomInfo failed with error: %ld"), WSAGetLastError());
+        }
+        else {
+            UE_LOG(LogTemp, Warning, TEXT("send success, bytes = %d"), BytesSent);
+        }
+    }
+    else
+    {
+        CheckServer();
+    }
+}
+
+void AMyNetworkManagerActor::TrySignUp() {
+
 }
 
 void AMyNetworkManagerActor::RequestRoomInfo() 
@@ -285,6 +316,24 @@ void AMyNetworkManagerActor::ReceiveData()
                     {
                         OnLoginFailed.Broadcast();
                         UE_LOG(LogTemp, Warning, TEXT("Login Failed"));
+                    }
+                    });
+                break;
+            }
+            case idExistHeader:
+            {
+                BoolPacket* p = reinterpret_cast<BoolPacket*>(Buffer);
+                bool bSuccess = p->result;
+                AsyncTask(ENamedThreads::GameThread, [this, bSuccess]() {
+                    if (bSuccess)
+                    {
+                        OnIdIsExist.Broadcast();
+                        UE_LOG(LogTemp, Warning, TEXT("Id already Exist"));
+                    }
+                    else
+                    {
+                        OnIdIsNotExist.Broadcast();
+                        UE_LOG(LogTemp, Warning, TEXT("Can sign up"));
                     }
                     });
                 break;

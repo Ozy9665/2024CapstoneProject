@@ -479,8 +479,8 @@ void process_packet(int c_id, char* packet) {
 	}
 	case loginHeader:
 	{
-		auto* p = reinterpret_cast<LoginPacket*>(packet);
-		if (p->size != sizeof(LoginPacket)) {
+		auto* p = reinterpret_cast<IdPacket*>(packet);
+		if (p->size != sizeof(IdPacket)) {
 			std::cout << "Invalid LoginPacket size\n";
 			break;
 		}
@@ -504,6 +504,39 @@ void process_packet(int c_id, char* packet) {
 			packet.result = false;
 			g_users[c_id].do_send_packet(&packet);
 		}
+		break;
+	}
+	case idExistHeader:
+	{
+		auto* p = reinterpret_cast<IdPacket*>(packet);
+		if (p->size != sizeof(IdPacket)) {
+			std::cout << "Invalid LoginPacket size\n";
+			break;
+		}
+		std::string user_id_str(p->Id);
+
+		if (checkValidID(user_id_str)) {
+			std::cout << user_id_str << " is exist ID\n";
+			// 이미 존재하는 아이디입니다.
+			BoolPacket packet;
+			packet.header = idExistHeader;
+			packet.size = sizeof(BoolPacket);
+			packet.result = true;
+			g_users[c_id].do_send_packet(&packet);
+		}
+		else {
+			std::cout << p->Id << " can sign up\n";
+			// 존재하지 않는 아이디. 생성가능
+			BoolPacket packet;
+			packet.header = idExistHeader;
+			packet.size = sizeof(BoolPacket);
+			packet.result = false;
+			g_users[c_id].do_send_packet(&packet);
+		}
+		break;
+	}
+	case signUpHeader:
+	{
 		break;
 	}
 	default:

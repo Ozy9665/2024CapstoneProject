@@ -27,6 +27,9 @@ public:
 	FString Password;
 
 	UPROPERTY(BlueprintReadWrite, Category = "Network")
+	FString Verify_Password;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Network")
 	int32 PendingRoomNumber = -1;
 
 	SOCKET ClientSocket = INVALID_SOCKET;

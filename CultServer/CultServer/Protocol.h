@@ -35,6 +35,8 @@ constexpr char readyHeader = 11;
 constexpr char gameStartHeader = 12;
 constexpr char ritualHeader = 13;
 constexpr char loginHeader = 14;
+constexpr char idExistHeader = 15;
+constexpr char signUpHeader = 16;
 
 constexpr char ST_FREE{ 0 };
 constexpr char ST_READY{ 1 };
@@ -240,10 +242,17 @@ struct RitualPacket {
 	FVector Loc3;
 };	
 
-struct LoginPacket {
+struct IdPacket {
 	uint8_t header;
 	uint8_t size;
 	char Id[32];
+};
+
+struct IdPwPacket {
+	uint8_t header;
+	uint8_t size;
+	char id[32];
+	char pw[32];
 };
 
 struct BoolPacket {
