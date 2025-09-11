@@ -652,6 +652,21 @@ void APoliceCharacter::SpawnImpactEffect(FVector ImpactLocation)
 
 
 // Interaction
+void APoliceCharacter::TryCarry()
+{
+	if (CarryingTarget)
+	{
+		// 이미 업고 있으면 내려놓기
+		FVector DropLocation = GetActorLocation() + GetActorForwardVector() * 200.0f;
+		CarryingTarget->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+		CarryingTarget->SetActorLocation(DropLocation);
+		CarryingTarget->CurrentState = ECultistState::Incapacitated;
+		CarryingTarget = nullptr;
+		return;
+	}
+	
+}
+
 void APoliceCharacter::TryPickUp()
 {
 	TArray<AActor*> Overlapping;

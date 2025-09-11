@@ -83,6 +83,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Weapon")
 	bool bIsShooting = false;
 
+	// 들쳐매기
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	class ACultistCharacter* CarryingTarget;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float CarryCheckDistance = 100.0f;
+
 	//	- Mesh
 	UPROPERTY(VisibleAnywhere, Category="Weapon")
 	UStaticMeshComponent* BatonMesh;
@@ -210,6 +216,7 @@ public:
 	UAIPerceptionStimuliSourceComponent* StimulusComponent;
 
 	// Interaction
+	void TryCarry();
 	void TryPickUp();
 	void TryConfine(AActor* ConfineTarget);
 	ACultistCharacter* CarriedCharacter;	// 들고있는 신도

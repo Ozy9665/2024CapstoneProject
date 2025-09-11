@@ -23,7 +23,14 @@ enum class ESpecialAbility : uint8
 	Rolling UMETA(DisplayName = "Rolling")
 };
 
-
+UENUM(BlueprintType)
+enum class ECultistState : uint8
+{
+	Normal,	// 평상시
+	Incapacitated,	// 쓰러짐
+	Carried,	// 업힌상태
+	Imprisoned	// 감금
+};
 
 
 UCLASS()
@@ -181,6 +188,9 @@ public:
 	bool bIsConfined = false;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")
 	bool bIsBeingCarried = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interaction")
+	ECultistState CurrentState;
+
 
 	// 피격효과 위젯 클래스
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
