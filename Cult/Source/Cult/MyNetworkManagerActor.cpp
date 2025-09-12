@@ -137,10 +137,7 @@ void AMyNetworkManagerActor::CheckIDValidation() {
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(IdPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
-            UE_LOG(LogTemp, Error, TEXT("RequestRoomInfo failed with error: %ld"), WSAGetLastError());
-        }
-        else {
-            UE_LOG(LogTemp, Warning, TEXT("send success, bytes = %d"), BytesSent);
+            UE_LOG(LogTemp, Error, TEXT("CheckIDValidation failed with error: %ld"), WSAGetLastError());
         }
     }
     else
@@ -150,7 +147,31 @@ void AMyNetworkManagerActor::CheckIDValidation() {
 }
 
 void AMyNetworkManagerActor::TrySignUp() {
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        ReceiveData();
+        IdPwPacket Packet;
+        Packet.header = signUpHeader;
+        Packet.size = sizeof(IdPwPacket);
+        FMemory::Memzero(Packet.id, sizeof(Packet.id));
+        FTCHARToUTF8 IdUtf8(*GI->Id);
+        FCStringAnsi::Strncpy(Packet.id, IdUtf8.Get(), sizeof(Packet.id) - 1);
+        Packet.id[sizeof(Packet.id) - 1] = '\0';
 
+        FTCHARToUTF8 PwUtf8(*GI->Password);
+        FCStringAnsi::Strncpy(Packet.pw, PwUtf8.Get(), sizeof(Packet.pw) - 1);
+        Packet.pw[sizeof(Packet.pw) - 1] = '\0';
+
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(IdPwPacket), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("TrySignUp failed with error: %ld"), WSAGetLastError());
+        }
+    }
+    else
+    {
+        CheckServer();
+    }
 }
 
 void AMyNetworkManagerActor::RequestRoomInfo() 
@@ -336,6 +357,10 @@ void AMyNetworkManagerActor::ReceiveData()
                         UE_LOG(LogTemp, Warning, TEXT("Can sign up"));
                     }
                     });
+                break;
+            }
+            case signUpHeader:
+            {
                 break;
             }
             default:

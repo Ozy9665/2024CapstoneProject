@@ -20,4 +20,4 @@ bool InitializeDB();
 
 bool checkValidID(std::string);
 
-bool createNewID(long long , short , short );
+bool createNewID(std::string, std::string);

@@ -245,7 +245,7 @@ struct RitualPacket {
 struct IdPacket {
 	uint8_t header;
 	uint8_t size;
-	char Id[32];
+	char id[32];
 };
 
 struct IdPwPacket {

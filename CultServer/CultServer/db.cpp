@@ -113,7 +113,7 @@ bool checkValidID(std::string user_id_str)
 	return (isValid == 1);
 }
 
-bool createNewID(long long user_id, short x, short y)
+bool createNewID(std::string user_id_str, std::string user_pw_str)
 {
 	if (hstmt == SQL_NULL_HSTMT) {
 		InitializeDB();
@@ -125,8 +125,11 @@ bool createNewID(long long user_id, short x, short y)
 
 	SQLFreeStmt(hstmt, SQL_CLOSE);
 
-	SQLWCHAR szQuery[128];
-	swprintf_s(szQuery, 128, L"EXEC createNewID %I64d, %d, %d", user_id, x, y);
+	SQLWCHAR szQuery[256];
+	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+	std::wstring wUserId = conv.from_bytes(user_id_str);
+	std::wstring wUserPw = conv.from_bytes(user_pw_str);
+	swprintf_s(szQuery, 256, L"EXEC dbo.createNewID N'%s', N'%s'", wUserId.c_str(), wUserPw.c_str());
 	
 	SQLRETURN ret = SQLExecDirect(hstmt, szQuery, SQL_NTS);
 	if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
