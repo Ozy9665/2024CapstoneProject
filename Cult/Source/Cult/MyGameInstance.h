@@ -24,6 +24,9 @@ public:
 	FString Id;
 
 	UPROPERTY(BlueprintReadWrite, Category = "Network")
+	bool canUseId = false;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Network")
 	FString Password;
 
 	UPROPERTY(BlueprintReadWrite, Category = "Network")

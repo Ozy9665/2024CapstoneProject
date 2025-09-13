@@ -353,6 +353,7 @@ void AMyNetworkManagerActor::ReceiveData()
                     }
                     else
                     {
+                        GI->canUseId = true;
                         OnIdIsNotExist.Broadcast();
                         UE_LOG(LogTemp, Warning, TEXT("Can sign up"));
                     }
