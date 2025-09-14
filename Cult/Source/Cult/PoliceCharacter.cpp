@@ -664,6 +664,27 @@ void APoliceCharacter::TryCarry()
 		CarryingTarget = nullptr;
 		return;
 	}
+
+	// 라인 트레이스
+	FVector Start = GetActorLocation();
+	FVector End = Start + (GetActorForwardVector() * CarryCheckDistance);
+	FHitResult Hit;
+
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(this);
+
+	if (GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Pawn, Params))
+	{
+		ACultistCharacter* Cultist = Cast<ACultistCharacter>(Hit.GetActor());
+		if (Cultist && Cultist->ActorHasTag("Cultist") && Cultist->CurrentState == ECultistState::Incapacitated)
+		{
+			CarryingTarget = Cultist;
+			Cultist->CurrentState = ECultistState::Carried;
+			Cultist->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, FName("CarrySocket"));
+			Cultist->GetCharacterMovement()->DisableMovement();
+			Cultist->SetActorEnableCollision(false);
+		}
+	}
 	
 }
 
