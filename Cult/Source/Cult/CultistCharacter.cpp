@@ -13,6 +13,10 @@
 #include "Components/InputComponent.h"
 #include "Landscape.h"
 #include "DrawDebugHelpers.h"
+#include "CrowActor.h"
+#include "Engine/World.h"
+#include "GameFramework/Actor.h"
+
 
 extern AMySocketCultistActor* MySocketCultistActor;
 
@@ -180,6 +184,8 @@ void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction("CancelPreview", IE_Pressed, this, &ACultistCharacter::CancelPreview);
 
 	PlayerInputComponent->BindAction("SkillCheckInput", IE_Pressed, this, &ACultistCharacter::TriggerSkillCheckInput);
+
+	PlayerInputComponent->BindAction("CrowSkill", IE_Pressed, this, &ACultistCharacter::OnCrowSkillPressed);
 	UE_LOG(LogTemp, Warning, TEXT("Binding  input"));
 
 }
@@ -955,6 +961,22 @@ void ACultistCharacter::TriggerSkillCheckInput()
 	if (SkillCheckWidget)
 	{
 		SkillCheckWidget->OnInputPressed();
+	}
+}
+
+void ACultistCharacter::OnCrowSkillPressed()
+{
+	if (!CrowClass) return;
+	FActorSpawnParameters Params;
+	Params.Owner = this;
+	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	const FVector SpawnLoc = GetActorLocation() + FVector(0, 0, 400.f);
+	const FRotator SpawnRot = GetActorRotation();
+
+	if (ACrowActor* Crow = GetWorld()->SpawnActor<ACrowActor>(CrowClass, SpawnLoc, SpawnRot, Params))
+	{
+		Crow->InitCrow(this, CrowLifetime);
 	}
 }
 

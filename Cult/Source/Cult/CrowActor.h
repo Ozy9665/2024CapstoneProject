@@ -11,6 +11,7 @@ UENUM(BlueprintType)
 enum class ECrowState : uint8
 {
 	Idle,
+	SpawnRise,
 	Patrol,
 	Alert
 };
@@ -50,11 +51,16 @@ protected:
 	float CurrentAngle = 0.f;
 	FVector PatrolCenter;
 
+	UPROPERTY(EditDefaultsOnly, Category = "CrowMovement")
+	float PatrolHeight = 500.f;
+
 	// 경고(발견)
 	UPROPERTY(EditDefaultsOnly, Category="CrowAlert")
 	float AlertRadius = 200.f;
 	UPROPERTY(EditDefaultsOnly, Category = "CrowAlert")
 	float AlertOrbitSpeed = 180.f;	// 발견시 빠르게 회전
+
+	float SpawnElapsed = 0.f;
 
 	AActor* TargetPolice = nullptr;
 

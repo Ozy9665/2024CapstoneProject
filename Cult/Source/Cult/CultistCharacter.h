@@ -13,6 +13,7 @@
 #include "CultistCharacter.generated.h"
 
 class AMySocketCultistActor;
+class ACrowActor;
 
 // Ability Type
 UENUM(BlueprintType)
@@ -251,6 +252,15 @@ public:
 	void ResetTreeSkillCooldown();
 	UPROPERTY(EditAnywhere, Category = "Abilities")
 	float TreeSkillCooldownTime = 3.f;
+
+	// Crow
+	UFUNCTION()
+	void OnCrowSkillPressed();
+	UPROPERTY(EditDefaultsOnly, Category="CrowSkill")
+	TSubclassOf<ACrowActor> CrowClass;
+	UPROPERTY(EditDefaultsOnly, Category="CrowSkill")
+	float CrowLifetime = 12.f;
+
 
 	int my_ID = -1;
 	int GetPlayerID() const;
