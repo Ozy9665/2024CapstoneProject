@@ -548,7 +548,7 @@ void process_packet(int c_id, char* packet) {
 		if (createNewID(user_id_str, user_pw_str)) {
 			std::cout <<  "createNewID success.\n";
 			BoolPacket packet;
-			packet.header = idExistHeader;
+			packet.header = signUpHeader;
 			packet.size = sizeof(BoolPacket);
 			packet.result = true;
 			g_users[c_id].do_send_packet(&packet);
@@ -556,7 +556,7 @@ void process_packet(int c_id, char* packet) {
 		else {
 			std::cout << p->id << " can't sign up\n";
 			BoolPacket packet;
-			packet.header = idExistHeader;
+			packet.header = signUpHeader;
 			packet.size = sizeof(BoolPacket);
 			packet.result = false;
 			g_users[c_id].do_send_packet(&packet);

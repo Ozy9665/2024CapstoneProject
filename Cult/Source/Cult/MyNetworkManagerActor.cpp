@@ -362,6 +362,20 @@ void AMyNetworkManagerActor::ReceiveData()
             }
             case signUpHeader:
             {
+                BoolPacket* p = reinterpret_cast<BoolPacket*>(Buffer);
+                bool bSuccess = p->result;
+                AsyncTask(ENamedThreads::GameThread, [this, bSuccess]() {
+                    if (bSuccess)
+                    {
+                        OnSignUpSuccess.Broadcast();
+                        UE_LOG(LogTemp, Warning, TEXT("Sign up Finished."));
+                    }
+                    else
+                    {
+                        OnSignUpFailed.Broadcast();
+                        UE_LOG(LogTemp, Warning, TEXT("Can't sign up"));
+                    }
+                    });
                 break;
             }
             default:
