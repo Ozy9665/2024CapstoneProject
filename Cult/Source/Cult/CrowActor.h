@@ -54,6 +54,18 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "CrowMovement")
 	float PatrolHeight = 500.f;
 
+	// 탐지
+	UPROPERTY(EditAnywhere, Category="CrowSense")
+	float SenseRadius = 800.f;
+	UPROPERTY(EditAnywhere, Category="CrowSense")
+	float SenseInterval = 0.2f;
+	//	탐지 
+	//      - 내부 타이머
+	float SenseTimer = 0.f; 
+	void DetectPolice();
+
+
+
 	// 경고(발견)
 	UPROPERTY(EditDefaultsOnly, Category="CrowAlert")
 	float AlertRadius = 200.f;

@@ -45,6 +45,14 @@ void ACrowActor::Tick(float DeltaTime)
 
 		FVector ForwardDir = (TargetPos - PatrolCenter).GetSafeNormal();
 		SetActorRotation(ForwardDir.Rotation());
+
+		// 패트롤중엔 경찰 감지 가능
+		SenseTimer += DeltaTime;
+		if (SenseTimer > SenseInterval)
+		{
+			SenseTimer = 0.f;
+			DetectPolice();
+		}
 	}
 	else if (CurrentState == ECrowState::Alert && TargetPolice)
 	{
@@ -115,6 +123,32 @@ void ACrowActor::EnterAlertState(AActor* PoliceTarget)
 	CurrentState = ECrowState::Alert;
 	TargetPolice = PoliceTarget;
 	CurrentAngle = 0.f;
+
+	// 효과
+	UE_LOG(LogTemp, Warning, TEXT("Crow Alert Police"));
+
+	// 사운드
+
+	// Police 경계선 ( 안 쓸 수도 )  - CustomDepth
+	// ㅁㄴㅇㄻㄴㅇㄻ
+}
+
+void ACrowActor::DetectPolice()
+{
+	// 
+	TArray<FOverlapResult> Overlaps;
+	FCollisionShape Sphere = FCollisionShape::MakeSphere(SenseRadius);
+
+	// 오버랩 검사
+
+
+	// 아니면 리턴
+
+	// 검사 - 
+	
+	// 경찰확인
+
+	// 찾으면 break
 }
 
 void ACrowActor::DestroyCrow()
