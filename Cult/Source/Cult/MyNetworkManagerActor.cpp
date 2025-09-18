@@ -99,21 +99,23 @@ void AMyNetworkManagerActor::TryLogin() {
     if (ClientSocket != INVALID_SOCKET)
     {
         ReceiveData();
-        IdPacket Packet;
+        IdPwPacket Packet;
         Packet.header = loginHeader;
-        Packet.size = sizeof(IdPacket);
+        Packet.size = sizeof(IdPwPacket);
         FMemory::Memzero(Packet.id, sizeof(Packet.id));
         FTCHARToUTF8 IdUtf8(*GI->Id);
-        FCStringAnsi::Strncpy(Packet.id, IdUtf8.Get(), sizeof(Packet.id) - 1); // -1
-        Packet.id[sizeof(Packet.id) - 1] = '\0'; // 마지막에 널 종료
+        FCStringAnsi::Strncpy(Packet.id, IdUtf8.Get(), sizeof(Packet.id) - 1);
+        Packet.id[sizeof(Packet.id) - 1] = '\0';
 
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(IdPacket), 0);
+        FMemory::Memzero(Packet.pw, sizeof(Packet.pw));
+        FTCHARToUTF8 PwUtf8(*GI->Password);
+        FCStringAnsi::Strncpy(Packet.pw, PwUtf8.Get(), sizeof(Packet.pw) - 1);
+        Packet.pw[sizeof(Packet.pw) - 1] = '\0';
+
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(IdPwPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
-            UE_LOG(LogTemp, Error, TEXT("RequestRoomInfo failed with error: %ld"), WSAGetLastError());
-        }
-        else {
-            UE_LOG(LogTemp, Warning, TEXT("send success, bytes = %d"), BytesSent);
+            UE_LOG(LogTemp, Error, TEXT("TryLogin failed with error: %ld"), WSAGetLastError());
         }
     }
     else
@@ -158,6 +160,7 @@ void AMyNetworkManagerActor::TrySignUp() {
         FCStringAnsi::Strncpy(Packet.id, IdUtf8.Get(), sizeof(Packet.id) - 1);
         Packet.id[sizeof(Packet.id) - 1] = '\0';
 
+        FMemory::Memzero(Packet.pw, sizeof(Packet.pw));
         FTCHARToUTF8 PwUtf8(*GI->Password);
         FCStringAnsi::Strncpy(Packet.pw, PwUtf8.Get(), sizeof(Packet.pw) - 1);
         Packet.pw[sizeof(Packet.pw) - 1] = '\0';
@@ -327,7 +330,8 @@ void AMyNetworkManagerActor::ReceiveData()
             {
                 BoolPacket* p = reinterpret_cast<BoolPacket*>(Buffer);
                 bool bSuccess = p->result;
-                AsyncTask(ENamedThreads::GameThread, [this, bSuccess]() {
+                uint8_t ReasonCode = p->reason;
+                AsyncTask(ENamedThreads::GameThread, [this, bSuccess, ReasonCode]() {
                     if (bSuccess)
                     {
                         OnLoginSuccess.Broadcast();
@@ -335,7 +339,7 @@ void AMyNetworkManagerActor::ReceiveData()
                     }
                     else
                     {
-                        OnLoginFailed.Broadcast();
+                        OnLoginFailed.Broadcast(ReasonCode);
                         UE_LOG(LogTemp, Warning, TEXT("Login Failed"));
                     }
                     });

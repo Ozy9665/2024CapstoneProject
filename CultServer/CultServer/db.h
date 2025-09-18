@@ -21,3 +21,10 @@ bool InitializeDB();
 bool checkValidID(std::string);
 
 bool createNewID(std::string, std::string);
+
+int logIn(std::string, std::string);
+// 0- 성공
+// 1- id 없음
+// 2- 비번 오류
+// 3- db에러
+// 4- 접속중인 아이디

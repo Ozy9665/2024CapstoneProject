@@ -259,6 +259,7 @@ struct BoolPacket {
 	uint8_t header;
 	uint8_t size;
 	bool result;
+	uint8_t reason;
 };
 
 #pragma pack(pop)

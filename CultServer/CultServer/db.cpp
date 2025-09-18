@@ -141,3 +141,35 @@ bool createNewID(std::string user_id_str, std::string user_pw_str)
 	SQLFreeStmt(hstmt, SQL_CLOSE);
 	return true;
 }
+
+int logIn(std::string user_id_str, std::string user_pw_str) {
+	if (hstmt == SQL_NULL_HSTMT) {
+		InitializeDB();
+		if (hstmt == SQL_NULL_HSTMT) {
+			std::cout << "[logIn] ERROR: hstmt == SQL_NULL_HSTMT after Init\n";
+		}
+		return 3;
+	}
+
+	SQLFreeStmt(hstmt, SQL_CLOSE);
+
+	SQLWCHAR szQuery[256];
+	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> conv;
+	std::wstring wUserId = conv.from_bytes(user_id_str);
+	std::wstring wUserPw = conv.from_bytes(user_pw_str);
+	swprintf_s(szQuery, 256, L"EXEC dbo.logIn N'%s', N'%s'", wUserId.c_str(), wUserPw.c_str());
+
+	SQLRETURN ret = SQLExecDirect(hstmt, szQuery, SQL_NTS);
+	if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
+		HandleDiagnosticRecord(hstmt, SQL_HANDLE_STMT, ret);
+		SQLFreeStmt(hstmt, SQL_CLOSE);
+		return 3;
+	}
+	int reasonCode{ 3 };
+	if (SQLFetch(hstmt) == SQL_SUCCESS) {
+		SQLGetData(hstmt, 1, SQL_C_SLONG, &reasonCode, 0, nullptr);
+	}
+
+	SQLFreeStmt(hstmt, SQL_CLOSE);
+	return reasonCode;
+}

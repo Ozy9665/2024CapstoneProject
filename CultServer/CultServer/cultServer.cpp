@@ -20,7 +20,9 @@ EXP_OVER g_a_over;
 
 std::atomic<int> client_id = 0;
 std::unordered_map<int, SESSION> g_users;
+std::pair<int, std::string> id_pair;
 std::array<room, 100> g_rooms;
+
 int altar_locs[100][5];
 
 void CommandWorker()
@@ -479,29 +481,65 @@ void process_packet(int c_id, char* packet) {
 	}
 	case loginHeader:
 	{
-		auto* p = reinterpret_cast<IdPacket*>(packet);
-		if (p->size != sizeof(IdPacket)) {
+		auto* p = reinterpret_cast<IdPwPacket*>(packet);
+		if (p->size != sizeof(IdPwPacket)) {
 			std::cout << "Invalid LoginPacket size\n";
 			break;
 		}
 		std::string user_id_str(p->id);
+		std::string user_pw_str(p->pw);
 
-		if (checkValidID(user_id_str)) {
-			std::cout << user_id_str << " is Valid ID\n";
-			// 로그인 성공 처리
-			BoolPacket packet;
-			packet.header = loginHeader;
-			packet.size = sizeof(BoolPacket);
-			packet.result = true;
-			g_users[c_id].do_send_packet(&packet);
-		}
-		else {
-			std::cout << p->id << " is Invalid ID\n";
-			// 로그인 실패 처리
+		if (user_id_str == id_pair.second) {
+			std::cout << user_id_str << " is already Exist ID.\n";
+
 			BoolPacket packet;
 			packet.header = loginHeader;
 			packet.size = sizeof(BoolPacket);
 			packet.result = false;
+			packet.reason = 4;
+			g_users[c_id].do_send_packet(&packet);
+			break;
+		}
+
+		int code = logIn(user_id_str, user_pw_str);
+		if (code == 0) {
+			// 로그인 성공 처리
+			std::cout << user_id_str << " is Valid\n";
+			BoolPacket packet;
+			packet.header = loginHeader;
+			packet.size = sizeof(BoolPacket);
+			packet.result = true;
+			packet.reason = 0;
+			g_users[c_id].do_send_packet(&packet);
+		}
+		else if (code == 1) {
+			// ID 틀림
+			std::cout << p->id << " is Invalid ID\n";
+			BoolPacket packet;
+			packet.header = loginHeader;
+			packet.size = sizeof(BoolPacket);
+			packet.result = false;
+			packet.reason = 1;
+			g_users[c_id].do_send_packet(&packet);
+		}
+		else if (code == 2) {
+			// 비밀번호 틀림
+			std::cout << p->id << " is Invalid PW\n";
+			BoolPacket packet;
+			packet.header = loginHeader;
+			packet.size = sizeof(BoolPacket);
+			packet.result = false;
+			packet.reason = 2;
+			g_users[c_id].do_send_packet(&packet);
+		}
+		else if (code == 3) {
+			// DB 오류
+			std::cout << "DB ERROR!!\n";
+			BoolPacket packet;
+			packet.header = loginHeader;
+			packet.size = sizeof(BoolPacket);
+			packet.result = false;
+			packet.reason = 3;
 			g_users[c_id].do_send_packet(&packet);
 		}
 		break;
