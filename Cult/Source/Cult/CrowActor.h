@@ -27,6 +27,7 @@ public:
 
 	void InitCrow(AActor* InOwner, float InLifeTime);
 	void EnterAlertState(AActor* PoliceTarget);
+	void EndAlertState();
 
 protected:
 	// Called when the game starts or when spawned

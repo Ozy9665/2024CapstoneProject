@@ -5,6 +5,7 @@
 #include "GameFramework/FloatingPawnMovement.h"
 #include "Components/SphereComponent.h"
 #include "TimerManager.h"
+#include "Components/WidgetComponent.h"
 
 // Sets default values
 ACrowActor::ACrowActor()
@@ -130,7 +131,42 @@ void ACrowActor::EnterAlertState(AActor* PoliceTarget)
 	// 사운드
 
 	// Police 경계선 ( 안 쓸 수도 )  - CustomDepth
-	// ㅁㄴㅇㄻㄴㅇㄻ
+	if (USkeletalMeshComponent* Mesh = PoliceTarget->FindComponentByClass<USkeletalMeshComponent>())
+	{
+		Mesh->SetRenderCustomDepth(true);
+		Mesh->SetCustomDepthStencilValue(1);
+	}
+	// 아이콘?
+	/*
+	if (UWidgetComponent* Icon = PoliceTarget->FindComponentByClass<UWidgetComponent>())
+	{
+		Icon->SetVisibility(true);
+	}
+	*/
+
+	// 사운드
+	// UGameplayStatics::PlaySoundAtLocation(this, CrowSound, GetActorLocation());
+	// 이펙트
+	// UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), CrowAlertVFX, PoliceTarget->GetActorLocation());
+}
+
+void ACrowActor::EndAlertState()
+{
+	if (!TargetPolice) return;
+
+	UE_LOG(LogTemp, Warning, TEXT("End Alert"));
+
+	// 경계선 off
+	if (USkeletalMeshComponent* Mesh = TargetPolice->FindComponentByClass<USkeletalMeshComponent>())
+	{
+		Mesh->SetRenderCustomDepth(false);
+	}
+
+	//
+
+	TargetPolice = nullptr;
+	CurrentState = ECrowState::Patrol;
+	CurrentAngle = 0.f;
 }
 
 void ACrowActor::DetectPolice()
@@ -140,15 +176,23 @@ void ACrowActor::DetectPolice()
 	FCollisionShape Sphere = FCollisionShape::MakeSphere(SenseRadius);
 
 	// 오버랩 검사
+	bool bHit = GetWorld()->OverlapMultiByChannel(
+		Overlaps, GetActorLocation(), FQuat::Identity, ECC_Pawn, Sphere
+	);
 
+	if (!bHit) return;
 
-	// 아니면 리턴
+	for (auto& O : Overlaps)
+	{
+		AActor* Other = O.GetActor();
+		if (!Other) continue;
 
-	// 검사 - 
-	
-	// 경찰확인
-
-	// 찾으면 break
+		if (Other->ActorHasTag(TEXT("Police")))
+		{
+			EnterAlertState(Other);
+			break;	// 유일 - 바로 break
+		}
+	}
 }
 
 void ACrowActor::DestroyCrow()
