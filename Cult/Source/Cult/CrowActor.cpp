@@ -113,15 +113,16 @@ void ACrowActor::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 void ACrowActor::InitCrow(AActor* InOwner, float InLifeTime)
 {
 	CrowOwner = InOwner;
+	OwnerPawn = Cast<APawn>(InOwner);
 	PatrolCenter = InOwner ? InOwner->GetActorLocation() : GetActorLocation();
+	
 	CurrentState = ECrowState::SpawnRise;
-
 	CurrentAngle = 0.f;
 	SpawnElapsed = 0.f;
 
-	// LifeTime 후 자동 소멸
+	// PatrolTime 후 자동 소멸
 	GetWorldTimerManager().SetTimer(
-		LifeTimer, this, &ACrowActor::DestroyCrow, InLifeTime, false
+		PatrolTimer, this, &ACrowActor::OnPatrolExpire, PatrolDuration, false
 	);
 }
 
@@ -206,4 +207,22 @@ void ACrowActor::DetectPolice()
 void ACrowActor::DestroyCrow()
 {
 	Destroy();
+}
+
+
+
+// Expire
+void ACrowActor::OnPatrolExpire()
+{
+	DestroyCrow();
+}
+
+void ACrowActor::OnAlertExpire()
+{
+
+}
+
+void ACrowActor::OnControlExpire()
+{
+
 }

@@ -13,7 +13,9 @@ enum class ECrowState : uint8
 	Idle,
 	SpawnRise,
 	Patrol,
-	Alert
+	Alert,
+	Dive,	// 발견 후 돌진
+	Controlled	// 유체이탈
 };
 
 UCLASS()
@@ -77,11 +79,55 @@ protected:
 
 	AActor* TargetPolice = nullptr;
 
-	FTimerHandle LifeTimer;
-
-	AActor* CrowOwner;
 
 	void DestroyCrow();
+
+
+	// 타이머 및 시간 파라미터
+
+
+	UPROPERTY(EditAnywhere, Category="Crow_Timing")
+	float PatrolDuration = 12.f;	// 기본 정찰 지속
+	UPROPERTY(EditAnywhere, Category = "Crow_Timing")
+	float AlertDuration = 5.f;	// 발견 후 지속
+	UPROPERTY(EditAnywhere, Category = "Crow_Timing")
+	float ControlDuration = 6.f;	// 빙의 지속
+
+	FTimerHandle PatrolTimer;
+	FTimerHandle AlertTimer;
+	FTimerHandle ControlTimer;
+
+	// 돌진(시야방해) 파라미터
+	UPROPERTY(EditAnywhere, Category="Crow_Dive")	// 돌진
+	float DiveSpeed = 2200.f;
+	UPROPERTY(EditAnywhere, Category = "Crow_Dive")
+	float DiveHitRadius = 120.f;
+	UPROPERTY(EditAnywhere, Category = "Crow_Effect")	// 돌진 후 처리관련
+	float BlindSeconds = 1.8f;
+	UPROPERTY(EditAnywhere, Category = "Crow_Dive")
+	float StunSeconds = 0.6f;
+
+	// 컨트롤 파라미터
+	UPROPERTY(EditAnywhere, Category="Crow_Control")
+	float ControlMoveSpeed = 900.f;
+	UPROPERTY(EditAnywhere, Category = "Crow_Control")
+	float ControlRiseSpeed = 500.f;
+	UPROPERTY(EditAnywhere, Category = "Crow_Control")
+	float ControlTurnSpeed = 90.f;	// 초당 회전
+
+	// 조종 모드 시 값
+	float AxisForward = 0.f, AxisRight = 0.f, AxisUp = 0.f;
+	float AxisTurn = 0.f, AxisLookUp = 0.f;
+
+	// 오너 / 컨르롤러 관리
+	AActor* CrowOwner = nullptr;
+	APlayerController* CachedPC = nullptr;
+	APawn* OwnerPawn = nullptr;
+
+	// 종료 관리
+	void OnPatrolExpire();
+	void OnAlertExpire();
+	void OnControlExpire();
 
 public:	
 	// Called every frame
