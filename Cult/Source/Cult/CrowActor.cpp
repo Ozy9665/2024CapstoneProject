@@ -57,6 +57,7 @@ void ACrowActor::Tick(float DeltaTime)
 	}
 	else if (CurrentState == ECrowState::Alert && TargetPolice)
 	{
+		// 회전 로직
 		CurrentAngle += FMath::DegreesToRadians(AlertOrbitSpeed) * DeltaTime;
 
 		FVector Center = TargetPolice->GetActorLocation() + FVector(0, 0, 200.f);
@@ -68,6 +69,13 @@ void ACrowActor::Tick(float DeltaTime)
 
 		FVector ForwardDir = (TargetPos - Center).GetSafeNormal();
 		SetActorRotation(ForwardDir.Rotation());
+
+		// 거리제한
+		float Dist = FVector::Dist(GetActorLocation(), TargetPolice->GetActorLocation());
+		if (Dist > SenseRadius)
+		{
+			EndAlertState();
+		}
 	}
 	else if (CurrentState == ECrowState::SpawnRise)
 	{
