@@ -99,6 +99,21 @@ void ACrowActor::Tick(float DeltaTime)
 			CurrentAngle = 0.f;
 		}
 	}
+	else if (CurrentState == ECrowState::Dive && TargetPolice)
+	{
+		const FVector To = (TargetPolice->GetActorLocation() - GetActorLocation());
+		const float Dist = To.Size();
+		
+		const FVector Dir = To.GetSafeNormal();
+		SetActorLocation(GetActorLocation() + Dir * DiveSpeed * DeltaTime);
+		SetActorRotation(Dir.Rotation());
+
+		if (Dist < DiveHitRadius)
+		{
+			ExplodeOnPolice();
+			return;
+		}
+	}
 
 }
 
@@ -107,6 +122,11 @@ void ACrowActor::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
+	PlayerInputComponent->BindAxis("CrowForward", this, &ACrowActor::Axis_CrowForward);
+	PlayerInputComponent->BindAxis("CrowRight", this, &ACrowActor::Axis_CrowRight);
+	PlayerInputComponent->BindAxis("CrowUp", this, &ACrowActor::Axis_CrowUp);
+	PlayerInputComponent->BindAxis("Turn", this, &ACrowActor::Axis_Turn);
+	PlayerInputComponent->BindAxis("LookUp", this, &ACrowActor::Axis_LookUp);
 }
 
 
@@ -157,6 +177,11 @@ void ACrowActor::EnterAlertState(AActor* PoliceTarget)
 	// UGameplayStatics::PlaySoundAtLocation(this, CrowSound, GetActorLocation());
 	// 이펙트
 	// UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), CrowAlertVFX, PoliceTarget->GetActorLocation());
+
+	// Alert시간 후 파괴
+	GetWorldTimerManager().ClearTimer(AlertTimer);
+	GetWorldTimerManager().SetTimer(AlertTimer, this, &ACrowActor::OnAlertExpire, AlertDuration, false);
+
 }
 
 void ACrowActor::EndAlertState()
@@ -204,6 +229,80 @@ void ACrowActor::DetectPolice()
 	}
 }
 
+
+void ACrowActor::RequestDive()
+{
+	if (CurrentState != ECrowState::Alert || !TargetPolice)return;
+
+	CurrentState = ECrowState::Dive;
+	GetWorldTimerManager().ClearTimer(AlertTimer);
+}
+
+void ACrowActor::ExplodeOnPolice()
+{
+	// 이펙트 / 사운드
+	//
+
+	// 경찰 UI/상태 처리
+	if (AActor* T = TargetPolice)
+	{
+		//
+		if (auto PC = Cast<APawn>(T))
+		{
+			//
+			// 
+		}
+	}
+
+	EndAlertState();
+	DestroyCrow();
+
+}
+
+
+
+// Control
+
+void ACrowActor::BeginControl(APlayerController* PC)
+{
+	if (!PC) return;
+	CachedPC = PC;
+
+	// 카메라를 Crow로
+	CachedPC->SetViewTargetWithBlend(this, 0.25f);
+
+	CurrentState = ECrowState::Controlled;
+	AxisForward = AxisRight = AxisUp = 0.f;
+	AxisTurn = AxisLookUp = 0.f;
+
+	// 빙의 제한
+	GetWorldTimerManager().SetTimer(ControlTimer, this, &ACrowActor::OnControlExpire, ControlDuration, false);
+
+	// 입력
+	AutoReceiveInput = EAutoReceiveInput::Player0;
+}
+
+void ACrowActor::EndControl(bool bDestroyCrow)
+{
+	// 카메라 복귀
+	if (CachedPC && OwnerPawn)
+	{
+		CachedPC->SetViewTargetWithBlend(OwnerPawn, 0.25f);
+	}
+	GetWorldTimerManager().ClearTimer(ControlTimer);
+
+	// 빙의 해제 
+	DestroyCrow();
+}
+
+// Control - Axis
+void ACrowActor::Axis_CrowForward(float V) { AxisForward = V; }
+void ACrowActor::Axis_CrowRight(float V) { AxisRight = V; }
+void ACrowActor::Axis_CrowUp(float V) { AxisUp = V; }
+void ACrowActor::Axis_Turn(float V) { AxisTurn = V; }
+void ACrowActor::Axis_LookUp(float V) { AxisLookUp = V; }
+
+
 void ACrowActor::DestroyCrow()
 {
 	Destroy();
@@ -219,10 +318,11 @@ void ACrowActor::OnPatrolExpire()
 
 void ACrowActor::OnAlertExpire()
 {
-
+	EndAlertState();
+	DestroyCrow();
 }
 
 void ACrowActor::OnControlExpire()
 {
-
+	EndControl(false);
 }

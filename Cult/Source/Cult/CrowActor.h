@@ -107,6 +107,7 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Crow_Dive")
 	float StunSeconds = 0.6f;
 
+
 	// 컨트롤 파라미터
 	UPROPERTY(EditAnywhere, Category="Crow_Control")
 	float ControlMoveSpeed = 900.f;
@@ -114,6 +115,7 @@ protected:
 	float ControlRiseSpeed = 500.f;
 	UPROPERTY(EditAnywhere, Category = "Crow_Control")
 	float ControlTurnSpeed = 90.f;	// 초당 회전
+
 
 	// 조종 모드 시 값
 	float AxisForward = 0.f, AxisRight = 0.f, AxisUp = 0.f;
@@ -135,7 +137,17 @@ public:
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	// 축
+	void Axis_CrowForward(float V);
+	void Axis_CrowRight(float V);
+	void Axis_CrowUp(float V);
+	void Axis_Turn(float V);
+	void Axis_LookUp(float V);
 
-
-
+	// 컨트롤 함수
+	void BeginControl(APlayerController* PC);
+	void EndControl(bool bDestroyCrow = false);
+	// 돌진
+	void RequestDive();
+	void ExplodeOnPolice();
 };
