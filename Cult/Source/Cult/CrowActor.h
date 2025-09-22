@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
 #include "Components/SphereComponent.h"
+#include "Camera/CameraComponent.h"
+#include "GameFramework/SpringArmComponent.h"
 #include "CrowActor.generated.h"
 
 UENUM(BlueprintType)
@@ -42,6 +44,10 @@ protected:
 	USphereComponent* SenseSphere;
 	UPROPERTY(VisibleAnywhere)
 	class UFloatingPawnMovement* Movement;
+	UPROPERTY(VisibleAnywhere)
+	USpringArmComponent* SpringArm;
+	UPROPERTY(VisibleAnywhere)
+	UCameraComponent* Camera;
 
 	// 
 	ECrowState CurrentState = ECrowState::Idle;
@@ -134,6 +140,8 @@ protected:
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
+
+	ECrowState GetState() const;
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;

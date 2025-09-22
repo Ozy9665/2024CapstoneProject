@@ -186,6 +186,7 @@ void ACultistCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 	PlayerInputComponent->BindAction("SkillCheckInput", IE_Pressed, this, &ACultistCharacter::TriggerSkillCheckInput);
 
 	PlayerInputComponent->BindAction("CrowSkill", IE_Pressed, this, &ACultistCharacter::OnCrowSkillPressed);
+	PlayerInputComponent->BindAction("CrowControl", IE_Pressed, this, &ACultistCharacter::OnCrowControlPressed);
 	UE_LOG(LogTemp, Warning, TEXT("Binding  input"));
 
 }
@@ -967,16 +968,46 @@ void ACultistCharacter::TriggerSkillCheckInput()
 void ACultistCharacter::OnCrowSkillPressed()
 {
 	if (!CrowClass) return;
-	FActorSpawnParameters Params;
-	Params.Owner = this;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-	const FVector SpawnLoc = GetActorLocation() + FVector(0, 0, 400.f);
-	const FRotator SpawnRot = GetActorRotation();
-
-	if (ACrowActor* Crow = GetWorld()->SpawnActor<ACrowActor>(CrowClass, SpawnLoc, SpawnRot, Params))
+	// ¼ÒÈ¯
+	if (!CrowInstance)
 	{
-		Crow->InitCrow(this, CrowLifetime);
+		FActorSpawnParameters Params;
+		Params.Owner = this;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		const FVector SpawnLoc = GetActorLocation() + FVector(0, 0, 400.f);
+		const FRotator SpawnRot = GetActorRotation();
+
+		CrowInstance = GetWorld()->SpawnActor<ACrowActor>(CrowClass, SpawnLoc, SpawnRot, Params);
+		if (CrowInstance)
+		{
+			CrowInstance->InitCrow(this, CrowLifetime);
+		}
+	}
+	else
+	{
+		if (CrowInstance->GetState() == ECrowState::Alert)
+		{
+			CrowInstance->RequestDive();
+		}
+	}
+}
+void ACultistCharacter::OnCrowControlPressed()
+{
+	if (!CrowClass)return;
+	if (!CrowInstance)return;
+
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC)return;
+
+	if (CrowInstance->GetState() != ECrowState::Controlled)
+	{
+		CrowInstance->BeginControl(PC);
+	}
+	else
+	{
+		CrowInstance->EndControl(false);
 	}
 }
 

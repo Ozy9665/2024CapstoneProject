@@ -15,6 +15,15 @@ ACrowActor::ACrowActor()
 
 	CrowMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CrowMesh"));
 	SetRootComponent(CrowMesh);
+
+	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
+	SpringArm->SetupAttachment(RootComponent);
+	SpringArm->bUsePawnControlRotation = true;
+
+	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
+	Camera->SetupAttachment(SpringArm);
+
+	CrowMesh->SetRelativeRotation(FRotator(0.f, -180.f, 0.f));
 }
 
 // Called when the game starts or when spawned
@@ -31,6 +40,8 @@ void ACrowActor::Tick(float DeltaTime)
 
 	if (CurrentState == ECrowState::Patrol)
 	{
+		if (CurrentState == ECrowState::Controlled) return;
+
 		CurrentAngle += FMath::DegreesToRadians(OrbitSpeed) * DeltaTime;
 		float Radius = 100.f + 50.f * SpawnElapsed ;
 		float Height = 100.f + 200.f * SpawnElapsed ;
@@ -54,6 +65,7 @@ void ACrowActor::Tick(float DeltaTime)
 			SenseTimer = 0.f;
 			DetectPolice();
 		}
+		SetActorRotation(ForwardDir.Rotation());
 	}
 	else if (CurrentState == ECrowState::Alert && TargetPolice)
 	{
@@ -114,7 +126,29 @@ void ACrowActor::Tick(float DeltaTime)
 			return;
 		}
 	}
+	else if (CurrentState == ECrowState::Controlled)
+	{
+		if (Controller)
+		{
+			const FRotator Ctrl = Controller->GetControlRotation();
+			SetActorRotation(FRotator(0.f, Ctrl.Yaw, 0.f));
+		}
 
+		FVector Fwd = GetActorForwardVector(); Fwd.Z = 0.f; Fwd.Normalize();
+		FVector Rgt = GetActorRightVector();   Rgt.Z = 0.f; Rgt.Normalize();
+
+		// Movement
+		const FVector F = Fwd * AxisForward * ControlMoveSpeed * DeltaTime;
+		const FVector R = Rgt * AxisRight * ControlMoveSpeed * DeltaTime;
+		const FVector U = FVector::UpVector * AxisUp * ControlMoveSpeed * DeltaTime;
+		AddActorWorldOffset(F + R + U, true);
+
+		// Rotate
+		//FRotator Rot = GetActorRotation();
+		//Rot.Yaw += AxisTurn * ControlTurnSpeed * DeltaTime;
+		//Rot.Pitch += AxisLookUp * ControlTurnSpeed * DeltaTime;
+		//SetActorRotation(Rot);
+	}
 }
 
 // Called to bind functionality to input
@@ -125,8 +159,10 @@ void ACrowActor::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 	PlayerInputComponent->BindAxis("CrowForward", this, &ACrowActor::Axis_CrowForward);
 	PlayerInputComponent->BindAxis("CrowRight", this, &ACrowActor::Axis_CrowRight);
 	PlayerInputComponent->BindAxis("CrowUp", this, &ACrowActor::Axis_CrowUp);
-	PlayerInputComponent->BindAxis("Turn", this, &ACrowActor::Axis_Turn);
-	PlayerInputComponent->BindAxis("LookUp", this, &ACrowActor::Axis_LookUp);
+	//PlayerInputComponent->BindAxis("Turn", this, &ACrowActor::Axis_Turn);
+	//PlayerInputComponent->BindAxis("LookUp", this, &ACrowActor::Axis_LookUp);
+	PlayerInputComponent->BindAxis("Turn", this, &ACrowActor::AddControllerYawInput);
+	PlayerInputComponent->BindAxis("LookUp", this, &ACrowActor::AddControllerPitchInput);
 }
 
 
@@ -269,9 +305,20 @@ void ACrowActor::BeginControl(APlayerController* PC)
 	CachedPC = PC;
 
 	// 카메라를 Crow로
-	CachedPC->SetViewTargetWithBlend(this, 0.25f);
+	//CachedPC->SetViewTargetWithBlend(this, 0.25f);
+	PC->Possess(this);
+	PC->SetControlRotation(GetActorRotation());
+
+	bUseControllerRotationYaw = true;
+	bUseControllerRotationPitch = false;
+	bUseControllerRotationRoll = false;
+
 
 	CurrentState = ECrowState::Controlled;
+
+	//FRotator CtrlRot = PC->GetControlRotation();
+	//SetActorRotation(CtrlRot);
+
 	AxisForward = AxisRight = AxisUp = 0.f;
 	AxisTurn = AxisLookUp = 0.f;
 
@@ -279,7 +326,7 @@ void ACrowActor::BeginControl(APlayerController* PC)
 	GetWorldTimerManager().SetTimer(ControlTimer, this, &ACrowActor::OnControlExpire, ControlDuration, false);
 
 	// 입력
-	AutoReceiveInput = EAutoReceiveInput::Player0;
+	//AutoReceiveInput = EAutoReceiveInput::Player0;
 }
 
 void ACrowActor::EndControl(bool bDestroyCrow)
@@ -287,7 +334,8 @@ void ACrowActor::EndControl(bool bDestroyCrow)
 	// 카메라 복귀
 	if (CachedPC && OwnerPawn)
 	{
-		CachedPC->SetViewTargetWithBlend(OwnerPawn, 0.25f);
+		//CachedPC->SetViewTargetWithBlend(OwnerPawn, 0.25f);
+		CachedPC->Possess(OwnerPawn);
 	}
 	GetWorldTimerManager().ClearTimer(ControlTimer);
 
@@ -302,6 +350,10 @@ void ACrowActor::Axis_CrowUp(float V) { AxisUp = V; }
 void ACrowActor::Axis_Turn(float V) { AxisTurn = V; }
 void ACrowActor::Axis_LookUp(float V) { AxisLookUp = V; }
 
+ECrowState ACrowActor::GetState() const
+{
+	return CurrentState;
+}
 
 void ACrowActor::DestroyCrow()
 {

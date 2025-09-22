@@ -256,8 +256,12 @@ public:
 	// Crow
 	UFUNCTION()
 	void OnCrowSkillPressed();
+	UFUNCTION()
+	void OnCrowControlPressed();
 	UPROPERTY(EditDefaultsOnly, Category="CrowSkill")
 	TSubclassOf<ACrowActor> CrowClass;
+	UPROPERTY(EditDefaultsOnly, Category="CrowSkill")
+	ACrowActor* CrowInstance = nullptr;
 	UPROPERTY(EditDefaultsOnly, Category="CrowSkill")
 	float CrowLifetime = 12.f;
 
