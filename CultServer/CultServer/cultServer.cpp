@@ -15,6 +15,9 @@
 #pragma comment(lib, "MSWSock.lib")
 #pragma comment (lib, "WS2_32.LIB")
 
+const float VIEW_RANGE = 1000.0f;           // 시야 반경
+const float VIEW_RANGE_SQ = VIEW_RANGE * VIEW_RANGE;
+
 SOCKET g_s_socket, g_c_socket;
 EXP_OVER g_a_over;
 
@@ -57,6 +60,69 @@ void disconnect(int c_id)
 	g_users.erase(c_id);
 }
 
+float distanceSq(const SESSION& a, const SESSION& b) {
+	float ax, ay, az;
+	float bx, by, bz;
+
+	// a의 위치
+	if (a.role == 0) { // cultist
+		ax = a.cultist_state.PositionX;
+		ay = a.cultist_state.PositionY;
+		az = a.cultist_state.PositionZ;
+	}
+	else {           // police
+		ax = a.police_state.PositionX;
+		ay = a.police_state.PositionY;
+		az = a.police_state.PositionZ;
+	}
+
+	// b의 위치
+	if (b.role == 0) {
+		bx = b.cultist_state.PositionX;
+		by = b.cultist_state.PositionY;
+		bz = b.cultist_state.PositionZ;
+	}
+	else {
+		bx = b.police_state.PositionX;
+		by = b.police_state.PositionY;
+		bz = b.police_state.PositionZ;
+	}
+
+	float dx = ax - bx;
+	float dy = ay - by;
+	float dz = az - bz;
+
+	return dx * dx + dy * dy + dz * dz; // 3D 거리 제곱
+}
+
+template <typename PacketT>
+void broadcast_in_room(int sender_id, int room_id, const PacketT* packet, float view_range = -1.0f) {
+	if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size())) {
+		std::cout << "Invalid room ID: " << room_id << std::endl;
+		return;
+	}
+
+	const room& r = g_rooms[room_id];
+
+	float view_range_sq = (view_range > 0) ? view_range * view_range : -1.0f;	// -1이면 전원에게 전송
+
+	for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
+		uint8_t other_id = r.player_ids[i];
+		if (other_id == UINT8_MAX || other_id == sender_id)
+			continue;
+
+		if (!g_users.count(other_id) || !g_users[other_id].isValidSocket())
+			continue;
+
+		// 거리 체크
+		if (view_range_sq > 0 && distanceSq(g_users[sender_id], g_users[other_id]) > view_range_sq)
+			continue;
+
+		g_users[other_id].do_send_packet(packet);
+	}
+}
+
+
 void process_packet(int c_id, char* packet) {
 	switch (packet[0]) {
 	case cultistHeader:
@@ -68,26 +134,7 @@ void process_packet(int c_id, char* packet) {
 		}
 		g_users[c_id].cultist_state = p->state;
 
-		// room 번호로 broadcast
-		int room_id = g_users[c_id].room_id;
-		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
-		{
-			std::cout << "Invalid room ID: " << room_id << std::endl;
-			break;
-		}
-
-		const room& r = g_rooms[room_id];
-		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
-		{
-			uint8_t other_id = r.player_ids[i];
-			if (other_id == UINT8_MAX || other_id == c_id)
-				continue;
-
-			if (g_users.count(other_id) && g_users[other_id].isValidSocket())
-			{
-				g_users[other_id].do_send_packet(p);
-			}
-		}
+		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
 		break;
 	}
 	case skillHeader: 
@@ -98,25 +145,7 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		int room_id = g_users[c_id].room_id;
-		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
-		{
-			std::cout << "Invalid room ID: " << room_id << std::endl;
-			break;
-		}
-
-		const room& r = g_rooms[room_id];
-		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
-		{
-			uint8_t other_id = r.player_ids[i];
-			if (other_id == UINT8_MAX || other_id == c_id)
-				continue;
-
-			if (g_users.count(other_id) && g_users[other_id].isValidSocket())
-			{
-				g_users[other_id].do_send_packet(p);
-			}
-		}
+		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
 		break;
 	}
 	case policeHeader:
@@ -128,26 +157,7 @@ void process_packet(int c_id, char* packet) {
 		}
 		g_users[c_id].police_state = p->state;
 
-		// room 번호로 broadcast
-		int room_id = g_users[c_id].room_id;
-		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
-		{
-			std::cout << "Invalid room ID: " << room_id << std::endl;
-			break;
-		}
-
-		const room& r = g_rooms[room_id];
-		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
-		{
-			uint8_t other_id = r.player_ids[i];
-			if (other_id == UINT8_MAX || other_id == c_id)
-				continue;
-
-			if (g_users.count(other_id) && g_users[other_id].isValidSocket())
-			{
-				g_users[other_id].do_send_packet(p);
-			}
-		}
+		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
 		break;
 	}
 	case particleHeader:
