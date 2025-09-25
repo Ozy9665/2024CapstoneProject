@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <atomic>
 #include <array>
+#include <unordered_set>
 #include "error.h"
 
 constexpr short SERVER_PORT = 7777;
@@ -27,6 +28,9 @@ constexpr char hitHeader = 4;
 constexpr char connectionHeader = 5;
 constexpr char DisconnectionHeader = 6;
 constexpr char disableHeader = 7;
+constexpr char disappearHeader = 17;
+constexpr char appearHeader = 18;
+
 //-- room header
 constexpr char requestHeader = 8;
 constexpr char enterHeader = 9;
@@ -232,6 +236,7 @@ struct SkillPacket {
 	uint8_t size;
 	FVector SpawnLoc;
 	FRotator SpawnRot;
+	uint8_t skill;
 };
 
 struct RitualPacket {
@@ -294,11 +299,11 @@ public:
 	char			state;
 	int				prev_remain;
 	int				room_id;
-
 	union {
 		FCultistCharacterState cultist_state;
 		FPoliceCharacterState police_state;
 	};
+	std::unordered_set<int> visible_ids;
 
 	void do_recv();
 

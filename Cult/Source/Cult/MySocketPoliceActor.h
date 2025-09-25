@@ -61,6 +61,7 @@ public:
 	void CheckImpactEffect();
 	void SpawnImpactEffect(FHitResult HitResult);
 	void SendParticleData(FHitResult HitResult);
+	void HideCharacter(int, bool);
 	void SendDisconnection();
 	void CloseConnection();
 	void SafeDestroyCharacter(int PlayerID);

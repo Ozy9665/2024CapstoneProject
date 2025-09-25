@@ -125,6 +125,18 @@ void AMySocketCultistActor::ReceiveData()
                     case DisconnectionHeader:
                         ProcessDisconnection(Buffer);
                         break;
+                    case disappearHeader:
+                    {
+                        unsigned char id = static_cast<unsigned char>(Buffer[2]);
+                        HideCharacter(id, true);
+                        break;
+                    }
+                    case appearHeader:
+                    {
+                        unsigned char id = static_cast<unsigned char>(Buffer[2]);
+                        HideCharacter(id, false);
+                        break;
+                    }
                     default:
                         UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
                         break;
@@ -336,7 +348,7 @@ void AMySocketCultistActor::SendDisable()
     }
 }
 
-void AMySocketCultistActor::SendSkill(FVector SpawnLoc, FRotator SpawnRot)
+void AMySocketCultistActor::SendSkill(FVector SpawnLoc, FRotator SpawnRot, int32 skill)
 {
     if (ClientSocket != INVALID_SOCKET)
     {
@@ -1076,6 +1088,20 @@ void AMySocketCultistActor::SpawnImpactEffect(const FImpactPacket& ReceivedImpac
         MuzzleLoc,
         MuzzleRot
     );
+}
+
+void AMySocketCultistActor::HideCharacter(int PlayerID, bool bHide) {
+    AsyncTask(ENamedThreads::GameThread, [this, PlayerID, bHide]()
+        {
+            if (ACharacter* Char = SpawnedCharacters.FindRef(PlayerID)) {
+                Char->SetActorHiddenInGame(bHide);
+                Char->SetActorEnableCollision(!bHide);
+                Char->SetActorTickEnabled(!bHide);
+
+                UE_LOG(LogTemp, Log, TEXT("Character %d %s"),
+                    PlayerID, bHide ? TEXT("hidden") : TEXT("unhidden"));
+            }
+        });
 }
 
 void AMySocketCultistActor::SendDisconnection() {

@@ -932,7 +932,7 @@ void ACultistCharacter::ConfirmPlacement()
 
 	if (TreeObstacleActorClass)
 	{
-		MySocketCultistActor->SendSkill(SpawnLocation, SpawnRotation);
+		MySocketCultistActor->SendSkill(SpawnLocation, SpawnRotation, 1);
 	}
 
 	SpawnedPreviewActor->Destroy();

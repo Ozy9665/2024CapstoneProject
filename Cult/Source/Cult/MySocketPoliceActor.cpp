@@ -125,6 +125,18 @@ void AMySocketPoliceActor::ReceiveData()
                     case DisconnectionHeader:
                         ProcessDisconnection(Buffer);
                         break;
+                    case disappearHeader:
+                    {
+                        unsigned char id = static_cast<unsigned char>(Buffer[2]);
+                        HideCharacter(id, true);
+                        break;
+                    }
+                    case appearHeader:
+                    {
+                        unsigned char id = static_cast<unsigned char>(Buffer[2]);
+                        HideCharacter(id, false);
+                        break;
+                    }
                     default:
                         UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
                         break;
@@ -601,6 +613,20 @@ void AMySocketPoliceActor::SendParticleData(FHitResult HitResult) {
     }
 }
 
+void AMySocketPoliceActor::HideCharacter(int PlayerID, bool bHide) {
+    AsyncTask(ENamedThreads::GameThread, [this, PlayerID, bHide]()
+        {
+            if (ACharacter* Char = SpawnedCharacters.FindRef(PlayerID)) {
+                Char->SetActorHiddenInGame(bHide);
+                Char->SetActorEnableCollision(!bHide);
+                Char->SetActorTickEnabled(!bHide);
+
+                UE_LOG(LogTemp, Log, TEXT("Character %d %s"),
+                    PlayerID, bHide ? TEXT("hidden") : TEXT("unhidden"));
+            }
+        });
+}
+
 void AMySocketPoliceActor::SendDisconnection() {
     NoticePacket Packet;
     Packet.header = DisconnectionHeader;
@@ -685,6 +711,8 @@ const TMap<int, ACharacter*>& AMySocketPoliceActor::GetSpawnedCharacters() const
 {
     return SpawnedCharacters;
 }
+
+
 
 // Called every frame
 void AMySocketPoliceActor::Tick(float DeltaTime)

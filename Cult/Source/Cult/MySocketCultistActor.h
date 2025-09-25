@@ -53,7 +53,7 @@ public:
 	void ProcessHitData(const char* Buffer);
 	void ProcessConnection(const char* Buffer);
 	void ProcessDisconnection(const char* Buffer);
-	void SendSkill(FVector, FRotator);
+	void SendSkill(FVector, FRotator, int32);
 	void SendDisable();
 	void SendPlayerData();
 	FCultistCharacterState GetCharacterState();
@@ -67,6 +67,7 @@ public:
 	void SpawnPoliceAICharacter(const unsigned char PlayerID);
 	void ProcessParticleData(char* Buffer);
 	void SpawnImpactEffect(const FImpactPacket& ReceivedImpact);
+	void HideCharacter(int, bool);
 	void SendDisconnection();
 	void CloseConnection();
 	void SafeDestroyCharacter(int PlayerID);

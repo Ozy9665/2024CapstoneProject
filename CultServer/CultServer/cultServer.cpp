@@ -105,7 +105,7 @@ void broadcast_in_room(int sender_id, int room_id, const PacketT* packet, float 
 	const room& r = g_rooms[room_id];
 
 	float view_range_sq = (view_range > 0) ? view_range * view_range : -1.0f;	// -1이면 전원에게 전송
-
+	
 	for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
 		uint8_t other_id = r.player_ids[i];
 		if (other_id == UINT8_MAX || other_id == sender_id)
@@ -115,13 +115,34 @@ void broadcast_in_room(int sender_id, int room_id, const PacketT* packet, float 
 			continue;
 
 		// 거리 체크
-		if (view_range_sq > 0 && distanceSq(g_users[sender_id], g_users[other_id]) > view_range_sq)
-			continue;
+		bool inRange = (view_range_sq < 0) || (distanceSq(g_users[sender_id], g_users[other_id]) <= view_range_sq);
+		// 시야 안에 들어온 경우
+		if (inRange) {
+			// 원래 안 보였는데 새로 보이게 됨 -> appear 이벤트 전송
+			if (g_users[other_id].visible_ids.insert(sender_id).second) {
+				IdOnlyPacket appear;
+				appear.header = appearHeader;
+				appear.size = sizeof(IdOnlyPacket);
+				appear.id = static_cast<uint8_t>(sender_id);
+				g_users[other_id].do_send_packet(&appear);
+			}
 
-		g_users[other_id].do_send_packet(packet);
+			// 상태 패킷 전송
+			g_users[other_id].do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
+		}
+		// 시야 밖으로 나간 경우
+		else {
+			// 원래 보이던 애가 사라짐 -> disappear 이벤트 전송
+			if (g_users[other_id].visible_ids.erase(sender_id) > 0) {
+				IdOnlyPacket disappear;
+				disappear.header = disappearHeader;
+				disappear.size = sizeof(IdOnlyPacket);
+				disappear.id = static_cast<uint8_t>(sender_id);
+				g_users[other_id].do_send_packet(&disappear);
+			}
+		}
 	}
 }
-
 
 void process_packet(int c_id, char* packet) {
 	switch (packet[0]) {
@@ -713,10 +734,10 @@ int main()
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));	// 한국어로 출력
 	// db초기화
-	if (!InitializeDB()) {
+	/*if (!InitializeDB()) {
 		std::cout << "DB 초기화 실패, 프로그램 종료\n";
 		return 0;
-	}
+	}*/
 
 	WSADATA WSAData;
 	WSAStartup(MAKEWORD(2, 0), &WSAData);
