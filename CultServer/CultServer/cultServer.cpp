@@ -144,6 +144,85 @@ void broadcast_in_room(int sender_id, int room_id, const PacketT* packet, float 
 	}
 }
 
+bool validate_cultist_state(FCultistCharacterState& state)
+{
+	bool ok = true;
+
+	// 속도 체크
+	if (state.Speed > MAX_SPEED) {
+		std::cout << "[AntiCheat] Player " << state.PlayerID
+			<< " exceeded speed: " << state.Speed
+			<< " -> clamped to " << MAX_SPEED << std::endl;
+		state.Speed = MAX_SPEED;
+		ok = false;
+	}
+
+	// 죽은 상태인데 Speed > 0
+	if (state.ABP_IsDead && state.Speed > 0.0f) {
+		std::cout << "[AntiCheat] Player " << state.PlayerID
+			<< " is dead but moving. Speed=" << state.Speed << std::endl;
+		state.Speed = 0.0f;
+		ok = false;
+	}
+
+	// Crouch 속도 체크
+	if (state.Speed > MAX_SPEED / 2) {
+		std::cout << "[AntiCheat] Player " << state.PlayerID
+			<< " exceeded speed: " << state.Speed
+			<< " -> clamped to " << MAX_SPEED / 2 << std::endl;
+		state.Speed = MAX_SPEED / 2;
+		ok = false;
+	}
+
+	// 맵 범위 체크
+	if (fabs(state.PositionX) > MAP_BOUND_X ||
+		fabs(state.PositionY) > MAP_BOUND_Y ||
+		state.PositionZ < MAP_MIN_Z)
+	{
+		std::cout << "[AntiCheat] Player " << state.PlayerID
+			<< " out of map bounds: ("
+			<< state.PositionX << ", " << state.PositionY << ", " << state.PositionZ << ")\n";
+		ok = false;
+	}
+	return ok;
+}
+
+bool validate_police_state(FPoliceCharacterState& state)
+{
+	bool ok = true;
+
+	// 속도 체크
+	if (state.Speed > MAX_SPEED) {
+		std::cout << "[AntiCheat] Police " << state.PlayerID
+			<< " exceeded speed: " << state.Speed
+			<< " -> clamped to " << MAX_SPEED << std::endl;
+		state.Speed = MAX_SPEED;
+		ok = false;
+	}
+
+	// Crouch 속도 체크
+	if (state.Speed > MAX_SPEED / 2) {
+		std::cout << "[AntiCheat] Player " << state.PlayerID
+			<< " exceeded speed: " << state.Speed
+			<< " -> clamped to " << MAX_SPEED / 2 << std::endl;
+		state.Speed = MAX_SPEED / 2;
+		ok = false;
+	}
+
+	// 맵 범위 체크
+	if (fabs(state.PositionX) > MAP_BOUND_X ||
+		fabs(state.PositionY) > MAP_BOUND_Y ||
+		state.PositionZ < MAP_MIN_Z)
+	{
+		std::cout << "[AntiCheat] Police " << state.PlayerID
+			<< " out of map bounds: ("
+			<< state.PositionX << ", " << state.PositionY << ", " << state.PositionZ << ")\n";
+		ok = false;
+	}
+
+	return ok;
+}
+
 void process_packet(int c_id, char* packet) {
 	switch (packet[0]) {
 	case cultistHeader:
@@ -152,6 +231,9 @@ void process_packet(int c_id, char* packet) {
 		if (p->size != sizeof(CultistPacket)) {
 			std::cout << "Invalid CultistPacket size\n";
 			break;
+		}
+		if (!validate_cultist_state(p->state)) {
+			std::cout << "Suspicious cultist packet from c_id " << c_id << std::endl;
 		}
 		g_users[c_id].cultist_state = p->state;
 
@@ -166,7 +248,25 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
+		int room_id = g_users[c_id].room_id;
+		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
+		{
+			std::cout << "Invalid room ID: " << room_id << std::endl;
+			break;
+		}
+
+		const room& r = g_rooms[room_id];
+		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
+		{
+			uint8_t other_id = r.player_ids[i];
+			if (other_id == UINT8_MAX || other_id == c_id)
+				continue;
+
+			if (g_users.count(other_id) && g_users[other_id].isValidSocket())
+			{
+				g_users[other_id].do_send_packet(p);
+			}
+		}
 		break;
 	}
 	case policeHeader:
@@ -175,6 +275,9 @@ void process_packet(int c_id, char* packet) {
 		if (p->size != sizeof(PolicePacket)) {
 			std::cout << "Invalid PolicePacket size\n";
 			break;
+		}
+		if (!validate_police_state(p->state)) {
+			std::cout << "Suspicious police packet from c_id " << c_id << std::endl;
 		}
 		g_users[c_id].police_state = p->state;
 
@@ -196,18 +299,7 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		const room& r = g_rooms[room_id];
-		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
-		{
-			uint8_t other_id = r.player_ids[i];
-			if (other_id == UINT8_MAX || other_id == c_id)
-				continue;
-
-			if (g_users.count(other_id) && g_users[other_id].isValidSocket())
-			{
-				g_users[other_id].do_send_packet(p);
-			}
-		}
+		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
 		break;
 	}
 	case hitHeader:
@@ -218,25 +310,7 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		int room_id = g_users[c_id].room_id;
-		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
-		{
-			std::cout << "Invalid room ID: " << room_id << std::endl;
-			break;
-		}
-
-		const room& r = g_rooms[room_id];
-		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
-		{
-			uint8_t other_id = r.player_ids[i];
-			if (other_id == UINT8_MAX || other_id == c_id)
-				continue;
-
-			if (g_users.count(other_id) && g_users[other_id].isValidSocket())
-			{
-				g_users[other_id].do_send_packet(p);
-			}
-		}
+		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
 		break;
 	}
 	case connectionHeader:
