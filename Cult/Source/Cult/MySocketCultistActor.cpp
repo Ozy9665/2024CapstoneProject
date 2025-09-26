@@ -357,19 +357,31 @@ void AMySocketCultistActor::SendSkill(FVector SpawnLoc, FRotator SpawnRot, int32
         Packet.size = sizeof(SkillPacket);
         Packet.SpawnLoc = SpawnLoc;
         Packet.SpawnRot = SpawnRot;
+        Packet.skill = skill;
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(SkillPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("SendSkill failed with error: %ld"), WSAGetLastError());
         }
+        switch (skill)
+        {
+        case 1:
+        {
+            AsyncTask(ENamedThreads::GameThread, [this, SpawnLoc, SpawnRot]() {
+                FActorSpawnParameters SpawnParams;
+                SpawnParams.Owner = this;
+                SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-        AsyncTask(ENamedThreads::GameThread, [this, SpawnLoc, SpawnRot]() {
-            FActorSpawnParameters SpawnParams;
-            SpawnParams.Owner = this;
-            SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-            GetWorld()->SpawnActor<AProceduralBranchActor>(MyCharacter->ProceduralBranchActorClass, SpawnLoc, SpawnRot, SpawnParams);
-            });
+                GetWorld()->SpawnActor<AProceduralBranchActor>(MyCharacter->ProceduralBranchActorClass, SpawnLoc, SpawnRot, SpawnParams);
+                });
+            break;
+        }
+        case 2:
+            break;
+        default:
+            break;
+        }
+       
     }
     else
     {
