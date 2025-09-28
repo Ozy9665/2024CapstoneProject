@@ -247,16 +247,6 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid SkillPacket size\n";
 			break;
 		}
-		std::cout << "[Skill] skill=" << (int)p->skill << "\n";
-		std::cout << "Loc: X=" << p->SpawnLoc.x
-			<< " Y=" << p->SpawnLoc.y
-			<< " Z=" << p->SpawnLoc.z << "\n";
-		std::cout << "Rot: P=" << p->SpawnRot.pitch
-			<< " Y=" << p->SpawnRot.yaw
-			<< " R=" << p->SpawnRot.roll << "\n";
-		const uint8_t* b = reinterpret_cast<const uint8_t*>(packet);
-		std::cout << "Hdr=" << (int)b[0] << " Size=" << (int)b[1]
-			<< " Skill(byte)=" << (int)b[sizeof(SkillPacket) - 1] << "\n";
 
 		int room_id = g_users[c_id].room_id;
 		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
