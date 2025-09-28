@@ -22,7 +22,7 @@ constexpr float baseZ = 2770.f;
 constexpr float MAX_SPEED = 600.0f;
 constexpr float MAP_BOUND_X = 10000.0f; // 맵 최대 크기에 맞게 수정
 constexpr float MAP_BOUND_Y = 10000.0f;
-constexpr float MAP_MIN_Z = -100.0f;
+constexpr float MAP_MIN_Z = -3100.0f;
 
 //-- ingame header
 constexpr char cultistHeader = 0;

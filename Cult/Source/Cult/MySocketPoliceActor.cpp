@@ -8,6 +8,7 @@
 #include "PoliceCharacter.h"
 #include "Components/TextBlock.h"
 #include "TreeObstacleActor.h"
+#include "CrowActor.h"
 
 #pragma comment(lib, "ws2_32.lib")
 AMySocketPoliceActor* MySocketPoliceActor = nullptr;
@@ -204,19 +205,43 @@ void AMySocketPoliceActor::ProcessSkillData(const char* Buffer)
         UE_LOG(LogTemp, Error, TEXT("TreeObstacleActorClass is null"));
         return;
     }
-    FVector ReceivedVector;
-    memcpy(&ReceivedVector, Buffer + 2, sizeof(FVector));
-    FRotator ReceivedRotator;
-    memcpy(&ReceivedRotator, Buffer + 2 + sizeof(FVector), sizeof(FRotator));
-    UE_LOG(LogTemp, Warning, TEXT("Spawn Pos: %s, Rot: %s"), *ReceivedVector.ToString(), *ReceivedRotator.ToString());
-    UE_LOG(LogTemp, Warning, TEXT("Spawning with class: %s"), *MyCharacter->TreeObstacleActorClass->GetName());
 
-    AsyncTask(ENamedThreads::GameThread, [this, ReceivedVector, ReceivedRotator]() {
+    if (!MyCharacter->CrowClass)
+    {
+        UE_LOG(LogTemp, Error, TEXT("CrowClass is null"));
+        UE_LOG(LogTemp, Warning, TEXT("PawnClass=%s, CrowClass=%s"),
+            *GetNameSafe(MyCharacter ? MyCharacter->GetClass() : nullptr),
+            *GetNameSafe(MyCharacter ? MyCharacter->CrowClass : nullptr));
+
+        return;
+    }
+    SkillPacket ReceivedSkill;
+    memcpy(&ReceivedSkill, Buffer, sizeof(SkillPacket));
+    UE_LOG(LogTemp, Warning, TEXT("Spawn Pos: %s, Rot: %s"), *ReceivedSkill.SpawnLoc.ToString(), *ReceivedSkill.SpawnRot.ToString());
+    
+
+    AsyncTask(ENamedThreads::GameThread, [this, ReceivedSkill]() {
         FActorSpawnParameters SpawnParams;
-        SpawnParams.Owner = this;
+        SpawnParams.Owner = MyCharacter;
         SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-        GetWorld()->SpawnActor<ATreeObstacleActor>(MyCharacter->TreeObstacleActorClass, ReceivedVector, ReceivedRotator, SpawnParams);
+        switch (ReceivedSkill.skill)
+        {
+        case 1:
+            GetWorld()->SpawnActor<ATreeObstacleActor>(MyCharacter->TreeObstacleActorClass, ReceivedSkill.SpawnLoc, ReceivedSkill.SpawnRot, SpawnParams);
+            UE_LOG(LogTemp, Warning, TEXT("Spawning with class: %s"), *MyCharacter->TreeObstacleActorClass->GetName());
+            break;
+        case 2:
+            MyCharacter->CrowInstance = GetWorld()->SpawnActor<ACrowActor>(MyCharacter->CrowClass, ReceivedSkill.SpawnLoc, ReceivedSkill.SpawnRot, SpawnParams);
+            UE_LOG(LogTemp, Warning, TEXT("Spawning with class: %s"), *MyCharacter->CrowClass->GetName());
+            if (MyCharacter->CrowInstance)
+            {
+                MyCharacter->CrowInstance->InitCrow(MyCharacter, MyCharacter->CrowLifetime);
+            }
+            break;
+        default:
+            UE_LOG(LogTemp, Error, TEXT("Unknown Skill Number: %d"), ReceivedSkill.skill);
+            break;
+        }
         });
 }
 

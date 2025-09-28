@@ -166,7 +166,7 @@ bool validate_cultist_state(FCultistCharacterState& state)
 	}
 
 	// Crouch 속도 체크
-	if (state.Speed > MAX_SPEED / 2) {
+	if (state.Crouch && state.Speed > MAX_SPEED / 2) {
 		std::cout << "[AntiCheat] Player " << state.PlayerID
 			<< " exceeded speed: " << state.Speed
 			<< " -> clamped to " << MAX_SPEED / 2 << std::endl;
@@ -174,9 +174,9 @@ bool validate_cultist_state(FCultistCharacterState& state)
 		ok = false;
 	}
 
-	// 맵 범위 체크
-	if (fabs(state.PositionX) > MAP_BOUND_X ||
-		fabs(state.PositionY) > MAP_BOUND_Y ||
+	// 맵 범위 체크 + 음수체크 
+	if (state.PositionX < -MAP_BOUND_X || state.PositionX > MAP_BOUND_X ||
+		state.PositionY < -MAP_BOUND_Y || state.PositionY > MAP_BOUND_Y ||
 		state.PositionZ < MAP_MIN_Z)
 	{
 		std::cout << "[AntiCheat] Player " << state.PlayerID
@@ -201,7 +201,7 @@ bool validate_police_state(FPoliceCharacterState& state)
 	}
 
 	// Crouch 속도 체크
-	if (state.Speed > MAX_SPEED / 2) {
+	if (state.bIsCrouching && state.Speed > MAX_SPEED / 2) {
 		std::cout << "[AntiCheat] Player " << state.PlayerID
 			<< " exceeded speed: " << state.Speed
 			<< " -> clamped to " << MAX_SPEED / 2 << std::endl;
@@ -210,8 +210,8 @@ bool validate_police_state(FPoliceCharacterState& state)
 	}
 
 	// 맵 범위 체크
-	if (fabs(state.PositionX) > MAP_BOUND_X ||
-		fabs(state.PositionY) > MAP_BOUND_Y ||
+	if (state.PositionX < -MAP_BOUND_X || state.PositionX > MAP_BOUND_X ||
+		state.PositionY < -MAP_BOUND_Y || state.PositionY > MAP_BOUND_Y ||
 		state.PositionZ < MAP_MIN_Z)
 	{
 		std::cout << "[AntiCheat] Police " << state.PlayerID
@@ -247,6 +247,16 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid SkillPacket size\n";
 			break;
 		}
+		std::cout << "[Skill] skill=" << (int)p->skill << "\n";
+		std::cout << "Loc: X=" << p->SpawnLoc.x
+			<< " Y=" << p->SpawnLoc.y
+			<< " Z=" << p->SpawnLoc.z << "\n";
+		std::cout << "Rot: P=" << p->SpawnRot.pitch
+			<< " Y=" << p->SpawnRot.yaw
+			<< " R=" << p->SpawnRot.roll << "\n";
+		const uint8_t* b = reinterpret_cast<const uint8_t*>(packet);
+		std::cout << "Hdr=" << (int)b[0] << " Size=" << (int)b[1]
+			<< " Skill(byte)=" << (int)b[sizeof(SkillPacket) - 1] << "\n";
 
 		int room_id = g_users[c_id].room_id;
 		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
