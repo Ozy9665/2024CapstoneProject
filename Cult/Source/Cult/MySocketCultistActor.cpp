@@ -356,9 +356,10 @@ void AMySocketCultistActor::SendSkill(FVector SpawnLoc, FRotator SpawnRot, int32
         SkillPacket Packet;
         Packet.header = skillHeader;
         Packet.size = sizeof(SkillPacket);
+        Packet.skill = skill;
+        Packet.casterId = my_ID;
         Packet.SpawnLoc = SpawnLoc;
         Packet.SpawnRot = SpawnRot;
-        Packet.skill = skill;
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(SkillPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {

@@ -229,19 +229,5 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
 	float ImpulseAmount = 1200.0f;
 
-	// tree abilities
-	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
-	TSubclassOf<class ATreeObstacleActor> TreeObstacleActorClass;
-
-	// crow abilities
-	UPROPERTY(EditDefaultsOnly, Category = "CrowSkill")
-	TSubclassOf <class ACrowActor > CrowClass;
-	UPROPERTY(EditDefaultsOnly, Category = "CrowSkill")
-	ACrowActor* CrowInstance = nullptr;
-	UPROPERTY(EditDefaultsOnly, Category = "CrowSkill")
-	float CrowLifetime = 12.f;
-
-
-
 	int my_ID = -1;
 };

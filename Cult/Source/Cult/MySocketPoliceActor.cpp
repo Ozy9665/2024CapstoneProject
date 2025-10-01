@@ -194,52 +194,62 @@ void AMySocketPoliceActor::ProcessHitData(const char* Buffer)
 
 void AMySocketPoliceActor::ProcessSkillData(const char* Buffer) 
 {
-    if (!MyCharacter)
-    {
-        UE_LOG(LogTemp, Error, TEXT("MyCharacter is null"));
-        return;
-    }
-
-    if (!MyCharacter->TreeObstacleActorClass)
-    {
-        UE_LOG(LogTemp, Error, TEXT("TreeObstacleActorClass is null"));
-        return;
-    }
-
-    if (!MyCharacter->CrowClass)
-    {
-        UE_LOG(LogTemp, Error, TEXT("CrowClass is null"));
-        UE_LOG(LogTemp, Warning, TEXT("PawnClass=%s, CrowClass=%s"),
-            *GetNameSafe(MyCharacter ? MyCharacter->GetClass() : nullptr),
-            *GetNameSafe(MyCharacter ? MyCharacter->CrowClass : nullptr));
-
-        return;
-    }
     SkillPacket ReceivedSkill;
     memcpy(&ReceivedSkill, Buffer, sizeof(SkillPacket));
-    UE_LOG(LogTemp, Warning, TEXT("Spawn Pos: %s, Rot: %s"), *ReceivedSkill.SpawnLoc.ToString(), *ReceivedSkill.SpawnRot.ToString());
-    
 
-    AsyncTask(ENamedThreads::GameThread, [this, ReceivedSkill]() {
-        FActorSpawnParameters SpawnParams;
-        SpawnParams.Owner = MyCharacter;
-        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-        switch (ReceivedSkill.skill)
+    const int Key = static_cast<int>(ReceivedSkill.casterId);
+    ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
+    if (!FoundChar) {
+        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d not found"), ReceivedSkill.casterId);
+        return;
+    }
+
+    ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
+    if (!CasterCultist) {
+        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d is not Cultist"), ReceivedSkill.casterId);
+        return;
+    }
+
+    TWeakObjectPtr<ACultistCharacter> WeakCaster = CasterCultist;
+    const FVector  SpawnLoc = ReceivedSkill.SpawnLoc;
+    const FRotator SpawnRot = ReceivedSkill.SpawnRot;
+    const uint8    Skill = ReceivedSkill.skill;
+
+    AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot, Skill]() {
+        ACultistCharacter* Caster = WeakCaster.Get();
+        if (!IsValid(Caster)) return;
+
+        FActorSpawnParameters Params;
+        Params.Owner = Caster;
+        Params.Instigator = Caster;
+        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        switch (Skill)
         {
         case 1:
-            GetWorld()->SpawnActor<ATreeObstacleActor>(MyCharacter->TreeObstacleActorClass, ReceivedSkill.SpawnLoc, ReceivedSkill.SpawnRot, SpawnParams);
-            UE_LOG(LogTemp, Warning, TEXT("Spawning with class: %s"), *MyCharacter->TreeObstacleActorClass->GetName());
+        {
+            if (!Caster->TreeObstacleActorClass) {
+                UE_LOG(LogTemp, Error, TEXT("[Skill] %s TreeObstacleActorClass is null"), *Caster->GetName());
+                break;
+            }
+            Caster->GetWorld()->SpawnActor<ATreeObstacleActor>(
+                Caster->TreeObstacleActorClass, SpawnLoc, SpawnRot, Params);
             break;
+        }
         case 2:
-            MyCharacter->CrowInstance = GetWorld()->SpawnActor<ACrowActor>(MyCharacter->CrowClass, ReceivedSkill.SpawnLoc, ReceivedSkill.SpawnRot, SpawnParams);
-            UE_LOG(LogTemp, Warning, TEXT("Spawning with class: %s"), *MyCharacter->CrowClass->GetName());
-            if (MyCharacter->CrowInstance)
-            {
-                MyCharacter->CrowInstance->InitCrow(MyCharacter, MyCharacter->CrowLifetime);
+        {
+            if (!Caster->CrowClass) {
+                UE_LOG(LogTemp, Error, TEXT("[Skill] %s CrowClass is null"), *Caster->GetName());
+                break;
+            }
+            Caster->CrowInstance = Caster->GetWorld()->SpawnActor<ACrowActor>(
+                Caster->CrowClass, SpawnLoc, SpawnRot, Params);
+            if (Caster->CrowInstance) {
+                Caster->CrowInstance->InitCrow(Caster, Caster->CrowLifetime);
             }
             break;
+        }
         default:
-            UE_LOG(LogTemp, Error, TEXT("Unknown Skill Number: %d"), ReceivedSkill.skill);
+            UE_LOG(LogTemp, Error, TEXT("Unknown Skill Number: %d"), Skill);
             break;
         }
         });

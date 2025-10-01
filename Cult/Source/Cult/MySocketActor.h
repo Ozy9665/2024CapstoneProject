@@ -172,9 +172,10 @@ struct NoticePacket {
 struct SkillPacket {
 	uint8_t header;
 	uint8_t size;
+	uint8_t casterId;
+	uint8_t skill;	// 1: ³ª¹«, 2: ±î¸¶±Í
 	FVector SpawnLoc;
 	FRotator SpawnRot;
-	uint8_t skill;	// 1: ³ª¹«, 2: ±î¸¶±Í
 };
 
 struct RitualPacket {
