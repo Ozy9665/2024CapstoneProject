@@ -13,7 +13,9 @@
 #include "Components/InputComponent.h"
 #include "Landscape.h"
 #include "DrawDebugHelpers.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "CrowActor.h"
+#include "AIController.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 
@@ -1012,6 +1014,45 @@ void ACultistCharacter::OnCrowControlPressed()
 	}
 }
 
+
+// Heal
+void ACultistCharacter::StartInteractionTrace()
+{
+	FVector Start = GetActorLocation();
+	TArray<AActor*> ActorsToIgnore;
+	ActorsToIgnore.Add(this);
+	FHitResult HitResult;
+
+	bool bHit = UKismetSystemLibrary::SphereTraceSingleForObjects(
+		this, Start, Start, 200.0f, { UEngineTypes::ConvertToObjectType(ECollisionChannel::ECC_Pawn) },
+		false, ActorsToIgnore, EDrawDebugTrace::ForDuration, HitResult, true
+	);
+
+	if (bHit)
+	{
+		ACharacter* Target = Cast<ACharacter>(HitResult.GetActor());
+		if (Target && Target->ActorHasTag("Cultist"))
+		{
+			BeginInteraction(Target);
+		}
+	}
+}
+void ACultistCharacter::BeginInteraction(ACharacter* TargetCharacter)
+{
+
+}
+void ACultistCharacter::ACultistCharacter::OnInteractionMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result)
+{
+
+}
+void ACultistCharacter::AnimNotify_DoHeal()
+{
+
+}
+void ACultistCharacter::EndInteraction()
+{
+
+}
 
 
 int ACultistCharacter::GetPlayerID() const {

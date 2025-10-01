@@ -6,6 +6,8 @@
 #include "GameFramework/Character.h"
 #include "Blueprint/UserWidget.h"
 #include"GameFramework/SpringArmComponent.h"
+#include "Navigation/PathFollowingComponent.h"
+#include "AITypes.h"
 #include "BaseCharacter.h"
 #include "Altar.h"
 #include "CultistSkillCheckWidget.h"
@@ -266,8 +268,23 @@ public:
 	float CrowLifetime = 12.f;
 
 	// Heal
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Interaction")
+	bool ABP_MoveToHeal;
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Interaction")
 	bool ABP_DoHeal;
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Interaction")
 	bool ABP_GetHeal;
+
+	UFUNCTION(BlueprintCallable, Category="Interaction")
+	void AnimNotify_DoHeal();
+
+	void StartInteractionTrace();
+	void BeginInteraction(ACharacter* TargetCharacter);
+	void OnInteractionMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result);
+	void EndInteraction();
+	UPROPERTY()
+	TObjectPtr<ACharacter> HealPartner;
+
 
 	int my_ID = -1;
 	int GetPlayerID() const;
