@@ -570,6 +570,20 @@ void AMySocketPoliceActor::UpdateCultistAnimInstanceProperties(UAnimInstance* An
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsPakourProperty);
         BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.bIsPakour));
     }
+
+    FProperty* IsABP_DoHealProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_DoHeal"));
+    if (IsABP_DoHealProperty && IsABP_DoHealProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_DoHealProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_DoHeal));
+    }
+
+    FProperty* IsABP_GetHealProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_GetHeal"));
+    if (IsABP_GetHealProperty && IsABP_GetHealProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_GetHealProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_GetHeal));
+    }
 }
 
 void AMySocketPoliceActor::CheckImpactEffect()

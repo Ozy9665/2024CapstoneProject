@@ -75,6 +75,8 @@ struct FCultistCharacterState
 	uint8_t ABP_TTGetUp;
 	uint8_t ABP_IsDead;
 	uint8_t ABP_IsStunned;
+	uint8_t ABP_DoHeal;
+	uint8_t ABP_GetHeal;
 	uint8_t bIsPakour;
 };
 

@@ -265,6 +265,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category="CrowSkill")
 	float CrowLifetime = 12.f;
 
+	// Heal
+	bool ABP_DoHeal;
+	bool ABP_GetHeal;
 
 	int my_ID = -1;
 	int GetPlayerID() const;

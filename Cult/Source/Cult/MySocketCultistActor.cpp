@@ -6,6 +6,7 @@
 #include "Components/TextBlock.h"
 #include "TreeObstacleActor.h"
 #include "ProceduralBranchActor.h"
+#include "CrowActor.h"
 
 #pragma comment(lib, "ws2_32.lib")
 AMySocketCultistActor* MySocketCultistActor = nullptr;
@@ -363,25 +364,27 @@ void AMySocketCultistActor::SendSkill(FVector SpawnLoc, FRotator SpawnRot, int32
         {
             UE_LOG(LogTemp, Error, TEXT("SendSkill failed with error: %ld"), WSAGetLastError());
         }
-        switch (skill)
-        {
-        case 1:
-        {
-            AsyncTask(ENamedThreads::GameThread, [this, SpawnLoc, SpawnRot]() {
+        AsyncTask(ENamedThreads::GameThread, [this, SpawnLoc, SpawnRot, skill]() {
+            switch (skill)
+            {
+            case 1:
+            {
                 FActorSpawnParameters SpawnParams;
                 SpawnParams.Owner = this;
                 SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
                 GetWorld()->SpawnActor<AProceduralBranchActor>(MyCharacter->ProceduralBranchActorClass, SpawnLoc, SpawnRot, SpawnParams);
-                });
-            break;
-        }
-        case 2:
-            break;
-        default:
-            break;
-        }
-       
+
+                break;
+            }
+            case 2:
+            {
+                break;
+            }
+            default:
+                break;
+            }
+            });       
     }
     else
     {
@@ -444,6 +447,8 @@ FCultistCharacterState AMySocketCultistActor::GetCharacterState()
         State.ABP_TTGetUp = CultistChar->TurnToGetUp;
         State.ABP_IsDead = CultistChar->bIsDead;
         State.ABP_IsStunned = CultistChar->bIsStunned;
+        State.ABP_DoHeal = CultistChar->ABP_DoHeal;
+        State.ABP_GetHeal = CultistChar->ABP_GetHeal;
         State.bIsPakour = CultistChar->bIsPakour;
 
         //UE_LOG(LogTemp, Error, TEXT("Client ABP_TTStun: %d, ABP_IsDead: %d"), State.ABP_TTStun, CultistChar->bIsDead);
@@ -617,6 +622,20 @@ void AMySocketCultistActor::UpdateCultistAnimInstanceProperties(UAnimInstance* A
     {
         FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_IsPakourProperty);
         BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.bIsPakour));
+    }
+
+    FProperty* IsABP_DoHealProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_DoHeal"));
+    if (IsABP_DoHealProperty && IsABP_DoHealProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_DoHealProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_DoHeal));
+    }
+
+    FProperty* IsABP_GetHealProperty = AnimInstance->GetClass()->FindPropertyByName(FName("ABP_GetHeal"));
+    if (IsABP_GetHealProperty && IsABP_GetHealProperty->IsA<FBoolProperty>())
+    {
+        FBoolProperty* BoolProp = CastFieldChecked<FBoolProperty>(IsABP_GetHealProperty);
+        BoolProp->SetPropertyValue_InContainer(AnimInstance, static_cast<bool>(State.ABP_GetHeal));
     }
 }
 
