@@ -49,6 +49,7 @@ public:
 	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);
 	void ReceiveData();
 	void ProcessCultistData(const char* Buffer);
+	void ProcessSkillData(const char* Buffer);
 	void ProcessPoliceData(const char* Buffer);
 	void ProcessHitData(const char* Buffer);
 	void ProcessConnection(const char* Buffer);

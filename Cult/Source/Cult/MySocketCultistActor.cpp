@@ -109,7 +109,7 @@ void AMySocketCultistActor::ReceiveData()
                         ProcessCultistData(Buffer);
                         break;
                     case skillHeader:
-                        //ProcessObjectData(Buffer);
+                        ProcessSkillData(Buffer);
                         break;
                     case policeHeader:
                         ProcessPoliceData(Buffer);
@@ -167,6 +167,69 @@ void AMySocketCultistActor::ProcessCultistData(const char* Buffer)
         FScopeLock Lock(&CultistDataMutex);
         ReceivedCultistStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
     }
+}
+
+void AMySocketCultistActor::ProcessSkillData(const char* Buffer)
+{
+    SkillPacket ReceivedSkill;
+    memcpy(&ReceivedSkill, Buffer, sizeof(SkillPacket));
+
+    const int Key = static_cast<int>(ReceivedSkill.casterId);
+    ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
+    if (!FoundChar) {
+        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d not found"), ReceivedSkill.casterId);
+        return;
+    }
+
+    ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
+    if (!CasterCultist) {
+        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d is not Cultist"), ReceivedSkill.casterId);
+        return;
+    }
+
+    TWeakObjectPtr<ACultistCharacter> WeakCaster = CasterCultist;
+    const FVector  SpawnLoc = ReceivedSkill.SpawnLoc;
+    const FRotator SpawnRot = ReceivedSkill.SpawnRot;
+    const uint8    Skill = ReceivedSkill.skill;
+
+    AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot, Skill]() {
+        ACultistCharacter* Caster = WeakCaster.Get();
+        if (!IsValid(Caster)) return;
+
+        FActorSpawnParameters Params;
+        Params.Owner = Caster;
+        Params.Instigator = Caster;
+        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        switch (Skill)
+        {
+        case 1:
+        {
+            if (!Caster->TreeObstacleActorClass) {
+                UE_LOG(LogTemp, Error, TEXT("[Skill] %s TreeObstacleActorClass is null"), *Caster->GetName());
+                break;
+            }
+            Caster->GetWorld()->SpawnActor<ATreeObstacleActor>(
+                Caster->TreeObstacleActorClass, SpawnLoc, SpawnRot, Params);
+            break;
+        }
+        case 2:
+        {
+            if (!Caster->CrowClass) {
+                UE_LOG(LogTemp, Error, TEXT("[Skill] %s CrowClass is null"), *Caster->GetName());
+                break;
+            }
+            Caster->CrowInstance = Caster->GetWorld()->SpawnActor<ACrowActor>(
+                Caster->CrowClass, SpawnLoc, SpawnRot, Params);
+            if (Caster->CrowInstance) {
+                Caster->CrowInstance->InitCrow(Caster, Caster->CrowLifetime);
+            }
+            break;
+        }
+        default:
+            UE_LOG(LogTemp, Error, TEXT("Unknown Skill Number: %d"), Skill);
+            break;
+        }
+        });
 }
 
 void AMySocketCultistActor::ProcessPoliceData(const char* Buffer)
