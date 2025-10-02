@@ -1039,7 +1039,26 @@ void ACultistCharacter::StartInteractionTrace()
 }
 void ACultistCharacter::BeginInteraction(ACharacter* TargetCharacter)
 {
+	ACultistCharacter* TargetCultist = Cast<ACultistCharacter>(TargetCharacter);
+	if (!TargetCultist)return;
 
+	// 힐파트너
+	this->HealPartner = TargetCultist;
+	TargetCultist->HealPartner = this;
+
+	// 이동
+	TargetCultist->ABP_MoveToHeal = true;
+
+	AAIController* TargetAIController = Cast<AAIController>(TargetCultist->GetController());
+	if (TargetAIController)
+	{
+		FVector InteractionLocation = GetActorLocation() + GetActorForwardVector() * 150.f;
+		FAIMoveRequest MoveRequest(InteractionLocation);
+		MoveRequest.SetAcceptanceRadius(5.0f);
+		TargetAIController->MoveTo(MoveRequest);
+		// 이동 후 함수호출
+		TargetAIController->GetPathFollowingComponent()->OnRequestFinished.AddUObject(this, &ACultistCharacter::OnInteractionMoveCompleted);
+	}
 }
 void ACultistCharacter::ACultistCharacter::OnInteractionMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result)
 {
