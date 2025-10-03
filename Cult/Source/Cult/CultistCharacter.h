@@ -271,6 +271,8 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Interaction")
 	bool ABP_MoveToHeal;
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Interaction")
+	bool ABP_SitToHeal;
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Interaction")
 	bool ABP_DoHeal;
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Interaction")
 	bool ABP_GetHeal;
