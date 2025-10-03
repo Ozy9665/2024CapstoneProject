@@ -173,6 +173,10 @@ void AMySocketCultistActor::ProcessSkillData(const char* Buffer)
 {
     SkillPacket ReceivedSkill;
     memcpy(&ReceivedSkill, Buffer, sizeof(SkillPacket));
+    if (ReceivedSkill.casterId == my_ID) {
+        UE_LOG(LogTemp, Warning, TEXT("my skill packet recv."));
+        return;
+    }
 
     const int Key = static_cast<int>(ReceivedSkill.casterId);
     ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
@@ -191,6 +195,13 @@ void AMySocketCultistActor::ProcessSkillData(const char* Buffer)
     const FVector  SpawnLoc = ReceivedSkill.SpawnLoc;
     const FRotator SpawnRot = ReceivedSkill.SpawnRot;
     const uint8    Skill = ReceivedSkill.skill;
+
+    UE_LOG(LogTemp, Warning, TEXT("[SkillRx] hdr=%d size=%d caster=%d my=%d skill=%d -> Found=%s Class=%s CrowClass=%s"),
+        (int)((uint8)Buffer[0]), (int)((uint8)Buffer[1]),
+        ReceivedSkill.casterId, my_ID, (int)ReceivedSkill.skill,
+        *GetNameSafe(CasterCultist),
+        *GetNameSafe(CasterCultist ? CasterCultist->GetClass() : nullptr),
+        *GetNameSafe(CasterCultist ? CasterCultist->CrowClass : nullptr));
 
     AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot, Skill]() {
         ACultistCharacter* Caster = WeakCaster.Get();
@@ -218,10 +229,21 @@ void AMySocketCultistActor::ProcessSkillData(const char* Buffer)
                 UE_LOG(LogTemp, Error, TEXT("[Skill] %s CrowClass is null"), *Caster->GetName());
                 break;
             }
-            Caster->CrowInstance = Caster->GetWorld()->SpawnActor<ACrowActor>(
-                Caster->CrowClass, SpawnLoc, SpawnRot, Params);
-            if (Caster->CrowInstance) {
-                Caster->CrowInstance->InitCrow(Caster, Caster->CrowLifetime);
+            if (!Caster->CrowInstance)
+            {
+                Caster->CrowInstance = Caster->GetWorld()->SpawnActor<ACrowActor>(
+                    Caster->CrowClass, SpawnLoc, SpawnRot, Params);
+                if (Caster->CrowInstance) {
+                    Caster->CrowInstance->InitCrow(Caster, Caster->CrowLifetime);
+                    UE_LOG(LogTemp, Warning, TEXT("[SkillRx] Spawned crow for caster=%s"), *Caster->GetName());
+                }
+            }
+            else
+            {
+                // 이미 존재하면 상태만 갱신하고 싶을 때(예: Dive 등) 여기서 처리
+                if (Caster->CrowInstance->GetState() == ECrowState::Alert) {
+                    Caster->CrowInstance->RequestDive();
+                }
             }
             break;
         }
@@ -420,7 +442,7 @@ void AMySocketCultistActor::SendSkill(FVector SpawnLoc, FRotator SpawnRot, int32
         Packet.header = skillHeader;
         Packet.size = sizeof(SkillPacket);
         Packet.skill = skill;
-        Packet.casterId = my_ID;
+        Packet.casterId = MyCharacter->my_ID;
         Packet.SpawnLoc = SpawnLoc;
         Packet.SpawnRot = SpawnRot;
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(SkillPacket), 0);
@@ -443,6 +465,7 @@ void AMySocketCultistActor::SendSkill(FVector SpawnLoc, FRotator SpawnRot, int32
             }
             case 2:
             {
+                UE_LOG(LogTemp, Error, TEXT("SendSkill with ID: %d"), MyCharacter->my_ID);
                 break;
             }
             default:

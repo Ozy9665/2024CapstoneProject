@@ -247,6 +247,10 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid SkillPacket size\n";
 			break;
 		}
+		std::cout << "[SkillRecv] from=" << (int)c_id << " room=" << g_users[c_id].room_id
+			<< " skill=" << (int)p->skill << " size=" << (int)p->size << "\n";
+
+		p->casterId = static_cast<uint8_t>(c_id);
 
 		int room_id = g_users[c_id].room_id;
 		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
@@ -469,8 +473,6 @@ void process_packet(int c_id, char* packet) {
 		}
 		int room_id = p->room_number;
 		NoticePacket packet;
-		std::cout << "role: " << static_cast<int>(g_users[c_id].role);
-		std::cout << "room: " << static_cast<int>(p->room_number);
 		switch (g_users[c_id].role)
 		{
 		case 0: // cultist
