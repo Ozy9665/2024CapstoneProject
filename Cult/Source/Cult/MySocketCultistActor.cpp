@@ -192,6 +192,13 @@ void AMySocketCultistActor::ProcessSkillData(const char* Buffer)
     const FRotator SpawnRot = ReceivedSkill.SpawnRot;
     const uint8    Skill = ReceivedSkill.skill;
 
+    UE_LOG(LogTemp, Warning, TEXT("[SkillRx] hdr=%d size=%d caster=%d my=%d skill=%d -> Found=%s Class=%s CrowClass=%s"),
+        (int)((uint8)Buffer[0]), (int)((uint8)Buffer[1]),
+        ReceivedSkill.casterId, my_ID, (int)ReceivedSkill.skill,
+        *GetNameSafe(CasterCultist),
+        *GetNameSafe(CasterCultist ? CasterCultist->GetClass() : nullptr),
+        *GetNameSafe(CasterCultist ? CasterCultist->CrowClass : nullptr));
+
     AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot, Skill]() {
         ACultistCharacter* Caster = WeakCaster.Get();
         if (!IsValid(Caster)) return;
