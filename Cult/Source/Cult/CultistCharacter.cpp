@@ -1066,3 +1066,12 @@ void ACultistCharacter::SendDisableToServer()
 		MySocketCultistActor->SendDisable();
 	}
 }
+
+ACameraActor* ACultistCharacter::GetFollowCameraActor() const
+{
+	if (const UChildActorComponent* CAC = FindComponentByClass<UChildActorComponent>())
+	{
+		return Cast<ACameraActor>(CAC->GetChildActor());
+	}
+	return nullptr;
+}

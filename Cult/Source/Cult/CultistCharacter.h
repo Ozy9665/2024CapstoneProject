@@ -289,4 +289,5 @@ public:
 	int my_ID = -1;
 	int GetPlayerID() const;
 	void SendDisableToServer();
+	ACameraActor* GetFollowCameraActor() const;
 };

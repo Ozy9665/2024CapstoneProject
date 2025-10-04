@@ -6,6 +6,8 @@
 #include "Components/SphereComponent.h"
 #include "TimerManager.h"
 #include "Components/WidgetComponent.h"
+#include "Camera/CameraActor.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 // Sets default values
 ACrowActor::ACrowActor()
@@ -331,16 +333,52 @@ void ACrowActor::BeginControl(APlayerController* PC)
 
 void ACrowActor::EndControl(bool bDestroyCrow)
 {
-	// 카메라 복귀
 	if (CachedPC && OwnerPawn)
 	{
-		//CachedPC->SetViewTargetWithBlend(OwnerPawn, 0.25f);
+		// 1) 플레이어 캐릭터를 다시 소유
 		CachedPC->Possess(OwnerPawn);
+
+		// 2) ViewTarget을 플레이어의 ChildActor 카메라로 돌림
+		if (ACharacter* CC = Cast<ACharacter>(OwnerPawn))
+		{
+			if (UChildActorComponent* CAC = CC->FindComponentByClass<UChildActorComponent>())
+			{
+				if (ACameraActor* FollowCam = Cast<ACameraActor>(CAC->GetChildActor()))
+				{
+					CachedPC->SetViewTargetWithBlend(FollowCam, 0.25f, EViewTargetBlendFunction::VTBlend_Cubic);
+				}
+				else
+				{
+					// 차선책: 폰 자체
+					CachedPC->SetViewTarget(OwnerPawn);
+				}
+			}
+			else
+			{
+				CachedPC->SetViewTarget(OwnerPawn);
+			}
+
+			// (선택) 컨트롤러/이동 플래그 원복
+			CC->bUseControllerRotationYaw = false;
+			if (UCharacterMovementComponent* Move = CC->GetCharacterMovement())
+			{
+				Move->bOrientRotationToMovement = true;
+			}
+		}
+
+		// (선택) 컨트롤러 회전 정리
+		const FRotator NewCtrl(0.f, OwnerPawn->GetActorRotation().Yaw, 0.f);
+		CachedPC->SetControlRotation(NewCtrl);
+		CachedPC->SetInputMode(FInputModeGameOnly());
+		CachedPC->bShowMouseCursor = false;
 	}
+
 	GetWorldTimerManager().ClearTimer(ControlTimer);
 
-	// 빙의 해제 
-	DestroyCrow();
+	if (bDestroyCrow)
+	{
+		DestroyCrow();
+	}
 }
 
 // Control - Axis
@@ -365,12 +403,14 @@ void ACrowActor::DestroyCrow()
 // Expire
 void ACrowActor::OnPatrolExpire()
 {
+	EndControl(false);
 	DestroyCrow();
 }
 
 void ACrowActor::OnAlertExpire()
 {
 	EndAlertState();
+	EndControl(false);
 	DestroyCrow();
 }
 
