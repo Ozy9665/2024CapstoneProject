@@ -1039,19 +1039,85 @@ void ACultistCharacter::StartInteractionTrace()
 }
 void ACultistCharacter::BeginInteraction(ACharacter* TargetCharacter)
 {
+	ACultistCharacter* TargetCultist = Cast<ACultistCharacter>(TargetCharacter);
+	if (!TargetCultist)return;
 
+	// 힐파트너
+	this->HealPartner = TargetCultist;
+	TargetCultist->HealPartner = this;
+
+	// 이동
+	TargetCultist->ABP_MoveToHeal = true;
+
+	AAIController* TargetAIController = Cast<AAIController>(TargetCultist->GetController());
+	if (TargetAIController)
+	{
+		FVector InteractionLocation = GetActorLocation() + GetActorForwardVector() * 150.f;
+		FAIMoveRequest MoveRequest(InteractionLocation);
+		MoveRequest.SetAcceptanceRadius(5.0f);
+		TargetAIController->MoveTo(MoveRequest);
+		// 이동 후 함수호출
+		TargetAIController->GetPathFollowingComponent()->OnRequestFinished.AddUObject(this, &ACultistCharacter::OnInteractionMoveCompleted);
+	}
 }
 void ACultistCharacter::ACultistCharacter::OnInteractionMoveCompleted(FAIRequestID RequestID, const FPathFollowingResult& Result)
 {
+	ACultistCharacter* TargetCultist = Cast < ACultistCharacter>(HealPartner);
 
+	if (Result.IsSuccess() && TargetCultist)
+	{
+		// 이동은 false
+		TargetCultist->ABP_MoveToHeal = false;
+
+		// 회전
+		FVector LookAtDirection = (TargetCultist->GetActorLocation() - GetActorLocation()).GetSafeNormal();
+		SetActorRotation(LookAtDirection.Rotation());
+
+		// 애니메이션 변수
+		TargetCultist->ABP_SitToHeal = true;
+	}
+	else
+	{
+		// 실패시 취소
+		EndInteraction();
+	}
 }
 void ACultistCharacter::AnimNotify_DoHeal()
 {
+	ACultistCharacter* TargetCultist = Cast < ACultistCharacter>(HealPartner);
 
+	if (TargetCultist && ABP_SitToHeal)
+	{
+		// 앉기 종료
+		this->ABP_SitToHeal = false;
+		// 치료 시작
+		this->ABP_DoHeal = true;
+
+		TargetCultist->ABP_SitToHeal = false;
+		TargetCultist->ABP_GetHeal = true;
+
+		// 종료 타이머
+		// FTimerHandle EndTimer;
+		//GetWorld()->GetTimerManager().SetTimer(EndTimer, this, &ACultistCharacter, 5.0f, false);
+	}
 }
+// 모든 상태 초기화
 void ACultistCharacter::EndInteraction()
 {
+	// this
+	ABP_MoveToHeal = false;
+	ABP_DoHeal = false;
+	ABP_GetHeal = false;
+	ABP_SitToHeal = false;
 
+	if (ACultistCharacter* TargetCultist = Cast < ACultistCharacter>(HealPartner))
+	{
+		TargetCultist->ABP_DoHeal = false;
+		TargetCultist->ABP_GetHeal = false;
+		TargetCultist->ABP_MoveToHeal = false;
+		TargetCultist->ABP_SitToHeal = false;
+	}
+	this->HealPartner = nullptr;
 }
 
 
