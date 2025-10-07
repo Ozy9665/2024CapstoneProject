@@ -11,6 +11,8 @@
 #include "error.h"
 #include "PoliceAI.h"
 #include "db.h"
+#include <mutex>
+#include <queue>
 
 #pragma comment(lib, "MSWSock.lib")
 #pragma comment (lib, "WS2_32.LIB")
@@ -27,6 +29,87 @@ std::pair<int, std::string> id_pair;
 std::array<room, 100> g_rooms;
 
 int altar_locs[100][5];
+
+// Login
+// 로그인 작업 큐
+struct LoginTask {
+	int c_id;
+	std::string id;
+	std::string pw;
+};
+
+std::mutex g_login_mtx;
+std::condition_variable g_login_cv;
+std::queue<LoginTask> g_login_q;
+
+// 이미 접속 처리된 ID 중복 방지를 위한 집합 (선택)
+std::mutex g_logged_mtx;
+std::unordered_set<std::string> g_logged_in_ids;
+
+// IOCP 핸들을 워커가 쓸 수 있게
+HANDLE g_h_iocp = nullptr;
+
+// 워커 생명주기
+std::atomic<bool> g_login_worker_run{ true };
+std::thread g_login_worker;
+
+void LoginWorkerLoop()
+{
+	// db초기화
+	/*if (!InitializeDB()) {
+		std::cout << "DB 초기화 실패, 프로그램 종료\n";
+		return 0;
+	}*/
+	while (g_login_worker_run.load())
+	{
+		LoginTask task;
+		{
+			std::unique_lock<std::mutex> lk(g_login_mtx);
+			g_login_cv.wait(lk, [] { return !g_login_q.empty() || !g_login_worker_run.load(); });
+			if (!g_login_worker_run.load()) break;
+			task = std::move(g_login_q.front());
+			g_login_q.pop();
+		}
+
+		// DB 쿼리 수행
+		int code = logIn(task.id, task.pw); // 0성공, 1/2/3 에러코드 :contentReference[oaicite:2]{index=2}
+
+		// 결과 패킷을 IOCP로 되돌려 메인 스레드가 전송하게 한다
+		// EXP_OVER를 재사용하여 OP_LOGIN으로 PostQueuedCompletionStatus
+		EXP_OVER* over = new EXP_OVER();
+		over->comp_type = OP_LOGIN;
+		over->id = (char)task.c_id;
+
+		BoolPacket packet{};
+		packet.header = loginHeader;
+		packet.size = sizeof(BoolPacket);
+		if (code == 0) {
+			// 중복 로그인 방지: 이미 로그인된 ID면 거절
+			{
+				std::lock_guard<std::mutex> lk(g_logged_mtx);
+				if (g_logged_in_ids.count(task.id)) {
+					packet.result = false;
+					packet.reason = 4; // already logged in (네 프로토콜 주석) :contentReference[oaicite:3]{index=3}
+				}
+				else {
+					packet.result = true;
+					packet.reason = 0;
+					g_logged_in_ids.insert(task.id);
+				}
+			}
+		}
+		else {
+			packet.result = false;
+			packet.reason = (uint8_t)code;
+		}
+
+		// send_buffer에 패킷 복사해두면 메인 스레드에서 그대로 송신 가능
+		memcpy(over->send_buffer, &packet, sizeof(packet));
+
+		// num_bytes에는 packet.size 넣어두면 편함
+		PostQueuedCompletionStatus(g_h_iocp, packet.size, (ULONG_PTR)task.c_id, &over->over);
+	}
+}
 
 void CommandWorker()
 {
@@ -783,8 +866,20 @@ void mainLoop(HANDLE h_iocp) {
 			break;
 		}
 		case OP_SEND:
+		{
 			delete eo;
 			break;
+		}
+		case OP_LOGIN:
+		{
+			// eo->send_buffer 안에 BoolPacket이 있음
+			// key는 c_id
+			if (g_users.count((int)key) && g_users[(int)key].isValidSocket()) {
+				g_users[(int)key].do_send_packet(eo->send_buffer); // WSASend 발생 :contentReference[oaicite:5]{index=5}
+			}
+			delete eo;
+			break;
+		}
 		}
 	}
 }
@@ -809,11 +904,6 @@ int main()
 {
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));	// 한국어로 출력
-	// db초기화
-	/*if (!InitializeDB()) {
-		std::cout << "DB 초기화 실패, 프로그램 종료\n";
-		return 0;
-	}*/
 
 	WSADATA WSAData;
 	WSAStartup(MAKEWORD(2, 0), &WSAData);
