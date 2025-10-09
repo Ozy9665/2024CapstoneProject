@@ -7,12 +7,15 @@
 #include <MSWSock.h>
 #include <thread>
 #include <string>
+#include <mutex>
+#include <queue>
+#include <atomic>
+#include <condition_variable>
+#include <unordered_set>
 #include "Protocol.h"
 #include "error.h"
 #include "PoliceAI.h"
 #include "db.h"
-#include <mutex>
-#include <queue>
 
 #pragma comment(lib, "MSWSock.lib")
 #pragma comment (lib, "WS2_32.LIB")
@@ -25,7 +28,6 @@ EXP_OVER g_a_over;
 
 std::atomic<int> client_id = 0;
 std::unordered_map<int, SESSION> g_users;
-std::pair<int, std::string> id_pair;
 std::array<room, 100> g_rooms;
 
 int altar_locs[100][5];
@@ -42,7 +44,6 @@ std::mutex g_login_mtx;
 std::condition_variable g_login_cv;
 std::queue<LoginTask> g_login_q;
 
-// 이미 접속 처리된 ID 중복 방지를 위한 집합 (선택)
 std::mutex g_logged_mtx;
 std::unordered_set<std::string> g_logged_in_ids;
 
@@ -55,11 +56,6 @@ std::thread g_login_worker;
 
 void LoginWorkerLoop()
 {
-	// db초기화
-	/*if (!InitializeDB()) {
-		std::cout << "DB 초기화 실패, 프로그램 종료\n";
-		return 0;
-	}*/
 	while (g_login_worker_run.load())
 	{
 		LoginTask task;
@@ -71,43 +67,45 @@ void LoginWorkerLoop()
 			g_login_q.pop();
 		}
 
-		// DB 쿼리 수행
-		int code = logIn(task.id, task.pw); // 0성공, 1/2/3 에러코드 :contentReference[oaicite:2]{index=2}
+		BoolPacket packet{};
+		packet.header = loginHeader;
+		packet.size = sizeof(BoolPacket);
 
+		bool should_query_db = true;
+		{
+			std::lock_guard<std::mutex> lk(g_logged_mtx);
+			if (g_logged_in_ids.count(task.id))
+			{
+				packet.result = false;
+				packet.reason = 4; // already logged in
+				should_query_db = false;
+			}
+		}
+
+		if (should_query_db) {
+			// DB 쿼리 수행
+			int code = logIn(task.id, task.pw); // 0성공, 1/2/3 에러코드
+			if (code == 0) {
+				packet.result = true;
+				packet.reason = 0;
+				std::lock_guard<std::mutex> lk(g_logged_mtx);
+				g_logged_in_ids.insert(task.id);
+			}
+			else {
+				packet.result = false;
+				packet.reason = static_cast<uint8_t>(code);
+			}
+		}
 		// 결과 패킷을 IOCP로 되돌려 메인 스레드가 전송하게 한다
 		// EXP_OVER를 재사용하여 OP_LOGIN으로 PostQueuedCompletionStatus
 		EXP_OVER* over = new EXP_OVER();
 		over->comp_type = OP_LOGIN;
-		over->id = (char)task.c_id;
-
-		BoolPacket packet{};
-		packet.header = loginHeader;
-		packet.size = sizeof(BoolPacket);
-		if (code == 0) {
-			// 중복 로그인 방지: 이미 로그인된 ID면 거절
-			{
-				std::lock_guard<std::mutex> lk(g_logged_mtx);
-				if (g_logged_in_ids.count(task.id)) {
-					packet.result = false;
-					packet.reason = 4; // already logged in (네 프로토콜 주석) :contentReference[oaicite:3]{index=3}
-				}
-				else {
-					packet.result = true;
-					packet.reason = 0;
-					g_logged_in_ids.insert(task.id);
-				}
-			}
-		}
-		else {
-			packet.result = false;
-			packet.reason = (uint8_t)code;
-		}
-
+		over->id = static_cast<char>(task.c_id);
 		// send_buffer에 패킷 복사해두면 메인 스레드에서 그대로 송신 가능
-		memcpy(over->send_buffer, &packet, sizeof(packet));
+		std::memcpy(over->send_buffer, &packet, sizeof(packet));
 
 		// num_bytes에는 packet.size 넣어두면 편함
-		PostQueuedCompletionStatus(g_h_iocp, packet.size, (ULONG_PTR)task.c_id, &over->over);
+		PostQueuedCompletionStatus(g_h_iocp, packet.size, static_cast<ULONG_PTR>(task.c_id), &over->over);
 	}
 }
 
@@ -139,6 +137,11 @@ void CommandWorker()
 void disconnect(int c_id)
 {
 	std::cout << "socket disconnect" << g_users[c_id].c_socket << std::endl;
+	{
+		std::lock_guard<std::mutex> lk(g_logged_mtx);
+		if (!g_users[c_id].account_id.empty())
+			g_logged_in_ids.erase(g_users[c_id].account_id);
+	}
 	closesocket(g_users[c_id].c_socket);
 	g_users.erase(c_id);
 }
@@ -679,6 +682,14 @@ void process_packet(int c_id, char* packet) {
 		std::string user_id_str(p->id);
 		std::string user_pw_str(p->pw);
 
+		{
+			std::lock_guard<std::mutex> lk(g_login_mtx);
+			g_login_q.push(LoginTask{ c_id, std::move(user_id_str), std::move(user_pw_str) });
+		}
+		g_login_cv.notify_one();
+		break;
+	}
+		/*
 		if (user_id_str == id_pair.second) {
 			std::cout << user_id_str << " is already Exist ID.\n";
 
@@ -732,8 +743,7 @@ void process_packet(int c_id, char* packet) {
 			packet.reason = 3;
 			g_users[c_id].do_send_packet(&packet);
 		}
-		break;
-	}
+		*/
 	case idExistHeader:
 	{
 		auto* p = reinterpret_cast<IdPacket*>(packet);
@@ -835,7 +845,7 @@ void mainLoop(HANDLE h_iocp) {
 			sess.room_id = -1;
 			g_users.insert(std::make_pair(new_id, sess));	// 여기 emplace로 바꿀 순 없을까?
 			CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket), h_iocp, new_id, 0);
-			sess.do_recv();
+			g_users[new_id].do_recv();
 
 			SOCKADDR_IN* client_addr = (SOCKADDR_IN*)(g_a_over.send_buffer + sizeof(SOCKADDR_IN) + 16);
 			std::cout << "클라이언트 접속: IP = " << inet_ntoa(client_addr->sin_addr) << ", Port = " << ntohs(client_addr->sin_port) << std::endl;
@@ -875,7 +885,7 @@ void mainLoop(HANDLE h_iocp) {
 			// eo->send_buffer 안에 BoolPacket이 있음
 			// key는 c_id
 			if (g_users.count((int)key) && g_users[(int)key].isValidSocket()) {
-				g_users[(int)key].do_send_packet(eo->send_buffer); // WSASend 발생 :contentReference[oaicite:5]{index=5}
+				g_users[(int)key].do_send_packet(eo->send_buffer);
 			}
 			delete eo;
 			break;
@@ -934,15 +944,27 @@ int main()
 	g_a_over.comp_type = OP_ACCEPT;
 	AcceptEx(g_s_socket, g_c_socket, g_a_over.send_buffer, 0, addr_size + 16, addr_size + 16, 0, &g_a_over.over);
 	
+	// db초기화
+	/*if (!InitializeDB()) {
+	std::cout << "DB 초기화 실패, 프로그램 종료\n";
+	return 0;
+	}*/
+
 	for (int i = 0; i < 100; ++i) {
 		g_rooms[i].room_id = i;
 		InitializeAltarLoc(i);
 	}
+	g_h_iocp = h_iocp;
+	g_login_worker = std::thread(LoginWorkerLoop);
 
 	mainLoop(h_iocp);
 
 	//CommandThread.join();
 	//StopAIWorker();
+	g_login_worker_run.store(false);
+	g_login_cv.notify_all();
+	if (g_login_worker.joinable()) 
+		g_login_worker.join();
 	closesocket(g_s_socket);
 	WSACleanup();
 }

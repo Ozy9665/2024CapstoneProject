@@ -312,6 +312,7 @@ public:
 		FPoliceCharacterState police_state;
 	};
 	std::unordered_set<int> visible_ids;
+	std::string account_id;
 
 	void do_recv();
 
