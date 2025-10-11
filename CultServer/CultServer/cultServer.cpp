@@ -34,78 +34,112 @@ int altar_locs[100][5];
 
 // Login
 // 로그인 작업 큐
-struct LoginTask {
+enum EVENT_TYPE { EV_LOGIN, EV_EXIST, EV_SIGNUP };
+struct DBTask {
 	int c_id;
+	EVENT_TYPE event_id;
 	std::string id;
 	std::string pw;
 };
 
-std::mutex g_login_mtx;
-std::condition_variable g_login_cv;
-std::queue<LoginTask> g_login_q;
+std::mutex g_db_mtx;
+std::condition_variable g_db_cv;
+std::queue<DBTask> g_db_q;
 
 std::mutex g_logged_mtx;
 std::unordered_set<std::string> g_logged_in_ids;
 
-// IOCP 핸들을 워커가 쓸 수 있게
 HANDLE g_h_iocp = nullptr;
+std::atomic<bool> g_db_worker_run{ true };
+std::thread g_db_worker;
 
-// 워커 생명주기
-std::atomic<bool> g_login_worker_run{ true };
-std::thread g_login_worker;
-
-void LoginWorkerLoop()
-{
-	while (g_login_worker_run.load())
+void DBWorkerLoop() {
+	while (g_db_worker_run.load())
 	{
-		LoginTask task;
+		DBTask task;
 		{
-			std::unique_lock<std::mutex> lk(g_login_mtx);
-			g_login_cv.wait(lk, [] { return !g_login_q.empty() || !g_login_worker_run.load(); });
-			if (!g_login_worker_run.load()) break;
-			task = std::move(g_login_q.front());
-			g_login_q.pop();
+			std::unique_lock<std::mutex> lk(g_db_mtx);
+			g_db_cv.wait(lk, [] { return !g_db_q.empty() || !g_db_worker_run.load(); });
+			if (!g_db_worker_run.load()) break;
+			task = std::move(g_db_q.front());
+			g_db_q.pop();
 		}
 
-		BoolPacket packet{};
-		packet.header = loginHeader;
-		packet.size = sizeof(BoolPacket);
+		EXP_OVER* over = new EXP_OVER();
+		BoolPacket pkt{};
+		pkt.size = sizeof(BoolPacket);
 
-		bool should_query_db = true;
+		switch (task.event_id)
 		{
-			std::lock_guard<std::mutex> lk(g_logged_mtx);
-			if (g_logged_in_ids.count(task.id))
+		case EV_LOGIN:
+		{
+			pkt.header = loginHeader;
+
+			// 1) 이미 로그인된 ID면 DB 스킵
+			bool already = false;
 			{
-				packet.result = false;
-				packet.reason = 4; // already logged in
-				should_query_db = false;
-			}
-		}
-
-		if (should_query_db) {
-			// DB 쿼리 수행
-			int code = logIn(task.id, task.pw); // 0성공, 1/2/3 에러코드
-			if (code == 0) {
-				packet.result = true;
-				packet.reason = 0;
 				std::lock_guard<std::mutex> lk(g_logged_mtx);
-				g_logged_in_ids.insert(task.id);
+				if (g_logged_in_ids.count(task.id)) already = true;
+			}
+
+			if (already) {
+				pkt.result = false;
+				pkt.reason = 4;
 			}
 			else {
-				packet.result = false;
-				packet.reason = static_cast<uint8_t>(code);
+				const int code = logIn(task.id, task.pw);
+				if (code == 0) {
+					pkt.result = true;
+					pkt.reason = 0;
+					std::lock_guard<std::mutex> lk(g_logged_mtx);
+					g_logged_in_ids.insert(task.id);
+				}
+				else {
+					pkt.result = false;
+					pkt.reason = static_cast<uint8_t>(code);
+				}
+			}
+
+			over->comp_type = OP_LOGIN;
+			break;
+		}
+		case EV_EXIST:
+		{
+			pkt.header = idExistHeader;
+			const bool exist = checkValidID(task.id);
+
+			pkt.result = exist;
+			pkt.reason = 0;
+
+			over->comp_type = OP_ID_EXIST;
+			break;
+		}
+		case EV_SIGNUP:
+		{
+			pkt.header = signUpHeader;
+			const bool code = createNewID(task.id, task.pw);
+			if (code) {
+				pkt.result = true;
+				pkt.reason = 0;
+			}
+			else {
+				pkt.result = false;
+				pkt.reason = static_cast<uint8_t>(code);
+
+				over->comp_type = OP_SIGNUP;
+				break;
 			}
 		}
-		// 결과 패킷을 IOCP로 되돌려 메인 스레드가 전송하게 한다
-		// EXP_OVER를 재사용하여 OP_LOGIN으로 PostQueuedCompletionStatus
-		EXP_OVER* over = new EXP_OVER();
-		over->comp_type = OP_LOGIN;
-		over->id = static_cast<char>(task.c_id);
-		// send_buffer에 패킷 복사해두면 메인 스레드에서 그대로 송신 가능
-		std::memcpy(over->send_buffer, &packet, sizeof(packet));
+		default:
+			pkt.header = 0;
+			pkt.result = false;
+			pkt.reason = 0xFF;
+			over->comp_type = OP_LOGIN;
+			break;
+		}
 
-		// num_bytes에는 packet.size 넣어두면 편함
-		PostQueuedCompletionStatus(g_h_iocp, packet.size, static_cast<ULONG_PTR>(task.c_id), &over->over);
+		std::memcpy(over->send_buffer, &pkt, sizeof(pkt));
+		PostQueuedCompletionStatus(g_h_iocp, pkt.size, static_cast<ULONG_PTR>(task.c_id), &over->over);
 	}
 }
 
@@ -679,71 +713,15 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid LoginPacket size\n";
 			break;
 		}
-		std::string user_id_str(p->id);
-		std::string user_pw_str(p->pw);
-
+		std::string uid{ p->id };
+		std::string upw{ p->pw };
 		{
-			std::lock_guard<std::mutex> lk(g_login_mtx);
-			g_login_q.push(LoginTask{ c_id, std::move(user_id_str), std::move(user_pw_str) });
+			std::lock_guard<std::mutex> lk(g_db_mtx);
+			g_db_q.push(DBTask{ c_id, EV_LOGIN, std::move(uid), std::move(upw) });
 		}
-		g_login_cv.notify_one();
+		g_db_cv.notify_one();
 		break;
 	}
-		/*
-		if (user_id_str == id_pair.second) {
-			std::cout << user_id_str << " is already Exist ID.\n";
-
-			BoolPacket packet;
-			packet.header = loginHeader;
-			packet.size = sizeof(BoolPacket);
-			packet.result = false;
-			packet.reason = 4;
-			g_users[c_id].do_send_packet(&packet);
-			break;
-		}
-
-		int code = logIn(user_id_str, user_pw_str);
-		if (code == 0) {
-			// 로그인 성공 처리
-			std::cout << user_id_str << " is Valid\n";
-			BoolPacket packet;
-			packet.header = loginHeader;
-			packet.size = sizeof(BoolPacket);
-			packet.result = true;
-			packet.reason = 0;
-			g_users[c_id].do_send_packet(&packet);
-		}
-		else if (code == 1) {
-			// ID 틀림
-			std::cout << p->id << " is Invalid ID\n";
-			BoolPacket packet;
-			packet.header = loginHeader;
-			packet.size = sizeof(BoolPacket);
-			packet.result = false;
-			packet.reason = 1;
-			g_users[c_id].do_send_packet(&packet);
-		}
-		else if (code == 2) {
-			// 비밀번호 틀림
-			std::cout << p->id << " is Invalid PW\n";
-			BoolPacket packet;
-			packet.header = loginHeader;
-			packet.size = sizeof(BoolPacket);
-			packet.result = false;
-			packet.reason = 2;
-			g_users[c_id].do_send_packet(&packet);
-		}
-		else if (code == 3) {
-			// DB 오류
-			std::cout << "DB ERROR!!\n";
-			BoolPacket packet;
-			packet.header = loginHeader;
-			packet.size = sizeof(BoolPacket);
-			packet.result = false;
-			packet.reason = 3;
-			g_users[c_id].do_send_packet(&packet);
-		}
-		*/
 	case idExistHeader:
 	{
 		auto* p = reinterpret_cast<IdPacket*>(packet);
@@ -751,26 +729,12 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid LoginPacket size\n";
 			break;
 		}
-		std::string user_id_str(p->id);
-
-		if (checkValidID(user_id_str)) {
-			std::cout << user_id_str << " is exist ID\n";
-			// 이미 존재하는 아이디입니다.
-			BoolPacket packet;
-			packet.header = idExistHeader;
-			packet.size = sizeof(BoolPacket);
-			packet.result = true;
-			g_users[c_id].do_send_packet(&packet);
+		std::string uid{ p->id };
+		{
+			std::lock_guard<std::mutex> lk(g_db_mtx);
+			g_db_q.push(DBTask{ c_id, EV_EXIST, std::move(uid), {} });
 		}
-		else {
-			std::cout << p->id << " can sign up\n";
-			// 존재하지 않는 아이디. 생성가능
-			BoolPacket packet;
-			packet.header = idExistHeader;
-			packet.size = sizeof(BoolPacket);
-			packet.result = false;
-			g_users[c_id].do_send_packet(&packet);
-		}
+		g_db_cv.notify_one();
 		break;
 	}
 	case signUpHeader:
@@ -780,26 +744,13 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid signUpPacket size\n";
 			break;
 		}
-		std::string user_id_str(p->id);
-		std::string user_pw_str(p->pw);
-
-		if (createNewID(user_id_str, user_pw_str)) {
-			std::cout <<  "createNewID success.\n";
-			BoolPacket packet;
-			packet.header = signUpHeader;
-			packet.size = sizeof(BoolPacket);
-			packet.result = true;
-			g_users[c_id].do_send_packet(&packet);
+		std::string uid{ p->id };
+		std::string upw{ p->pw };
+		{
+			std::lock_guard<std::mutex> lk(g_db_mtx);
+			g_db_q.push(DBTask{ c_id, EV_SIGNUP, std::move(uid), std::move(upw) });
 		}
-		else {
-			std::cout << p->id << " can't sign up\n";
-			BoolPacket packet;
-			packet.header = signUpHeader;
-			packet.size = sizeof(BoolPacket);
-			packet.result = false;
-			g_users[c_id].do_send_packet(&packet);
-		}
-
+		g_db_cv.notify_one();
 		break;
 	}
 	default:
@@ -881,6 +832,8 @@ void mainLoop(HANDLE h_iocp) {
 			break;
 		}
 		case OP_LOGIN:
+		case OP_ID_EXIST:
+		case OP_SIGNUP:
 		{
 			// eo->send_buffer 안에 BoolPacket이 있음
 			// key는 c_id
@@ -955,16 +908,16 @@ int main()
 		InitializeAltarLoc(i);
 	}
 	g_h_iocp = h_iocp;
-	g_login_worker = std::thread(LoginWorkerLoop);
+	g_db_worker = std::thread(DBWorkerLoop);
 
 	mainLoop(h_iocp);
 
 	//CommandThread.join();
 	//StopAIWorker();
-	g_login_worker_run.store(false);
-	g_login_cv.notify_all();
-	if (g_login_worker.joinable()) 
-		g_login_worker.join();
+	g_db_worker_run.store(false);
+	g_db_cv.notify_all();
+	if (g_db_worker.joinable()) 
+		g_db_worker.join();
 	closesocket(g_s_socket);
 	WSACleanup();
 }

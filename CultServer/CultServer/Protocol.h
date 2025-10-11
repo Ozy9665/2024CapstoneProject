@@ -68,7 +68,7 @@ struct room {
 	};
 };
 
-enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND, OP_LOGIN };
+enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND, OP_LOGIN, OP_ID_EXIST, OP_SIGNUP };
 
 enum EWeaponType : uint8_t
 {
