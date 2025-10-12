@@ -32,8 +32,7 @@ std::array<room, 100> g_rooms;
 
 int altar_locs[100][5];
 
-// Login
-// 로그인 작업 큐
+// db event 큐
 enum EVENT_TYPE { EV_LOGIN, EV_EXIST, EV_SIGNUP };
 struct DBTask {
 	int c_id;
