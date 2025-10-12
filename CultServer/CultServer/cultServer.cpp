@@ -91,6 +91,7 @@ void DBWorkerLoop() {
 				if (code == 0) {
 					pkt.result = true;
 					pkt.reason = 0;
+					std::strncpy(over->account_id, task.id.c_str(), sizeof(over->account_id) - 1);
 					std::lock_guard<std::mutex> lk(g_logged_mtx);
 					g_logged_in_ids.insert(task.id);
 				}
@@ -106,29 +107,20 @@ void DBWorkerLoop() {
 		case EV_EXIST:
 		{
 			pkt.header = idExistHeader;
-			const bool exist = checkValidID(task.id);
-
-			pkt.result = exist;
-			pkt.reason = 0;
-
+			int code = checkValidID(task.id);
+			pkt.result = (code == 0);
+			pkt.reason = static_cast<uint8_t>(code);
 			over->comp_type = OP_ID_EXIST;
 			break;
 		}
 		case EV_SIGNUP:
 		{
 			pkt.header = signUpHeader;
-			const bool code = createNewID(task.id, task.pw);
-			if (code) {
-				pkt.result = true;
-				pkt.reason = 0;
-			}
-			else {
-				pkt.result = false;
-				pkt.reason = static_cast<uint8_t>(code);
-
-				over->comp_type = OP_SIGNUP;
-				break;
-			}
+			int code = createNewID(task.id, task.pw);
+			pkt.result = (code == 0);
+			pkt.reason = static_cast<uint8_t>(code);
+			over->comp_type = OP_SIGNUP;
+			break;
 		}
 		default:
 			pkt.header = 0;
@@ -832,6 +824,20 @@ void mainLoop(HANDLE h_iocp) {
 			break;
 		}
 		case OP_LOGIN:
+		{
+			auto* pkt = reinterpret_cast<BoolPacket*>(eo->send_buffer);
+			int cid = static_cast<int>(key);
+
+			if (pkt->result && g_users.count(cid)) {
+				g_users[cid].account_id = eo->account_id;
+			}
+
+			if (g_users.count(cid) && g_users[cid].isValidSocket())
+				g_users[cid].do_send_packet(pkt);
+
+			delete eo;
+			break;
+		}
 		case OP_ID_EXIST:
 		case OP_SIGNUP:
 		{

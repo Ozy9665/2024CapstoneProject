@@ -296,6 +296,7 @@ public:
 	char			send_buffer[1024];
 	WSABUF			wsabuf;
 	COMP_TYPE		comp_type;
+	char account_id[32]{};
 };
 
 class SESSION {

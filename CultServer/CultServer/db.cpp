@@ -73,11 +73,11 @@ bool InitializeDB() {
     return true;
 }
 
-bool checkValidID(std::string user_id_str)
+int checkValidID(std::string user_id_str)
 {
 	if (hstmt == SQL_NULL_HSTMT) {
 		std::cout << "SQL_NULL_HSTMT" << std::endl;
-		return false;
+		return 3;
 	}
 
 	SQLFreeStmt(hstmt, SQL_CLOSE);
@@ -91,36 +91,27 @@ bool checkValidID(std::string user_id_str)
 	SQLRETURN ret = SQLExecDirect(hstmt, szQuery, SQL_NTS);
 	if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
 		HandleDiagnosticRecord(hstmt, SQL_HANDLE_STMT, ret);
-		return false;
+		SQLFreeStmt(hstmt, SQL_CLOSE);
+		return 3;
 	}
 
-	SQLINTEGER isValid = 0;
-	SQLLEN    cbValid = 0;
-	SQLBindCol(hstmt, 1, SQL_C_LONG, &isValid, sizeof(isValid), &cbValid);
+	int reasonCode = 3;
+	if (SQLFetch(hstmt) == SQL_SUCCESS) {
+		SQLGetData(hstmt, 1, SQL_C_SLONG, &reasonCode, 0, nullptr);
+	}
 
-	ret = SQLFetch(hstmt);
 	SQLFreeStmt(hstmt, SQL_CLOSE);
-
-	if (ret == SQL_NO_DATA) {
-		std::cout << "[checkValidID] No data returned\n";
-		return false;
-	}
-	else if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
-		HandleDiagnosticRecord(hstmt, SQL_HANDLE_STMT, ret);
-		return false;
-	}
-
-	return (isValid == 1);
+	return reasonCode;
 }
 
-bool createNewID(std::string user_id_str, std::string user_pw_str)
+int createNewID(std::string user_id_str, std::string user_pw_str)
 {
 	if (hstmt == SQL_NULL_HSTMT) {
 		InitializeDB();
 		if (hstmt == SQL_NULL_HSTMT) {
 			std::cout << "[createNewID] ERROR: hstmt == SQL_NULL_HSTMT after Init\n";
 		}
-		return false;
+		return 3;
 	}
 
 	SQLFreeStmt(hstmt, SQL_CLOSE);
@@ -135,11 +126,15 @@ bool createNewID(std::string user_id_str, std::string user_pw_str)
 	if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
 		HandleDiagnosticRecord(hstmt, SQL_HANDLE_STMT, ret);
 		SQLFreeStmt(hstmt, SQL_CLOSE);
-		return false;
+		return 3;
+	}
+	int reasonCode{ 3 };
+	if (SQLFetch(hstmt) == SQL_SUCCESS) {
+		SQLGetData(hstmt, 1, SQL_C_SLONG, &reasonCode, 0, nullptr);
 	}
 
 	SQLFreeStmt(hstmt, SQL_CLOSE);
-	return true;
+	return reasonCode;
 }
 
 int logIn(std::string user_id_str, std::string user_pw_str) {

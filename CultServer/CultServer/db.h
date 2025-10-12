@@ -18,9 +18,9 @@ void HandleDiagnosticRecord(SQLHANDLE, SQLSMALLINT, RETCODE);
 
 bool InitializeDB();
 
-bool checkValidID(std::string);
+int checkValidID(std::string);
 
-bool createNewID(std::string, std::string);
+int createNewID(std::string, std::string);
 
 int logIn(std::string, std::string);
 // 0- ¼º°ø
