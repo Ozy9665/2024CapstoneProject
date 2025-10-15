@@ -262,16 +262,18 @@ void AMyNetworkManagerActor::RequestRitualData() {
 
 void AMyNetworkManagerActor::ProcessRitualData(const char* Buffer)
 {
-    RitualPacket Packet;
-    memcpy(&Packet, Buffer, sizeof(RitualPacket));
+    FNetVec n1{}, n2{}, n3{};
+    FMemory::Memcpy(&n1, Buffer + 2, 24);  // Loc1
+    FMemory::Memcpy(&n2, Buffer + 26, 24);  // Loc2
+    FMemory::Memcpy(&n3, Buffer + 50, 24);  // Loc3
 
-    AsyncTask(ENamedThreads::GameThread, [this, Packet]() {
+    const FVector L1 = AMySocketActor::ToUE(n1);
+    const FVector L2 = AMySocketActor::ToUE(n2);
+    const FVector L3 = AMySocketActor::ToUE(n3);
+
+    AsyncTask(ENamedThreads::GameThread, [this, L1, L2, L3]() {
         GI->RutialSpawnLocations.Empty();
-        GI->RutialSpawnLocations = {
-            Packet.Loc1,
-            Packet.Loc2,
-            Packet.Loc3
-        };
+        GI->RutialSpawnLocations = TArray<FVector>{ L1, L2, L3 };
         for (int32 i = 0; i < GI->RutialSpawnLocations.Num(); ++i)
         {
             const FVector& Loc = GI->RutialSpawnLocations[i];

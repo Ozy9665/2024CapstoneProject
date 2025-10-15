@@ -211,8 +211,8 @@ void AMySocketPoliceActor::ProcessSkillData(const char* Buffer)
     }
 
     TWeakObjectPtr<ACultistCharacter> WeakCaster = CasterCultist;
-    const FVector  SpawnLoc = ReceivedSkill.SpawnLoc;
-    const FRotator SpawnRot = ReceivedSkill.SpawnRot;
+    const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedSkill.SpawnLoc);
+    const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedSkill.SpawnRot);
     const uint8    Skill = ReceivedSkill.skill;
 
     AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot, Skill]() {

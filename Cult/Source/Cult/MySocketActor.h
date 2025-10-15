@@ -17,6 +17,18 @@ struct Froom {
 	UPROPERTY(BlueprintReadWrite) TArray<int32> player_ids;
 };
 
+struct FNetVec {
+	double x; 
+	double y; 
+	double z;
+};
+
+struct FNetRot {
+	double x;
+	double y;
+	double z;
+};
+
 #pragma pack(push, 1)
 struct FPoliceCharacterState
 {
@@ -174,16 +186,16 @@ struct SkillPacket {
 	uint8_t size;
 	uint8_t casterId;
 	uint8_t skill;	// 1: ³ª¹«, 2: ±î¸¶±Í
-	FVector SpawnLoc;
-	FRotator SpawnRot;
+	FNetVec SpawnLoc;
+	FNetRot SpawnRot;
 };
 
 struct RitualPacket {
 	uint8_t header;
 	uint8_t size;
-	FVector Loc1;
-	FVector Loc2;
-	FVector Loc3;
+	FNetVec Loc1;
+	FNetVec Loc2;
+	FNetVec Loc3;
 };
 
 struct IdPacket {
@@ -216,6 +228,10 @@ class CULT_API AMySocketActor : public AActor
 public:	
 	// Sets default values for this actor's properties
 	AMySocketActor();
+	static FVector ToUE(const FNetVec&);
+	static FRotator ToUE(const FNetRot&);
+	static FNetVec ToNet(const FVector&);
+	static FNetRot ToNet(const FRotator&);
 
 protected:
 	// Called when the game starts or when spawned

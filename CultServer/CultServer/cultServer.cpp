@@ -28,9 +28,25 @@ EXP_OVER g_a_over;
 
 std::atomic<int> client_id = 0;
 std::unordered_map<int, SESSION> g_users;
-std::array<room, 100> g_rooms;
+std::array<room, MAX_ROOM> g_rooms;
 
-int altar_locs[100][5];
+// 제단 위치
+std::array<std::array<int, 5>, MAX_ROOM> altar_locs{};
+
+void InitializeAltarLoc(int room_num) {
+	if (room_num < 0 || room_num >= static_cast<int>(altar_locs.size())) {
+		return;
+	}
+
+	for (int i = 0; i < 5; ++i) {
+		altar_locs[room_num][i] = i;
+	}
+
+	for (int i = 0; i < 4; ++i) {
+		int j = i + rand() % (5 - i);
+		std::swap(altar_locs[room_num][i], altar_locs[room_num][j]);
+	}
+}
 
 // db event 큐
 enum EVENT_TYPE { EV_LOGIN, EV_EXIST, EV_SIGNUP };
@@ -583,6 +599,11 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 		int room_id = p->room_number;
+		if (room_id < 0 || room_id >= MAX_ROOM) {
+			std::cout << "room_id error: " << room_id << " from c_id=" << c_id << "\n";
+			break;
+		}
+
 		NoticePacket packet;
 		switch (g_users[c_id].role)
 		{
@@ -595,6 +616,7 @@ void process_packet(int c_id, char* packet) {
 			else {
 				packet.header = enterHeader;
 				packet.size = sizeof(NoticePacket);
+				g_users[c_id].room_id = room_id;
 			}
 			break;
 		}
@@ -607,9 +629,9 @@ void process_packet(int c_id, char* packet) {
 			else {
 				packet.header = enterHeader;
 				packet.size = sizeof(NoticePacket);
+				g_users[c_id].room_id = room_id;
 			}
 			break;
-			
 		}
 		default:
 			std::cout << "User " << c_id << " Has Strange role : " << g_users[c_id].role << std::endl;
@@ -686,6 +708,13 @@ void process_packet(int c_id, char* packet) {
 	}
 	case ritualHeader: 
 	{
+		const int room_id = g_users[c_id].room_id;
+
+		if (room_id < 0 || room_id >= MAX_ROOM) {
+			std::cout << "[Srv][Ritual] Invalid room_id: " << room_id
+				<< " for c_id=" << c_id << "\n";
+			break;
+		}
 		RitualPacket packet;
 		packet.header = ritualHeader;
 		packet.size = sizeof(RitualPacket);
@@ -693,6 +722,7 @@ void process_packet(int c_id, char* packet) {
 		packet.Loc1 = kPredefinedLocations[altar_locs[g_users[c_id].room_id][0]];
 		packet.Loc2 = kPredefinedLocations[altar_locs[g_users[c_id].room_id][1]];
 		packet.Loc3 = kPredefinedLocations[altar_locs[g_users[c_id].room_id][2]];
+		const auto& arr = altar_locs[g_users[c_id].room_id];
 
 		g_users[c_id].do_send_packet(&packet);
 		break;
@@ -852,22 +882,6 @@ void mainLoop(HANDLE h_iocp) {
 	}
 }
 
-void InitializeAltarLoc(int room_num) {
-	if (room_num < 0 || room_num >= 100)
-		return;
-
-	for (int i = 0; i < 5; ++i)
-	{
-		altar_locs[room_num][i] = i;
-	}
-
-	for (int i = 0; i < 4; ++i)
-	{
-	    int j = i + rand() % (5 - i);
-	    std::swap(altar_locs[room_num][i], altar_locs[room_num][j]);
-	}
-}
-
 int main()
 {
 	HANDLE h_iocp;
@@ -903,10 +917,10 @@ int main()
 	AcceptEx(g_s_socket, g_c_socket, g_a_over.send_buffer, 0, addr_size + 16, addr_size + 16, 0, &g_a_over.over);
 	
 	// db초기화
-	/*if (!InitializeDB()) {
-	std::cout << "DB 초기화 실패, 프로그램 종료\n";
-	return 0;
-	}*/
+	//if (!InitializeDB()) {
+	//	std::cout << "DB 초기화 실패, 프로그램 종료\n";
+	//	return 0;
+	//}
 
 	for (int i = 0; i < 100; ++i) {
 		g_rooms[i].room_id = i;

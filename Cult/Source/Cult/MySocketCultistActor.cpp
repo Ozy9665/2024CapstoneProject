@@ -192,8 +192,8 @@ void AMySocketCultistActor::ProcessSkillData(const char* Buffer)
     }
 
     TWeakObjectPtr<ACultistCharacter> WeakCaster = CasterCultist;
-    const FVector  SpawnLoc = ReceivedSkill.SpawnLoc;
-    const FRotator SpawnRot = ReceivedSkill.SpawnRot;
+    const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedSkill.SpawnLoc);
+    const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedSkill.SpawnRot);
     const uint8    Skill = ReceivedSkill.skill;
 
     UE_LOG(LogTemp, Warning, TEXT("[SkillRx] hdr=%d size=%d caster=%d my=%d skill=%d -> Found=%s Class=%s CrowClass=%s"),
@@ -443,8 +443,8 @@ void AMySocketCultistActor::SendSkill(FVector SpawnLoc, FRotator SpawnRot, int32
         Packet.size = sizeof(SkillPacket);
         Packet.skill = skill;
         Packet.casterId = MyCharacter->my_ID;
-        Packet.SpawnLoc = SpawnLoc;
-        Packet.SpawnRot = SpawnRot;
+        Packet.SpawnLoc = AMySocketActor::ToNet(SpawnLoc);
+        Packet.SpawnRot = AMySocketActor::ToNet(SpawnRot);
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(SkillPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
