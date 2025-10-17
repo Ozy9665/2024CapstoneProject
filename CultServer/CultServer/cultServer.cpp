@@ -167,93 +167,182 @@ std::atomic<bool> g_room_worker_run{ true };
 std::thread g_room_worker;
 
 void RoomWorkerLoop() {
-	/* 임시 */
-	/* 
-		case requestHeader: 
-	{ 
-		// 1. 클라이언트가 room data를 request했음.
-		auto* p = reinterpret_cast<RoleOnlyPacket*>(packet);
-		if (p->size != sizeof(RoleOnlyPacket)) {
-			std::cout << "Invalid requestHeader size\n";
-			break;
+	while (g_db_worker_run.load())
+	{
+		RoomTask task;
+		{
+			std::unique_lock<std::mutex> lk(g_room_mtx);
+			g_room_cv.wait(lk, [] { return !g_room_q.empty() || !g_room_worker_run.load(); });
+			if (!g_room_worker_run.load()) break;
+			task = std::move(g_room_q.front());
+			g_room_q.pop();
 		}
-		int role = static_cast<int>(p->role);
-		g_users[c_id].setRole(role);
-		// 2. 앞에서부터 ingame이 false이고, 
-		//	  g_users[c_id].role의 플레이어가 full이 아닌 room을 RoomdataPakcet로 10개 전송
-		RoomsPakcet packet;
-		packet.header = requestHeader;
-		packet.size = sizeof(RoomsPakcet);
 
-		int inserted = 0;
-		for (const room& room : g_rooms) {
-			if (inserted >= 10)
-				break;
+		switch (task.type)
+		{
+		case RM_REQ:
+		{
+			if (!g_users.count(task.c_id)) continue;
+			int role = task.role;
+			g_users[task.c_id].setRole(role);
 
-			if (!room.isIngame)
-			{
-				if ((role == 1 && room.police < 1) ||
-					(role == 0 && room.cultist < 4))
-				{
-					packet.rooms[inserted++] = room;
+			RoomsPakcet pkt{};
+			pkt.header = requestHeader;
+			pkt.size = sizeof(RoomsPakcet);
+
+			int inserted = 0;
+			for (const room& r : g_rooms) {
+				if (inserted >= 10) break;
+				if (!r.isIngame) {
+					if ((role == 1 && r.police < MAX_POLICE_PER_ROOM) ||
+						(role == 0 && r.cultist < MAX_CULTIST_PER_ROOM))
+					{
+						pkt.rooms[inserted++] = r;
+					}
 				}
 			}
-		}
 
-		g_users[c_id].do_send_packet(&packet);
-		break; 
-	}
-	case enterHeader: 
-	{
-		// 0. room number를 보고 비어있으면 Packet 전송
-		// 1. 업데이트되어 룸이 입장 불가능하면 leaveHeader 전송
-		auto* p = reinterpret_cast<RoomNumberPacket*>(packet);
-		if (p->size != sizeof(RoomNumberPacket)) {
-			std::cout << "Invalid enterPacket size\n";
-			break;
+			EXP_OVER* eo = new EXP_OVER();
+			std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
+			eo->comp_type = OP_ROOM_REQ;
+			PostQueuedCompletionStatus(g_h_iocp, pkt.size, static_cast<ULONG_PTR>(task.c_id), &eo->over);
+			continue;
 		}
-		int room_id = p->room_number;
-		if (room_id < 0 || room_id >= MAX_ROOM) {
-			std::cout << "room_id error: " << room_id << " from c_id=" << c_id << "\n";
-			break;
-		}
+		case RM_ENTER:
+		{
+			if (!g_users.count(task.c_id)) continue;
 
-		NoticePacket packet;
-		switch (g_users[c_id].role)
-		{
-		case 0: // cultist
-		{
-			if (g_rooms[room_id].cultist >= MAX_CULTIST_PER_ROOM) {
-				packet.header = leaveHeader;
-				packet.size = sizeof(NoticePacket);
+			NoticePacket pkt{};
+			pkt.size = sizeof(NoticePacket);
+
+			int room_id = task.room_id;
+			if (room_id < 0 || room_id >= MAX_ROOM) {
+				pkt.header = leaveHeader;
 			}
 			else {
-				packet.header = enterHeader;
-				packet.size = sizeof(NoticePacket);
-				g_users[c_id].room_id = room_id;
+				auto& user = g_users[task.c_id];
+				if (user.getRole() == 0) {
+					pkt.header = (g_rooms[room_id].cultist >= MAX_CULTIST_PER_ROOM) ? leaveHeader : enterHeader;
+					if (pkt.header == enterHeader) 
+						user.room_id = room_id;
+				}
+				else if (user.getRole() == 1) {
+					pkt.header = (g_rooms[room_id].police >= MAX_POLICE_PER_ROOM) ? leaveHeader : enterHeader;
+					if (pkt.header == enterHeader) 
+						user.room_id = room_id;
+				}
+				else {
+					pkt.header = leaveHeader;
+				}
 			}
-			break;
+
+			// DB 방식과 동일: EXP_OVER에 담아 IOCP로 post
+			EXP_OVER* eo = new EXP_OVER();
+			std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
+			eo->comp_type = OP_ROOM_ENTER;
+			PostQueuedCompletionStatus(g_h_iocp, pkt.size, static_cast<ULONG_PTR>(task.c_id), &eo->over);
+			continue;
 		}
-		case 1: // police
+		case RM_GAMESTART:
 		{
-			if (g_rooms[room_id].police >= MAX_POLICE_PER_ROOM) {
-				packet.header = leaveHeader;
-				packet.size = sizeof(NoticePacket);
+			if (!g_users.count(task.c_id)) continue;
+			int room_id = task.room_id;
+			if (room_id < 0 || room_id >= MAX_ROOM) continue;
+
+			auto& me = g_users[task.c_id];
+
+			// 카운터, ingame, player_ids 갱신
+			if (me.getRole() == 1) g_rooms[room_id].police++;
+			else if (me.getRole() == 0) g_rooms[room_id].cultist++;
+			if (g_rooms[room_id].cultist >= MAX_CULTIST_PER_ROOM &&
+				g_rooms[room_id].police >= MAX_POLICE_PER_ROOM) {
+				g_rooms[room_id].isIngame = true;
 			}
-			else {
-				packet.header = enterHeader;
-				packet.size = sizeof(NoticePacket);
-				g_users[c_id].room_id = room_id;
+			me.room_id = room_id;
+			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
+				if (g_rooms[room_id].player_ids[i] == UINT8_MAX) {
+					g_rooms[room_id].player_ids[i] = static_cast<uint8_t>(task.c_id);
+					break;
+				}
 			}
-			break;
+
+			// 본인에게
+			{
+				IdRolePacket pkt{};
+				pkt.header = connectionHeader;
+				pkt.size = sizeof(IdRolePacket);
+				pkt.id = static_cast<uint8_t>(task.c_id);
+				pkt.role = static_cast<uint8_t>(me.getRole());
+
+				EXP_OVER* eo = new EXP_OVER();
+				std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
+				eo->comp_type = OP_ROOM_GAMESTART;
+				PostQueuedCompletionStatus(g_h_iocp, pkt.size, static_cast<ULONG_PTR>(task.c_id), &eo->over);
+			}
+
+			// 서로 교환
+			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
+				uint8_t other = g_rooms[room_id].player_ids[i];
+				if (other == UINT8_MAX || other == task.c_id) continue;
+				if (!g_users.count(other)) continue;
+
+				// 다른 유저에게 나
+				{
+					IdRolePacket pkt{};
+					pkt.header = connectionHeader;
+					pkt.size = sizeof(IdRolePacket);
+					pkt.id = static_cast<uint8_t>(task.c_id);
+					pkt.role = static_cast<uint8_t>(me.getRole());
+
+					EXP_OVER* eo = new EXP_OVER();
+					std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
+					eo->comp_type = OP_ROOM_GAMESTART;
+					PostQueuedCompletionStatus(g_h_iocp, pkt.size, static_cast<ULONG_PTR>(other), &eo->over);
+				}
+				// 나에게 다른 유저
+				{
+					IdRolePacket pkt{};
+					pkt.header = connectionHeader;
+					pkt.size = sizeof(IdRolePacket);
+					pkt.id = other;
+					pkt.role = static_cast<uint8_t>(g_users[other].getRole());
+
+					EXP_OVER* eo = new EXP_OVER();
+					std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
+					eo->comp_type = OP_ROOM_GAMESTART;
+					PostQueuedCompletionStatus(g_h_iocp, pkt.size, static_cast<ULONG_PTR>(task.c_id), &eo->over);
+				}
+			}
+			continue;
+		}
+		case RM_RITUAL:
+		{
+			if (!g_users.count(task.c_id)) continue;
+			int room_id = g_users[task.c_id].room_id;
+			if (room_id < 0 || room_id >= MAX_ROOM) continue;
+
+			RitualPacket pkt{};
+			pkt.header = ritualHeader;
+			pkt.size = sizeof(RitualPacket);
+
+			const auto& arr = altar_locs[room_id];
+			pkt.Loc1 = kPredefinedLocations[arr[0]];
+			pkt.Loc2 = kPredefinedLocations[arr[1]];
+			pkt.Loc3 = kPredefinedLocations[arr[2]];
+
+			EXP_OVER* eo = new EXP_OVER();
+			std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
+			eo->comp_type = OP_ROOM_RITUAL;
+			PostQueuedCompletionStatus(g_h_iocp, pkt.size, static_cast<ULONG_PTR>(task.c_id), &eo->over);
+			continue;
 		}
 		default:
-			std::cout << "User " << c_id << " Has Strange role : " << g_users[c_id].role << std::endl;
 			break;
 		}
-		g_users[c_id].do_send_packet(&packet);
-		break;
 	}
+}
+	/* 임시 */
+	/* 
 	case leaveHeader: 
 	{
 		// 1. 방에서 나갔으니까 page가 0인 RoomdataPakcet 전송.
@@ -269,81 +358,8 @@ void RoomWorkerLoop() {
 		g_users[c_id].setState(ST_READY);
 		break;
 	}
-	case gameStartHeader: 
-	{
-		auto* p = reinterpret_cast<RoomNumberPacket*>(packet);
-		if (p->size != sizeof(RoomNumberPacket)) {
-			std::cout << "Invalid gameStartHeader size\n";
-			break;
-		}
-		int room_id = p->room_number;
-		// 0. 유저 role에 따라 room의 유저 수 증가
-		if (1 == g_users[c_id].role) {
-			g_rooms[room_id].police++;
-		}
-		else if (0 == g_users[c_id].role) {
-			g_rooms[room_id].cultist++;
-		}
-		// 1. room이 꽉차면 isIngame을 true로, 유저의 방번호 업데이트
-		if (g_rooms[room_id].cultist >= MAX_CULTIST_PER_ROOM && g_rooms[room_id].police >= MAX_POLICE_PER_ROOM) {
-			g_rooms[room_id].isIngame = true;
-		}
-		g_users[c_id].room_id = room_id;
-		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-			if (g_rooms[room_id].player_ids[i] == UINT8_MAX) {
-				g_rooms[room_id].player_ids[i] = static_cast<uint8_t>(c_id);
-				break;
-			}
-		}
-		// 2.내 아이디를 send해서 확정시켜주기
-		IdRolePacket packet;
-		packet.header = connectionHeader;
-		packet.size = sizeof(IdRolePacket);
-		packet.id = static_cast<uint8_t>(c_id);
-		packet.role = static_cast<uint8_t>(g_users[c_id].getRole());
-		g_users[c_id].do_send_packet(&packet);
-
-		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-			uint8_t otherId = g_rooms[room_id].player_ids[i];
-			if (otherId == UINT8_MAX || otherId == c_id)
-				continue;
-			// 다른 유저들에게 내 정보 전송
-			packet.id = static_cast<uint8_t>(c_id);
-			packet.role = static_cast<uint8_t>(g_users[c_id].getRole());
-			g_users[otherId].do_send_packet(&packet);
-
-			// 나에게 다른 유저들 전송
-			packet.id = otherId;
-			packet.role = static_cast<uint8_t>(g_users[otherId].getRole());
-			g_users[c_id].do_send_packet(&packet);
-		}
-		//client_id++;
-		break;
-	}
-	case ritualHeader: 
-	{
-		const int room_id = g_users[c_id].room_id;
-
-		if (room_id < 0 || room_id >= MAX_ROOM) {
-			std::cout << "[Srv][Ritual] Invalid room_id: " << room_id
-				<< " for c_id=" << c_id << "\n";
-			break;
-		}
-		RitualPacket packet;
-		packet.header = ritualHeader;
-		packet.size = sizeof(RitualPacket);
-
-		packet.Loc1 = kPredefinedLocations[altar_locs[g_users[c_id].room_id][0]];
-		packet.Loc2 = kPredefinedLocations[altar_locs[g_users[c_id].room_id][1]];
-		packet.Loc3 = kPredefinedLocations[altar_locs[g_users[c_id].room_id][2]];
-		const auto& arr = altar_locs[g_users[c_id].room_id];
-
-		g_users[c_id].do_send_packet(&packet);
-		break;
-	}
 	*/
-}
-
+ 
 void CommandWorker()
 {
 	while (true)
