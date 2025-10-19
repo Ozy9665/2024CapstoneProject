@@ -151,7 +151,7 @@ void DBWorkerLoop() {
 }
 
 // room thread
-enum ROOM_EVENT { RM_REQ, RM_ENTER, RM_GAMESTART, RM_RITUAL };
+enum ROOM_EVENT { RM_REQ, RM_ENTER, RM_GAMESTART, RM_RITUAL, RM_DISCONNECT };
 struct RoomTask {
 	int c_id;
 	ROOM_EVENT type;
@@ -167,7 +167,7 @@ std::atomic<bool> g_room_worker_run{ true };
 std::thread g_room_worker;
 
 void RoomWorkerLoop() {
-	while (g_db_worker_run.load())
+	while (g_room_worker_run.load())
 	{
 		RoomTask task;
 		{
@@ -212,11 +212,12 @@ void RoomWorkerLoop() {
 		{
 			if (!g_users.count(task.c_id)) continue;
 
+			auto& user = g_users[task.c_id];
 			NoticePacket pkt{};
 			pkt.size = sizeof(NoticePacket);
 
 			int room_id = task.room_id;
-			if (room_id < 0 || room_id >= MAX_ROOM) {
+			if (user.room_id >= 0 && room_id < 0 || room_id >= MAX_ROOM) {
 				pkt.header = leaveHeader;
 			}
 			else {
@@ -334,6 +335,42 @@ void RoomWorkerLoop() {
 			std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
 			eo->comp_type = OP_ROOM_RITUAL;
 			PostQueuedCompletionStatus(g_h_iocp, pkt.size, static_cast<ULONG_PTR>(task.c_id), &eo->over);
+			continue;
+		}
+		case RM_DISCONNECT:
+		{
+			if (!g_users.count(task.c_id)) continue;
+			int room_id = g_users[task.c_id].room_id;
+			if (room_id < 0 || room_id >= MAX_ROOM) break;
+
+			if (0 == g_users[task.c_id].role) {
+				g_rooms[room_id].cultist--;
+			}
+			else if (1 == g_users[task.c_id].role) {
+				g_rooms[room_id].police--;
+			}
+
+			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
+				if (g_rooms[room_id].player_ids[i] == static_cast<uint8_t>(task.c_id)) {
+					g_rooms[room_id].player_ids[i] = UINT8_MAX;
+					break;
+				}
+			}
+
+			IdOnlyPacket pkt;
+			pkt.header = DisconnectionHeader;
+			pkt.size = sizeof(IdOnlyPacket);
+			pkt.id = static_cast<uint8_t>(task.c_id);
+			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
+				uint8_t other = g_rooms[room_id].player_ids[i];
+				if (other == UINT8_MAX || !g_users.count(other) || !g_users[other].isValidSocket()) {
+					continue;
+				}
+				EXP_OVER* eo = new EXP_OVER();
+				std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
+				eo->comp_type = OP_ROOM_DISCONNECT;
+				PostQueuedCompletionStatus(g_h_iocp, pkt.size, static_cast<ULONG_PTR>(other), &eo->over);
+			}
 			continue;
 		}
 		default:
@@ -669,39 +706,9 @@ void process_packet(int c_id, char* packet) {
 	}
 	case DisconnectionHeader: 
 	{
-		auto* p = reinterpret_cast<NoticePacket*>(packet);
-		if (p->size != sizeof(NoticePacket)) {
-			std::cout << "Invalid RoomNumberPacket size\n";
-			break;
-		}
-		// 1. 받은 room_id의 c_id유저를 room에서 빼는 작업.
-		// g_uers에서 빼는 작업은 mainloop에서 disconnect를 호출.
-		// rooms에서 유저 role에 해당하는 role도 --
-		int room_id = g_users[c_id].room_id;
-		if (0 == g_users[c_id].role) {
-			g_rooms[room_id].cultist--;
-		}
-		else if (1 == g_users[c_id].role) {
-			g_rooms[room_id].police--;
-		}
-		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-			if (g_rooms[room_id].player_ids[i] == static_cast<uint8_t>(c_id)) {
-				g_rooms[room_id].player_ids[i] = UINT8_MAX;
-				break;
-			}
-		}
-		// 2. room 멤버들에게 disconncection header로 유저의 접속을 알림.
-		IdOnlyPacket packet;
-		packet.header = DisconnectionHeader;
-		packet.size = sizeof(IdOnlyPacket);
-		packet.id = static_cast<uint8_t>(c_id);
-		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-			if (g_rooms[room_id].player_ids[i] == UINT8_MAX) {
-				continue;
-			}
-			uint8_t otherId = g_rooms[room_id].player_ids[i];
-			g_users[otherId].do_send_packet(&packet);
-		}
+		std::lock_guard<std::mutex> lk(g_room_mtx);
+		g_room_q.push(RoomTask{ c_id, RM_DISCONNECT, 0, -1 });
+		g_room_cv.notify_one();
 		break;
 	}
 	case disableHeader:
@@ -987,6 +994,7 @@ void mainLoop(HANDLE h_iocp) {
 		case OP_ROOM_ENTER:
 		case OP_ROOM_GAMESTART:
 		case OP_ROOM_RITUAL:
+		case OP_ROOM_DISCONNECT:
 		{
 			int cid = static_cast<int>(key);
 			if (g_users.count(cid) && g_users[cid].isValidSocket())
