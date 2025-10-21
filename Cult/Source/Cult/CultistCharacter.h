@@ -286,7 +286,8 @@ public:
 	void EndInteraction();
 	UPROPERTY()
 	TObjectPtr<ACharacter> HealPartner;
-
+	UFUNCTION(BlueprintCallable, Category = "Cult|Heal")
+	void SendTryHeal();
 
 	int my_ID = -1;
 	int GetPlayerID() const;

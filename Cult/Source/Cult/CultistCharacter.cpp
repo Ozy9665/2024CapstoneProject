@@ -1120,6 +1120,13 @@ void ACultistCharacter::EndInteraction()
 	this->HealPartner = nullptr;
 }
 
+void ACultistCharacter::SendTryHeal() 
+{
+	if (MySocketCultistActor)
+	{
+		MySocketCultistActor->SendTryHeal();
+	}
+}
 
 int ACultistCharacter::GetPlayerID() const {
 	return my_ID;

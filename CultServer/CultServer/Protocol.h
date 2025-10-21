@@ -36,6 +36,7 @@ constexpr char DisconnectionHeader = 6;
 constexpr char disableHeader = 7;
 constexpr char disappearHeader = 17;
 constexpr char appearHeader = 18;
+constexpr char tryHealHeader = 19;
 
 //-- room header
 constexpr char requestHeader = 8;

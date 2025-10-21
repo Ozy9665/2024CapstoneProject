@@ -69,6 +69,7 @@ public:
 	void ProcessParticleData(char* Buffer);
 	void SpawnImpactEffect(const FImpactPacket& ReceivedImpact);
 	void HideCharacter(int, bool);
+	void SendTryHeal();
 	void SendDisconnection();
 	void CloseConnection();
 	void SafeDestroyCharacter(int PlayerID);

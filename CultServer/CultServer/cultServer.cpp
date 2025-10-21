@@ -691,6 +691,19 @@ void process_packet(int c_id, char* packet) {
 		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
 		break;
 	}
+	case tryHealHeader: 
+	{
+		auto* p = reinterpret_cast<IdOnlyPacket*>(packet);
+		if (p->size != sizeof(IdOnlyPacket)) {
+			std::cout << "Invalid IdOnlyPacket size\n";
+			break;
+		}
+
+		// 근처 치료 가능한 유저 탐색
+		
+		// location과 rotation을 계산해 두 플레이어에게 전송
+		break;
+	}
 	case connectionHeader:
 	{
 		auto* p = reinterpret_cast<IdOnlyPacket*>(packet);
