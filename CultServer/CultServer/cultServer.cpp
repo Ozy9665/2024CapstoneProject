@@ -1,4 +1,5 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define NOMINMAX
 
 #include <iostream>
 #include <array>
@@ -12,6 +13,8 @@
 #include <atomic>
 #include <condition_variable>
 #include <unordered_set>
+#include <optional>
+#include <numeric>
 #include "Protocol.h"
 #include "error.h"
 #include "PoliceAI.h"
@@ -22,6 +25,7 @@
 
 const float VIEW_RANGE = 1000.0f;           // 시야 반경
 const float VIEW_RANGE_SQ = VIEW_RANGE * VIEW_RANGE;
+const float SPHERE_TRACE_RADIUS = 200.0f;
 
 SOCKET g_s_socket, g_c_socket;
 EXP_OVER g_a_over;
@@ -597,6 +601,54 @@ bool validate_police_state(FPoliceCharacterState& state)
 	return ok;
 }
 
+std::optional<uint8_t> SphereTraceClosestCultist(int centerId, float radius) {
+	auto myIt = g_users.find(centerId);
+	if (myIt == g_users.end()) {
+		std::cout << "Error Cid in SphereTraceClosestCultist: " << centerId << "\n";
+		return std::nullopt;
+	}
+
+	const SESSION& me = myIt->second;
+	const int roomId = me.room_id;
+	if (roomId < 0 || roomId >= MAX_ROOM) {
+		std::cout << "User " << centerId << " room id error " << "\n";
+		return std::nullopt;
+	}
+	const room& rm = g_rooms[roomId];
+
+	const float r2 = radius * radius;
+	float nearestId = std::numeric_limits<float>::max();
+
+	std::optional<uint8_t> bestId;
+
+	for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
+	{
+		uint8_t other = rm.player_ids[i];
+		if (other == UINT8_MAX || other == centerId) 
+			continue;
+
+		auto it = g_users.find(other);
+		if (it == g_users.end()) 
+			continue;
+
+		const SESSION& target = it->second;
+
+		// 소켓/상태/역할 필터
+		if (!target.isValidSocket())   
+			continue;
+		if (target.role != 0)           // Cultist
+			continue;
+		// 치료 가능한 상태 확인
+
+		const float d2 = distanceSq(me, target);
+		if (d2 <= r2 && d2 < nearestId) {
+			nearestId = d2;
+			bestId = other;
+		}
+	}
+	return bestId;
+}
+
 void process_packet(int c_id, char* packet) {
 	switch (packet[0]) {
 	case cultistHeader:
@@ -700,8 +752,16 @@ void process_packet(int c_id, char* packet) {
 		}
 
 		// 근처 치료 가능한 유저 탐색
-		
-		// location과 rotation을 계산해 두 플레이어에게 전송
+		auto targetOpt = SphereTraceClosestCultist(c_id, SPHERE_TRACE_RADIUS);
+		if (!targetOpt) {
+			// 타겟 없음
+			break;
+		}
+
+		const uint8_t targetId = *targetOpt;
+		std::cout << "[Heal] healer=" << c_id << " target=" << (int)targetId << "\n";
+		// location과 rotation을 계산
+		// 두 플레이어에게 이동해야할 위치를 각각 전송
 		break;
 	}
 	case connectionHeader:
