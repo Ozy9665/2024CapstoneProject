@@ -601,7 +601,7 @@ bool validate_police_state(FPoliceCharacterState& state)
 	return ok;
 }
 
-std::optional<uint8_t> SphereTraceClosestCultist(int centerId, float radius) {
+std::optional<int> SphereTraceClosestCultist(int centerId, float radius) {
 	auto myIt = g_users.find(centerId);
 	if (myIt == g_users.end()) {
 		std::cout << "Error Cid in SphereTraceClosestCultist: " << centerId << "\n";
@@ -619,11 +619,11 @@ std::optional<uint8_t> SphereTraceClosestCultist(int centerId, float radius) {
 	const float r2 = radius * radius;
 	float nearestId = std::numeric_limits<float>::max();
 
-	std::optional<uint8_t> bestId;
+	std::optional<int> bestId;
 
 	for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
 	{
-		uint8_t other = rm.player_ids[i];
+		int other = rm.player_ids[i];
 		if (other == UINT8_MAX || other == centerId) 
 			continue;
 
@@ -647,6 +647,34 @@ std::optional<uint8_t> SphereTraceClosestCultist(int centerId, float radius) {
 		}
 	}
 	return bestId;
+}
+
+std::optional<std::pair<FVector, FRotator>> GetMovePoint(int c_id, int targetId) {
+	auto itHealer = g_users.find(c_id);
+	auto itTarget = g_users.find(targetId);
+	if (itHealer == g_users.end() || itTarget == g_users.end()) {
+		return std::nullopt;
+	}
+
+	const SESSION& healer = itHealer->second;
+	const SESSION& target = itTarget->second;
+
+	FVector mid{
+		 static_cast<double>((healer.cultist_state.PositionX + target.cultist_state.PositionX) * 0.5),
+		 static_cast<double>((healer.cultist_state.PositionY + target.cultist_state.PositionY) * 0.5),
+		 static_cast<double>((healer.cultist_state.PositionZ + target.cultist_state.PositionZ) * 0.5)
+	};
+
+	const double dx = static_cast<double>(target.cultist_state.PositionX - healer.cultist_state.PositionX);
+	const double dy = static_cast<double>(target.cultist_state.PositionY - healer.cultist_state.PositionY);
+
+	double yawHealer = std::atan2(dy, dx) * 180.0 / 3.141592653589793;
+	if (yawHealer < 0.0) {
+		yawHealer += 360.0;
+	}
+	FRotator rot{ 0.0, yawHealer, 0.0 };
+
+	return std::make_pair(mid, rot);
 }
 
 void process_packet(int c_id, char* packet) {
@@ -758,10 +786,20 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		const uint8_t targetId = *targetOpt;
+		const int targetId = *targetOpt;
 		std::cout << "[Heal] healer=" << c_id << " target=" << (int)targetId << "\n";
 		// location과 rotation을 계산
+		auto moveOpt = GetMovePoint(c_id, targetId);
 		// 두 플레이어에게 이동해야할 위치를 각각 전송
+		auto [moveLoc, moveRot] = *moveOpt;
+		MovePacket pkt;
+		pkt.header = doHealHeader;
+		pkt.size = sizeof(MovePacket);
+		pkt.SpawnLoc = moveLoc;
+		pkt.SpawnRot = moveRot;
+
+		g_users[c_id].do_send_packet(&pkt);
+		g_users[targetId].do_send_packet(&pkt);
 		break;
 	}
 	case connectionHeader:

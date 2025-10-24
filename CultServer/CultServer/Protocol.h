@@ -37,6 +37,7 @@ constexpr char disableHeader = 7;
 constexpr char disappearHeader = 17;
 constexpr char appearHeader = 18;
 constexpr char tryHealHeader = 19;
+constexpr char doHealHeader = 20;
 
 //-- room header
 constexpr char requestHeader = 8;
@@ -279,6 +280,13 @@ struct BoolPacket {
 	uint8_t size;
 	bool result;
 	uint8_t reason;
+};
+
+struct MovePacket {
+	uint8_t header;
+	uint8_t size;
+	FVector SpawnLoc;
+	FRotator SpawnRot;
 };
 
 #pragma pack(pop)
