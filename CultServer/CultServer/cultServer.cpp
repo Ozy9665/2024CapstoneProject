@@ -797,8 +797,9 @@ void process_packet(int c_id, char* packet) {
 		pkt.size = sizeof(MovePacket);
 		pkt.SpawnLoc = moveLoc;
 		pkt.SpawnRot = moveRot;
-
+		pkt.isHealer = true;
 		g_users[c_id].do_send_packet(&pkt);
+		pkt.isHealer = false;
 		g_users[targetId].do_send_packet(&pkt);
 		break;
 	}

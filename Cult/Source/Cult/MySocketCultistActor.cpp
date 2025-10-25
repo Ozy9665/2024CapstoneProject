@@ -1,6 +1,9 @@
 #include "MySocketCultistActor.h"
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include "AIController.h"
+#include "Navigation/PathFollowingComponent.h"
+#include "NavigationSystem.h"
 #include "Camera/CameraActor.h"
 #include "CultistCharacter.h"
 #include "Components/TextBlock.h"
@@ -136,6 +139,11 @@ void AMySocketCultistActor::ReceiveData()
                     {
                         unsigned char id = static_cast<unsigned char>(Buffer[2]);
                         HideCharacter(id, false);
+                        break;
+                    }
+                    case doHealHeader:
+                    {
+                        ProcessDoHeal(Buffer);
                         break;
                     }
                     default:
@@ -1162,7 +1170,7 @@ void AMySocketCultistActor::SpawnPoliceAICharacter(const unsigned char PlayerID)
     }
 }
 
-void AMySocketCultistActor::ProcessParticleData(char* Buffer) {
+void AMySocketCultistActor::ProcessParticleData(const char* Buffer) {
     FImpactPacket ReceivedImpact;
     memcpy(&ReceivedImpact, Buffer + 2, sizeof(FImpactPacket));
     // Particles.Add(ReceivedImpact);
@@ -1240,6 +1248,41 @@ void AMySocketCultistActor::SendTryHeal()
     {
         CloseConnection();
     }
+}
+
+void AMySocketCultistActor::ProcessDoHeal(const char* Buffer) {
+    MovePacket Received;
+    memcpy(&Received, Buffer, sizeof(MovePacket));
+
+    const FVector Goal = AMySocketActor::ToUE(Received.SpawnLoc);
+    const FRotator Face = AMySocketActor::ToUE(Received.SpawnRot);
+    const bool isHealer = Received.isHealer;
+
+    AsyncTask(ENamedThreads::GameThread, [this, Goal, Face, isHealer]() {
+        if (!MyCharacter) return;
+
+        // set Actor Rotation
+        MyCharacter->SetActorRotation(Face);
+
+        // Ai Move to
+        if (AAIController* AICon = Cast<AAIController>(MyCharacter->GetController()))
+        {
+            FAIMoveRequest MoveReq;
+            MoveReq.SetGoalLocation(Goal);
+            MoveReq.SetAcceptanceRadius(5.f);  // 도착 판정 거리
+            MoveReq.SetUsePathfinding(true);
+
+            FNavPathSharedPtr Path;
+            AICon->MoveTo(MoveReq, &Path);
+        }
+        else
+        {
+            // AIController 없을 때는 그냥 스냅 이동
+            MyCharacter->SetActorLocation(Goal);
+        }
+        // isHealer 여부에 따른 anim 재생
+        });
+        
 }
 
 void AMySocketCultistActor::SendDisconnection() {

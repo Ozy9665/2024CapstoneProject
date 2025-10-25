@@ -287,6 +287,7 @@ struct MovePacket {
 	uint8_t size;
 	FVector SpawnLoc;
 	FRotator SpawnRot;
+	bool isHealer;
 };
 
 #pragma pack(pop)

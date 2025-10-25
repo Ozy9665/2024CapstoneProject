@@ -66,10 +66,11 @@ public:
 	void UpdatePoliceAnimInstanceProperties(UAnimInstance* AnimInstance, const FPoliceCharacterState& State);
 	void SpawnPoliceCharacter(const unsigned char PlayerID);
 	void SpawnPoliceAICharacter(const unsigned char PlayerID);
-	void ProcessParticleData(char* Buffer);
+	void ProcessParticleData(const char* Buffer);
 	void SpawnImpactEffect(const FImpactPacket& ReceivedImpact);
 	void HideCharacter(int, bool);
 	void SendTryHeal();
+	void ProcessDoHeal(const char* Buffer);
 	void SendDisconnection();
 	void CloseConnection();
 	void SafeDestroyCharacter(int PlayerID);
