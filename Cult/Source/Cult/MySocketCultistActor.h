@@ -9,6 +9,7 @@
 #include <Kismet/GameplayStatics.h>
 #include "MySocketActor.h"
 #include "MyGameInstance.h"
+#include "Animation/AnimInstance.h"
 #include "CultistCharacter.h"
 #include "MySocketCultistActor.generated.h"
 
@@ -41,6 +42,7 @@ private:
 	TArray<FImpactPacket> Particles;
 	UMyGameInstance* GI;
 	TArray<int32> KeysToRemove;
+	TWeakObjectPtr<UAnimInstance> BoundAnimInstance;
 
 public:	
 	// Called every frame
@@ -74,4 +76,7 @@ public:
 	void SendDisconnection();
 	void CloseConnection();
 	void SafeDestroyCharacter(int PlayerID);
+
+	UFUNCTION()
+	void HandleMontageNotifyBegin(FName, const FBranchingPointNotifyPayload&);
 };

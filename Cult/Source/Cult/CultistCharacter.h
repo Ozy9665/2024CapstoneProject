@@ -288,6 +288,14 @@ public:
 	TObjectPtr<ACharacter> HealPartner;
 	UFUNCTION(BlueprintCallable, Category = "Cult|Heal")
 	void SendTryHeal();
+	UPROPERTY(EditDefaultsOnly, Category = "Animation|Heal")
+	UAnimMontage* AS_BandageArmSitting1_Montage;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Animation|Heal")
+	UAnimMontage* AS_WoundedSitting1_Montage;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Animation|Heal")
+	UAnimMontage* AS_BandageFriendSquat1_Montage;
 
 	int my_ID = -1;
 	int GetPlayerID() const;

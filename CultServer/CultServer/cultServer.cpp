@@ -792,6 +792,7 @@ void process_packet(int c_id, char* packet) {
 		auto moveOpt = GetMovePoint(c_id, targetId);
 		// 두 플레이어에게 이동해야할 위치를 각각 전송
 		auto [moveLoc, moveRot] = *moveOpt;
+
 		MovePacket pkt;
 		pkt.header = doHealHeader;
 		pkt.size = sizeof(MovePacket);
@@ -799,6 +800,13 @@ void process_packet(int c_id, char* packet) {
 		pkt.SpawnRot = moveRot;
 		pkt.isHealer = true;
 		g_users[c_id].do_send_packet(&pkt);
+
+		double yaw = std::fmod(moveRot.yaw + 180.0, 360.0);
+		if (yaw < 0.0) { 
+			yaw += 360.0; 
+		}
+
+		pkt.SpawnRot.yaw = yaw;
 		pkt.isHealer = false;
 		g_users[targetId].do_send_packet(&pkt);
 		break;

@@ -1,6 +1,7 @@
 #include "MySocketCultistActor.h"
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <Blueprint/AIBlueprintHelperLibrary.h>
 #include "AIController.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationSystem.h"
@@ -1265,24 +1266,98 @@ void AMySocketCultistActor::ProcessDoHeal(const char* Buffer) {
         MyCharacter->SetActorRotation(Face);
 
         // Ai Move to
-        if (AAIController* AICon = Cast<AAIController>(MyCharacter->GetController()))
+        AController* C = MyCharacter->GetController();
+        /*if (AAIController* AICon = Cast<AAIController>(C))
         {
+            UE_LOG(LogTemp, Error, TEXT("Cast AAIController"));
             FAIMoveRequest MoveReq;
             MoveReq.SetGoalLocation(Goal);
-            MoveReq.SetAcceptanceRadius(5.f);  // 도착 판정 거리
+            MoveReq.SetAcceptanceRadius(100.f);
             MoveReq.SetUsePathfinding(true);
-
             FNavPathSharedPtr Path;
             AICon->MoveTo(MoveReq, &Path);
         }
+        else */if (APlayerController* PC = Cast<APlayerController>(C))
+        {
+            UE_LOG(LogTemp, Error, TEXT("Cast APlayerController"));
+            UAIBlueprintHelperLibrary::SimpleMoveToLocation(PC, Goal);
+        }
         else
         {
-            // AIController 없을 때는 그냥 스냅 이동
-            MyCharacter->SetActorLocation(Goal);
+            UE_LOG(LogTemp, Error, TEXT("ProcessDoHeal Fail to Cast APlayerController"));
+            return;
+            //MyCharacter->SetActorLocation(Goal);
         }
         // isHealer 여부에 따른 anim 재생
+        if (USkeletalMeshComponent* Mesh = MyCharacter->GetMesh())
+        {
+            if (UAnimInstance* Anim = Mesh->GetAnimInstance())
+            {
+                if (isHealer) {
+                    if (MyCharacter->AS_BandageFriendSquat1_Montage)
+                    {
+                        Anim->Montage_Play(MyCharacter->AS_BandageFriendSquat1_Montage, 1.0f);
+                    }
+                    else
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("ProcessDoHeal: AS_BandageFriendSquat1_Montage is null"));
+                    }
+                }
+                else {
+                    if (MyCharacter->AS_BandageArmSitting1_Montage)
+                    {
+                        Anim->Montage_Play(MyCharacter->AS_BandageArmSitting1_Montage, 1.0f);
+
+                        // NotifyBegin에서 전환
+                        BoundAnimInstance = Anim;
+                        Anim->OnPlayMontageNotifyBegin.AddDynamic(this, &AMySocketCultistActor::HandleMontageNotifyBegin);
+                    }
+                    else
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("ProcessDoHeal: AS_BandageArmSitting1_Montage is null"));
+                    }
+                }
+            }
+            else {
+                UE_LOG(LogTemp, Error, TEXT("ProcessDoHeal Fail to get UAnimInstance"));
+                return;
+            }
+        }
+        else {
+            UE_LOG(LogTemp, Error, TEXT("ProcessDoHeal Fail to get USkeletalMeshComponent"));
+            return;
+        }
         });
         
+}
+
+void AMySocketCultistActor::HandleMontageNotifyBegin(
+    FName NotifyName, const FBranchingPointNotifyPayload& /*Payload*/)
+{
+    if (!MyCharacter) return;
+
+    // BP에서 넣어둔 노티파이 이름과 일치해야 함
+    static const FName HealNotify(TEXT("Heal_Notify"));
+    if (NotifyName != HealNotify) return;
+
+    // 1회성 동작이므로 바인딩 해제
+    if (UAnimInstance* Anim = BoundAnimInstance.Get())
+    {
+        Anim->OnPlayMontageNotifyBegin.RemoveDynamic(
+            this, &AMySocketCultistActor::HandleMontageNotifyBegin);
+    }
+
+    // 두 번째 몽타주 재생
+    if (USkeletalMeshComponent* Mesh = MyCharacter->GetMesh())
+    {
+        if (UAnimInstance* Anim = Mesh->GetAnimInstance())
+        {
+            if (MyCharacter->AS_WoundedSitting1_Montage)
+            {
+                Anim->Montage_Play(MyCharacter->AS_WoundedSitting1_Montage, 1.0f);
+            }
+        }
+    }
 }
 
 void AMySocketCultistActor::SendDisconnection() {
