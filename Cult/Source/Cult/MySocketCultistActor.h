@@ -78,5 +78,6 @@ public:
 	void SafeDestroyCharacter(int PlayerID);
 
 	UFUNCTION()
-	void HandleMontageNotifyBegin(FName, const FBranchingPointNotifyPayload&);
+	void HandleMontageNotifyBegin(FName NotifyName, const FBranchingPointNotifyPayload& Payload);
+
 };
