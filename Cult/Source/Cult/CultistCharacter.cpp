@@ -17,6 +17,7 @@
 #include "CrowActor.h"
 #include "AIController.h"
 #include "Engine/World.h"
+#include "Camera/CameraActor.h"
 #include "GameFramework/Actor.h"
 
 
