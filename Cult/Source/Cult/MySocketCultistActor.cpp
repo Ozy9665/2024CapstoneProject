@@ -1332,22 +1332,19 @@ void AMySocketCultistActor::ProcessDoHeal(const char* Buffer) {
 }
 
 void AMySocketCultistActor::HandleMontageNotifyBegin(
-    FName NotifyName, const FBranchingPointNotifyPayload& /*Payload*/)
+    FName NotifyName, const FBranchingPointNotifyPayload& Payload)
 {
+    UE_LOG(LogTemp, Warning, TEXT("NotifyBegin: %s"), *NotifyName.ToString());
     if (!MyCharacter) return;
+    if (NotifyName != TEXT("Sit")) return;
 
-    // BP에서 넣어둔 노티파이 이름과 일치해야 함
-    static const FName HealNotify(TEXT("Heal_Notify"));
-    if (NotifyName != HealNotify) return;
-
-    // 1회성 동작이므로 바인딩 해제
     if (UAnimInstance* Anim = BoundAnimInstance.Get())
     {
         Anim->OnPlayMontageNotifyBegin.RemoveDynamic(
             this, &AMySocketCultistActor::HandleMontageNotifyBegin);
+        BoundAnimInstance.Reset();
     }
 
-    // 두 번째 몽타주 재생
     if (USkeletalMeshComponent* Mesh = MyCharacter->GetMesh())
     {
         if (UAnimInstance* Anim = Mesh->GetAnimInstance())
