@@ -78,6 +78,8 @@ public:
 	void SafeDestroyCharacter(int PlayerID);
 
 	UFUNCTION()
-	void HandleMontageNotifyBegin(FName NotifyName, const FBranchingPointNotifyPayload& Payload);
+	void HandleMontageSitNotifyBegin(FName NotifyName, const FBranchingPointNotifyPayload& Payload);
+	UFUNCTION()
+	void HandleMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 
 };

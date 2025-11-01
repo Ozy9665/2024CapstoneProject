@@ -1294,9 +1294,12 @@ void AMySocketCultistActor::ProcessDoHeal(const char* Buffer) {
             if (UAnimInstance* Anim = Mesh->GetAnimInstance())
             {
                 if (isHealer) {
+                    MyCharacter->ABP_DoHeal = true;
                     if (MyCharacter->AS_BandageFriendSquat1_Montage)
                     {
                         Anim->Montage_Play(MyCharacter->AS_BandageFriendSquat1_Montage, 1.0f);
+                        Anim->OnMontageEnded.AddDynamic(
+                            this, &AMySocketCultistActor::HandleMontageEnded);
                     }
                     else
                     {
@@ -1304,13 +1307,15 @@ void AMySocketCultistActor::ProcessDoHeal(const char* Buffer) {
                     }
                 }
                 else {
+                    MyCharacter->ABP_GetHeal = true;
                     if (MyCharacter->AS_BandageArmSitting1_Montage)
                     {
                         Anim->Montage_Play(MyCharacter->AS_BandageArmSitting1_Montage, 1.0f);
 
                         // NotifyBegin에서 전환
                         BoundAnimInstance = Anim;
-                        Anim->OnPlayMontageNotifyBegin.AddDynamic(this, &AMySocketCultistActor::HandleMontageNotifyBegin);
+                        Anim->OnPlayMontageNotifyBegin.AddDynamic(this, &AMySocketCultistActor::HandleMontageSitNotifyBegin);
+                        Anim->OnMontageEnded.AddDynamic(this, &AMySocketCultistActor::HandleMontageEnded);
                     }
                     else
                     {
@@ -1331,17 +1336,16 @@ void AMySocketCultistActor::ProcessDoHeal(const char* Buffer) {
         
 }
 
-void AMySocketCultistActor::HandleMontageNotifyBegin(
+void AMySocketCultistActor::HandleMontageSitNotifyBegin(
     FName NotifyName, const FBranchingPointNotifyPayload& Payload)
 {
-    UE_LOG(LogTemp, Warning, TEXT("NotifyBegin: %s"), *NotifyName.ToString());
     if (!MyCharacter) return;
     if (NotifyName != TEXT("Sit")) return;
 
     if (UAnimInstance* Anim = BoundAnimInstance.Get())
     {
         Anim->OnPlayMontageNotifyBegin.RemoveDynamic(
-            this, &AMySocketCultistActor::HandleMontageNotifyBegin);
+            this, &AMySocketCultistActor::HandleMontageSitNotifyBegin);
         BoundAnimInstance.Reset();
     }
 
@@ -1353,6 +1357,32 @@ void AMySocketCultistActor::HandleMontageNotifyBegin(
             {
                 Anim->Montage_Play(MyCharacter->AS_WoundedSitting1_Montage, 1.0f);
             }
+        }
+    }
+}
+
+void AMySocketCultistActor::HandleMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+    if (!MyCharacter) return;
+
+    if (Montage == MyCharacter->AS_BandageFriendSquat1_Montage)
+    {
+        MyCharacter->ABP_DoHeal = false;
+        UE_LOG(LogTemp, Warning, TEXT("DoHeal Ended"));
+    }
+    else if (Montage == MyCharacter->AS_WoundedSitting1_Montage)
+    {
+        MyCharacter->ABP_GetHeal = false;
+        UE_LOG(LogTemp, Warning, TEXT("GetHeal Ended"));
+    }
+
+    if (Montage == MyCharacter->AS_WoundedSitting1_Montage ||
+        Montage == MyCharacter->AS_BandageFriendSquat1_Montage)
+    {
+        if (UAnimInstance* Anim = MyCharacter->GetMesh()->GetAnimInstance())
+        {
+            Anim->OnMontageEnded.RemoveDynamic(
+                this, &AMySocketCultistActor::HandleMontageEnded);
         }
     }
 }
