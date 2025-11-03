@@ -670,7 +670,7 @@ std::optional<std::pair<FVector, FRotator>> GetMovePoint(int c_id, int targetId)
 	const double dx = static_cast<double>(target.cultist_state.PositionX - healer.cultist_state.PositionX);
 	const double dy = static_cast<double>(target.cultist_state.PositionY - healer.cultist_state.PositionY);
 
-	double yawHealer = std::atan2(dy, dx) * 180.0 / ;
+	double yawHealer = std::atan2(dy, dx) * 180.0 / PI;
 	if (yawHealer < 0.0) {
 		yawHealer += 360.0;
 	}
