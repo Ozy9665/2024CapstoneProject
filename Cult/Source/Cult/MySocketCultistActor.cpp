@@ -1336,8 +1336,7 @@ void AMySocketCultistActor::ProcessDoHeal(const char* Buffer) {
         
 }
 
-void AMySocketCultistActor::HandleMontageSitNotifyBegin(
-    FName NotifyName, const FBranchingPointNotifyPayload& Payload)
+void AMySocketCultistActor::HandleMontageSitNotifyBegin(FName NotifyName, const FBranchingPointNotifyPayload& Payload)
 {
     if (!MyCharacter) return;
     if (NotifyName != TEXT("Sit")) return;

@@ -26,6 +26,8 @@
 const float VIEW_RANGE = 1000.0f;           // 시야 반경
 const float VIEW_RANGE_SQ = VIEW_RANGE * VIEW_RANGE;
 const float SPHERE_TRACE_RADIUS = 200.0f;
+const float HEAL_GAP = 100.0f;
+const float PI = 3.141592;
 
 SOCKET g_s_socket, g_c_socket;
 EXP_OVER g_a_over;
@@ -668,7 +670,7 @@ std::optional<std::pair<FVector, FRotator>> GetMovePoint(int c_id, int targetId)
 	const double dx = static_cast<double>(target.cultist_state.PositionX - healer.cultist_state.PositionX);
 	const double dy = static_cast<double>(target.cultist_state.PositionY - healer.cultist_state.PositionY);
 
-	double yawHealer = std::atan2(dy, dx) * 180.0 / 3.141592653589793;
+	double yawHealer = std::atan2(dy, dx) * 180.0 / ;
 	if (yawHealer < 0.0) {
 		yawHealer += 360.0;
 	}
@@ -796,7 +798,17 @@ void process_packet(int c_id, char* packet) {
 		MovePacket pkt;
 		pkt.header = doHealHeader;
 		pkt.size = sizeof(MovePacket);
-		pkt.SpawnLoc = moveLoc;
+
+		const double rad = moveRot.yaw * PI / 180.0;
+		const double dirX = std::cos(rad);
+		const double dirY = std::sin(rad);
+
+		FVector healerPos{
+			moveLoc.x - dirX * (HEAL_GAP * 0.5),
+			moveLoc.y - dirY * (HEAL_GAP * 0.5),
+			moveLoc.z
+		};
+		pkt.SpawnLoc = healerPos;
 		pkt.SpawnRot = moveRot;
 		pkt.isHealer = true;
 		g_users[c_id].do_send_packet(&pkt);
@@ -806,6 +818,12 @@ void process_packet(int c_id, char* packet) {
 			yaw += 360.0; 
 		}
 
+		FVector targetPos{
+			moveLoc.x + dirX * (HEAL_GAP * 0.5),
+			moveLoc.y + dirY * (HEAL_GAP * 0.5),
+			moveLoc.z
+		};
+		pkt.SpawnLoc = targetPos;
 		pkt.SpawnRot.yaw = yaw;
 		pkt.isHealer = false;
 		g_users[targetId].do_send_packet(&pkt);
