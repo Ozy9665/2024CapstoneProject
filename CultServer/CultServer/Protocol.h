@@ -329,6 +329,7 @@ public:
 	};
 	std::unordered_set<int> visible_ids;
 	std::string account_id;
+	int heal_gage;
 
 	void do_recv();
 

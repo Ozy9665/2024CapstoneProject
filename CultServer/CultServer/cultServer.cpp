@@ -15,6 +15,8 @@
 #include <unordered_set>
 #include <optional>
 #include <numeric>
+#include <chrono>
+#include <concurrent_priority_queue.h>
 #include "Protocol.h"
 #include "error.h"
 #include "PoliceAI.h"
@@ -71,17 +73,13 @@ std::queue<DBTask> g_db_q;
 std::mutex g_logged_mtx;
 std::unordered_set<std::string> g_logged_in_ids;
 
-std::atomic<bool> g_db_worker_run{ true };
-std::thread g_db_worker;
-
 void DBWorkerLoop() {
-	while (g_db_worker_run.load())
+	while (true)
 	{
 		DBTask task;
 		{
 			std::unique_lock<std::mutex> lk(g_db_mtx);
-			g_db_cv.wait(lk, [] { return !g_db_q.empty() || !g_db_worker_run.load(); });
-			if (!g_db_worker_run.load()) break;
+			g_db_cv.wait(lk, [] { return !g_db_q.empty(); });
 			task = std::move(g_db_q.front());
 			g_db_q.pop();
 		}
@@ -169,17 +167,13 @@ std::mutex g_room_mtx;
 std::condition_variable g_room_cv;
 std::queue<RoomTask> g_room_q;
 
-std::atomic<bool> g_room_worker_run{ true };
-std::thread g_room_worker;
-
 void RoomWorkerLoop() {
-	while (g_room_worker_run.load())
+	while (true)
 	{
 		RoomTask task;
 		{
 			std::unique_lock<std::mutex> lk(g_room_mtx);
-			g_room_cv.wait(lk, [] { return !g_room_q.empty() || !g_room_worker_run.load(); });
-			if (!g_room_worker_run.load()) break;
+			g_room_cv.wait(lk, [] { return !g_room_q.empty(); });
 			task = std::move(g_room_q.front());
 			g_room_q.pop();
 		}
@@ -403,6 +397,39 @@ void RoomWorkerLoop() {
 	}
 	*/
  
+// heal timer queue
+enum EVENT_TYPE { EV_HEAL };
+struct TIMER_EVENT {
+	int c_id;
+	std::chrono::system_clock::time_point wakeup_time;
+	EVENT_TYPE event_id;
+	
+	constexpr bool operator < (const TIMER_EVENT& Left) const
+	{
+		return (wakeup_time > Left.wakeup_time);
+	}
+};
+concurrency::concurrent_priority_queue<TIMER_EVENT> timer_queue;
+
+void HealTimerLoop() {
+	while (true) {
+		TIMER_EVENT ev;
+		auto current_time = std::chrono::system_clock::now();
+		if (true == timer_queue.try_pop(ev)) {
+			if (ev.wakeup_time > current_time) {
+				std::this_thread::sleep_until(ev.wakeup_time);
+			}
+			switch (ev.event_id) {
+			case EV_HEAL:
+				// timer heal 작업.
+				// 1초마다 게이지 업
+				// 10차면 회복
+				break;
+			}
+		}
+	}
+}
+
 void CommandWorker()
 {
 	while (true)
@@ -1065,6 +1092,7 @@ void mainLoop(HANDLE h_iocp) {
 			sess.state = ST_FREE;
 			sess.c_socket = g_c_socket;
 			sess.room_id = -1;
+			sess.heal_gage = 0;
 			g_users.insert(std::make_pair(new_id, sess));	// 여기 emplace로 바꿀 순 없을까?
 			CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket), h_iocp, new_id, 0);
 			g_users[new_id].do_recv();
@@ -1190,23 +1218,19 @@ int main()
 		InitializeAltarLoc(i);
 	}
 	g_h_iocp = h_iocp;
-	g_db_worker = std::thread(DBWorkerLoop);
-	g_room_worker = std::thread(RoomWorkerLoop);
+	std::thread db_thread{ DBWorkerLoop };
+	db_thread.join();
+	g_db_cv.notify_all();
+	std::thread room_thread{ RoomWorkerLoop };
+	room_thread.join();
+	g_room_cv.notify_all();
+	std::thread timer_thread{ HealTimerLoop };
+	timer_thread.join();
+	//CommandThread.join();
 
 	mainLoop(h_iocp);
 
-	//CommandThread.join();
 	//StopAIWorker();
-	g_db_worker_run.store(false);
-	g_db_cv.notify_all();
-	if (g_db_worker.joinable()) 
-		g_db_worker.join();
-
-	g_room_worker_run.store(false);
-	g_room_cv.notify_all();
-	if (g_room_worker.joinable())
-		g_room_worker.join();
-
 	closesocket(g_s_socket);
 	WSACleanup();
 }
