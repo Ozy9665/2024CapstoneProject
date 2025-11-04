@@ -17,6 +17,7 @@
 #include <numeric>
 #include <chrono>
 #include <concurrent_priority_queue.h>
+#include <algorithm>
 #include "Protocol.h"
 #include "error.h"
 #include "PoliceAI.h"
@@ -24,6 +25,7 @@
 
 #pragma comment(lib, "MSWSock.lib")
 #pragma comment (lib, "WS2_32.LIB")
+using namespace std;
 
 const float VIEW_RANGE = 1000.0f;           // 시야 반경
 const float VIEW_RANGE_SQ = VIEW_RANGE * VIEW_RANGE;
@@ -401,9 +403,10 @@ void RoomWorkerLoop() {
 enum EVENT_TYPE { EV_HEAL };
 struct TIMER_EVENT {
 	int c_id;
+	int target_id;
 	std::chrono::system_clock::time_point wakeup_time;
 	EVENT_TYPE event_id;
-	
+
 	constexpr bool operator < (const TIMER_EVENT& Left) const
 	{
 		return (wakeup_time > Left.wakeup_time);
@@ -416,16 +419,41 @@ void HealTimerLoop() {
 		TIMER_EVENT ev;
 		auto current_time = std::chrono::system_clock::now();
 		if (true == timer_queue.try_pop(ev)) {
+			if (!g_users[ev.c_id].cultist_state.ABP_DoHeal ||
+				!g_users[ev.target_id].cultist_state.ABP_GetHeal) {
+				continue;
+			}
 			if (ev.wakeup_time > current_time) {
 				std::this_thread::sleep_until(ev.wakeup_time);
 			}
 			switch (ev.event_id) {
 			case EV_HEAL:
-				// timer heal 작업.
-				// 1초마다 게이지 업
-				// 10차면 회복
+				g_users[ev.c_id].heal_gage += 1;
+				if (g_users[ev.c_id].heal_gage < 10) {
+					ev.wakeup_time = std::chrono::system_clock::now() + 1s;
+					ev.event_id = EV_HEAL;
+					timer_queue.push(ev);
+				}
+				else if (g_users[ev.c_id].heal_gage >= 10) {
+					// 락 걸기
+					if (g_users[ev.c_id].cultist_state.CurrentHealth + 10 > 100)
+						g_users[ev.c_id].cultist_state.CurrentHealth = 100;
+					else
+						g_users[ev.c_id].cultist_state.CurrentHealth += 10;
+					g_users[ev.c_id].heal_gage = 0;
+					NoticePacket packet;
+					packet.header = endHealHeader;
+					packet.size = sizeof(NoticePacket);
+					g_users[ev.c_id].do_send_packet(&packet);
+					g_users[ev.target_id].do_send_packet(&packet);
+				}
 				break;
 			}
+		}
+		else
+		{
+			// 큐가 비어 있으면 잠깐 휴식
+			std::this_thread::sleep_for(10ms);
 		}
 	}
 }
@@ -817,6 +845,12 @@ void process_packet(int c_id, char* packet) {
 
 		const int targetId = *targetOpt;
 		std::cout << "[Heal] healer=" << c_id << " target=" << (int)targetId << "\n";
+		if (g_users[c_id].cultist_state.ABP_DoHeal ||
+			g_users[targetId].cultist_state.ABP_GetHeal)
+		{
+			std::cout << "Heal already in progress\n";
+			break;
+		}
 		// location과 rotation을 계산
 		auto moveOpt = GetMovePoint(c_id, targetId);
 		// 두 플레이어에게 이동해야할 위치를 각각 전송
@@ -854,6 +888,13 @@ void process_packet(int c_id, char* packet) {
 		pkt.SpawnRot.yaw = yaw;
 		pkt.isHealer = false;
 		g_users[targetId].do_send_packet(&pkt);
+
+		TIMER_EVENT ev;
+		ev.wakeup_time = std::chrono::system_clock::now() + 1s;
+		ev.c_id = c_id;
+		ev.target_id = targetId;
+		ev.event_id = EV_HEAL;
+		timer_queue.push(ev);
 		break;
 	}
 	case connectionHeader:

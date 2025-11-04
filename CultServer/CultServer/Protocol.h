@@ -38,6 +38,7 @@ constexpr char disappearHeader = 17;
 constexpr char appearHeader = 18;
 constexpr char tryHealHeader = 19;
 constexpr char doHealHeader = 20;
+constexpr char endHealHeader = 21;
 
 //-- room header
 constexpr char requestHeader = 8;
