@@ -27,12 +27,6 @@
 #pragma comment (lib, "WS2_32.LIB")
 using namespace std;
 
-const float VIEW_RANGE = 1000.0f;           // 시야 반경
-const float VIEW_RANGE_SQ = VIEW_RANGE * VIEW_RANGE;
-const float SPHERE_TRACE_RADIUS = 200.0f;
-const float HEAL_GAP = 100.0f;
-const float PI = 3.141592;
-
 SOCKET g_s_socket, g_c_socket;
 EXP_OVER g_a_over;
 HANDLE g_h_iocp = nullptr;
@@ -223,13 +217,12 @@ void RoomWorkerLoop() {
 				pkt.header = leaveHeader;
 			}
 			else {
-				auto& user = g_users[task.c_id];
-				if (user.getRole() == 0) {
+				if (0 == task.role) {
 					pkt.header = (g_rooms[room_id].cultist >= MAX_CULTIST_PER_ROOM) ? leaveHeader : enterHeader;
 					if (pkt.header == enterHeader) 
 						user.room_id = room_id;
 				}
-				else if (user.getRole() == 1) {
+				else if (1 == task.role) {
 					pkt.header = (g_rooms[room_id].police >= MAX_POLICE_PER_ROOM) ? leaveHeader : enterHeader;
 					if (pkt.header == enterHeader) 
 						user.room_id = room_id;
@@ -239,7 +232,6 @@ void RoomWorkerLoop() {
 				}
 			}
 
-			// DB 방식과 동일: EXP_OVER에 담아 IOCP로 post
 			EXP_OVER* eo = new EXP_OVER();
 			std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
 			eo->comp_type = OP_ROOM_ENTER;
@@ -255,8 +247,8 @@ void RoomWorkerLoop() {
 			auto& me = g_users[task.c_id];
 
 			// 카운터, ingame, player_ids 갱신
-			if (me.getRole() == 1) g_rooms[room_id].police++;
-			else if (me.getRole() == 0) g_rooms[room_id].cultist++;
+			if (1 == task.role) g_rooms[room_id].police++;
+			else if (0 == task.role) g_rooms[room_id].cultist++;
 			if (g_rooms[room_id].cultist >= MAX_CULTIST_PER_ROOM &&
 				g_rooms[room_id].police >= MAX_POLICE_PER_ROOM) {
 				g_rooms[room_id].isIngame = true;
@@ -275,7 +267,7 @@ void RoomWorkerLoop() {
 				pkt.header = connectionHeader;
 				pkt.size = sizeof(IdRolePacket);
 				pkt.id = static_cast<uint8_t>(task.c_id);
-				pkt.role = static_cast<uint8_t>(me.getRole());
+				pkt.role = static_cast<uint8_t>(task.role);
 
 				EXP_OVER* eo = new EXP_OVER();
 				std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
@@ -295,7 +287,7 @@ void RoomWorkerLoop() {
 					pkt.header = connectionHeader;
 					pkt.size = sizeof(IdRolePacket);
 					pkt.id = static_cast<uint8_t>(task.c_id);
-					pkt.role = static_cast<uint8_t>(me.getRole());
+					pkt.role = static_cast<uint8_t>(task.role);
 
 					EXP_OVER* eo = new EXP_OVER();
 					std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
@@ -342,13 +334,13 @@ void RoomWorkerLoop() {
 		case RM_DISCONNECT:
 		{
 			if (!g_users.count(task.c_id)) continue;
-			int room_id = g_users[task.c_id].room_id;
+			int room_id = task.room_id;
 			if (room_id < 0 || room_id >= MAX_ROOM) break;
 
-			if (0 == g_users[task.c_id].role) {
+			if (0 == task.role && g_rooms[room_id].cultist >= 0) {
 				g_rooms[room_id].cultist--;
 			}
-			else if (1 == g_users[task.c_id].role) {
+			else if (1 == task.role && g_rooms[room_id].police >= 0) {
 				g_rooms[room_id].police--;
 			}
 
@@ -458,38 +450,84 @@ void HealTimerLoop() {
 	}
 }
 
+void disconnect(int);
 void CommandWorker()
 {
 	while (true)
 	{
-		std::string command;
-		std::getline(std::cin, command);
+		std::string line;
+		std::getline(std::cin, line);
 
-		if (command == "add_ai")
+		if (line.empty())
+			continue;
+
+		std::istringstream iss(line);
+		std::string cmd;
+		iss >> cmd;
+
+		if (cmd == "disconnect")
+		{
+			int target_id;
+			if (iss >> target_id)
+			{
+				if (g_users.count(target_id))
+				{
+					std::cout << "[Command] Forcing disconnect of ID: " << target_id << "\n";
+					disconnect(target_id);
+				}
+				else
+				{
+					std::cout << "[Command] No such user ID: " << target_id << "\n";
+				}
+			}
+			else
+			{
+				std::cout << "[Command] Usage: disconnect <id>\n";
+			}
+		}
+		if (cmd == "add_ai")
 		{
 			int ai_id = client_id++;
-			//InitializeAISession(ai_id);
 			std::cout << "[Command] New AI added. ID: " << ai_id << "\n";
 		}
-		else if (command == "exit")
+		else if (cmd == "exit")
 		{
 			std::cout << "[Command] Exiting server.\n";
 			exit(0);
 		}
 		else
 		{
-			std::cout << "[Command] Unknown command: " << command << "\n";
+			std::cout << "[Command] Unknown command: " << cmd << "\n";
 		}
 	}
 }
 
 void disconnect(int c_id)
 {
-	std::cout << "socket disconnect" << g_users[c_id].c_socket << std::endl;
+	if (!g_users.count(c_id))
+		return;
+	std::cout << "socket disconnect " << c_id << std::endl;
+
+	auto& user = g_users[c_id];
+	if(user.role != -1 && user.room_id != -1)
+	{
+		RoomTask task;
+		task.c_id = c_id;
+		task.type = RM_DISCONNECT;
+		task.role = user.role;
+		task.room_id = user.room_id;
+
+		{
+			std::lock_guard<std::mutex> lk(g_room_mtx);
+			g_room_q.push(std::move(task));
+			g_room_cv.notify_one();
+		}
+	}
+
 	{
 		std::lock_guard<std::mutex> lk(g_logged_mtx);
-		if (!g_users[c_id].account_id.empty())
-			g_logged_in_ids.erase(g_users[c_id].account_id);
+		if (!user.account_id.empty())
+			g_logged_in_ids.erase(user.account_id);
 	}
 	closesocket(g_users[c_id].c_socket);
 	g_users.erase(c_id);
@@ -872,6 +910,7 @@ void process_packet(int c_id, char* packet) {
 		pkt.SpawnLoc = healerPos;
 		pkt.SpawnRot = moveRot;
 		pkt.isHealer = true;
+		g_users[c_id].cultist_state.ABP_DoHeal = true;
 		g_users[c_id].do_send_packet(&pkt);
 
 		double yaw = std::fmod(moveRot.yaw + 180.0, 360.0);
@@ -887,6 +926,7 @@ void process_packet(int c_id, char* packet) {
 		pkt.SpawnLoc = targetPos;
 		pkt.SpawnRot.yaw = yaw;
 		pkt.isHealer = false;
+		g_users[c_id].cultist_state.ABP_GetHeal = true;
 		g_users[targetId].do_send_packet(&pkt);
 
 		TIMER_EVENT ev;
@@ -913,7 +953,7 @@ void process_packet(int c_id, char* packet) {
 	case DisconnectionHeader: 
 	{
 		std::lock_guard<std::mutex> lk(g_room_mtx);
-		g_room_q.push(RoomTask{ c_id, RM_DISCONNECT, 0, -1 });
+		g_room_q.push(RoomTask{ c_id, RM_DISCONNECT, g_users[c_id].role, g_users[c_id].room_id });
 		g_room_cv.notify_one();
 		break;
 	}
@@ -1003,7 +1043,7 @@ void process_packet(int c_id, char* packet) {
 		int room_id = p->room_number;
 		{
 			std::lock_guard<std::mutex> lk(g_room_mtx);
-			g_room_q.push(RoomTask{ c_id, RM_ENTER, 0, room_id });
+			g_room_q.push(RoomTask{ c_id, RM_ENTER, g_users[c_id].role, room_id });
 		}
 		g_room_cv.notify_one();
 		break;
@@ -1033,7 +1073,7 @@ void process_packet(int c_id, char* packet) {
 		int room_id = p->room_number;
 		{
 			std::lock_guard<std::mutex> lk(g_room_mtx);
-			g_room_q.push(RoomTask{ c_id, RM_GAMESTART, 0, room_id });
+			g_room_q.push(RoomTask{ c_id, RM_GAMESTART, g_users[c_id].role, room_id});
 		}
 		g_room_cv.notify_one();
 		break;
@@ -1132,6 +1172,7 @@ void mainLoop(HANDLE h_iocp) {
 			sess.prev_remain = 0;
 			sess.state = ST_FREE;
 			sess.c_socket = g_c_socket;
+			sess.role = -1;
 			sess.room_id = -1;
 			sess.heal_gage = 0;
 			g_users.insert(std::make_pair(new_id, sess));	// 여기 emplace로 바꿀 순 없을까?
@@ -1259,17 +1300,20 @@ int main()
 		InitializeAltarLoc(i);
 	}
 	g_h_iocp = h_iocp;
-	std::thread db_thread{ DBWorkerLoop };
-	db_thread.join();
-	g_db_cv.notify_all();
-	std::thread room_thread{ RoomWorkerLoop };
-	room_thread.join();
-	g_room_cv.notify_all();
-	std::thread timer_thread{ HealTimerLoop };
-	timer_thread.join();
-	//CommandThread.join();
 
+	std::thread db_thread{ DBWorkerLoop };
+	std::thread room_thread{ RoomWorkerLoop };
+	std::thread timer_thread{ HealTimerLoop };
+	std::thread command_thread{ CommandWorker };
 	mainLoop(h_iocp);
+
+	g_db_cv.notify_all();
+	db_thread.join();
+	g_room_cv.notify_all();
+	room_thread.join();
+	timer_thread.join();
+	command_thread.join();
+
 
 	//StopAIWorker();
 	closesocket(g_s_socket);

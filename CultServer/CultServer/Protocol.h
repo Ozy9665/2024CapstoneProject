@@ -16,6 +16,12 @@ constexpr int MAX_PLAYERS_PER_ROOM = 5;
 constexpr int MAX_CULTIST_PER_ROOM = 4;
 constexpr int MAX_POLICE_PER_ROOM = 1;
 
+constexpr float VIEW_RANGE = 1000.0f;           // 시야 반경
+constexpr float VIEW_RANGE_SQ = VIEW_RANGE * VIEW_RANGE;
+constexpr float SPHERE_TRACE_RADIUS = 200.0f;
+constexpr float HEAL_GAP = 100.0f;
+constexpr float PI = 3.141592;
+
 constexpr float baseX = 110.f;
 constexpr float baseY = -1100.f;
 constexpr float baseZ = 2770.f;

@@ -78,7 +78,8 @@ const FPoliceCharacterState& SESSION::getPoliceState() const
 }
 
 void SESSION::setRole(const int r) {
-	role = r;
+	if(role != r)
+		role = r;
 }
 
 int SESSION::getRole() const {

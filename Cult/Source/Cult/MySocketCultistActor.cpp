@@ -45,12 +45,7 @@ void AMySocketCultistActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
     if (ClientSocket != INVALID_SOCKET)
     {
         SendDisconnection();
-        closesocket(ClientSocket);
-        ClientSocket = INVALID_SOCKET;
     }
-
-    WSACleanup();
-    UE_LOG(LogTemp, Log, TEXT("Client socket closed and cleaned up."));
 }
 
 void AMySocketCultistActor::SetClientSocket(SOCKET InSocket, int32 RoomNumber)
@@ -145,6 +140,11 @@ void AMySocketCultistActor::ReceiveData()
                     case doHealHeader:
                     {
                         ProcessDoHeal(Buffer);
+                        break;
+                    }
+                    case endHealHeader:
+                    {
+                        // heal animation Á¾·á
                         break;
                     }
                     default:
@@ -1396,6 +1396,12 @@ void AMySocketCultistActor::SendDisconnection() {
     {
         UE_LOG(LogTemp, Error, TEXT("SendDisconnection failed with error: %ld"), WSAGetLastError());
     }
+
+    closesocket(ClientSocket);
+    ClientSocket = INVALID_SOCKET;
+
+    WSACleanup();
+    UE_LOG(LogTemp, Log, TEXT("Client socket closed and cleaned up."));
 }
 
 void AMySocketCultistActor::CloseConnection() {
