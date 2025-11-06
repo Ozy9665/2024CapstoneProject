@@ -173,7 +173,7 @@ void AAltar::Tick(float DeltaTime)
 		// 파티클 파라미터 업데이트
 		if (QTEParticleComponent)
 		{
-			QTEParticleComponent->SetFloatParameter(FName("User.CurrentAngleNormalized"), NormalizedAngle);
+			QTEParticleComponent->SetFloatParameter(FName("User_CurrentAngleNormalized"), NormalizedAngle);
 		}
 	}
 }
@@ -271,7 +271,6 @@ void AAltar::TriggerNextQTE()
 	QTERotationSpeed = FMath::Lerp(90.0f, 120.0f, RitualGauge / 100.0f);
 	if (QTEParticleComponent)
 	{
-		QTEParticleComponent->SetFloatParameter(FName("RotationSpeed"), QTERotationSpeed);
 		
 		// 성공영역 파라미터 설정
 		
