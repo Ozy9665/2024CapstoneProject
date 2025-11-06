@@ -6,14 +6,17 @@
 #include "Components/BoxComponent.h"
 #include "UObject/ConstructorHelpers.h"
 #include "CultistCharacter.h"
+#include "NiagaraComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Kismet/GameplayStatics.h"
 
 TSet<AActor*> PlayersInAltar;
 
-// Sets default values
+// 생성자
 AAltar::AAltar()
 {
- 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
-	PrimaryActorTick.bCanEverTick = false;
+	// tick 활성화
+	PrimaryActorTick.bCanEverTick = true;
 
 	// 제단 메쉬
 	MeshComp = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComp"));
@@ -33,6 +36,10 @@ AAltar::AAltar()
 	//{
 	//	MeshComp->SetStaticMesh(AltarMesh.Object);
 	//}
+
+	QTEParticleComponent = CreateDefaultSubobject<UNiagaraComponent>(TEXT("QTEParticleComp"));
+	QTEParticleComponent->SetupAttachment(RootComponent);
+
 	NumCultistsInRange = 0;
 
 	bPlayerInRange = false;
@@ -42,6 +49,9 @@ AAltar::AAltar()
 void AAltar::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// tick 활성화
+	SetActorTickEnabled(true);
 	
 	PlayersInAltar.Empty();
 
@@ -70,9 +80,22 @@ void AAltar::BeginPlay()
 	BaseGainRate = 35.0f;
 
 	// 충돌 이벤트 바인드
-	CollisionComp->OnComponentBeginOverlap.AddDynamic(this, &AAltar::OnOverlapBegin);
-	CollisionComp->OnComponentEndOverlap.AddDynamic(this, &AAltar::OnOverlapEnd);
+	if (CollisionComp)
+	{
+		CollisionComp->OnComponentBeginOverlap.AddDynamic(this, &AAltar::OnOverlapBegin);
+		CollisionComp->OnComponentEndOverlap.AddDynamic(this, &AAltar::OnOverlapEnd);
+	}
+	// 나이아가라 초기 비활성화
+	if (QTEParticleComponent)
+	{
+		QTEParticleComponent->Deactivate();
+	}
 
+	// 동적 머터리얼
+	if (MeshComp->GetMaterial(0))
+	{
+		AltarMID = MeshComp->CreateDynamicMaterialInstance(0, MeshComp->GetMaterial(0));
+	}
 }
 
 
@@ -110,7 +133,14 @@ void AAltar::OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherActo
 		NumCultistsInRange = PlayersInAltar.Num();
 		Cultist->SetCurrentAltar(nullptr);
 		//NumCultistsInRange = FMath::Max(0, NumCultistsInRange - 1);	// 최소 0
-		UE_LOG(LogTemp, Warning, TEXT("Cultist left the altar area"));
+
+		// QTE중지
+		if (Cultist == CurrentPerformingCultist)
+		{
+			StopRitualQTE(Cultist);
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("Cultist left. Total : %d"), NumCultistsInRange);
 	}
 }
 
@@ -118,6 +148,28 @@ void AAltar::OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherActo
 void AAltar::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	// 게이지 자동 충전
+	if(NumCultistsInRange > 0)
+	{
+		// QTE 활성화되지 않았을 때 or 항상 충전
+		
+		// 항상 충전
+		AddToRitualGauge(SlowAutoChargeRate * NumCultistsInRange * DeltaTime);
+	}
+
+	// QTE 회전
+	if (bIsQTEActive)
+	{
+		// 현 각도 업데이트(0~360)
+		QTECurrentAngle = FMath::Fmod(QTECurrentAngle + (QTERotationSpeed * DeltaTime), 360.0f);
+
+		// 파티클 파라미터 업데이트
+		if (QTEParticleComponent)
+		{
+			QTEParticleComponent->SetFloatParameter(FName("CurrentAngle"), QTECurrentAngle);
+		}
+	}
 }
 
 
@@ -140,3 +192,120 @@ void AAltar::IncreaseRitualGauge()
 	}
 }
 
+void AAltar::AddToRitualGauge(float Amount)
+{
+	RitualGauge += Amount;
+	RitualGauge = FMath::Clamp(RitualGauge, 0.0f, 100.f);
+
+	// 시각효과 업데이트
+	if (AltarMID)
+	{
+		AltarMID->SetScalarParameterValue(FName("Progress"), RitualGauge / 100.0f);
+	}
+	if (QTEParticleComponent)
+	{
+		// ProgressColor 파라미터로
+		// FLinearColor NewColor = ( 게이지 따라 색상 계산
+		// QTEParticleComponent->SetColorParameter(FName("ProgressColor"), NewColor);
+	}
+	if (RitualGauge >= 100.0f)
+	{
+		CheckRitualComplete();
+	}
+}
+
+void AAltar::CheckRitualComplete()
+{
+	ACultGameMode* GameMode = Cast<ACultGameMode>(GetWorld()->GetAuthGameMode());
+	if (GameMode)
+	{
+		GameMode->CheckRitualComlete(RitualGauge);
+	}
+}
+
+// 의식 시작 시 호출
+
+void AAltar::StartRitualQTE(ACultistCharacter* PerformingCultist)
+{
+	// 이미 QTE중이면 return
+	if (CurrentPerformingCultist != nullptr)return;
+
+	CurrentPerformingCultist = PerformingCultist;
+
+	// 다음 QTE타이머 시작
+	GetWorld()->GetTimerManager().SetTimer(QTETriggerTimerHandle, this, &AAltar::TriggerNextQTE, QTEInterval, false);
+}
+
+void AAltar::StopRitualQTE(ACultistCharacter* PerformingCultist)
+{
+	// 의식 중단 시 QTE수행중이던 신도인지
+	if (PerformingCultist != CurrentPerformingCultist) return;
+
+	CurrentPerformingCultist = nullptr;
+	bIsQTEActive = false;
+
+	if (QTEParticleComponent)
+	{
+		QTEParticleComponent->Deactivate();
+	}
+	// 타이머 정지
+	GetWorld()->GetTimerManager().ClearTimer(QTETriggerTimerHandle);
+}
+
+// 다음QTE활성화
+void AAltar::TriggerNextQTE()
+{
+	// QTE활성화 직전 나갔다면
+	if (CurrentPerformingCultist == nullptr)return;
+
+	bIsQTEActive = true;
+	QTECurrentAngle = 0.0f;	// 각도 초기화
+
+	//QTE 속도 조절
+	QTERotationSpeed = FMath::Lerp(90.0f, 120.0f, RitualGauge / 100.0f);
+	if (QTEParticleComponent)
+	{
+		QTEParticleComponent->SetFloatParameter(FName("RotationSpeed"), QTERotationSpeed);
+		
+		// 성공영역 파라미터 설정
+		
+
+		QTEParticleComponent->Activate(true);
+	}
+}
+
+// Cultist가 입력 시 호출
+void AAltar::OnPlayerInput()
+{
+	// QTE활성화 상태일 때만
+	if (!bIsQTEActive)return;
+
+	bool bSuccess = (QTECurrentAngle >= QTESuccessZoneStartAngle && QTECurrentAngle <= QTESuccessZoneEndAngle);
+
+	if (bSuccess)
+	{
+		AddToRitualGauge(QTEBonus);
+
+		// 성공 파티클 스폰
+	}
+	else
+	{
+		AddToRitualGauge(-QTEPenalty);
+
+		// 실패 파티클
+	}
+
+	// QTE 1회 처리 완료
+	bIsQTEActive = false;
+	if (QTEParticleComponent)
+	{
+		QTEParticleComponent->Deactivate();
+	}
+	// 다음 QTE 타이머
+	if (CurrentPerformingCultist != nullptr)
+	{
+		GetWorld()->GetTimerManager().SetTimer(
+			QTETriggerTimerHandle, this, &AAltar::TriggerNextQTE, QTEInterval, false
+		);
+	}
+}

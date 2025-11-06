@@ -7,6 +7,8 @@
 #include "GameFramework/Actor.h"
 #include "Altar.generated.h"
 
+class ACultistCharacter;
+class UNiagaraComponent;
 
 
 UCLASS()
@@ -24,6 +26,10 @@ protected:
 
 
 public:	
+	// Called every frame
+	virtual void Tick(float DeltaTime) override;
+	
+	
 	// Property
 	
 	// 메쉬
@@ -34,13 +40,53 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	class UBoxComponent* CollisionComp;
 
+	// qte 및 vfx
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	UNiagaraComponent* QTEParticleComponent;
+
+	// 제단 머터리얼
+	UPROPERTY()
+	class UMaterialInstanceDynamic* AltarMID;
+
 	// 영역 안 체크
 	bool bPlayerInRange;
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Ritual")
 	int NumCultistsInRange = 0;
 
+	// 기본 게이지 증가 변수
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ritual")
+	float SlowAutoChargeRate = 0.5f;
 
+	// qte 로직 변수들
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Ritual | QTE")
+	bool bIsQTEActive = false;	// qte 활성화 여부
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ritual | QTE")
+	float QTECurrentAngle = 0.0f;	// 0~360 
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual | QTE")
+	float QTERotationSpeed = 90.0f;	// 초당 회전 각도
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual | QTE")
+	float QTESuccessZoneStartAngle = 330.0f; // 성공영역 시작 각도
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual | QTE")
+	float QTESuccessZoneEndAngle = 359.0f;	// 성공영역 끝 각도
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual | QTE")
+	float QTEBonus = 10.0f;	// 성공 시 게이지
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual | QTE")
+	float QTEPenalty = 5.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual | QTE")
+	float QTEInterval = 5.0f;	// 다음 QTE까지의 시간
+
+	FTimerHandle QTETriggerTimerHandle;
+
+	UPROPERTY()
+	ACultistCharacter* CurrentPerformingCultist;
 
 	// 충돌처리
 	// OvelappedComp => 콜리전 컴포넌트 => 이 이벤트를 발생 => 제단의 콜리전박스
@@ -57,15 +103,18 @@ public:
 	void OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
 		UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
-
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
-
-
-
 	// 의식
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ritual")
 	float RitualGauge = 0.0f;
+
+	UFUNCTION(BlueprintCallable, Category = "Ritual")
+	void AddToRitualGauge(float Amount);
+
+	void CheckRitualComplete();
+
+
+
+
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ritual")
 	float BaseGainRate = 35.0f;
@@ -75,6 +124,20 @@ public:
 	void IncreaseRitualGauge();
 
 	FTimerHandle DisableTimerHandle;
+
+	// QTE 함수
+	UFUNCTION()
+	void StartRitualQTE(ACultistCharacter* PerformingCultist);
+
+	UFUNCTION()
+	void StopRitualQTE(ACultistCharacter* PerformingCultist);
+
+	UFUNCTION()
+	void OnPlayerInput();
+
+	UFUNCTION()
+	void TriggerNextQTE();
+
 
 	//UPROPERTY(EditDefaultsOnly, Category="Effects")
 	//TSubclassOf<class UMatineeCameraShake> EarthquakeEffect;

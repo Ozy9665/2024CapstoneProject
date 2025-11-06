@@ -294,8 +294,12 @@ void ACultistCharacter::StartRitual()
 	if (!bIsPerformingRitual)
 	{
 		bIsPerformingRitual = true;
-		TaskRitualProgress = 0.0f;
-		GetWorld()->GetTimerManager().SetTimer(RitualTimerHandle, this, &ACultistCharacter::PerformRitual, 0.1f, true);
+		//TaskRitualProgress = 0.0f;
+		//GetWorld()->GetTimerManager().SetTimer(RitualTimerHandle, this, &ACultistCharacter::PerformRitual, 0.1f, true);
+		
+		CurrentAltar->StartRitualQTE(this);
+		
+		
 		UE_LOG(LogTemp, Warning, TEXT("Ritual Started."));
 
 	}
@@ -304,18 +308,15 @@ void ACultistCharacter::StartRitual()
 		UE_LOG(LogTemp, Warning, TEXT("Already Performing.."));
 	}
 
-
-
-
-	if (TaskRitualWidget)
-	{
-		TaskRitualWidget->SetVisibility(ESlateVisibility::Visible);
-	}
-	if (!GetWorld()->GetTimerManager().IsTimerActive(SkillCheckTimerHandle))
-	{
-		GetWorld()->GetTimerManager().SetTimer(SkillCheckTimerHandle, this, &ACultistCharacter::StartNextSkillCheck, SkilCheckIntervalTime, false);
-		UE_LOG(LogTemp, Warning, TEXT("SkillCheck Timer Set"));
-	}
+	//if (TaskRitualWidget)
+	//{
+	//	TaskRitualWidget->SetVisibility(ESlateVisibility::Visible);
+	//}
+	//if (!GetWorld()->GetTimerManager().IsTimerActive(SkillCheckTimerHandle))
+	//{
+	//	GetWorld()->GetTimerManager().SetTimer(SkillCheckTimerHandle, this, &ACultistCharacter::StartNextSkillCheck, SkilCheckIntervalTime, false);
+	//	UE_LOG(LogTemp, Warning, TEXT("SkillCheck Timer Set"));
+	//}
 	//StartNextSkillCheck();
 	//GetCharacterMovement()->DisableMovement();
 
@@ -346,23 +347,32 @@ void ACultistCharacter::StopRitual()
 void ACultistCharacter::CancelRitual()
 {
 	UE_LOG(LogTemp, Warning, TEXT("Ritual Canceled"));
+	if (!bIsPerformingRitual)return;
+
 
 	bIsPerformingRitual = false;
 
-	GetWorld()->GetTimerManager().ClearTimer(RitualTimerHandle);
-	GetWorld()->GetTimerManager().ClearTimer(TaskRitualTimerHandle);
+	//GetWorld()->GetTimerManager().ClearTimer(RitualTimerHandle);
+	//GetWorld()->GetTimerManager().ClearTimer(TaskRitualTimerHandle);
 
-	if (TaskRitualWidget)
+	//if (TaskRitualWidget)
+	//{
+	//	TaskRitualWidget->SetVisibility(ESlateVisibility::Hidden);
+	//	TaskRitualProgress = 0.0f;
+	//}
+	//// 스킬체크 위젯 제거
+	//if (SkillCheckWidget)
+	//{
+	//	SkillCheckWidget->RemoveFromParent();
+	//	SkillCheckWidget = nullptr;
+	//}
+
+	// QTE중단
+	if (CurrentAltar)
 	{
-		TaskRitualWidget->SetVisibility(ESlateVisibility::Hidden);
-		TaskRitualProgress = 0.0f;
+		CurrentAltar->StopRitualQTE(this);
 	}
-	// 스킬체크 위젯 제거
-	if (SkillCheckWidget)
-	{
-		SkillCheckWidget->RemoveFromParent();
-		SkillCheckWidget = nullptr;
-	}
+
 
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 }
@@ -962,9 +972,9 @@ void ACultistCharacter::LookUpCamera(float Value)
 
 void ACultistCharacter::TriggerSkillCheckInput()
 {
-	if (SkillCheckWidget)
+	if (bIsPerformingRitual && CurrentAltar)
 	{
-		SkillCheckWidget->OnInputPressed();
+		CurrentAltar->OnPlayerInput();
 	}
 }
 
