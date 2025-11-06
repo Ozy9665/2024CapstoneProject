@@ -145,7 +145,7 @@ void ACultGameMode::SpawnAltars()
 
 		if (SpawnedAltar)
 		{
-			SpawnedAltar->SetActorScale3D(FVector(5.0f));
+			SpawnedAltar->SetActorScale3D(FVector(3.0f));
 			UE_LOG(LogTemp, Warning, TEXT("Spawned Altar[%d] at %s"), i, *GI->RutialSpawnLocations[i].ToString());
 		}
 		else

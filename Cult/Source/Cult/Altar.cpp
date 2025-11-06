@@ -6,6 +6,7 @@
 #include "Components/BoxComponent.h"
 #include "UObject/ConstructorHelpers.h"
 #include "CultistCharacter.h"
+#include "GameFramework/Controller.h"
 #include "NiagaraComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Kismet/GameplayStatics.h"
@@ -164,10 +165,15 @@ void AAltar::Tick(float DeltaTime)
 		// 현 각도 업데이트(0~360)
 		QTECurrentAngle = FMath::Fmod(QTECurrentAngle + (QTERotationSpeed * DeltaTime), 360.0f);
 
+		// 값 정규화
+		float NormalizedAngle = QTECurrentAngle / 360.0f;
+
+		UE_LOG(LogTemp, Warning, TEXT("Sending Angle to Niagara: %f"), NormalizedAngle);
+
 		// 파티클 파라미터 업데이트
 		if (QTEParticleComponent)
 		{
-			QTEParticleComponent->SetFloatParameter(FName("CurrentAngle"), QTECurrentAngle);
+			QTEParticleComponent->SetFloatParameter(FName("User.CurrentAngleNormalized"), NormalizedAngle);
 		}
 	}
 }
@@ -278,19 +284,38 @@ void AAltar::TriggerNextQTE()
 void AAltar::OnPlayerInput()
 {
 	// QTE활성화 상태일 때만
-	if (!bIsQTEActive)return;
+	if (!bIsQTEActive || !CurrentPerformingCultist)return;
 
-	bool bSuccess = (QTECurrentAngle >= QTESuccessZoneStartAngle && QTECurrentAngle <= QTESuccessZoneEndAngle);
+	// 성공영역의 시작 각도 0~1.0
+	float ZoneStartNormalized = QTECurrentAngle / 360.0f;
+
+	// 성공영역 너비 (0.1)
+	float ZoneWidthNormalized = 0.1f;
+
+	// 정면 계산	( 카메라방향, 컨트롤러의 회전값)
+	AController* PlayerController = CurrentPerformingCultist->GetController();
+	if (!PlayerController)return;
+
+	FVector PlayerFacingVector = PlayerController->GetControlRotation().Vector().GetSafeNormal();
+	float PlayerFacingDegrees = FMath::RadiansToDegrees(FMath::Atan2(PlayerFacingVector.Y, PlayerFacingVector.X));
+	if (PlayerFacingDegrees < 0.0f) { PlayerFacingDegrees += 360.0f; }
+	float PlayerFacingNormalized = PlayerFacingDegrees / 360.0f;
+
+	// 판정 - 입력 시 정면에 회전하는 성공영역이 있는지
+	float Delta = FMath::Fmod((PlayerFacingNormalized - ZoneStartNormalized) + 1.0f, 1.0f);
+	bool bSuccess = (Delta >= 0.0f && Delta <= ZoneWidthNormalized);
+
 
 	if (bSuccess)
 	{
 		AddToRitualGauge(QTEBonus);
-
+		UE_LOG(LogTemp, Warning, TEXT("QTE Success"));
 		// 성공 파티클 스폰
 	}
 	else
 	{
 		AddToRitualGauge(-QTEPenalty);
+		UE_LOG(LogTemp, Warning, TEXT("QTE Success"));
 
 		// 실패 파티클
 	}
