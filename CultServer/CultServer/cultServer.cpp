@@ -35,21 +35,24 @@ std::atomic<int> client_id = 0;
 std::unordered_map<int, SESSION> g_users;
 std::array<room, MAX_ROOM> g_rooms;
 
-// 제단 위치
-std::array<std::array<int, 5>, MAX_ROOM> altar_locs{};
+std::array<std::array<altar, 5>, MAX_ROOM> g_altars{};
 
-void InitializeAltarLoc(int room_num) {
-	if (room_num < 0 || room_num >= static_cast<int>(altar_locs.size())) {
+void InitializeAltars(int room_num) {
+	if (room_num < 0 || room_num >= static_cast<int>(g_altars.size())) {
 		return;
 	}
 
-	for (int i = 0; i < 5; ++i) {
-		altar_locs[room_num][i] = i;
-	}
-
+	std::array<int, 5> order{ 0, 1, 2, 3, 4 };
 	for (int i = 0; i < 4; ++i) {
 		int j = i + rand() % (5 - i);
-		std::swap(altar_locs[room_num][i], altar_locs[room_num][j]);
+		std::swap(order[i], order[j]);
+	}
+
+	for (int i = 0; i < 5; ++i) {
+		g_altars[room_num][i].loc = kPredefinedLocations[order[i]];
+		g_altars[room_num][i].isActivated = false;
+		g_altars[room_num][i].id = i;
+		g_altars[room_num][i].gage = 0;
 	}
 }
 
@@ -320,10 +323,11 @@ void RoomWorkerLoop() {
 			pkt.header = ritualHeader;
 			pkt.size = sizeof(RitualPacket);
 
-			const auto& arr = altar_locs[room_id];
-			pkt.Loc1 = kPredefinedLocations[arr[0]];
-			pkt.Loc2 = kPredefinedLocations[arr[1]];
-			pkt.Loc3 = kPredefinedLocations[arr[2]];
+			const auto& altars = g_altars[room_id];
+
+			pkt.Loc1 = altars[0].loc;
+			pkt.Loc2 = altars[1].loc;
+			pkt.Loc3 = altars[2].loc;
 
 			EXP_OVER* eo = new EXP_OVER();
 			std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
@@ -1297,7 +1301,7 @@ int main()
 
 	for (int i = 0; i < 100; ++i) {
 		g_rooms[i].room_id = i;
-		InitializeAltarLoc(i);
+		InitializeAltars(i);
 	}
 	g_h_iocp = h_iocp;
 

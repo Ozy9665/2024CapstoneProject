@@ -73,6 +73,8 @@ public:
 	void HideCharacter(int, bool);
 	void SendTryHeal();
 	void ProcessDoHeal(const char* Buffer);
+	void SendStartRitual();
+	void ProcessRitualData(const char* Buffer);
 	void SendDisconnection();
 	void CloseConnection();
 	void SafeDestroyCharacter(int PlayerID);

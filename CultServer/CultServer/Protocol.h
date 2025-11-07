@@ -45,6 +45,9 @@ constexpr char appearHeader = 18;
 constexpr char tryHealHeader = 19;
 constexpr char doHealHeader = 20;
 constexpr char endHealHeader = 21;
+constexpr char ritualStartHeader = 22;
+constexpr char ritualDataHeader = 23;
+constexpr char ritualendHeader = 24;
 
 //-- room header
 constexpr char requestHeader = 8;
@@ -67,6 +70,18 @@ constexpr char ST_DISABLE{ 3 };
 
 #pragma pack(push, 1)
 
+struct FVector {
+	double x;
+	double y;
+	double z;
+};
+
+struct FRotator {
+	double pitch;
+	double yaw;
+	double roll;
+};
+
 struct room {
 	uint8_t room_id;
 	uint8_t police = 0;
@@ -76,6 +91,13 @@ struct room {
 		UINT8_MAX, UINT8_MAX, UINT8_MAX,
 		UINT8_MAX, UINT8_MAX
 	};
+};
+
+struct altar {
+	FVector loc;
+	bool isActivated;
+	int id;
+	int gage;
 };
 
 enum COMP_TYPE {
@@ -238,18 +260,6 @@ struct RoomNumberPacket {
 struct NoticePacket {
 	uint8_t header;
 	uint8_t size;
-};
-
-struct FVector {
-	double x;
-	double y;
-	double z;
-};
-
-struct FRotator {
-	double pitch;
-	double yaw;
-	double roll;
 };
 
 struct SkillPacket {

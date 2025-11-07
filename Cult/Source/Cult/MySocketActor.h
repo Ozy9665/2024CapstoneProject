@@ -265,6 +265,9 @@ constexpr char appearHeader = 18;
 constexpr char tryHealHeader = 19;
 constexpr char doHealHeader = 20;
 constexpr char endHealHeader = 21;
+constexpr char ritualStartHeader = 22;
+constexpr char ritualDataHeader = 23;
+constexpr char ritualendHeader = 24;
 
 //-- room header
 constexpr char requestHeader = 8;
