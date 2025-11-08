@@ -77,6 +77,7 @@ public:
 	void SendRitualSkillCheck(uint8_t ritual_id, uint8_t reason);
 	void SendEndRitual(uint8_t ritual_id);
 	void ProcessRitualData(const char* Buffer);
+	void ProcessRitualEnd(const char* Buffer);
 	void SendDisconnection();
 	void CloseConnection();
 	void SafeDestroyCharacter(int PlayerID);

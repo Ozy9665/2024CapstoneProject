@@ -1337,6 +1337,7 @@ void AMySocketCultistActor::ProcessDoHeal(const char* Buffer) {
 }
 
 void AMySocketCultistActor::SendStartRitual(uint8_t ritual_id) {
+    // 제단 시작
     if (ClientSocket != INVALID_SOCKET)
     {
         RitualNoticePacket Packet;
@@ -1358,6 +1359,8 @@ void AMySocketCultistActor::SendStartRitual(uint8_t ritual_id) {
 }
 
 void AMySocketCultistActor::SendRitualSkillCheck(uint8_t ritual_id, uint8_t reason) {
+    // reason 1 -> skill check suc
+    // reason 2 -> skill check fail
     if (ClientSocket != INVALID_SOCKET)
     {
         RitualNoticePacket Packet;
@@ -1369,7 +1372,7 @@ void AMySocketCultistActor::SendRitualSkillCheck(uint8_t ritual_id, uint8_t reas
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RitualNoticePacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
-            UE_LOG(LogTemp, Error, TEXT("SendStartRitual failed with error: %ld"), WSAGetLastError());
+            UE_LOG(LogTemp, Error, TEXT("SendRitualSkillCheck failed with error: %ld"), WSAGetLastError());
         }
     }
     else
@@ -1379,6 +1382,7 @@ void AMySocketCultistActor::SendRitualSkillCheck(uint8_t ritual_id, uint8_t reas
 }
 
 void AMySocketCultistActor::SendEndRitual(uint8_t ritual_id) {
+    // 제단 손 떼기, 100퍼센트
     if (ClientSocket != INVALID_SOCKET)
     {
         RitualNoticePacket Packet;
@@ -1390,7 +1394,7 @@ void AMySocketCultistActor::SendEndRitual(uint8_t ritual_id) {
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RitualNoticePacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
-            UE_LOG(LogTemp, Error, TEXT("SendStartRitual failed with error: %ld"), WSAGetLastError());
+            UE_LOG(LogTemp, Error, TEXT("SendEndRitual failed with error: %ld"), WSAGetLastError());
         }
     }
     else
@@ -1407,8 +1411,13 @@ void AMySocketCultistActor::ProcessRitualData(const char* Buffer) {
     const int gage = Received.gage;
 
     AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gage]() {
-        // gage 처리
+        // gage 처리 제단의 게이지를 수정
+
         });
+}
+
+void AMySocketCultistActor::ProcessRitualEnd(const char* Buffer) {
+    // 제단 100퍼센트 완료
 }
 
 void AMySocketCultistActor::HandleMontageSitNotifyBegin(FName NotifyName, const FBranchingPointNotifyPayload& Payload)
