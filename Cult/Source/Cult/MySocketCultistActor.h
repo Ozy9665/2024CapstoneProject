@@ -73,7 +73,9 @@ public:
 	void HideCharacter(int, bool);
 	void SendTryHeal();
 	void ProcessDoHeal(const char* Buffer);
-	void SendStartRitual();
+	void SendStartRitual(uint8_t ritual_id);
+	void SendRitualSkillCheck(uint8_t ritual_id, uint8_t reason);
+	void SendEndRitual(uint8_t ritual_id);
 	void ProcessRitualData(const char* Buffer);
 	void SendDisconnection();
 	void CloseConnection();

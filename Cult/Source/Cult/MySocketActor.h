@@ -226,6 +226,26 @@ struct MovePacket {
 	bool isHealer;
 };
 
+struct RitualNoticePacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
+	uint8_t ritual_id;
+	uint8_t reason;
+	// reason 0 -> start
+	// reason 1 -> skill check suc
+	// reason 2 -> skill check fail
+	// reason 3 -> end
+};
+
+struct RitualGagePacket {
+	uint8_t header;
+	uint8_t size;
+	uint8_t id;
+	uint8_t ritual_id;
+	int gage;
+};
+
 #pragma pack(pop)
 
 UCLASS()
@@ -267,7 +287,7 @@ constexpr char doHealHeader = 20;
 constexpr char endHealHeader = 21;
 constexpr char ritualStartHeader = 22;
 constexpr char ritualDataHeader = 23;
-constexpr char ritualendHeader = 24;
+constexpr char ritualEndHeader = 24;
 
 //-- room header
 constexpr char requestHeader = 8;

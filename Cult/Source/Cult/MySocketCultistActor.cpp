@@ -1336,6 +1336,81 @@ void AMySocketCultistActor::ProcessDoHeal(const char* Buffer) {
         
 }
 
+void AMySocketCultistActor::SendStartRitual(uint8_t ritual_id) {
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        RitualNoticePacket Packet;
+        Packet.header = ritualStartHeader;
+        Packet.size = sizeof(RitualNoticePacket);
+        Packet.id = MyCharacter->my_ID;
+        Packet.ritual_id = ritual_id;
+        Packet.reason = 0;
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RitualNoticePacket), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendStartRitual failed with error: %ld"), WSAGetLastError());
+        }
+    }
+    else
+    {
+        CloseConnection();
+    }
+}
+
+void AMySocketCultistActor::SendRitualSkillCheck(uint8_t ritual_id, uint8_t reason) {
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        RitualNoticePacket Packet;
+        Packet.header = ritualDataHeader;
+        Packet.size = sizeof(RitualNoticePacket);
+        Packet.id = MyCharacter->my_ID;
+        Packet.ritual_id = ritual_id;
+        Packet.reason = reason;
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RitualNoticePacket), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendStartRitual failed with error: %ld"), WSAGetLastError());
+        }
+    }
+    else
+    {
+        CloseConnection();
+    }
+}
+
+void AMySocketCultistActor::SendEndRitual(uint8_t ritual_id) {
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        RitualNoticePacket Packet;
+        Packet.header = ritualEndHeader;
+        Packet.size = sizeof(RitualNoticePacket);
+        Packet.id = MyCharacter->my_ID;
+        Packet.ritual_id = ritual_id;
+        Packet.reason = 3;
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RitualNoticePacket), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendStartRitual failed with error: %ld"), WSAGetLastError());
+        }
+    }
+    else
+    {
+        CloseConnection();
+    }
+}
+
+void AMySocketCultistActor::ProcessRitualData(const char* Buffer) {
+    RitualGagePacket Received;
+    memcpy(&Received, Buffer, sizeof(RitualGagePacket));
+
+    const uint8_t ritual_id = Received.ritual_id;
+    const int gage = Received.gage;
+
+    AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gage]() {
+        // gage Ã³¸®
+        });
+}
+
 void AMySocketCultistActor::HandleMontageSitNotifyBegin(FName NotifyName, const FBranchingPointNotifyPayload& Payload)
 {
     if (!MyCharacter) return;
