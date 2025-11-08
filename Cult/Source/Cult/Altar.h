@@ -138,6 +138,11 @@ public:
 	UFUNCTION()
 	void TriggerNextQTE();
 
+	// 제단 id - 추후 레벨에서 지정 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ritual")
+	int32 AltarID = 0;
+
+	
 
 	//UPROPERTY(EditDefaultsOnly, Category="Effects")
 	//TSubclassOf<class UMatineeCameraShake> EarthquakeEffect;

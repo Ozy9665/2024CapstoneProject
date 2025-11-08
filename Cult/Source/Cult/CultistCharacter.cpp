@@ -245,6 +245,23 @@ void ACultistCharacter::ToggleCrouch()
 	}
 }
 
+// 의식 성공여부 함수 호출
+void ACultistCharacter::NotifySkillCheckResult(bool bSuccess)
+{
+
+	if (MySocketCultistActor && CurrentAltar)
+	{
+		if (bSuccess)
+		{
+			MySocketCultistActor->SendRitualSkillCheck(CurrentAltar->AltarID, 1);
+		}
+		else
+		{
+			MySocketCultistActor->SendRitualSkillCheck(CurrentAltar->AltarID, 2);
+		}
+	}
+}
+
 void ACultistCharacter::PerformRitual()
 {
 	if (!bIsPerformingRitual) return;
@@ -298,7 +315,10 @@ void ACultistCharacter::StartRitual()
 		//GetWorld()->GetTimerManager().SetTimer(RitualTimerHandle, this, &ACultistCharacter::PerformRitual, 0.1f, true);
 		
 		CurrentAltar->StartRitualQTE(this);
-		
+		if (MySocketCultistActor)
+		{
+			MySocketCultistActor->SendStartRitual(CurrentAltar->AltarID);
+		}
 		
 		UE_LOG(LogTemp, Warning, TEXT("Ritual Started."));
 
@@ -371,8 +391,12 @@ void ACultistCharacter::CancelRitual()
 	if (CurrentAltar)
 	{
 		CurrentAltar->StopRitualQTE(this);
+		if (MySocketCultistActor)
+		{
+			MySocketCultistActor->SendEndRitual(CurrentAltar->AltarID);
+		}
 	}
-
+	
 
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 }

@@ -9,6 +9,7 @@
 #include "GameFramework/Controller.h"
 #include "NiagaraComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "MySocketCultistActor.h"
 #include "Kismet/GameplayStatics.h"
 
 TSet<AActor*> PlayersInAltar;
@@ -304,6 +305,11 @@ void AAltar::OnPlayerInput()
 	float Delta = FMath::Fmod((PlayerFacingNormalized - ZoneStartNormalized) + 1.0f, 1.0f);
 	bool bSuccess = (Delta >= 0.0f && Delta <= ZoneWidthNormalized);
 
+
+	if (CurrentPerformingCultist)
+	{
+		CurrentPerformingCultist->NotifySkillCheckResult(bSuccess);
+	}
 
 	if (bSuccess)
 	{

@@ -60,6 +60,7 @@ public:
 	void StartRitual() override;
 	void StopRitual() override;
 	void CancelRitual();
+	void NotifySkillCheckResult(bool bSuccess);
 
 	// 의식중 여부
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ritual")
