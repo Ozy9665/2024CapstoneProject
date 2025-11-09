@@ -1408,7 +1408,7 @@ void AMySocketCultistActor::ProcessRitualData(const char* Buffer) {
     memcpy(&Received, Buffer, sizeof(RitualGagePacket));
 
     const uint8_t ritual_id = Received.ritual_id;
-    const int gage = Received.gage;
+    const int gage = Received.gauge;
 
     AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gage]() {
         // gage 처리 제단의 게이지를 수정

@@ -324,7 +324,6 @@ void RoomWorkerLoop() {
 			pkt.size = sizeof(RitualPacket);
 
 			const auto& altars = g_altars[room_id];
-
 			pkt.Loc1 = altars[0].loc;
 			pkt.Loc2 = altars[1].loc;
 			pkt.Loc3 = altars[2].loc;
@@ -939,6 +938,110 @@ void process_packet(int c_id, char* packet) {
 		ev.target_id = targetId;
 		ev.event_id = EV_HEAL;
 		timer_queue.push(ev);
+		break;
+	}
+	case ritualStartHeader: 
+	{
+		auto* p = reinterpret_cast<RitualNoticePacket*>(packet);
+		if (p->size != sizeof(RitualNoticePacket)) {
+			std::cout << "Invalid RitualNoticePacket size\n";
+			break;
+		}
+
+		int room_id = g_users[c_id].room_id;
+		if (room_id < 0 || room_id >= MAX_ROOM) 
+			break;
+
+		uint8_t ritual_id = p->ritual_id;
+		if (ritual_id >= 5) 
+			break;
+
+		auto& altar = g_altars[room_id][ritual_id];
+		altar.isActivated = true;
+		altar.time = std::chrono::system_clock::now();
+
+		std::cout << "[RitualStart] cultist=" << c_id << " altar=" << (int)ritual_id << "\n";
+		break;
+	}
+	case ritualDataHeader:
+	{
+		auto* p = reinterpret_cast<RitualNoticePacket*>(packet);
+		if (p->size != sizeof(RitualNoticePacket)) {
+			std::cout << "Invalid RitualNoticePacket size\n";
+			break;
+		}
+
+		int room_id = g_users[c_id].room_id;
+		if (room_id < 0 || room_id >= MAX_ROOM) 
+			break;
+		uint8_t ritual_id = p->ritual_id;
+		if (ritual_id >= 5) 
+			break;
+
+		auto& altar = g_altars[room_id][ritual_id];
+
+		if (!altar.isActivated)
+			break;
+
+		auto now = std::chrono::system_clock::now();
+		auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - altar.time).count();
+		if (elapsed > 0) {
+			int add = static_cast<int>(elapsed) * 10;
+			altar.gage = std::min(100, altar.gage + add);
+			altar.time = now;
+		}
+		// reason: 1 -> 성공 / 2 -> 실패
+		if (p->reason == 1)
+			altar.gage = std::min(100, altar.gage + 10);
+		else if (p->reason == 2)
+			altar.gage = std::max(0, altar.gage - 10);		
+
+		RitualGagePacket gauge{};
+		gauge.header = ritualDataHeader;
+		gauge.size = sizeof(RitualGagePacket);
+		gauge.ritual_id = ritual_id;
+		gauge.gauge = altar.gage;
+		g_users[c_id].do_send_packet(&gauge);
+
+		// broadcast_in_room(c_id, room_id, &gauge);
+		std::cout << "[RitualData] altar=" << (int)ritual_id << " gage=" << altar.gage << "\n";
+		break;
+	}
+	case ritualEndHeader:
+	{
+		auto* p = reinterpret_cast<RitualNoticePacket*>(packet);
+		if (p->size != sizeof(RitualNoticePacket)) {
+			std::cout << "Invalid RitualNoticePacket size\n";
+			break;
+		}
+
+		int room_id = g_users[c_id].room_id;
+		if (room_id < 0 || room_id >= MAX_ROOM) 
+			break;
+
+		uint8_t ritual_id = p->ritual_id;
+		if (ritual_id >= 5) 
+			break;
+
+		auto& altar = g_altars[room_id][ritual_id];
+		auto now = std::chrono::system_clock::now();
+		auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - altar.time).count();
+		if (elapsed > 0) {
+			int add = static_cast<int>(elapsed) * 10;
+			altar.gage = std::min(100, altar.gage + add);
+			altar.time = now;
+		}
+		if (altar.gage >= 100) {
+			RitualNoticePacket packet;
+			packet.header = ritualEndHeader;
+			packet.size = sizeof(RitualNoticePacket);
+			packet.id = c_id;
+			packet.ritual_id = ritual_id;
+			packet.reason = 3;
+			g_users[c_id].do_send_packet(&packet);
+		}
+		altar.isActivated = false;
+		std::cout << "[RitualEnd] cultist=" << c_id << " altar=" << (int)ritual_id << "\n";
 		break;
 	}
 	case connectionHeader:

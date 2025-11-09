@@ -325,7 +325,7 @@ struct RitualGagePacket {
 	uint8_t size;
 	uint8_t id;
 	uint8_t ritual_id;
-	int gage;
+	int gauge;
 };
 
 #pragma pack(pop)
