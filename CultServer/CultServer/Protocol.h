@@ -7,6 +7,7 @@
 #include <atomic>
 #include <array>
 #include <unordered_set>
+#include <chrono>
 #include "error.h"
 
 constexpr short SERVER_PORT = 7777;
@@ -16,7 +17,7 @@ constexpr int MAX_PLAYERS_PER_ROOM = 5;
 constexpr int MAX_CULTIST_PER_ROOM = 4;
 constexpr int MAX_POLICE_PER_ROOM = 1;
 
-constexpr float VIEW_RANGE = 1000.0f;           // 시야 반경
+constexpr float VIEW_RANGE = 3000.0f;           // 시야 반경
 constexpr float VIEW_RANGE_SQ = VIEW_RANGE * VIEW_RANGE;
 constexpr float SPHERE_TRACE_RADIUS = 200.0f;
 constexpr float HEAL_GAP = 100.0f;
@@ -27,8 +28,8 @@ constexpr float baseY = -1100.f;
 constexpr float baseZ = 2770.f;
 
 constexpr float MAX_SPEED = 600.0f;
-constexpr float MAP_BOUND_X = 10000.0f; // 맵 최대 크기에 맞게 수정
-constexpr float MAP_BOUND_Y = 10000.0f;
+constexpr float MAP_BOUND_X = 20000.0f; // 맵 최대 크기에 맞게 수정
+constexpr float MAP_BOUND_Y = 20000.0f;
 constexpr float MAP_MIN_Z = -3100.0f;
 
 //-- ingame header
@@ -48,7 +49,7 @@ constexpr char endHealHeader = 21;
 constexpr char ritualStartHeader = 22;
 constexpr char ritualDataHeader = 23;
 constexpr char ritualEndHeader = 24;
-
+constexpr char dogHeader = 25;
 //-- room header
 constexpr char requestHeader = 8;
 constexpr char enterHeader = 9;
@@ -97,8 +98,15 @@ struct altar {
 	FVector loc;
 	bool isActivated;
 	int id;
-	int gage;
+	int gauge;
 	std::chrono::system_clock::time_point time;
+};
+
+struct dog {
+	int owner;
+	FVector loc;
+	// 개 상태
+	
 };
 
 enum COMP_TYPE {
@@ -207,6 +215,12 @@ struct PolicePacket {
 	uint8_t  header;
 	uint8_t size;
 	FPoliceCharacterState state;
+};
+
+struct DogPacket {
+	uint8_t  header;
+	uint8_t size;
+	dog dog;
 };
 
 struct ParticlePacket {
@@ -368,7 +382,7 @@ public:
 	std::unordered_set<int> visible_ids;
 	std::string account_id;
 	int heal_gage;
-
+	dog dog;
 	void do_recv();
 
 public:

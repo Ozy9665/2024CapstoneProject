@@ -52,7 +52,7 @@ void InitializeAltars(int room_num) {
 		g_altars[room_num][i].loc = kPredefinedLocations[order[i]];
 		g_altars[room_num][i].isActivated = false;
 		g_altars[room_num][i].id = i;
-		g_altars[room_num][i].gage = 0;
+		g_altars[room_num][i].gauge = 0;
 	}
 }
 
@@ -589,7 +589,8 @@ void broadcast_in_room(int sender_id, int room_id, const PacketT* packet, float 
 
 		if (!g_users.count(other_id) || !g_users[other_id].isValidSocket())
 			continue;
-
+		g_users[other_id].do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
+		/*
 		// 거리 체크
 		bool inRange = (view_range_sq < 0) || (distanceSq(g_users[sender_id], g_users[other_id]) <= view_range_sq);
 		// 시야 안에 들어온 경우
@@ -616,7 +617,11 @@ void broadcast_in_room(int sender_id, int room_id, const PacketT* packet, float 
 				disappear.id = static_cast<uint8_t>(sender_id);
 				g_users[other_id].do_send_packet(&disappear);
 			}
+
+			// 상태 패킷 전송
+			g_users[other_id].do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
 		}
+		*/
 	}
 }
 
@@ -693,6 +698,28 @@ bool validate_police_state(FPoliceCharacterState& state)
 		std::cout << "[AntiCheat] Police " << state.PlayerID
 			<< " out of map bounds: ("
 			<< state.PositionX << ", " << state.PositionY << ", " << state.PositionZ << ")\n";
+		ok = false;
+	}
+
+	return ok;
+}
+
+bool validate_dog_state(int c_id, dog dog)
+{
+	bool ok = true;
+	// 주인 체크
+	if (dog.owner != c_id) {
+		std::cout << "[AntiCheat] owner: " << dog.owner << "'is not same in packet: ("
+			<< dog.owner << ")\n";
+		ok = false;
+	}
+	// 맵 범위 체크
+	if (dog.loc.x < -MAP_BOUND_X || dog.loc.x > MAP_BOUND_X ||
+		dog.loc.y < -MAP_BOUND_Y || dog.loc.y > MAP_BOUND_Y ||
+		dog.loc.z < MAP_MIN_Z)
+	{
+		std::cout << "[AntiCheat] owner: " << dog.owner << "'s dog out of map bounds : ("
+			<< dog.loc.x << ", " << dog.loc.y << ", " << dog.loc.z << ")\n";
 		ok = false;
 	}
 
@@ -840,6 +867,21 @@ void process_packet(int c_id, char* packet) {
 		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
 		break;
 	}
+	case dogHeader:
+	{
+		auto* p = reinterpret_cast<DogPacket*>(packet);
+		if (p->size != sizeof(DogPacket)) {
+			std::cout << "Invalid DogPacket size\n";
+			break;
+		}
+		if (!validate_dog_state(c_id, p->dog)) {
+			std::cout << "Suspicious dog packet from c_id " << c_id << std::endl;
+		}
+		g_users[c_id].dog = p->dog;
+
+		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
+		break;
+	}
 	case particleHeader:
 	{
 		auto* p = reinterpret_cast<ParticlePacket*>(packet);
@@ -960,7 +1002,7 @@ void process_packet(int c_id, char* packet) {
 		altar.isActivated = true;
 		altar.time = std::chrono::system_clock::now();
 
-		std::cout << "[RitualStart] cultist=" << c_id << " altar=" << (int)ritual_id << "\n";
+		std::cout << "[RitualStart] cultist=" << c_id << " altar=" << (int)ritual_id << "gauge= " << altar.gauge << "\n";
 		break;
 	}
 	case ritualDataHeader:
@@ -987,24 +1029,24 @@ void process_packet(int c_id, char* packet) {
 		auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - altar.time).count();
 		if (elapsed > 0) {
 			int add = static_cast<int>(elapsed) * 10;
-			altar.gage = std::min(100, altar.gage + add);
+			altar.gauge = std::min(100, altar.gauge + add);
 			altar.time = now;
 		}
 		// reason: 1 -> 성공 / 2 -> 실패
 		if (p->reason == 1)
-			altar.gage = std::min(100, altar.gage + 10);
+			altar.gauge = std::min(100, altar.gauge + 10);
 		else if (p->reason == 2)
-			altar.gage = std::max(0, altar.gage - 10);		
+			altar.gauge = std::max(0, altar.gauge - 10);		
 
 		RitualGagePacket gauge{};
 		gauge.header = ritualDataHeader;
 		gauge.size = sizeof(RitualGagePacket);
 		gauge.ritual_id = ritual_id;
-		gauge.gauge = altar.gage;
+		gauge.gauge = altar.gauge;
 		g_users[c_id].do_send_packet(&gauge);
 
 		// broadcast_in_room(c_id, room_id, &gauge);
-		std::cout << "[RitualData] altar=" << (int)ritual_id << " gage=" << altar.gage << "\n";
+		std::cout << "[RitualData] altar=" << (int)ritual_id << " gauge=" << altar.gauge << "\n";
 		break;
 	}
 	case ritualEndHeader:
@@ -1028,10 +1070,10 @@ void process_packet(int c_id, char* packet) {
 		auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - altar.time).count();
 		if (elapsed > 0) {
 			int add = static_cast<int>(elapsed) * 10;
-			altar.gage = std::min(100, altar.gage + add);
+			altar.gauge = std::min(100, altar.gauge + add);
 			altar.time = now;
 		}
-		if (altar.gage >= 100) {
+		if (altar.gauge >= 100) {
 			RitualNoticePacket packet;
 			packet.header = ritualEndHeader;
 			packet.size = sizeof(RitualNoticePacket);
@@ -1041,7 +1083,7 @@ void process_packet(int c_id, char* packet) {
 			g_users[c_id].do_send_packet(&packet);
 		}
 		altar.isActivated = false;
-		std::cout << "[RitualEnd] cultist=" << c_id << " altar=" << (int)ritual_id << "\n";
+		std::cout << "[RitualEnd] cultist=" << c_id << " altar=" << (int)ritual_id << " gauge: " << altar.gauge << "\n";
 		break;
 	}
 	case connectionHeader:
