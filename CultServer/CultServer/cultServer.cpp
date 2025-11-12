@@ -431,14 +431,15 @@ void HealTimerLoop() {
 				}
 				else if (g_users[ev.c_id].heal_gage >= 10) {
 					// 락 걸기
-					if (g_users[ev.c_id].cultist_state.CurrentHealth + 10 > 100)
+					if (g_users[ev.c_id].cultist_state.CurrentHealth + 50 > 100)
 						g_users[ev.c_id].cultist_state.CurrentHealth = 100;
 					else
 						g_users[ev.c_id].cultist_state.CurrentHealth += 10;
 					g_users[ev.c_id].heal_gage = 0;
-					NoticePacket packet;
+					BoolPacket packet;
 					packet.header = endHealHeader;
-					packet.size = sizeof(NoticePacket);
+					packet.result = true;
+					packet.size = sizeof(BoolPacket);
 					g_users[ev.c_id].do_send_packet(&packet);
 					g_users[ev.target_id].do_send_packet(&packet);
 				}
@@ -955,7 +956,7 @@ void process_packet(int c_id, char* packet) {
 		pkt.SpawnLoc = healerPos;
 		pkt.SpawnRot = moveRot;
 		pkt.isHealer = true;
-		g_users[c_id].cultist_state.ABP_DoHeal = true;
+		g_users[c_id].heal_partner = targetId;
 		g_users[c_id].do_send_packet(&pkt);
 
 		double yaw = std::fmod(moveRot.yaw + 180.0, 360.0);
@@ -971,7 +972,7 @@ void process_packet(int c_id, char* packet) {
 		pkt.SpawnLoc = targetPos;
 		pkt.SpawnRot.yaw = yaw;
 		pkt.isHealer = false;
-		g_users[c_id].cultist_state.ABP_GetHeal = true;
+		g_users[targetId].heal_partner = c_id;
 		g_users[targetId].do_send_packet(&pkt);
 
 		TIMER_EVENT ev;
@@ -980,6 +981,24 @@ void process_packet(int c_id, char* packet) {
 		ev.target_id = targetId;
 		ev.event_id = EV_HEAL;
 		timer_queue.push(ev);
+		break;
+	}
+	case endHealHeader:
+	{
+		auto* p = reinterpret_cast<NoticePacket*>(packet);
+		if (p->size != sizeof(NoticePacket)) {
+			std::cout << "Invalid NoticePacket size\n";
+			break;
+		}
+		int heal_partner{ g_users[c_id].heal_partner };
+		g_users[heal_partner].heal_partner = -1;
+		g_users[c_id].heal_partner = -1;
+
+		BoolPacket packet;
+		packet.header = endHealHeader;
+		packet.result = false;
+		packet.size = sizeof(BoolPacket);
+		g_users[heal_partner].do_send_packet(&packet);
 		break;
 	}
 	case ritualStartHeader: 
@@ -1064,26 +1083,57 @@ void process_packet(int c_id, char* packet) {
 		uint8_t ritual_id = p->ritual_id;
 		if (ritual_id >= 5) 
 			break;
-
-		auto& altar = g_altars[room_id][ritual_id];
-		auto now = std::chrono::system_clock::now();
-		auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - altar.time).count();
-		if (elapsed > 0) {
-			int add = static_cast<int>(elapsed) * 10;
-			altar.gauge = std::min(100, altar.gauge + add);
-			altar.time = now;
+		if (p->reason == 3) {
+			auto& altar = g_altars[room_id][ritual_id];
+			auto now = std::chrono::system_clock::now();
+			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - altar.time).count();
+			if (elapsed > 0) {
+				int add = static_cast<int>(elapsed / 100); // 0.1초당 1% 증가
+				altar.gauge = std::min(100, altar.gauge + add);
+				altar.time = now;
+			}
+			if (altar.gauge >= 100) {
+				RitualNoticePacket packet;
+				packet.header = ritualEndHeader;
+				packet.size = sizeof(RitualNoticePacket);
+				packet.id = c_id;
+				packet.ritual_id = ritual_id;
+				packet.reason = 4;
+				g_users[c_id].do_send_packet(&packet);
+			}
+			altar.isActivated = false;
+			std::cout << "[RitualEnd] cultist=" << c_id << " altar=" << (int)ritual_id << " gauge: " << altar.gauge << "\n";
 		}
-		if (altar.gauge >= 100) {
-			RitualNoticePacket packet;
-			packet.header = ritualEndHeader;
-			packet.size = sizeof(RitualNoticePacket);
-			packet.id = c_id;
-			packet.ritual_id = ritual_id;
-			packet.reason = 3;
-			g_users[c_id].do_send_packet(&packet);
+		if (p->reason == 4) {
+			auto& altar = g_altars[room_id][ritual_id];
+			auto now = std::chrono::system_clock::now();
+			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - altar.time).count();
+			if (elapsed > 0) {
+				int add = static_cast<int>(elapsed) * 10;
+				altar.gauge = std::min(100, altar.gauge + add);
+				altar.time = now;
+			}
+			if (altar.gauge >= 98) {
+				RitualNoticePacket packet;
+				packet.header = ritualEndHeader;
+				packet.size = sizeof(RitualNoticePacket);
+				packet.id = c_id;
+				packet.ritual_id = ritual_id;
+				packet.reason = 4;
+				g_users[c_id].do_send_packet(&packet);
+			}
+			else {
+				RitualNoticePacket packet;
+				packet.header = ritualEndHeader;
+				packet.size = sizeof(RitualNoticePacket);
+				packet.id = c_id;
+				packet.ritual_id = ritual_id;
+				packet.reason = altar.gauge;
+				g_users[c_id].do_send_packet(&packet);
+			}
+			altar.isActivated = false;
+			std::cout << "[RitualEnd] cultist=" << c_id << " altar=" << (int)ritual_id << " gauge: " << altar.gauge << "\n";
 		}
-		altar.isActivated = false;
-		std::cout << "[RitualEnd] cultist=" << c_id << " altar=" << (int)ritual_id << " gauge: " << altar.gauge << "\n";
 		break;
 	}
 	case connectionHeader:
@@ -1407,7 +1457,7 @@ void mainLoop(HANDLE h_iocp) {
 int main()
 {
 	HANDLE h_iocp;
-	std::wcout.imbue(std::locale("korean"));	// 한국어로 출력
+	std::wcout.imbue(std::locale("korean"));
 
 	WSADATA WSAData;
 	WSAStartup(MAKEWORD(2, 0), &WSAData);

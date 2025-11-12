@@ -393,7 +393,7 @@ void ACultistCharacter::CancelRitual()
 		CurrentAltar->StopRitualQTE(this);
 		if (MySocketCultistActor)
 		{
-			MySocketCultistActor->SendEndRitual(CurrentAltar->AltarID);
+			MySocketCultistActor->SendEndRitual(CurrentAltar->AltarID, 3);
 		}
 	}
 	

@@ -333,6 +333,7 @@ struct RitualNoticePacket {
 	// reason 1 -> skill check suc
 	// reason 2 -> skill check fail
 	// reason 3 -> end
+	// reason 4 -> ritial 100%
 };
 
 struct RitualGagePacket {
@@ -383,7 +384,10 @@ public:
 	std::unordered_set<int> visible_ids;
 	std::string account_id;
 	int heal_gage;
-	Dog dog;
+	union {
+		Dog dog;
+		int heal_partner;
+	};
 	void do_recv();
 
 public:
@@ -393,14 +397,6 @@ public:
 	~SESSION();
 
 	void do_send_packet(void* packet);
-
-	void do_send(char , int , char* );
-
-	void do_send_data(int , const void* , size_t );
-
-	void do_send_connection(char , int , int );
-
-	void do_send_disconnection(char , int );
 
 	void setState(const char st);
 

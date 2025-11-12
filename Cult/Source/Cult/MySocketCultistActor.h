@@ -73,11 +73,12 @@ public:
 	void SpawnImpactEffect(const FImpactPacket&);
 	void HideCharacter(int, bool);
 	void SendTryHeal();
-	void SendEndHeal();
 	void ProcessDoHeal(const char*);
+	void SendEndHeal();
+	void ProcessEndHeal(const char*);
 	void SendStartRitual(uint8_t);
 	void SendRitualSkillCheck(uint8_t, uint8_t);
-	void SendEndRitual(uint8_t);
+	void SendEndRitual(uint8_t, uint8_t);
 	void ProcessRitualData(const char*);
 	void ProcessRitualEnd(const char*);
 	void SendDisconnection();

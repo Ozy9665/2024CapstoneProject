@@ -147,7 +147,7 @@ void AMySocketCultistActor::ReceiveData()
                     }
                     case endHealHeader:
                     {
-                        // heal animation 종료
+                        ProcessEndHeal(Buffer);
                         break;
                     }
                     default:
@@ -1260,26 +1260,6 @@ void AMySocketCultistActor::SendTryHeal()
     }
 }
 
-void AMySocketCultistActor::SendEndHeal()
-{
-    if (ClientSocket != INVALID_SOCKET)
-    {
-        IdOnlyPacket Packet;
-        Packet.header = endHealHeader;
-        Packet.size = sizeof(IdOnlyPacket);
-        Packet.id = MyCharacter->my_ID;
-        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(IdOnlyPacket), 0);
-        if (BytesSent == SOCKET_ERROR)
-        {
-            UE_LOG(LogTemp, Error, TEXT("SendEndHeal failed with error: %ld"), WSAGetLastError());
-        }
-    }
-    else
-    {
-        CloseConnection();
-    }
-}
-
 void AMySocketCultistActor::ProcessDoHeal(const char* Buffer) {
     MovePacket Received;
     memcpy(&Received, Buffer, sizeof(MovePacket));
@@ -1365,6 +1345,33 @@ void AMySocketCultistActor::ProcessDoHeal(const char* Buffer) {
         
 }
 
+void AMySocketCultistActor::SendEndHeal()
+{
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        NoticePacket Packet;
+        Packet.header = endHealHeader;
+        Packet.size = sizeof(NoticePacket);
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(NoticePacket), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendEndHeal failed with error: %ld"), WSAGetLastError());
+        }
+    }
+    else
+    {
+        CloseConnection();
+    }
+}
+
+void AMySocketCultistActor::ProcessEndHeal(const char* Buffer) {
+    BoolPacket Received;
+    memcpy(&Received, Buffer, sizeof(MovePacket));
+    if (Received.result) {
+        // 치료 성공
+    }
+}
+
 void AMySocketCultistActor::SendStartRitual(uint8_t ritual_id) {
     // 제단 시작
     if (ClientSocket != INVALID_SOCKET)
@@ -1410,7 +1417,7 @@ void AMySocketCultistActor::SendRitualSkillCheck(uint8_t ritual_id, uint8_t reas
     }
 }
 
-void AMySocketCultistActor::SendEndRitual(uint8_t ritual_id) {
+void AMySocketCultistActor::SendEndRitual(uint8_t ritual_id, uint8_t reason) {
     // 제단 손 떼기, 100퍼센트
     if (ClientSocket != INVALID_SOCKET)
     {
@@ -1419,7 +1426,7 @@ void AMySocketCultistActor::SendEndRitual(uint8_t ritual_id) {
         Packet.size = sizeof(RitualNoticePacket);
         Packet.id = MyCharacter->my_ID;
         Packet.ritual_id = ritual_id;
-        Packet.reason = 3;
+        Packet.reason = reason;
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RitualNoticePacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
@@ -1440,13 +1447,26 @@ void AMySocketCultistActor::ProcessRitualData(const char* Buffer) {
     const int gage = Received.gauge;
 
     AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gage]() {
-        // gage 처리 제단의 게이지를 수정
+        // gauge 처리 제단의 게이지를 수정
 
         });
 }
 
 void AMySocketCultistActor::ProcessRitualEnd(const char* Buffer) {
-    // 제단 100퍼센트 완료
+    RitualNoticePacket Received;
+    memcpy(&Received, Buffer, sizeof(RitualNoticePacket));
+
+    if (Received.reason == 4) {
+        // 제단 100퍼센트 완료
+    }
+    else {
+        const uint8_t ritual_id = Received.ritual_id;
+        const int gage = Received.reason;
+        AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gage]() {
+            // Received.reason으로 ritual gauge 수정
+
+            });
+    }
 }
 
 void AMySocketCultistActor::HandleMontageSitNotifyBegin(FName NotifyName, const FBranchingPointNotifyPayload& Payload)

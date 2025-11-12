@@ -249,7 +249,8 @@ struct RitualNoticePacket {
 	// reason 0 -> start
 	// reason 1 -> skill check suc
 	// reason 2 -> skill check fail
-	// reason 3 -> end
+	// reason 3 -> moved
+	// reason 4 -> ritial 100%
 };
 
 struct RitualGagePacket {
