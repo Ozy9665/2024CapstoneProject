@@ -1022,6 +1022,7 @@ void process_packet(int c_id, char* packet) {
 		altar.time = std::chrono::system_clock::now();
 
 		std::cout << "[RitualStart] cultist=" << c_id << " altar=" << (int)ritual_id << "gauge= " << altar.gauge << "\n";
+		// 0퍼면 냅두고 아니면 클라한테 몇펀지 보내주기
 		break;
 	}
 	case ritualDataHeader:
