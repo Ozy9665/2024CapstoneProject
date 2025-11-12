@@ -1260,6 +1260,26 @@ void AMySocketCultistActor::SendTryHeal()
     }
 }
 
+void AMySocketCultistActor::SendEndHeal()
+{
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        IdOnlyPacket Packet;
+        Packet.header = endHealHeader;
+        Packet.size = sizeof(IdOnlyPacket);
+        Packet.id = MyCharacter->my_ID;
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(IdOnlyPacket), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendEndHeal failed with error: %ld"), WSAGetLastError());
+        }
+    }
+    else
+    {
+        CloseConnection();
+    }
+}
+
 void AMySocketCultistActor::ProcessDoHeal(const char* Buffer) {
     MovePacket Received;
     memcpy(&Received, Buffer, sizeof(MovePacket));
