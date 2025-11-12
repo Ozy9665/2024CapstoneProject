@@ -289,6 +289,9 @@ public:
 	TObjectPtr<ACharacter> HealPartner;
 	UFUNCTION(BlueprintCallable, Category = "Cult|Heal")
 	void SendTryHeal();
+
+	UFUNCTION(BlueprintCallable, Category = "CultHeal")
+	void SendEndHeal();
 	UPROPERTY(EditDefaultsOnly, Category = "Animation|Heal")
 	UAnimMontage* AS_BandageArmSitting1_Montage;
 

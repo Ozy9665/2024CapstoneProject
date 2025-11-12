@@ -1162,6 +1162,14 @@ void ACultistCharacter::SendTryHeal()
 		MySocketCultistActor->SendTryHeal();
 	}
 }
+void ACultistCharacter::SendEndHeal()
+{
+	if (MySocketCultistActor)
+	{
+		MySocketCultistActor->SendEndHeal();
+	}
+}
+
 
 int ACultistCharacter::GetPlayerID() const {
 	return my_ID;
