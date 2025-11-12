@@ -50,6 +50,7 @@ constexpr char ritualStartHeader = 22;
 constexpr char ritualDataHeader = 23;
 constexpr char ritualEndHeader = 24;
 constexpr char dogHeader = 25;
+
 //-- room header
 constexpr char requestHeader = 8;
 constexpr char enterHeader = 9;
@@ -83,7 +84,7 @@ struct FRotator {
 	double roll;
 };
 
-struct room {
+struct Room {
 	uint8_t room_id;
 	uint8_t police = 0;
 	uint8_t cultist = 0;
@@ -94,7 +95,7 @@ struct room {
 	};
 };
 
-struct altar {
+struct Altar {
 	FVector loc;
 	bool isActivated;
 	int id;
@@ -102,7 +103,7 @@ struct altar {
 	std::chrono::system_clock::time_point time;
 };
 
-struct dog {
+struct Dog {
 	int owner;
 	FVector loc;
 	// °³ »óÅÂ
@@ -220,7 +221,7 @@ struct PolicePacket {
 struct DogPacket {
 	uint8_t  header;
 	uint8_t size;
-	dog dog;
+	Dog dog;
 };
 
 struct ParticlePacket {
@@ -257,13 +258,13 @@ struct IdRolePacket {
 struct RoomDataPacket {
 	uint8_t header;
 	uint8_t size;
-	room room_data;
+	Room room_data;
 };
 
 struct RoomsPakcet {
 	uint8_t header;
 	uint8_t size;
-	room rooms[10];
+	Room rooms[10];
 };
 
 struct RoomNumberPacket {
@@ -382,7 +383,7 @@ public:
 	std::unordered_set<int> visible_ids;
 	std::string account_id;
 	int heal_gage;
-	dog dog;
+	Dog dog;
 	void do_recv();
 
 public:

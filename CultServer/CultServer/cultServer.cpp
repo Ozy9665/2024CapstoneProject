@@ -33,9 +33,9 @@ HANDLE g_h_iocp = nullptr;
 
 std::atomic<int> client_id = 0;
 std::unordered_map<int, SESSION> g_users;
-std::array<room, MAX_ROOM> g_rooms;
+std::array<Room, MAX_ROOM> g_rooms;
 
-std::array<std::array<altar, 5>, MAX_ROOM> g_altars{};
+std::array<std::array<Altar, 5>, MAX_ROOM> g_altars{};
 
 void InitializeAltars(int room_num) {
 	if (room_num < 0 || room_num >= static_cast<int>(g_altars.size())) {
@@ -190,7 +190,7 @@ void RoomWorkerLoop() {
 			pkt.size = sizeof(RoomsPakcet);
 
 			int inserted = 0;
-			for (const room& r : g_rooms) {
+			for (const Room& r : g_rooms) {
 				if (inserted >= 10) break;
 				if (!r.isIngame) {
 					if ((role == 1 && r.police < MAX_POLICE_PER_ROOM) ||
@@ -578,7 +578,7 @@ void broadcast_in_room(int sender_id, int room_id, const PacketT* packet, float 
 		return;
 	}
 
-	const room& r = g_rooms[room_id];
+	const Room& r = g_rooms[room_id];
 
 	float view_range_sq = (view_range > 0) ? view_range * view_range : -1.0f;	// -1이면 전원에게 전송
 	
@@ -704,7 +704,7 @@ bool validate_police_state(FPoliceCharacterState& state)
 	return ok;
 }
 
-bool validate_dog_state(int c_id, dog dog)
+bool validate_dog_state(int c_id, Dog dog)
 {
 	bool ok = true;
 	// 주인 체크
@@ -739,7 +739,7 @@ std::optional<int> SphereTraceClosestCultist(int centerId, float radius) {
 		std::cout << "User " << centerId << " room id error " << "\n";
 		return std::nullopt;
 	}
-	const room& rm = g_rooms[roomId];
+	const Room& rm = g_rooms[roomId];
 
 	const float r2 = radius * radius;
 	float nearestId = std::numeric_limits<float>::max();
@@ -838,7 +838,7 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		const room& r = g_rooms[room_id];
+		const Room& r = g_rooms[room_id];
 		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
 		{
 			uint8_t other_id = r.player_ids[i];
@@ -1118,7 +1118,7 @@ void process_packet(int c_id, char* packet) {
 
 		bool allCultistsDisabled = true;
 
-		const room& r = g_rooms[room_id];
+		const Room& r = g_rooms[room_id];
 		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
 		{
 			uint8_t pid = r.player_ids[i];

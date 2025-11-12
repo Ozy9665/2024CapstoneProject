@@ -7,6 +7,8 @@
 #include "MySocketActor.generated.h"
 
 
+#pragma pack(push, 1)
+
 USTRUCT(BlueprintType)
 struct Froom {
 	GENERATED_BODY()
@@ -29,7 +31,13 @@ struct FNetRot {
 	double z;
 };
 
-#pragma pack(push, 1)
+struct Dog {
+	int owner;
+	FNetVec loc;
+	// °³ »óÅÂ
+
+};
+
 struct FPoliceCharacterState
 {
 	int32 PlayerID;
@@ -124,6 +132,12 @@ struct PolicePacket {
 	uint8_t  header;
 	uint8_t size;
 	FPoliceCharacterState state;
+};
+
+struct DogPacket {
+	uint8_t  header;
+	uint8_t size;
+	Dog dog;
 };
 
 struct ParticlePacket {
@@ -288,6 +302,7 @@ constexpr char endHealHeader = 21;
 constexpr char ritualStartHeader = 22;
 constexpr char ritualDataHeader = 23;
 constexpr char ritualEndHeader = 24;
+constexpr char dogHeader = 25;
 
 //-- room header
 constexpr char requestHeader = 8;

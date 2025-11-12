@@ -308,6 +308,26 @@ void AMySocketPoliceActor::SendPlayerData()
         {
             UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
         }
+        SendDogData();
+    }
+    else
+    {
+        CloseConnection();
+    }
+}
+
+void AMySocketPoliceActor::SendDogData() {
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        DogPacket Packet;
+        Packet.header = dogHeader;
+        Packet.size = sizeof(DogPacket);
+        Packet.dog = GetDog();
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(DogPacket), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
+        }
     }
     else
     {
@@ -373,6 +393,14 @@ FPoliceCharacterState AMySocketPoliceActor::GetCharacterState()
     State.bIsShooting = MyCharacter->bIsShooting;
 
     return State;
+}
+
+Dog AMySocketPoliceActor::GetDog() {
+    Dog dog;
+    dog.loc;
+    dog.owner = MyCharacter->my_ID;
+
+    return dog;
 }
 
 void AMySocketPoliceActor::SpawnCultistCharacter(const unsigned char PlayerID)

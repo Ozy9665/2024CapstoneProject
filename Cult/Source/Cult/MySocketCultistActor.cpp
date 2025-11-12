@@ -113,6 +113,9 @@ void AMySocketCultistActor::ReceiveData()
                     case policeHeader:
                         ProcessPoliceData(Buffer);
                         break;
+                    case dogHeader:
+                        ProcessDogData(Buffer);
+                        break;
                     case particleHeader:
                         ProcessParticleData(Buffer);
                         break;
@@ -271,6 +274,12 @@ void AMySocketCultistActor::ProcessPoliceData(const char* Buffer)
         FScopeLock Lock(&PoliceDataMutex);
         ReceivedPoliceStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
     }
+}
+
+void AMySocketCultistActor::ProcessDogData(const char* Buffer) {
+    Dog ReceivedDog;
+    memcpy(&ReceivedDog, Buffer + 2, sizeof(Dog));
+    // 개 상태 업데이트
 }
 
 void AMySocketCultistActor::ProcessHitData(const char* Buffer)
