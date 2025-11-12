@@ -1240,7 +1240,7 @@ void AMySocketCultistActor::HideCharacter(int PlayerID, bool bHide) {
         });
 }
 
-void AMySocketCultistActor::SendTryHeal() 
+void AMySocketCultistActor::SendTryHeal()
 {
     if (ClientSocket != INVALID_SOCKET)
     {
@@ -1368,7 +1368,10 @@ void AMySocketCultistActor::ProcessEndHeal(const char* Buffer) {
     BoolPacket Received;
     memcpy(&Received, Buffer, sizeof(MovePacket));
     if (Received.result) {
-        // 치료 성공
+        // 치료 성공 - hp회복, 상태 복구
+    }
+    else {
+        // 치료 실패 ( 움직임 )
     }
 }
 
@@ -1418,7 +1421,7 @@ void AMySocketCultistActor::SendRitualSkillCheck(uint8_t ritual_id, uint8_t reas
 }
 
 void AMySocketCultistActor::SendEndRitual(uint8_t ritual_id, uint8_t reason) {
-    // 제단 손 떼기, 100퍼센트
+    // 제단 손 떼기 reason = 3, 100퍼센트 reason = 4
     if (ClientSocket != INVALID_SOCKET)
     {
         RitualNoticePacket Packet;
@@ -1444,11 +1447,10 @@ void AMySocketCultistActor::ProcessRitualData(const char* Buffer) {
     memcpy(&Received, Buffer, sizeof(RitualGagePacket));
 
     const uint8_t ritual_id = Received.ritual_id;
-    const int gage = Received.gauge;
+    const int gauge = Received.gauge;
 
-    AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gage]() {
-        // gauge 처리 제단의 게이지를 수정
-
+    AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
+        // gauge으로 ritual gauge 수정
         });
 }
 
@@ -1458,12 +1460,13 @@ void AMySocketCultistActor::ProcessRitualEnd(const char* Buffer) {
 
     if (Received.reason == 4) {
         // 제단 100퍼센트 완료
+        // 캐릭터 손 떼게 하고, 제단 100퍼센트로 수정
     }
     else {
         const uint8_t ritual_id = Received.ritual_id;
-        const int gage = Received.reason;
-        AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gage]() {
-            // Received.reason으로 ritual gauge 수정
+        const int gauge = Received.reason;
+        AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
+            // gauge으로 ritual gauge 수정
 
             });
     }
