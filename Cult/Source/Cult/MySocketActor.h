@@ -216,6 +216,10 @@ struct TreePacket {
 	uint8_t size;
 	FNetVec SpawnLoc;
 	FNetRot SpawnRot;
+
+	// юс╫ц
+	uint8_t skill;
+	uint8_t casterId;
 };
 
 struct RitualPacket {
