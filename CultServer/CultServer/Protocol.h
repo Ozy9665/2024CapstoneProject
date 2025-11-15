@@ -34,7 +34,7 @@ constexpr float MAP_MIN_Z = -3100.0f;
 
 //-- ingame header
 constexpr char cultistHeader = 0;
-constexpr char skillHeader = 1;
+constexpr char treeHeader = 1;
 constexpr char policeHeader = 2;
 constexpr char particleHeader = 3;
 constexpr char hitHeader = 4;
@@ -50,6 +50,9 @@ constexpr char ritualStartHeader = 22;
 constexpr char ritualDataHeader = 23;
 constexpr char ritualEndHeader = 24;
 constexpr char dogHeader = 25;
+constexpr char crowSpawnHeader = 26;
+constexpr char crowDataHeader = 27;
+constexpr char crowDisableHeader = 28;
 
 //-- room header
 constexpr char requestHeader = 8;
@@ -106,8 +109,18 @@ struct Altar {
 struct Dog {
 	int owner;
 	FVector loc;
+	FRotator rot;
 	// 개 상태
 	
+};
+
+struct Crow {
+	int owner;
+	FVector loc;
+	FRotator rot;
+	// 까마귀 상태
+	bool is_alive;
+
 };
 
 enum COMP_TYPE {
@@ -212,6 +225,12 @@ struct CultistPacket {
 	FCultistCharacterState state;
 };
 
+struct CrowPacket {
+	uint8_t  header;
+	uint8_t size;
+	Crow crow;
+};
+
 struct PolicePacket {
 	uint8_t  header;
 	uint8_t size;
@@ -278,11 +297,9 @@ struct NoticePacket {
 	uint8_t size;
 };
 
-struct SkillPacket {
+struct TreePacket {
 	uint8_t header;
 	uint8_t size;
-	uint8_t casterId;
-	uint8_t skill;	// 1: 나무, 2: 까마귀
 	FVector SpawnLoc;
 	FRotator SpawnRot;
 };
@@ -384,9 +401,10 @@ public:
 	std::unordered_set<int> visible_ids;
 	std::string account_id;
 	int heal_gage;
+	int heal_partner;
 	union {
 		Dog dog;
-		int heal_partner;
+		Crow crow;
 	};
 	void do_recv();
 

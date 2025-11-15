@@ -111,7 +111,7 @@ void AMySocketPoliceActor::ReceiveData()
                     case cultistHeader:
                         ProcessPlayerData(Buffer);
                         break;
-                    case skillHeader:
+                    case treeHeader:
                         ProcessSkillData(Buffer);
                         break;
                     case particleHeader:
@@ -194,8 +194,8 @@ void AMySocketPoliceActor::ProcessHitData(const char* Buffer)
 
 void AMySocketPoliceActor::ProcessSkillData(const char* Buffer) 
 {
-    SkillPacket ReceivedSkill;
-    memcpy(&ReceivedSkill, Buffer, sizeof(SkillPacket));
+    TreePacket ReceivedSkill;
+    memcpy(&ReceivedSkill, Buffer, sizeof(TreePacket));
 
     const int Key = static_cast<int>(ReceivedSkill.casterId);
     ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
@@ -398,6 +398,7 @@ FPoliceCharacterState AMySocketPoliceActor::GetCharacterState()
 Dog AMySocketPoliceActor::GetDog() {
     Dog dog;
     dog.loc;
+    dog.rot;
     dog.owner = MyCharacter->my_ID;
 
     return dog;

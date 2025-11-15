@@ -969,7 +969,7 @@ void ACultistCharacter::ConfirmPlacement()
 
 	if (TreeObstacleActorClass)
 	{
-		MySocketCultistActor->SendSkill(SpawnLocation, SpawnRotation, 1);
+		MySocketCultistActor->SendTree(SpawnLocation, SpawnRotation);
 	}
 
 	SpawnedPreviewActor->Destroy();
@@ -1017,7 +1017,7 @@ void ACultistCharacter::OnCrowSkillPressed()
 		const FRotator SpawnRot = GetActorRotation();
 
 		CrowInstance = GetWorld()->SpawnActor<ACrowActor>(CrowClass, SpawnLoc, SpawnRot, Params);
-		MySocketCultistActor->SendSkill(SpawnLoc, SpawnRot, 2);
+		MySocketCultistActor->SendCrowSpawn(SpawnLoc, SpawnRot);
 		if (CrowInstance)
 		{
 			CrowInstance->InitCrow(this, CrowLifetime);
