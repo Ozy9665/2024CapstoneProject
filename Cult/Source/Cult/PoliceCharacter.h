@@ -14,7 +14,9 @@
 #include"GameFramework/Character.h"
 #include"GameFramework/SpringArmComponent.h"
 #include "Perception/AIPerceptionStimuliSourceComponent.h"
+#include "PoliceDog.h"
 #include "PoliceCharacter.generated.h"
+
 
 class AMySocketPoliceActor;
 
@@ -228,6 +230,12 @@ public:
 	UBuildingBlockComponent* TestTargetBlock;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
 	float ImpulseAmount = 1200.0f;
+
+	// PoliceDog
+	UPROPERTY(EditDefaultsOnly, Category = "PoliceDog")
+	TSubclassOf<APoliceDog> PoliceDogClass;
+	UPROPERTY(EditDefaultsOnly, Category = "PoliceDog")
+	APoliceDog* CrowInstance = nullptr;
 
 	int my_ID = -1;
 };
