@@ -54,6 +54,7 @@ public:
 	void ProcessTreeData(const char*);
 	void ProcessCrowSpawnData(const char*);
 	void ProcessCrowData(const char*);
+	void ProcessCrowDisable(const char* Buffer);
 	void ProcessPoliceData(const char*);
 	void ProcessDogData(const char*);
 	void ProcessHitData(const char*);

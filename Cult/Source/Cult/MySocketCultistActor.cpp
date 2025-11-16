@@ -110,6 +110,15 @@ void AMySocketCultistActor::ReceiveData()
                     case treeHeader:
                         ProcessTreeData(Buffer);
                         break;
+                    case crowSpawnHeader:
+                        ProcessCrowSpawnData(Buffer);
+                        break;
+                    case crowDataHeader:
+                        ProcessCrowData(Buffer);
+                        break;
+                    case crowDisableHeader:
+                        ProcessCrowDisable(Buffer);
+                        break;
                     case policeHeader:
                         ProcessPoliceData(Buffer);
                         break;
@@ -141,15 +150,11 @@ void AMySocketCultistActor::ReceiveData()
                         break;
                     }
                     case doHealHeader:
-                    {
                         ProcessDoHeal(Buffer);
                         break;
-                    }
                     case endHealHeader:
-                    {
                         ProcessEndHeal(Buffer);
                         break;
-                    }
                     default:
                         UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
                         break;
@@ -199,11 +204,92 @@ void AMySocketCultistActor::ProcessTreeData(const char* Buffer)
 }
 
 void AMySocketCultistActor::ProcessCrowSpawnData(const char* Buffer) {
+    Crow ReceivedCrow;
+    memcpy(&ReceivedCrow, Buffer + 2, sizeof(Crow));
 
+    const int Key = static_cast<int>(ReceivedCrow.owner);
+    ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
+    if (!FoundChar) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] caster %d not found"), ReceivedCrow.owner);
+        return;
+    }
+
+    ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
+    if (!CasterCultist) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] caster %d is not Cultist"), ReceivedCrow.owner);
+        return;
+    }
+
+    TWeakObjectPtr<ACultistCharacter> WeakCaster = CasterCultist;
+    const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedCrow.loc);
+    const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedCrow.rot);
+
+    AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot]() {
+        ACultistCharacter* Caster = WeakCaster.Get();
+        if (!IsValid(Caster))
+            return;
+
+        FActorSpawnParameters Params;
+        Params.Owner = Caster;
+        Params.Instigator = Caster;
+        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+        if (!Caster->CrowClass) {
+            UE_LOG(LogTemp, Error, TEXT("[CrowSpawn] %s CrowClass is null"), *Caster->GetName());
+            return;
+        }
+        if (!Caster->CrowInstance)
+        {
+            Caster->CrowInstance = Caster->GetWorld()->SpawnActor<ACrowActor>(
+                Caster->CrowClass, SpawnLoc, SpawnRot, Params);
+            UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] Spawned crow for caster=%s"), *Caster->GetName());
+        }
+    });
 }
 
 void AMySocketCultistActor::ProcessCrowData(const char* Buffer) {
+    Crow ReceivedCrow;
+    memcpy(&ReceivedCrow, Buffer + 2, sizeof(Crow));
 
+    const int Key = static_cast<int>(ReceivedCrow.owner);
+    ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
+    if (!FoundChar) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowData] caster %d not found"), ReceivedCrow.owner);
+        return;
+    }
+
+    ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
+    if (!CasterCultist) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowData] caster %d is not Cultist"), ReceivedCrow.owner);
+        return;
+    }
+    if (CasterCultist->CrowInstance) {
+        // 까마귀 업데이트
+    }
+}
+
+void AMySocketCultistActor::ProcessCrowDisable(const char* Buffer) {
+    IdOnlyPacket packet;
+    memcpy(&packet, Buffer + 2, sizeof(packet));
+    
+    const int Key = static_cast<int>(packet.id);
+    ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
+    if (!FoundChar) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowDisable] caster %d not found"), packet.id);
+        return;
+    }
+
+    ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
+    if (!CasterCultist) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowDisable] caster %d is not Cultist"), packet.id);
+        return;
+    }
+
+    if (CasterCultist->CrowInstance)
+    {
+        CasterCultist->CrowInstance->Destroy();
+        CasterCultist->CrowInstance = nullptr;
+    }
 }
 
 void AMySocketCultistActor::ProcessPoliceData(const char* Buffer)
@@ -447,7 +533,7 @@ void AMySocketCultistActor::SendCrowData() {
     if (ClientSocket != INVALID_SOCKET)
     {
         CrowPacket Packet;
-        Packet.header = crowSpawnHeader;
+        Packet.header = crowDataHeader;
         Packet.size = sizeof(CrowPacket);
         Packet.crow = GetCrow();
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(CrowPacket), 0);
@@ -459,7 +545,7 @@ void AMySocketCultistActor::SendCrowData() {
     else
     {
         CloseConnection();
-    }
+    } 
 }
 
 void AMySocketCultistActor::SendCrowDisable() {
