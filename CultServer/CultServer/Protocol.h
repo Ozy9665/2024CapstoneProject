@@ -300,6 +300,7 @@ struct NoticePacket {
 struct TreePacket {
 	uint8_t header;
 	uint8_t size;
+	uint8_t casterId;
 	FVector SpawnLoc;
 	FRotator SpawnRot;
 };

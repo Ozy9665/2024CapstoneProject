@@ -191,15 +191,38 @@ void AMySocketCultistActor::ProcessTreeData(const char* Buffer)
     TreePacket ReceivedSkill;
     memcpy(&ReceivedSkill, Buffer, sizeof(TreePacket));
 
+    const int Key = static_cast<int>(ReceivedSkill.casterId);
+    ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
+    if (!FoundChar) {
+        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d not found"), ReceivedSkill.casterId);
+        return;
+    }
+
+    ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
+    if (!CasterCultist) {
+        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d is not Cultist"), ReceivedSkill.casterId);
+        return;
+    }
+
+    TWeakObjectPtr<ACultistCharacter> WeakCaster = CasterCultist;
     const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedSkill.SpawnLoc);
     const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedSkill.SpawnRot);
 
-    AsyncTask(ENamedThreads::GameThread, [this, SpawnLoc, SpawnRot]() {
-        FActorSpawnParameters SpawnParams;
-        SpawnParams.Owner = this;
-        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+    AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot]() {
+        ACultistCharacter* Caster = WeakCaster.Get();
+        if (!IsValid(Caster)) return;
 
-        GetWorld()->SpawnActor<AProceduralBranchActor>(MyCharacter->ProceduralBranchActorClass, SpawnLoc, SpawnRot, SpawnParams);
+        FActorSpawnParameters Params;
+        Params.Owner = Caster;
+        Params.Instigator = Caster;
+        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+        if (!Caster->TreeObstacleActorClass) {
+            UE_LOG(LogTemp, Error, TEXT("[Skill] %s TreeObstacleActorClass is null"), *Caster->GetName());
+            return;
+        }
+        Caster->GetWorld()->SpawnActor<ATreeObstacleActor>(Caster->TreeObstacleActorClass, SpawnLoc, SpawnRot, Params);
+
         });
 }
 
@@ -265,6 +288,12 @@ void AMySocketCultistActor::ProcessCrowData(const char* Buffer) {
     }
     if (CasterCultist->CrowInstance) {
         // 까마귀 업데이트
+        AsyncTask(ENamedThreads::GameThread, [CI = CasterCultist->CrowInstance, ReceivedCrow]() {
+            if (IsValid(CI)) {
+                CI->SetActorLocation(AMySocketActor::ToUE(ReceivedCrow.loc));
+                CI->SetActorRotation(AMySocketActor::ToUE(ReceivedCrow.rot));
+            }
+        });
     }
 }
 
@@ -305,7 +334,29 @@ void AMySocketCultistActor::ProcessPoliceData(const char* Buffer)
 void AMySocketCultistActor::ProcessDogData(const char* Buffer) {
     Dog ReceivedDog;
     memcpy(&ReceivedDog, Buffer + 2, sizeof(Dog));
-    // 개 상태 업데이트
+    
+    const int Key = static_cast<int>(ReceivedDog.owner);
+    ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
+    if (!FoundChar) {
+        UE_LOG(LogTemp, Warning, TEXT("[DogData] caster %d not found"), ReceivedDog.owner);
+        return;
+    }
+
+    APoliceCharacter* Police = Cast<APoliceCharacter>(FoundChar);
+    if (!Police) {
+        UE_LOG(LogTemp, Warning, TEXT("[DogData] caster %d is not Police"), ReceivedDog.owner);
+        return;
+    }
+    if (Police->PoliceDogInstance) {
+        // 개 상태 업데이트
+        AsyncTask(ENamedThreads::GameThread, [PDI = Police->PoliceDogInstance, ReceivedDog]() {
+            if (IsValid(PDI)) {
+                PDI->SetActorLocation(AMySocketActor::ToUE(ReceivedDog.loc));
+                PDI->SetActorRotation(AMySocketActor::ToUE(ReceivedDog.rot));
+            }
+        });
+    }
+
 }
 
 void AMySocketCultistActor::ProcessHitData(const char* Buffer)
@@ -632,14 +683,21 @@ FCultistCharacterState AMySocketCultistActor::GetCharacterState()
     return State;
 }
 
-Crow AMySocketCultistActor::GetCrow() {
+Crow AMySocketCultistActor::GetCrow()
+{
     Crow crow;
-    crow.loc;
-    crow.rot;
     crow.owner = MyCharacter->my_ID;
+    if (MyCharacter->CrowInstance)
+    {
+        crow.loc = AMySocketActor::ToNet(MyCharacter->CrowInstance->GetActorLocation());
+        crow.rot = AMySocketActor::ToNet(MyCharacter->CrowInstance->GetActorRotation());
+
+        // 까마귀 상태 추가
+    }
 
     return crow;
 }
+
 
 void AMySocketCultistActor::ProcessCharacterUpdates()
 {

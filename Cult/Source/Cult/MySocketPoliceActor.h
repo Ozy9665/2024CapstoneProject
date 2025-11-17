@@ -49,6 +49,9 @@ public:
 	void ProcessPlayerData(const char*);
 	void ProcessHitData(const char*);
 	void ProcessSkillData(const char*);
+	void ProcessCrowSpawnData(const char*);
+	void ProcessCrowData(const char*);
+	void ProcessCrowDisable(const char* Buffer);
 	void ProcessConnection(const char*);
 	void ProcessDisconnection(const char*);
 	void SendPlayerData();

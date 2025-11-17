@@ -114,6 +114,15 @@ void AMySocketPoliceActor::ReceiveData()
                     case treeHeader:
                         ProcessSkillData(Buffer);
                         break;
+                    case crowSpawnHeader:
+                        ProcessCrowSpawnData(Buffer);
+                        break;
+                    case crowDataHeader:
+                        ProcessCrowData(Buffer);
+                        break;
+                    case crowDisableHeader:
+                        ProcessCrowDisable(Buffer);
+                        break;
                     case particleHeader:
                         //ProcessParticleData(Buffer);
                         break;
@@ -213,9 +222,8 @@ void AMySocketPoliceActor::ProcessSkillData(const char* Buffer)
     TWeakObjectPtr<ACultistCharacter> WeakCaster = CasterCultist;
     const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedSkill.SpawnLoc);
     const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedSkill.SpawnRot);
-    const uint8    Skill = ReceivedSkill.skill;
 
-    AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot, Skill]() {
+    AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot]() {
         ACultistCharacter* Caster = WeakCaster.Get();
         if (!IsValid(Caster)) return;
 
@@ -223,36 +231,109 @@ void AMySocketPoliceActor::ProcessSkillData(const char* Buffer)
         Params.Owner = Caster;
         Params.Instigator = Caster;
         Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-        switch (Skill)
-        {
-        case 1:
-        {
-            if (!Caster->TreeObstacleActorClass) {
-                UE_LOG(LogTemp, Error, TEXT("[Skill] %s TreeObstacleActorClass is null"), *Caster->GetName());
-                break;
-            }
-            Caster->GetWorld()->SpawnActor<ATreeObstacleActor>(
-                Caster->TreeObstacleActorClass, SpawnLoc, SpawnRot, Params);
-            break;
+
+        if (!Caster->TreeObstacleActorClass) {
+            UE_LOG(LogTemp, Error, TEXT("[Skill] %s TreeObstacleActorClass is null"), *Caster->GetName());
+            return;
         }
-        case 2:
+        Caster->GetWorld()->SpawnActor<ATreeObstacleActor>(Caster->TreeObstacleActorClass, SpawnLoc, SpawnRot, Params);
+        
+    });
+}
+
+void AMySocketPoliceActor::ProcessCrowSpawnData(const char* Buffer) {
+    Crow ReceivedCrow;
+    memcpy(&ReceivedCrow, Buffer + 2, sizeof(Crow));
+
+    const int Key = static_cast<int>(ReceivedCrow.owner);
+    ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
+    if (!FoundChar) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] caster %d not found"), ReceivedCrow.owner);
+        return;
+    }
+
+    ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
+    if (!CasterCultist) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] caster %d is not Cultist"), ReceivedCrow.owner);
+        return;
+    }
+
+    TWeakObjectPtr<ACultistCharacter> WeakCaster = CasterCultist;
+    const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedCrow.loc);
+    const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedCrow.rot);
+
+    AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot]() {
+        ACultistCharacter* Caster = WeakCaster.Get();
+        if (!IsValid(Caster))
+            return;
+
+        FActorSpawnParameters Params;
+        Params.Owner = Caster;
+        Params.Instigator = Caster;
+        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+        if (!Caster->CrowClass) {
+            UE_LOG(LogTemp, Error, TEXT("[CrowSpawn] %s CrowClass is null"), *Caster->GetName());
+            return;
+        }
+        if (!Caster->CrowInstance)
         {
-            if (!Caster->CrowClass) {
-                UE_LOG(LogTemp, Error, TEXT("[Skill] %s CrowClass is null"), *Caster->GetName());
-                break;
-            }
             Caster->CrowInstance = Caster->GetWorld()->SpawnActor<ACrowActor>(
                 Caster->CrowClass, SpawnLoc, SpawnRot, Params);
-            if (Caster->CrowInstance) {
-                Caster->CrowInstance->InitCrow(Caster, Caster->CrowLifetime);
-            }
-            break;
-        }
-        default:
-            UE_LOG(LogTemp, Error, TEXT("Unknown Skill Number: %d"), Skill);
-            break;
+            UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] Spawned crow for caster=%s"), *Caster->GetName());
         }
         });
+}
+
+void AMySocketPoliceActor::ProcessCrowData(const char* Buffer) {
+    Crow ReceivedCrow;
+    memcpy(&ReceivedCrow, Buffer + 2, sizeof(Crow));
+
+    const int Key = static_cast<int>(ReceivedCrow.owner);
+    ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
+    if (!FoundChar) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowData] caster %d not found"), ReceivedCrow.owner);
+        return;
+    }
+
+    ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
+    if (!CasterCultist) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowData] caster %d is not Cultist"), ReceivedCrow.owner);
+        return;
+    }
+    if (CasterCultist->CrowInstance) {
+        // 까마귀 업데이트
+        AsyncTask(ENamedThreads::GameThread, [CI = CasterCultist->CrowInstance, ReceivedCrow]() {
+            if (IsValid(CI)) {
+                CI->SetActorLocation(AMySocketActor::ToUE(ReceivedCrow.loc));
+                CI->SetActorRotation(AMySocketActor::ToUE(ReceivedCrow.rot));
+            }
+            });
+    }
+}
+
+void AMySocketPoliceActor::ProcessCrowDisable(const char* Buffer) {
+    IdOnlyPacket packet;
+    memcpy(&packet, Buffer + 2, sizeof(packet));
+
+    const int Key = static_cast<int>(packet.id);
+    ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
+    if (!FoundChar) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowDisable] caster %d not found"), packet.id);
+        return;
+    }
+
+    ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
+    if (!CasterCultist) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowDisable] caster %d is not Cultist"), packet.id);
+        return;
+    }
+
+    if (CasterCultist->CrowInstance)
+    {
+        CasterCultist->CrowInstance->Destroy();
+        CasterCultist->CrowInstance = nullptr;
+    }
 }
 
 void AMySocketPoliceActor::ProcessConnection(const char* Buffer) {
@@ -326,7 +407,7 @@ void AMySocketPoliceActor::SendDogData() {
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(DogPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
-            UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
+            UE_LOG(LogTemp, Error, TEXT("SendDogData failed with error: %ld"), WSAGetLastError());
         }
     }
     else
@@ -397,9 +478,14 @@ FPoliceCharacterState AMySocketPoliceActor::GetCharacterState()
 
 Dog AMySocketPoliceActor::GetDog() {
     Dog dog;
-    dog.loc;
-    dog.rot;
     dog.owner = MyCharacter->my_ID;
+    if (MyCharacter->PoliceDogInstance)
+    {
+        dog.loc = AMySocketActor::ToNet(MyCharacter->PoliceDogInstance->GetActorLocation());
+        dog.rot = AMySocketActor::ToNet(MyCharacter->PoliceDogInstance->GetActorRotation());
+
+        // 개 상태 추가
+    }
 
     return dog;
 }
