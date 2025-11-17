@@ -235,7 +235,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "PoliceDog")
 	TSubclassOf<APoliceDog> PoliceDogClass;
 	UPROPERTY(EditDefaultsOnly, Category = "PoliceDog")
-	APoliceDog* CrowInstance = nullptr;
+	APoliceDog* PoliceDogInstance = nullptr;
 
 	int my_ID = -1;
 };
