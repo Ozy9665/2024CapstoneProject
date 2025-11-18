@@ -267,6 +267,7 @@ public:
 	ACrowActor* CrowInstance = nullptr;
 	UPROPERTY(EditDefaultsOnly, Category="CrowSkill")
 	float CrowLifetime = 12.f;
+	bool crowIsAvailable{ false };
 
 	// Heal
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Interaction")

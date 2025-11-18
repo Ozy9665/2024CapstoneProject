@@ -1017,6 +1017,7 @@ void ACultistCharacter::OnCrowSkillPressed()
 		const FRotator SpawnRot = GetActorRotation();
 
 		CrowInstance = GetWorld()->SpawnActor<ACrowActor>(CrowClass, SpawnLoc, SpawnRot, Params);
+		crowIsAvailable = true;
 		MySocketCultistActor->SendCrowSpawn(SpawnLoc, SpawnRot);
 		if (CrowInstance)
 		{

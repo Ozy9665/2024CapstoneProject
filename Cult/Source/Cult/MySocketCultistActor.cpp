@@ -265,6 +265,7 @@ void AMySocketCultistActor::ProcessCrowSpawnData(const char* Buffer) {
         {
             Caster->CrowInstance = Caster->GetWorld()->SpawnActor<ACrowActor>(
                 Caster->CrowClass, SpawnLoc, SpawnRot, Params);
+            Caster->crowIsAvailable = true;
             UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] Spawned crow for caster=%s"), *Caster->GetName());
         }
     });
@@ -286,7 +287,7 @@ void AMySocketCultistActor::ProcessCrowData(const char* Buffer) {
         UE_LOG(LogTemp, Warning, TEXT("[CrowData] caster %d is not Cultist"), ReceivedCrow.owner);
         return;
     }
-    if (CasterCultist->CrowInstance) {
+    if (CasterCultist->CrowInstance && CasterCultist->crowIsAvailable) {
         // 까마귀 업데이트
         AsyncTask(ENamedThreads::GameThread, [CI = CasterCultist->CrowInstance, ReceivedCrow]() {
             if (IsValid(CI)) {
@@ -318,6 +319,7 @@ void AMySocketCultistActor::ProcessCrowDisable(const char* Buffer) {
     {
         CasterCultist->CrowInstance->Destroy();
         CasterCultist->CrowInstance = nullptr;
+        CasterCultist->crowIsAvailable = false;
     }
 }
 
@@ -536,6 +538,7 @@ void AMySocketCultistActor::SendTree(FVector SpawnLoc, FRotator SpawnRot)
         TreePacket Packet;
         Packet.header = treeHeader;
         Packet.size = sizeof(TreePacket);
+        Packet.casterId = MyCharacter->my_ID;
         Packet.SpawnLoc = AMySocketActor::ToNet(SpawnLoc);
         Packet.SpawnRot = AMySocketActor::ToNet(SpawnRot);
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(TreePacket), 0);
@@ -567,7 +570,7 @@ void AMySocketCultistActor::SendCrowSpawn(FVector SpawnLoc, FRotator SpawnRot)
         Packet.crow.owner = MyCharacter->my_ID;
         Packet.crow.loc = AMySocketActor::ToNet(SpawnLoc);
         Packet.crow.rot = AMySocketActor::ToNet(SpawnRot);
-        Packet.crow.is_alive = true;
+        Packet.crow.is_alive = MyCharacter->crowIsAvailable;
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(CrowPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
@@ -632,6 +635,9 @@ void AMySocketCultistActor::SendPlayerData()
         {
             UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
         }
+        if (MyCharacter->crowIsAvailable) {
+            SendCrowData();
+        }
     }
     else
     {
@@ -691,7 +697,7 @@ Crow AMySocketCultistActor::GetCrow()
     {
         crow.loc = AMySocketActor::ToNet(MyCharacter->CrowInstance->GetActorLocation());
         crow.rot = AMySocketActor::ToNet(MyCharacter->CrowInstance->GetActorRotation());
-
+        crow.is_alive = MyCharacter->crowIsAvailable;
         // 까마귀 상태 추가
     }
 

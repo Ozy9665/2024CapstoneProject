@@ -112,7 +112,7 @@ void AMySocketPoliceActor::ReceiveData()
                         ProcessPlayerData(Buffer);
                         break;
                     case treeHeader:
-                        ProcessSkillData(Buffer);
+                        ProcessTreeData(Buffer);
                         break;
                     case crowSpawnHeader:
                         ProcessCrowSpawnData(Buffer);
@@ -201,7 +201,7 @@ void AMySocketPoliceActor::ProcessHitData(const char* Buffer)
     }
 }
 
-void AMySocketPoliceActor::ProcessSkillData(const char* Buffer) 
+void AMySocketPoliceActor::ProcessTreeData(const char* Buffer) 
 {
     TreePacket ReceivedSkill;
     memcpy(&ReceivedSkill, Buffer, sizeof(TreePacket));
