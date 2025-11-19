@@ -300,7 +300,7 @@ void AMySocketCultistActor::ProcessCrowData(const char* Buffer) {
 
 void AMySocketCultistActor::ProcessCrowDisable(const char* Buffer) {
     IdOnlyPacket packet;
-    memcpy(&packet, Buffer + 2, sizeof(packet));
+    memcpy(&packet, Buffer, sizeof(packet));
     
     const int Key = static_cast<int>(packet.id);
     ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
@@ -317,9 +317,16 @@ void AMySocketCultistActor::ProcessCrowDisable(const char* Buffer) {
 
     if (CasterCultist->CrowInstance)
     {
-        CasterCultist->CrowInstance->Destroy();
-        CasterCultist->CrowInstance = nullptr;
-        CasterCultist->crowIsAvailable = false;
+        ACrowActor* CI = CasterCultist->CrowInstance;
+
+        AsyncTask(ENamedThreads::GameThread, [CasterCultist, CI]() {
+            if (IsValid(CI))
+            {
+                CI->Destroy();
+            }
+            CasterCultist->CrowInstance = nullptr;
+            CasterCultist->crowIsAvailable = false;
+        });
     }
 }
 
@@ -609,6 +616,7 @@ void AMySocketCultistActor::SendCrowDisable() {
         Packet.header = crowDisableHeader;
         Packet.size = sizeof(IdOnlyPacket);
         Packet.id = MyCharacter->my_ID;
+        UE_LOG(LogTemp, Warning, TEXT("my_ID = %d"), MyCharacter->my_ID);
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(IdOnlyPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {

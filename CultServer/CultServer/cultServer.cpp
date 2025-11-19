@@ -839,7 +839,7 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid SkillCrowPacket size\n";
 			break;
 		}
-		std::cout << "[CrowSpawnRecv] from=" << (int)c_id << " room=" << g_users[c_id].room_id << "\n";
+		std::cout << "[CrowSpawnRecv] from=" << p->crow.owner << " room=" << g_users[c_id].room_id << "\n";
 		g_users[c_id].crow = p->crow;
 		if (!g_users[c_id].crow.is_alive) {
 			break;
@@ -870,7 +870,7 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid IdOnlyPacket size\n";
 			break;
 		}
-		std::cout << "[CrowDisableRecv] from=" << (int)c_id << " room=" << g_users[c_id].room_id << "\n";
+		std::cout << "[CrowDisableRecv] from=" << (int)p->id << " room=" << g_users[c_id].room_id << "\n";
 		g_users[c_id].crow.is_alive = false;
 
 		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
