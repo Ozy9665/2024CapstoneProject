@@ -1516,13 +1516,33 @@ void AMySocketCultistActor::SendEndHeal()
 
 void AMySocketCultistActor::ProcessEndHeal(const char* Buffer) {
     BoolPacket Received;
-    memcpy(&Received, Buffer, sizeof(MovePacket));
+    //memcpy(&Received, Buffer, sizeof(MovePacket));
+    memcpy(&Received, Buffer, sizeof(BoolPacket));
     if (Received.result) {
         // 치료 성공 - hp회복, 상태 복구
+        MyCharacter->CurrentHealth = 100.0f;
     }
     else {
         // 치료 실패 ( 움직임 )
+        
+
     }
+    if (USkeletalMeshComponent* Mesh = MyCharacter->GetMesh())
+    {
+        if (UAnimInstance* Anim = Mesh->GetAnimInstance())
+        {
+            if (MyCharacter->AS_WoundedSitting1_Montage)
+            {
+                Anim->Montage_Stop(0.2f, MyCharacter->AS_WoundedSitting1_Montage);
+            }
+            if (MyCharacter->AS_BandageFriendSquat1_Montage)
+            {
+                Anim->Montage_Stop(0.2f, MyCharacter->AS_BandageFriendSquat1_Montage);
+            }
+        }
+    }
+    MyCharacter->ABP_DoHeal = false;
+    MyCharacter->ABP_GetHeal = false;
 }
 
 void AMySocketCultistActor::SendStartRitual(uint8_t ritual_id) {
