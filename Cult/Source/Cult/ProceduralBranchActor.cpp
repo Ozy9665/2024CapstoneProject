@@ -3,6 +3,7 @@
 
 #include "ProceduralBranchActor.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
 
 // Sets default values
@@ -131,17 +132,30 @@ void AProceduralBranchActor::SpawnBranches()
 		FVector Dir = SpawnRot.RotateVector(FVector::ForwardVector + UpwardBias);
 		FRotator FinalRot = Dir.Rotation();
 
-		FActorSpawnParameters Params;
+		FTransform SpawnTransform(FinalRot, SpawnPoint);
+
+		/*FActorSpawnParameters Params;
 		AProceduralBranchActor* Branch = GetWorld()->SpawnActor<AProceduralBranchActor>(
 			AProceduralBranchActor::StaticClass(),
 			SpawnPoint,
 			FinalRot,
 			Params
+		);*/
+
+
+		AProceduralBranchActor* Branch = GetWorld()->SpawnActorDeferred<AProceduralBranchActor>(
+			AProceduralBranchActor::StaticClass(),
+			SpawnTransform,
+			this, 
+			nullptr,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn
 		);
 
 		if (Branch)
 		{
 			Branch->bIsMainTrunk = false;
+
+			UGameplayStatics::FinishSpawningActor(Branch, SpawnTransform);
 		}
 
 	}
