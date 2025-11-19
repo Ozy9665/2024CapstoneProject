@@ -704,7 +704,6 @@ Crow AMySocketCultistActor::GetCrow()
     return crow;
 }
 
-
 void AMySocketCultistActor::ProcessCharacterUpdates()
 {
     {

@@ -1007,7 +1007,7 @@ void ACultistCharacter::OnCrowSkillPressed()
 	if (!CrowClass) return;
 
 	// º“»Ø
-	if (!CrowInstance)
+	if (!CrowInstance && !crowIsAvailable)
 	{
 		FActorSpawnParameters Params;
 		Params.Owner = this;
@@ -1036,6 +1036,7 @@ void ACultistCharacter::OnCrowControlPressed()
 {
 	if (!CrowClass)return;
 	if (!CrowInstance)return;
+	if (!crowIsAvailable)return;
 
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC)return;
