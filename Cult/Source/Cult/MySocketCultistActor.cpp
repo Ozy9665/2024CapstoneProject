@@ -1515,6 +1515,11 @@ void AMySocketCultistActor::SendEndHeal()
 }
 
 void AMySocketCultistActor::ProcessEndHeal(const char* Buffer) {
+    if (!MyCharacter)
+    {
+        return;
+    }
+
     BoolPacket Received;
     //memcpy(&Received, Buffer, sizeof(MovePacket));
     memcpy(&Received, Buffer, sizeof(BoolPacket));

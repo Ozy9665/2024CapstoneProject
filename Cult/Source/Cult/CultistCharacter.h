@@ -12,6 +12,7 @@
 #include "Altar.h"
 #include "CultistSkillCheckWidget.h"
 #include "RitualPerformer.h"
+#include "ProceduralBranchActor.h"
 #include "CultistCharacter.generated.h"
 
 class AMySocketCultistActor;
@@ -216,7 +217,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TSubclassOf<class ATreeObstacleActor> TreeObstacleActorClass;
 
-	UPROPERTY(EditAnywhere, Category = "Abilities")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Abilities")
 	TSubclassOf<class AProceduralBranchActor> ProceduralBranchActorClass;
 
 	UPROPERTY()
