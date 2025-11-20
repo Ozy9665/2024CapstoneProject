@@ -966,8 +966,10 @@ void ACultistCharacter::ConfirmPlacement()
 
 	FVector SpawnLocation = SpawnedPreviewActor->GetActorLocation();
 	FRotator SpawnRotation = SpawnedPreviewActor->GetActorRotation();
+	// SpawnRotation.Pitch -= 90.0f;
 
-	if (TreeObstacleActorClass)
+
+	if (ProceduralBranchActorClass)
 	{
 		MySocketCultistActor->SendTree(SpawnLocation, SpawnRotation);
 	}
