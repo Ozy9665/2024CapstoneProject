@@ -150,6 +150,18 @@ void AMyGameBeginActor::SpawnActor() {
 
         AMySocketPoliceActor* PoliceActor = GetWorld()->SpawnActor<AMySocketPoliceActor>(
             AMySocketPoliceActor::StaticClass(), GetActorLocation(), GetActorRotation());
+        // °³ À§Ä¡
+        if (GI->DogClass)
+        {
+            FVector DogLocation = PoliceActor->GetActorLocation() + (PoliceActor->GetActorRightVector() * 150) + (PoliceActor->GetActorForwardVector() * -50.0f);
+            FRotator DogRotation = PoliceActor->GetActorRotation();
+            APawn* DogPawn = GetWorld()->SpawnActor<APawn>(GI->DogClass, DogLocation, DogRotation, SpawnParams);
+            if (DogPawn)
+            {
+                UE_LOG(LogTemp, Log, TEXT("Spawned AI Police Dog"));
+            }
+        }
+
         if (not PoliceActor)
         {
             UE_LOG(LogTemp, Error, TEXT("Failed to spawn PoliceActor."));

@@ -55,6 +55,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character")
 	TSubclassOf<class APawn> PoliceClass;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, category ="Dog")
+	TSubclassOf<class APawn> DogClass;
+
 	UPROPERTY(BlueprintReadWrite, Category = "Network")
 	TArray<FVector> RutialSpawnLocations;
 };
