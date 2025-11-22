@@ -44,6 +44,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	UNiagaraComponent* QTEParticleComponent;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VFX")
+	float CurrentGlow = 0;
+
 	// 제단 머터리얼
 	UPROPERTY()
 	class UMaterialInstanceDynamic* AltarMID;

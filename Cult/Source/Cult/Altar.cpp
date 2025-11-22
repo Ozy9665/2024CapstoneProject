@@ -151,13 +151,42 @@ void AAltar::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// 게이지 자동 충전
-	if(NumCultistsInRange > 0)
+	// 의식 수행 중일 때 게이지 자동 충전
+	if(CurrentPerformingCultist != nullptr)
 	{
 		// QTE 활성화되지 않았을 때 or 항상 충전
 		
 		// 항상 충전
 		AddToRitualGauge(SlowAutoChargeRate * NumCultistsInRange * DeltaTime);
+
+		// 머터리얼 조절
+		float TimeSeconds = GetWorld()->GetTimeSeconds();
+		float SineValue = FMath::Sin(TimeSeconds * 3.0f);
+
+		CurrentGlow = (SineValue + 1.0f) * 0.5f;
+
+		if (AltarMID)
+		{
+			AltarMID->SetScalarParameterValue(FName("GaugeGlow"), CurrentGlow * 50.0f);
+		}
+
+		// 게이지 따라 채우기
+		if (QTEParticleComponent)
+		{
+			// 0~1
+			float ProgressNormalized = RitualGauge / 100.0f;
+
+			// 값 전달
+			QTEParticleComponent->SetFloatParameter(FName("User_RitualProgress"), ProgressNormalized);
+		}
+	}
+	else
+	{
+		CurrentGlow = 0.0f;
+		if (AltarMID)
+		{
+			AltarMID->SetScalarParameterValue(FName("GaugeGlow"), 0.0f);
+		}
 	}
 
 	// QTE 회전
@@ -286,31 +315,19 @@ void AAltar::OnPlayerInput()
 	// QTE활성화 상태일 때만
 	if (!bIsQTEActive || !CurrentPerformingCultist)return;
 
-	// 성공영역의 시작 각도 0~1.0
-	float ZoneStartNormalized = QTECurrentAngle / 360.0f;
+	bool bSuccess = (CurrentGlow >= 0.8f);
 
-	// 성공영역 너비 (0.1)
-	float ZoneWidthNormalized = 0.1f;
 
-	// 정면 계산	( 카메라방향, 컨트롤러의 회전값)
-	AController* PlayerController = CurrentPerformingCultist->GetController();
-	if (!PlayerController)return;
 
-	FVector PlayerFacingVector = PlayerController->GetControlRotation().Vector().GetSafeNormal();
-	float PlayerFacingDegrees = FMath::RadiansToDegrees(FMath::Atan2(PlayerFacingVector.Y, PlayerFacingVector.X));
-	if (PlayerFacingDegrees < 0.0f) { PlayerFacingDegrees += 360.0f; }
-	float PlayerFacingNormalized = PlayerFacingDegrees / 360.0f;
+
 
 	// 판정 - 입력 시 정면에 회전하는 성공영역이 있는지
-	float Delta = FMath::Fmod((PlayerFacingNormalized - ZoneStartNormalized) + 1.0f, 1.0f);
-	bool bSuccess = (Delta >= 0.0f && Delta <= ZoneWidthNormalized);
 
 
 	if (CurrentPerformingCultist)
 	{
 		CurrentPerformingCultist->NotifySkillCheckResult(bSuccess);
 	}
-
 	if (bSuccess)
 	{
 		AddToRitualGauge(QTEBonus);
@@ -325,17 +342,17 @@ void AAltar::OnPlayerInput()
 		// 실패 파티클
 	}
 
-	// QTE 1회 처리 완료
-	bIsQTEActive = false;
-	if (QTEParticleComponent)
-	{
-		QTEParticleComponent->Deactivate();
-	}
-	// 다음 QTE 타이머
-	if (CurrentPerformingCultist != nullptr)
-	{
-		GetWorld()->GetTimerManager().SetTimer(
-			QTETriggerTimerHandle, this, &AAltar::TriggerNextQTE, QTEInterval, false
-		);
-	}
+	//// QTE 1회 처리 완료
+	//bIsQTEActive = false;
+	//if (QTEParticleComponent)
+	//{
+	//	QTEParticleComponent->Deactivate();
+	//}
+	//// 다음 QTE 타이머
+	//if (CurrentPerformingCultist != nullptr)
+	//{
+	//	GetWorld()->GetTimerManager().SetTimer(
+	//		QTETriggerTimerHandle, this, &AAltar::TriggerNextQTE, QTEInterval, false
+	//	);
+	//}
 }
