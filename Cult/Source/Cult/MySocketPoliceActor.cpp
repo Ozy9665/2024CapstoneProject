@@ -791,6 +791,21 @@ void AMySocketPoliceActor::HideCharacter(int PlayerID, bool bHide) {
         });
 }
 
+void AMySocketPoliceActor::SendQuit() {
+    NoticePacket Packet;
+    Packet.header = quitHeader;
+    Packet.size = sizeof(NoticePacket);
+
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(NoticePacket), 0);
+    if (BytesSent == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("SendDisconnection failed with error: %ld"), WSAGetLastError());
+    }
+
+    closesocket(ClientSocket);
+    ClientSocket = INVALID_SOCKET;
+}
+
 void AMySocketPoliceActor::SendDisconnection() {
     NoticePacket Packet;
     Packet.header = DisconnectionHeader;

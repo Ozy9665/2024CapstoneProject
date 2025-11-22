@@ -88,6 +88,8 @@ public:
 	void SendEndRitual(uint8_t, uint8_t);
 	void ProcessRitualData(const char*);
 	void ProcessRitualEnd(const char*);
+	UFUNCTION(BlueprintCallable)
+	void SendQuit();
 	void SendDisconnection();
 	void CloseConnection();
 	void SafeDestroyCharacter(int);

@@ -333,6 +333,7 @@ constexpr char ritualHeader = 13;
 constexpr char loginHeader = 14;
 constexpr char idExistHeader = 15;
 constexpr char signUpHeader = 16;
+constexpr char quitHeader = 29;
 
 constexpr FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,

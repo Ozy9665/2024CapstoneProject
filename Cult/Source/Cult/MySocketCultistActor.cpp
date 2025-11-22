@@ -1697,6 +1697,21 @@ void AMySocketCultistActor::HandleMontageEnded(UAnimMontage* Montage, bool bInte
     }
 }
 
+void AMySocketCultistActor::SendQuit() {
+    NoticePacket Packet;
+    Packet.header = quitHeader;
+    Packet.size = sizeof(NoticePacket);
+
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(NoticePacket), 0);
+    if (BytesSent == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("SendDisconnection failed with error: %ld"), WSAGetLastError());
+    }
+
+    closesocket(ClientSocket);
+    ClientSocket = INVALID_SOCKET;
+}
+
 void AMySocketCultistActor::SendDisconnection() {
     NoticePacket Packet;
     Packet.header = DisconnectionHeader;

@@ -789,3 +789,8 @@ void APoliceCharacter::TestCollapse()
 	//	DrawDebugSphere(GetWorld(), TestTargetBlock->GetComponentLocation(), 30.f, 12, FColor::Red, false, 2.0f);
 	}
 }
+
+AMySocketPoliceActor* APoliceCharacter::GetMySocketActor()
+{
+	return MySocketPoliceActor;
+}

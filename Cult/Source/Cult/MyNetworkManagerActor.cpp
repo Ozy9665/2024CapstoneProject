@@ -14,13 +14,6 @@ AMyNetworkManagerActor::AMyNetworkManagerActor()
 {
     // Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
     PrimaryActorTick.bCanEverTick = false;
-
-    WSADATA WsaData;
-    int Result = WSAStartup(MAKEWORD(2, 2), &WsaData);
-    if (Result != 0)
-    {
-        UE_LOG(LogTemp, Error, TEXT("WSAStartup failed: %d"), Result);
-    }
 }
 
 // Called when the game starts or when spawned
@@ -33,6 +26,14 @@ void AMyNetworkManagerActor::BeginPlay()
         return;
     }
     UE_LOG(LogTemp, Error, TEXT("Actor Spawned"));
+
+    WSADATA WsaData;
+    int Result = WSAStartup(MAKEWORD(2, 2), &WsaData);
+    if (Result != 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("WSAStartup failed: %d"), Result);
+    }
+
     CheckServer();
 }
 

@@ -238,4 +238,6 @@ public:
 	APoliceDog* PoliceDogInstance = nullptr;
 
 	int my_ID = -1;
+	UFUNCTION(BlueprintPure)
+	static AMySocketPoliceActor* GetMySocketActor();
 };

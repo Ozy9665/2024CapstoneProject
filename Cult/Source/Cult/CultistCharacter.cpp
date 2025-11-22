@@ -1179,6 +1179,11 @@ int ACultistCharacter::GetPlayerID() const {
 	return my_ID;
 }
 
+AMySocketCultistActor* ACultistCharacter::GetMySocketActor()
+{
+	return MySocketCultistActor;
+}
+
 void ACultistCharacter::SendDisableToServer()
 {
 	if (MySocketCultistActor)

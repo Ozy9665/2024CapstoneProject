@@ -305,6 +305,8 @@ public:
 
 	int my_ID = -1;
 	int GetPlayerID() const;
+	UFUNCTION(BlueprintPure)
+	static AMySocketCultistActor* GetMySocketActor();
 	void SendDisableToServer();
 	ACameraActor* GetFollowCameraActor() const;
 };
