@@ -86,6 +86,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual | QTE")
 	float QTEInterval = 5.0f;	// 다음 QTE까지의 시간
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual | QTE")
+	float TotalCycleTime = 3.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual | QTE")
+	float FlashDuration = 1.5f;
+
 	FTimerHandle QTETriggerTimerHandle;
 
 	UPROPERTY()

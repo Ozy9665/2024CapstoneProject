@@ -153,21 +153,35 @@ void AAltar::Tick(float DeltaTime)
 
 	// 의식 수행 중일 때 게이지 자동 충전
 	if(CurrentPerformingCultist != nullptr)
-	{
-		// QTE 활성화되지 않았을 때 or 항상 충전
-		
+	{	
 		// 항상 충전
 		AddToRitualGauge(SlowAutoChargeRate * NumCultistsInRange * DeltaTime);
 
-		// 머터리얼 조절
-		float TimeSeconds = GetWorld()->GetTimeSeconds();
-		float SineValue = FMath::Sin(TimeSeconds * 3.0f);
+		float CurrentTime = GetWorld()->GetTimeSeconds();
+		// 0.0~3.0
+		float TimeInCycle = FMath::Fmod(CurrentTime, TotalCycleTime);
 
-		CurrentGlow = (SineValue + 1.0f) * 0.5f;
+		if (TimeInCycle <= FlashDuration)
+		{
+			// 빛나는 구간
+			float Alpha = (TimeInCycle / FlashDuration) * PI;
+			float RawSine = FMath::Sin(Alpha);
+			CurrentGlow = FMath::Pow(RawSine, 2.0f);
+		}
+		else
+		{
+			// 휴식 구간
+			CurrentGlow = 0.0f;
+		}
 
 		if (AltarMID)
 		{
-			AltarMID->SetScalarParameterValue(FName("GaugeGlow"), CurrentGlow * 50.0f);
+			// 밝기 조절
+			AltarMID->SetScalarParameterValue(FName("GaugeGlow"), CurrentGlow);
+
+			// 색상 조절
+			float ProgressNormalized = RitualGauge / 100.0f;
+			AltarMID->SetScalarParameterValue(FName("RitualProgress"), ProgressNormalized);
 		}
 
 		// 게이지 따라 채우기
@@ -186,24 +200,6 @@ void AAltar::Tick(float DeltaTime)
 		if (AltarMID)
 		{
 			AltarMID->SetScalarParameterValue(FName("GaugeGlow"), 0.0f);
-		}
-	}
-
-	// QTE 회전
-	if (bIsQTEActive)
-	{
-		// 현 각도 업데이트(0~360)
-		QTECurrentAngle = FMath::Fmod(QTECurrentAngle + (QTERotationSpeed * DeltaTime), 360.0f);
-
-		// 값 정규화
-		float NormalizedAngle = QTECurrentAngle / 360.0f;
-
-		UE_LOG(LogTemp, Warning, TEXT("Sending Angle to Niagara: %f"), NormalizedAngle);
-
-		// 파티클 파라미터 업데이트
-		if (QTEParticleComponent)
-		{
-			QTEParticleComponent->SetFloatParameter(FName("User_CurrentAngleNormalized"), NormalizedAngle);
 		}
 	}
 }
@@ -268,8 +264,14 @@ void AAltar::StartRitualQTE(ACultistCharacter* PerformingCultist)
 
 	CurrentPerformingCultist = PerformingCultist;
 
-	// 다음 QTE타이머 시작
-	GetWorld()->GetTimerManager().SetTimer(QTETriggerTimerHandle, this, &AAltar::TriggerNextQTE, QTEInterval, false);
+
+	if (QTEParticleComponent)
+	{
+		QTEParticleComponent->Activate(true);
+
+		float ProgressNormalized = RitualGauge / 100.0f;
+		QTEParticleComponent->SetFloatParameter(FName("User_RitualProgress"), ProgressNormalized);
+	}
 }
 
 void AAltar::StopRitualQTE(ACultistCharacter* PerformingCultist)
@@ -278,14 +280,15 @@ void AAltar::StopRitualQTE(ACultistCharacter* PerformingCultist)
 	if (PerformingCultist != CurrentPerformingCultist) return;
 
 	CurrentPerformingCultist = nullptr;
-	bIsQTEActive = false;
 
 	if (QTEParticleComponent)
 	{
 		QTEParticleComponent->Deactivate();
 	}
-	// 타이머 정지
-	GetWorld()->GetTimerManager().ClearTimer(QTETriggerTimerHandle);
+	if (AltarMID)
+	{
+		AltarMID->SetScalarParameterValue(FName("GaugeGlow"), 0.0f);
+	}
 }
 
 // 다음QTE활성화
@@ -313,9 +316,9 @@ void AAltar::TriggerNextQTE()
 void AAltar::OnPlayerInput()
 {
 	// QTE활성화 상태일 때만
-	if (!bIsQTEActive || !CurrentPerformingCultist)return;
+	if (!CurrentPerformingCultist)return;
 
-	bool bSuccess = (CurrentGlow >= 0.8f);
+	bool bSuccess = (CurrentGlow >= 0.7f);
 
 
 
@@ -341,18 +344,4 @@ void AAltar::OnPlayerInput()
 
 		// 실패 파티클
 	}
-
-	//// QTE 1회 처리 완료
-	//bIsQTEActive = false;
-	//if (QTEParticleComponent)
-	//{
-	//	QTEParticleComponent->Deactivate();
-	//}
-	//// 다음 QTE 타이머
-	//if (CurrentPerformingCultist != nullptr)
-	//{
-	//	GetWorld()->GetTimerManager().SetTimer(
-	//		QTETriggerTimerHandle, this, &AAltar::TriggerNextQTE, QTEInterval, false
-	//	);
-	//}
 }
