@@ -317,7 +317,8 @@ void ACultistCharacter::StartRitual()
 		CurrentAltar->StartRitualQTE(this);
 		if (MySocketCultistActor)
 		{
-			MySocketCultistActor->SendStartRitual(CurrentAltar->AltarID);
+			uint8 RitualID = (uint8)CurrentAltar->AltarID;
+			MySocketCultistActor->SendStartRitual(RitualID);
 		}
 		
 		UE_LOG(LogTemp, Warning, TEXT("Ritual Started."));
@@ -328,19 +329,7 @@ void ACultistCharacter::StartRitual()
 		UE_LOG(LogTemp, Warning, TEXT("Already Performing.."));
 	}
 
-	//if (TaskRitualWidget)
-	//{
-	//	TaskRitualWidget->SetVisibility(ESlateVisibility::Visible);
-	//}
-	//if (!GetWorld()->GetTimerManager().IsTimerActive(SkillCheckTimerHandle))
-	//{
-	//	GetWorld()->GetTimerManager().SetTimer(SkillCheckTimerHandle, this, &ACultistCharacter::StartNextSkillCheck, SkilCheckIntervalTime, false);
-	//	UE_LOG(LogTemp, Warning, TEXT("SkillCheck Timer Set"));
-	//}
-	//StartNextSkillCheck();
-	//GetCharacterMovement()->DisableMovement();
 
-	// Animation
 }
 
 // 중단 x, 완료처리
@@ -372,28 +361,14 @@ void ACultistCharacter::CancelRitual()
 
 	bIsPerformingRitual = false;
 
-	//GetWorld()->GetTimerManager().ClearTimer(RitualTimerHandle);
-	//GetWorld()->GetTimerManager().ClearTimer(TaskRitualTimerHandle);
-
-	//if (TaskRitualWidget)
-	//{
-	//	TaskRitualWidget->SetVisibility(ESlateVisibility::Hidden);
-	//	TaskRitualProgress = 0.0f;
-	//}
-	//// 스킬체크 위젯 제거
-	//if (SkillCheckWidget)
-	//{
-	//	SkillCheckWidget->RemoveFromParent();
-	//	SkillCheckWidget = nullptr;
-	//}
-
 	// QTE중단
 	if (CurrentAltar)
 	{
 		CurrentAltar->StopRitualQTE(this);
 		if (MySocketCultistActor)
 		{
-			MySocketCultistActor->SendEndRitual(CurrentAltar->AltarID, 3);
+			uint8 RitualID = (uint8)CurrentAltar->AltarID;
+			MySocketCultistActor->SendEndRitual(RitualID, 3);
 		}
 	}
 	
