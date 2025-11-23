@@ -15,4 +15,16 @@ class CULT_API ACultPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 
+protected:
+    virtual void SetupInputComponent() override;
+
+    UFUNCTION()
+    void OnPausePressed();
+
+public:
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI")
+    TSubclassOf<UUserWidget> PauseWidgetClass;
+
+    UPROPERTY(BlueprintReadWrite, Category = "UI")
+    UUserWidget* PauseWidget;
 };
