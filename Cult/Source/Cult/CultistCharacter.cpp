@@ -549,7 +549,7 @@ void ACultistCharacter::TakeDamage(float DamageAmount)
 {
 	if (bIsStunned)return;
 	bIsHitByAnAttack = true;
-	
+	SendEndHeal();
 	// Ritual 상태 해제
 	bIsPerformingRitual = false;
 
