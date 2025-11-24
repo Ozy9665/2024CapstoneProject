@@ -913,7 +913,6 @@ void process_packet(int c_id, char* packet) {
 	}
 	case dogHeader:
 	{
-		break;
 		auto* p = reinterpret_cast<DogPacket*>(packet);
 		if (p->size != sizeof(DogPacket)) {
 			std::cout << "Invalid DogPacket size\n";

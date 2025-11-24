@@ -105,26 +105,21 @@ void AMySocketPoliceActor::ReceiveData()
                     PendingBuffer.insert(PendingBuffer.end(), Buffer, Buffer + BytesReceived);
                     while (true) 
                     {
-                        // 헤더 + size = 최소 2바이트 필요
                         if (PendingBuffer.size() < 2)
                             break;
 
                         uint8 PacketType = static_cast<uint8>(PendingBuffer[0]);
                         uint8 PacketSize = static_cast<uint8>(PendingBuffer[1]);
 
-                        // 패킷 전체가 안 들어왔으면 중단
                         if (PendingBuffer.size() < PacketSize)
                             break;
 
-                        // 3) 완성된 패킷 메모리 복사
                         std::vector<char> OnePacket(PendingBuffer.begin(),
                             PendingBuffer.begin() + PacketSize);
 
-                        // 4) PendingBuffer에서 제거
                         PendingBuffer.erase(PendingBuffer.begin(),
                             PendingBuffer.begin() + PacketSize);
 
-                        // 5) 패킷 처리
                         switch (PacketType)
                         {
                         case cultistHeader:
@@ -409,7 +404,7 @@ void AMySocketPoliceActor::SendPlayerData()
         {
             UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
         }
-        // SendDogData();
+        SendDogData();
     }
     else
     {
@@ -429,6 +424,7 @@ void AMySocketPoliceActor::SendDogData() {
         {
             UE_LOG(LogTemp, Error, TEXT("SendDogData failed with error: %ld"), WSAGetLastError());
         }
+        UE_LOG(LogTemp, Warning, TEXT("SendDogData"));
     }
     else
     {

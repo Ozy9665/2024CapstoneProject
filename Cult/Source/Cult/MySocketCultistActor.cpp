@@ -102,26 +102,21 @@ void AMySocketCultistActor::ReceiveData()
                     PendingBuffer.insert(PendingBuffer.end(), Buffer, Buffer + BytesReceived);
                     while (true)
                     {
-                        // 헤더 + size = 최소 2바이트 필요
                         if (PendingBuffer.size() < 2)
                             break;
 
                         uint8 PacketType = static_cast<uint8>(PendingBuffer[0]);
                         uint8 PacketSize = static_cast<uint8>(PendingBuffer[1]);
 
-                        // 패킷 전체가 안 들어왔으면 중단
                         if (PendingBuffer.size() < PacketSize)
                             break;
 
-                        // 3) 완성된 패킷 메모리 복사
                         std::vector<char> OnePacket(PendingBuffer.begin(),
                             PendingBuffer.begin() + PacketSize);
 
-                        // 4) PendingBuffer에서 제거
                         PendingBuffer.erase(PendingBuffer.begin(),
                             PendingBuffer.begin() + PacketSize);
 
-                        // 5) 패킷 처리
                         switch (PacketType)
                         {
                         case cultistHeader:
@@ -377,6 +372,7 @@ void AMySocketCultistActor::ProcessPoliceData(const char* Buffer)
 }
 
 void AMySocketCultistActor::ProcessDogData(const char* Buffer) {
+    UE_LOG(LogTemp, Warning, TEXT("[DogData] ProcessDogData called"));
     Dog ReceivedDog;
     memcpy(&ReceivedDog, Buffer + 2, sizeof(Dog));
     
@@ -398,8 +394,13 @@ void AMySocketCultistActor::ProcessDogData(const char* Buffer) {
             if (IsValid(PDI)) {
                 PDI->SetActorLocation(AMySocketActor::ToUE(ReceivedDog.loc));
                 PDI->SetActorRotation(AMySocketActor::ToUE(ReceivedDog.rot));
+                UE_LOG(LogTemp, Warning, TEXT("[DogData]: %s"), *AMySocketActor::ToUE(ReceivedDog.loc).ToString());
+
             }
         });
+    }
+    else {
+        UE_LOG(LogTemp, Warning, TEXT("[DogData] !Police->PoliceDogInstance"));
     }
 
 }
@@ -1301,9 +1302,6 @@ void AMySocketCultistActor::SpawnPoliceCharacter(const unsigned char PlayerID)
         FRotator(PoliceDummyState.RotationPitch, PoliceDummyState.RotationYaw, PoliceDummyState.RotationRoll),
         SpawnParams
     );
-    APawn* DogPawn = GetWorld()->SpawnActor<APawn>(GI->DogClass,
-        FVector(PoliceDummyState.PositionX, PoliceDummyState.PositionY, PoliceDummyState.PositionZ),
-        FRotator(PoliceDummyState.RotationPitch, PoliceDummyState.RotationYaw, PoliceDummyState.RotationRoll), SpawnParams);
 
     if (NewCharacter)
     {
@@ -1311,6 +1309,16 @@ void AMySocketCultistActor::SpawnPoliceCharacter(const unsigned char PlayerID)
         ReceivedPoliceStates.Add(PlayerID, PoliceDummyState);
         UE_LOG(LogTemp, Log, TEXT("Spawned new police character for PlayerID=%d"), PlayerID);
 
+        APoliceDog* DogPawn = GetWorld()->SpawnActor<APoliceDog>(
+            GI->DogClass,
+            FVector(PoliceDummyState.PositionX, PoliceDummyState.PositionY, PoliceDummyState.PositionZ),
+            FRotator(PoliceDummyState.RotationPitch, PoliceDummyState.RotationYaw, PoliceDummyState.RotationRoll),
+            SpawnParams
+        );
+        if (DogPawn) {
+            NewCharacter->PoliceDogInstance = DogPawn;
+            UE_LOG(LogTemp, Log, TEXT("Spawned new dog"));
+        }
         APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
         if (PC && PC->IsLocalController())
         {
