@@ -409,7 +409,7 @@ void AMySocketPoliceActor::SendPlayerData()
         {
             UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
         }
-        SendDogData();
+        // SendDogData();
     }
     else
     {

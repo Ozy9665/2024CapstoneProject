@@ -154,7 +154,7 @@ void DBWorkerLoop() {
 }
 
 // room thread
-enum ROOM_EVENT { RM_REQ, RM_ENTER, RM_GAMESTART, RM_RITUAL, RM_DISCONNECT };
+enum ROOM_EVENT { RM_REQ, RM_ENTER, RM_GAMESTART, RM_RITUAL, RM_DISCONNECT, RM_QUIT };
 struct RoomTask {
 	int c_id;
 	ROOM_EVENT type;
@@ -369,6 +369,26 @@ void RoomWorkerLoop() {
 				PostQueuedCompletionStatus(g_h_iocp, pkt.size, static_cast<ULONG_PTR>(other), &eo->over);
 			}
 			continue;
+		}
+		case RM_QUIT:
+		{
+			if (!g_users.count(task.c_id)) continue;
+			int room_id = task.room_id;
+			if (room_id < 0 || room_id >= MAX_ROOM) break;
+
+			if (0 == task.role && g_rooms[room_id].cultist >= 0) {
+				g_rooms[room_id].cultist--;
+			}
+			else if (1 == task.role && g_rooms[room_id].police >= 0) {
+				g_rooms[room_id].police--;
+			}
+
+			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
+				if (g_rooms[room_id].player_ids[i] == static_cast<uint8_t>(task.c_id)) {
+					g_rooms[room_id].player_ids[i] = UINT8_MAX;
+					break;
+				}
+			}
 		}
 		default:
 			break;
@@ -1177,7 +1197,7 @@ void process_packet(int c_id, char* packet) {
 	case DisconnectionHeader: 
 	{
 		std::lock_guard<std::mutex> lk(g_room_mtx);
-		g_room_q.push(RoomTask{ c_id, RM_DISCONNECT, g_users[c_id].role, g_users[c_id].room_id });
+		g_room_q.push(RoomTask{ c_id, RM_QUIT, g_users[c_id].role, g_users[c_id].room_id });
 		g_room_cv.notify_one();
 		break;
 	}
@@ -1358,6 +1378,9 @@ void process_packet(int c_id, char* packet) {
 	}
 	case quitHeader:
 	{
+		std::lock_guard<std::mutex> lk(g_room_mtx);
+		g_room_q.push(RoomTask{ c_id, RM_DISCONNECT, g_users[c_id].role, g_users[c_id].room_id });
+		g_room_cv.notify_one();
 		break;
 	}
 	default:
