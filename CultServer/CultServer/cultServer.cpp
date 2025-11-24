@@ -1356,6 +1356,10 @@ void process_packet(int c_id, char* packet) {
 		g_db_cv.notify_one();
 		break;
 	}
+	case quitHeader:
+	{
+		break;
+	}
 	default:
 		char header = packet[0];
 		std::cout << "invalidHeader From id: " << c_id << "header: " << header << std::endl;

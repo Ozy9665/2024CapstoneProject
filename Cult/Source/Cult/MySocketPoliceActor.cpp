@@ -4,6 +4,7 @@
 #include "MySocketPoliceActor.h"
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <vector>
 #include "Camera/CameraActor.h"
 #include "PoliceCharacter.h"
 #include "Components/TextBlock.h"
@@ -92,64 +93,83 @@ void AMySocketPoliceActor::ReceiveData()
 {
     AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this]()
         {
+            std::vector<char> PendingBuffer;
+            PendingBuffer.reserve(4096);
+
             while (true)
             {
                 char Buffer[BufferSize];
                 int32 BytesReceived = recv(ClientSocket, Buffer, BufferSize, 0);
                 if (BytesReceived > 0)
                 {
-                    int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
-                    int PacketSize = static_cast<int>(static_cast<unsigned char>(Buffer[1]));
-                    if (BytesReceived != PacketSize)
+                    PendingBuffer.insert(PendingBuffer.end(), Buffer, Buffer + BytesReceived);
+                    while (true) 
                     {
-                        UE_LOG(LogTemp, Warning, TEXT("Invalid packet size: Received %d, Expected %d"), BytesReceived, PacketSize);
-                        continue;
-                    }
+                        // 헤더 + size = 최소 2바이트 필요
+                        if (PendingBuffer.size() < 2)
+                            break;
 
-                    switch (PacketType)
-                    {
-                    case cultistHeader:
-                        ProcessPlayerData(Buffer);
-                        break;
-                    case treeHeader:
-                        ProcessTreeData(Buffer);
-                        break;
-                    case crowSpawnHeader:
-                        ProcessCrowSpawnData(Buffer);
-                        break;
-                    case crowDataHeader:
-                        ProcessCrowData(Buffer);
-                        break;
-                    case crowDisableHeader:
-                        ProcessCrowDisable(Buffer);
-                        break;
-                    case particleHeader:
-                        //ProcessParticleData(Buffer);
-                        break;
-                    case hitHeader:
-                        //ProcessHitData(Buffer);
-                        break;
-                    case connectionHeader:
-                        ProcessConnection(Buffer);
-                        break;
-                    case DisconnectionHeader:
-                        ProcessDisconnection(Buffer);
-                        break;
-                    case disappearHeader:
-                    {
-                        unsigned char id = static_cast<unsigned char>(Buffer[2]);
-                        HideCharacter(id, true);
-                        break;
-                    }
-                    case appearHeader:
-                    {
-                        unsigned char id = static_cast<unsigned char>(Buffer[2]);
-                        HideCharacter(id, false);
-                        break;
-                    }
-                    default:
-                        UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
-                        break;
+                        uint8 PacketType = static_cast<uint8>(PendingBuffer[0]);
+                        uint8 PacketSize = static_cast<uint8>(PendingBuffer[1]);
+
+                        // 패킷 전체가 안 들어왔으면 중단
+                        if (PendingBuffer.size() < PacketSize)
+                            break;
+
+                        // 3) 완성된 패킷 메모리 복사
+                        std::vector<char> OnePacket(PendingBuffer.begin(),
+                            PendingBuffer.begin() + PacketSize);
+
+                        // 4) PendingBuffer에서 제거
+                        PendingBuffer.erase(PendingBuffer.begin(),
+                            PendingBuffer.begin() + PacketSize);
+
+                        // 5) 패킷 처리
+                        switch (PacketType)
+                        {
+                        case cultistHeader:
+                            ProcessPlayerData(OnePacket.data());
+                            break;
+                        case treeHeader:
+                            ProcessTreeData(OnePacket.data());
+                            break;
+                        case crowSpawnHeader:
+                            ProcessCrowSpawnData(OnePacket.data());
+                            break;
+                        case crowDataHeader:
+                            ProcessCrowData(OnePacket.data());
+                            break;
+                        case crowDisableHeader:
+                            ProcessCrowDisable(OnePacket.data());
+                            break;
+                        case particleHeader:
+                            //ProcessParticleData(OnePacket.data());
+                            break;
+                        case hitHeader:
+                            //ProcessHitData(OnePacket.data());
+                            break;
+                        case connectionHeader:
+                            ProcessConnection(OnePacket.data());
+                            break;
+                        case DisconnectionHeader:
+                            ProcessDisconnection(OnePacket.data());
+                            break;
+                        case disappearHeader:
+                        {
+                            unsigned char id = static_cast<unsigned char>(OnePacket[2]);
+                            HideCharacter(id, true);
+                            break;
+                        }
+                        case appearHeader:
+                        {
+                            unsigned char id = static_cast<unsigned char>(OnePacket[2]);
+                            HideCharacter(id, false);
+                            break;
+                        }
+                        default:
+                            UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
+                            break;
+                        }
                     }
                 }
                 else if (BytesReceived == 0 || WSAGetLastError() == WSAECONNRESET)

@@ -64,6 +64,7 @@ constexpr char ritualHeader = 13;
 constexpr char loginHeader = 14;
 constexpr char idExistHeader = 15;
 constexpr char signUpHeader = 16;
+constexpr char quitHeader = 29;
 
 constexpr char ST_FREE{ 0 };
 constexpr char ST_READY{ 1 };
