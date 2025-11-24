@@ -413,6 +413,10 @@ void AMySocketPoliceActor::SendPlayerData()
 }
 
 void AMySocketPoliceActor::SendDogData() {
+    if (!MyCharacter || !MyCharacter->PoliceDogInstance) {
+        UE_LOG(LogTemp, Error, TEXT("No PoliceDogInstance "));
+        return;
+    }
     if (ClientSocket != INVALID_SOCKET)
     {
         DogPacket Packet;
@@ -424,7 +428,6 @@ void AMySocketPoliceActor::SendDogData() {
         {
             UE_LOG(LogTemp, Error, TEXT("SendDogData failed with error: %ld"), WSAGetLastError());
         }
-        UE_LOG(LogTemp, Warning, TEXT("SendDogData"));
     }
     else
     {
@@ -493,7 +496,7 @@ FPoliceCharacterState AMySocketPoliceActor::GetCharacterState()
 }
 
 Dog AMySocketPoliceActor::GetDog() {
-    Dog dog;
+    Dog dog{};
     dog.owner = MyCharacter->my_ID;
     if (MyCharacter->PoliceDogInstance)
     {

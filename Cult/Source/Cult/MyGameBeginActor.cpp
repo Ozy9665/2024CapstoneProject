@@ -181,9 +181,11 @@ void AMyGameBeginActor::SpawnActor() {
                 + (PolicePawn->GetActorForwardVector() * -100.0f);
 
             FRotator DogRotation = PolicePawn->GetActorRotation();
-            APawn* DogPawn = GetWorld()->SpawnActor<APawn>(GI->DogClass, DogLocation, DogRotation, SpawnParams);
+            APoliceDog* DogPawn = GetWorld()->SpawnActor<APoliceDog>(GI->DogClass, DogLocation, DogRotation, SpawnParams);
             if (DogPawn)
             {
+                APoliceCharacter* MyCharacter = Cast<APoliceCharacter>(PC->GetPawn());
+                MyCharacter->PoliceDogInstance = DogPawn;
                 UE_LOG(LogTemp, Log, TEXT("Spawned AI Police Dog"));
             }
         }

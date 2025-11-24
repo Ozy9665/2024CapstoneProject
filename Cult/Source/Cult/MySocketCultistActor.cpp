@@ -372,7 +372,6 @@ void AMySocketCultistActor::ProcessPoliceData(const char* Buffer)
 }
 
 void AMySocketCultistActor::ProcessDogData(const char* Buffer) {
-    UE_LOG(LogTemp, Warning, TEXT("[DogData] ProcessDogData called"));
     Dog ReceivedDog;
     memcpy(&ReceivedDog, Buffer + 2, sizeof(Dog));
     
@@ -389,13 +388,12 @@ void AMySocketCultistActor::ProcessDogData(const char* Buffer) {
         return;
     }
     if (Police->PoliceDogInstance) {
+        UE_LOG(LogTemp, Warning, TEXT("[DogData] Police->PoliceDogInstance"));
         // 개 상태 업데이트
         AsyncTask(ENamedThreads::GameThread, [PDI = Police->PoliceDogInstance, ReceivedDog]() {
             if (IsValid(PDI)) {
                 PDI->SetActorLocation(AMySocketActor::ToUE(ReceivedDog.loc));
                 PDI->SetActorRotation(AMySocketActor::ToUE(ReceivedDog.rot));
-                UE_LOG(LogTemp, Warning, TEXT("[DogData]: %s"), *AMySocketActor::ToUE(ReceivedDog.loc).ToString());
-
             }
         });
     }
@@ -1310,7 +1308,7 @@ void AMySocketCultistActor::SpawnPoliceCharacter(const unsigned char PlayerID)
         UE_LOG(LogTemp, Log, TEXT("Spawned new police character for PlayerID=%d"), PlayerID);
 
         APoliceDog* DogPawn = GetWorld()->SpawnActor<APoliceDog>(
-            GI->DogClass,
+            GI->DogClass_Client,
             FVector(PoliceDummyState.PositionX, PoliceDummyState.PositionY, PoliceDummyState.PositionZ),
             FRotator(PoliceDummyState.RotationPitch, PoliceDummyState.RotationYaw, PoliceDummyState.RotationRoll),
             SpawnParams

@@ -918,9 +918,9 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid DogPacket size\n";
 			break;
 		}
-		if (!validate_dog_state(c_id, p->dog)) {
-			std::cout << "Suspicious dog packet from c_id " << c_id << std::endl;
-		}
+		//if (!validate_dog_state(c_id, p->dog)) {
+		//	std::cout << "Suspicious dog packet from c_id " << c_id << std::endl;
+		//}
 		g_users[c_id].dog = p->dog;
 
 		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);

@@ -57,6 +57,8 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, category ="Dog")
 	TSubclassOf<class APawn> DogClass;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, category = "Dog")
+	TSubclassOf<class APawn> DogClass_Client;
 
 	UPROPERTY(BlueprintReadWrite, Category = "Network")
 	TArray<FVector> RutialSpawnLocations;
