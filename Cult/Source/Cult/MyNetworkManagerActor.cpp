@@ -74,7 +74,12 @@ bool AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32 S
 void AMyNetworkManagerActor::CheckServer()
 {
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     FString ServerIP = TEXT("222.99.104.198");  // 辑滚 IP 林家
+=======
+    //FString ServerIP = TEXT("127.0.0.1");  // 辑滚 IP 林家
+    FString ServerIP = TEXT("192.168.0.9");  // 辑滚 IP 林家
+>>>>>>> Stashed changes
 =======
     //FString ServerIP = TEXT("127.0.0.1");  // 辑滚 IP 林家
     FString ServerIP = TEXT("192.168.0.9");  // 辑滚 IP 林家
