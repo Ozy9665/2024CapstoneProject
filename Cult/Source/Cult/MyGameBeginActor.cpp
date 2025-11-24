@@ -2,6 +2,8 @@
 
 
 #include "MyGameBeginActor.h"
+#include "GameFramework/PlayerStart.h" 
+#include "Kismet/GameplayStatics.h"
 #include "Camera/CameraActor.h" 
 
 // Sets default values
@@ -107,11 +109,32 @@ void AMyGameBeginActor::SpawnActor() {
             return;
         }
 
+
+        FVector SpawnLocation = FVector::ZeroVector;
+        FRotator SpawnRotation = FRotator::ZeroRotator;
+        AActor* StartSpot = nullptr;
+        TArray<AActor*> FoundStarts;
+        UGameplayStatics::GetAllActorsOfClass(GetWorld(), APlayerStart::StaticClass(), FoundStarts);
+        if (FoundStarts.Num() > 0)
+        {
+            // 첫 번째 PlayerStart를 사용
+            StartSpot = FoundStarts[0];
+            SpawnLocation = StartSpot->GetActorLocation();
+            SpawnRotation = StartSpot->GetActorRotation();
+            UE_LOG(LogTemp, Log, TEXT("Found PlayerStart! Spawning at: %s"), *SpawnLocation.ToString());
+        }
+        else
+        {
+            // PlayerStart가 없으면 기존대로 DefaultPawn
+            UE_LOG(LogTemp, Warning, TEXT("No PlayerStart found. Using DefaultPawn location."));
+            SpawnLocation = DefaultPawn->GetActorLocation();
+            SpawnRotation = DefaultPawn->GetActorRotation();
+        }
         FActorSpawnParameters SpawnParams;
         SpawnParams.Owner = this;
-        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-        FVector SpawnLocation = DefaultPawn->GetActorLocation();
-        FRotator SpawnRotation = DefaultPawn->GetActorRotation();
+        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+
         APawn* PolicePawn = GetWorld()->SpawnActor<APawn>(GI->PoliceClass, SpawnLocation, SpawnRotation, SpawnParams);
         if (not PolicePawn)
         {
@@ -153,8 +176,11 @@ void AMyGameBeginActor::SpawnActor() {
         // 개 위치
         if (GI->DogClass)
         {
-            FVector DogLocation = PoliceActor->GetActorLocation() + (PoliceActor->GetActorRightVector() * 150) + (PoliceActor->GetActorForwardVector() * -50.0f);
-            FRotator DogRotation = PoliceActor->GetActorRotation();
+            FVector DogLocation = PolicePawn->GetActorLocation()
+                + (PolicePawn->GetActorRightVector() * 150.0f)
+                + (PolicePawn->GetActorForwardVector() * -100.0f);
+
+            FRotator DogRotation = PolicePawn->GetActorRotation();
             APawn* DogPawn = GetWorld()->SpawnActor<APawn>(GI->DogClass, DogLocation, DogRotation, SpawnParams);
             if (DogPawn)
             {

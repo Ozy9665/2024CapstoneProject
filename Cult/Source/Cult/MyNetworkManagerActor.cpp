@@ -73,17 +73,10 @@ bool AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32 S
 
 void AMyNetworkManagerActor::CheckServer()
 {
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
     FString ServerIP = TEXT("222.99.104.198");  // 서버 IP 주소
-=======
+
     //FString ServerIP = TEXT("127.0.0.1");  // 서버 IP 주소
-    FString ServerIP = TEXT("192.168.0.9");  // 서버 IP 주소
->>>>>>> Stashed changes
-=======
-    //FString ServerIP = TEXT("127.0.0.1");  // 서버 IP 주소
-    FString ServerIP = TEXT("192.168.0.9");  // 서버 IP 주소
->>>>>>> Stashed changes
+    //FString ServerIP = TEXT("192.168.0.9");  // 서버 IP 주소
     int32 ServerPort = 7777;               // 포트 번호
 
     if(!CanConnectToServer(ServerIP, ServerPort))
