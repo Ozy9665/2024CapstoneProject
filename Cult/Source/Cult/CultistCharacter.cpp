@@ -944,9 +944,18 @@ void ACultistCharacter::ConfirmPlacement()
 	// SpawnRotation.Pitch -= 90.0f;
 
 
-	if (ProceduralBranchActorClass)
+	//if (ProceduralBranchActorClass)
+	//{
+	//	MySocketCultistActor->SendTree(SpawnLocation, SpawnRotation);
+	//}
+
+	if (TreeObstacleActorClass)
 	{
 		MySocketCultistActor->SendTree(SpawnLocation, SpawnRotation);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("ConfirmPlacement: TreeObstacleActorClass is not set in blueprint!"));
 	}
 
 	SpawnedPreviewActor->Destroy();

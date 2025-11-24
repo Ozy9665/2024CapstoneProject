@@ -345,3 +345,31 @@ void AAltar::OnPlayerInput()
 		// 실패 파티클
 	}
 }
+
+void AAltar::UpdateGaugeFromServer(float NewGauge)
+{
+	RitualGauge = FMath::Clamp(NewGauge, 0.0f, 100.0f);
+
+	if (AltarMID)
+	{
+		float ProgressNormalized = RitualGauge / 100.0f;
+		AltarMID->SetScalarParameterValue(FName("RitualProgress"), ProgressNormalized);
+		AltarMID->SetScalarParameterValue(FName("Progress"), ProgressNormalized);
+	}
+	if (QTEParticleComponent)
+	{
+		float ProgressNormalized = RitualGauge / 100.0f;
+		QTEParticleComponent->SetFloatParameter(FName("User_RitualProgress"), ProgressNormalized);
+	}
+}
+
+void AAltar::ForceCompleteRitual()
+{
+	UpdateGaugeFromServer(100.0f);
+
+	if (CurrentPerformingCultist)
+	{
+		CurrentPerformingCultist->CancelRitual();
+	}
+	CheckRitualComplete();
+}

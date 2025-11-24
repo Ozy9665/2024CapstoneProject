@@ -12,6 +12,7 @@
 #include "TreeObstacleActor.h"
 #include "ProceduralBranchActor.h"
 #include "CrowActor.h"
+#include "Altar.h"
 
 #pragma comment(lib, "ws2_32.lib")
 AMySocketCultistActor* MySocketCultistActor = nullptr;
@@ -593,7 +594,15 @@ void AMySocketCultistActor::SendTree(FVector SpawnLoc, FRotator SpawnRot)
                 SpawnParams.Owner = this;
                 SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-                GetWorld()->SpawnActor<AProceduralBranchActor>(MyCharacter->ProceduralBranchActorClass, SpawnLoc, SpawnRot, SpawnParams);
+                //GetWorld()->SpawnActor<AProceduralBranchActor>(MyCharacter->ProceduralBranchActorClass, SpawnLoc, SpawnRot, SpawnParams);
+                if (MyCharacter && MyCharacter->TreeObstacleActorClass)
+                {
+                    GetWorld()->SpawnActor<ATreeObstacleActor>(MyCharacter->TreeObstacleActorClass, SpawnLoc, SpawnRot, SpawnParams);
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("SendTree: MyCharacter is null or TreeObstacleActorClass is not set!"));
+                }
         });       
     }
     else
@@ -1661,6 +1670,19 @@ void AMySocketCultistActor::ProcessRitualData(const char* Buffer) {
 
     AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
         // gauge으로 ritual gauge 수정
+        TArray<AActor*> FoundAltars;
+        UGameplayStatics::GetAllActorsOfClass(GetWorld(), AAltar::StaticClass(), FoundAltars);
+
+        for (AActor* Actor : FoundAltars)
+        {
+            AAltar* TargetAltar = Cast<AAltar>(Actor);
+
+            if (TargetAltar && TargetAltar->AltarID == (int32)ritual_id)
+            {
+                TargetAltar->AddToRitualGauge((float)gauge);
+                break;
+            }
+        }
         });
 }
 
@@ -1671,6 +1693,7 @@ void AMySocketCultistActor::ProcessRitualEnd(const char* Buffer) {
     if (Received.reason == 4) {
         // 제단 100퍼센트 완료
         // 캐릭터 손 떼게 하고, 제단 100퍼센트로 수정
+
     }
     else {
         const uint8_t ritual_id = Received.ritual_id;

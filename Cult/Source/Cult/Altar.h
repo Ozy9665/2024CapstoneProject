@@ -91,6 +91,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual | QTE")
 	float FlashDuration = 1.5f;
 
+	void UpdateGaugeFromServer(float NewGauge);
+	void ForceCompleteRitual();
+
 	FTimerHandle QTETriggerTimerHandle;
 
 	UPROPERTY()
