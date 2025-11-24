@@ -1274,6 +1274,11 @@ void AMySocketCultistActor::UpdatePoliceAnimInstanceProperties(UAnimInstance* An
 
 void AMySocketCultistActor::SpawnPoliceCharacter(const unsigned char PlayerID)
 {
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Owner = this;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+
     // 이미 캐릭터가 존재하면 아무 작업도 하지 않음
     if (SpawnedCharacters.Contains(PlayerID))
     {
@@ -1289,9 +1294,6 @@ void AMySocketCultistActor::SpawnPoliceCharacter(const unsigned char PlayerID)
         UE_LOG(LogTemp, Error, TEXT("GI or PoliceClientClass is null"));
         return;
     }
-    FActorSpawnParameters SpawnParams;
-    SpawnParams.Owner = this;
-    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
     APoliceCharacter* NewCharacter = GetWorld()->SpawnActor<APoliceCharacter>(
         GI->PoliceClientClass,
@@ -1299,6 +1301,10 @@ void AMySocketCultistActor::SpawnPoliceCharacter(const unsigned char PlayerID)
         FRotator(PoliceDummyState.RotationPitch, PoliceDummyState.RotationYaw, PoliceDummyState.RotationRoll),
         SpawnParams
     );
+    APawn* DogPawn = GetWorld()->SpawnActor<APawn>(GI->DogClass,
+        FVector(PoliceDummyState.PositionX, PoliceDummyState.PositionY, PoliceDummyState.PositionZ),
+        FRotator(PoliceDummyState.RotationPitch, PoliceDummyState.RotationYaw, PoliceDummyState.RotationRoll), SpawnParams);
+
     if (NewCharacter)
     {
         SpawnedCharacters.Add(PlayerID, NewCharacter);
