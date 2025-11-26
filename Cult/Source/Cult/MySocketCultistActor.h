@@ -35,9 +35,10 @@ private:
 	ACultistCharacter* MyCharacter;
 	FCriticalSection CultistDataMutex;
 	FCriticalSection PoliceDataMutex;
-	TMap<int, ACharacter*> SpawnedCharacters;
+	TMap<int, ACharacter*> SpawnedCultistCharacters;
 	TMap<int, FCultistCharacterState> ReceivedCultistStates;
-	TMap<int, FPoliceCharacterState> ReceivedPoliceStates;
+	TPair<int, ACharacter*> SpawnedPoliceCharacter;
+	TPair<int, FPoliceCharacterState> ReceivedPoliceState;
 	TMap<int32, FTransform> LastReceivedTransform;
 	TArray<FImpactPacket> Particles;
 	UMyGameInstance* GI;

@@ -457,7 +457,7 @@ void AMySocketPoliceActor::SendHitData(FHitPacket hitPacket) {
 FPoliceCharacterState AMySocketPoliceActor::GetCharacterState()
 {
     FPoliceCharacterState State;
-    State.PlayerID = my_ID;
+    State.PlayerID = MyCharacter->my_ID;
 
     // 위치 및 회전 설정
     State.PositionX = MyCharacter->GetActorLocation().X;
