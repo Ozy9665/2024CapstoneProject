@@ -253,7 +253,7 @@ struct ParticlePacket {
 struct HitPacket {
 	uint8_t  header;
 	uint8_t  size;
-	FHitPacket data;
+	EWeaponType Weapon;
 };
 
 struct IdOnlyPacket {

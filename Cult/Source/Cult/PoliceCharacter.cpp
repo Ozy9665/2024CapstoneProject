@@ -293,6 +293,11 @@ void APoliceCharacter::FireTaser()
 	if (bIsShooting || !bIsAiming)return;
 	bIsShooting = true;
 
+	if (MySocketPoliceActor)
+	{
+		MySocketPoliceActor->SendHitData(EWeaponType::Taser);
+	}
+	/*
 	FVector CameraLocation;
 	FRotator CameraRotation;
 	GetActorEyesViewPoint(CameraLocation, CameraRotation);
@@ -332,6 +337,7 @@ void APoliceCharacter::FireTaser()
 			}
 		}
 	}
+	*/
 }
 
 void APoliceCharacter::EndFireTaser()
@@ -348,6 +354,11 @@ void APoliceCharacter::ShootPistol()
 	if (bIsShooting || !bIsAiming)return;
 	bIsShooting = true;
 
+	if (MySocketPoliceActor)
+	{
+		MySocketPoliceActor->SendHitData(EWeaponType::Pistol);
+	}
+	/*
 	// 방법1. Muzzle 기준
 	FVector Start = MuzzleLocation->GetComponentLocation();
 	FVector ForwardVector = MuzzleLocation->GetForwardVector();
@@ -398,6 +409,7 @@ void APoliceCharacter::ShootPistol()
 		}
 
 	}
+	*/
 	//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndPistolShoot, 1.1f, false);
 
 }
@@ -413,11 +425,11 @@ void APoliceCharacter::EndPistolShoot()
 //					============근접공격============
 void APoliceCharacter::BatonAttack()
 {
-	if (!this)
+	if (MySocketPoliceActor)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("BatonAttack: this is NULL"));
-		return;
+		MySocketPoliceActor->SendHitData(EWeaponType::Baton);
 	}
+	/*
 	UE_LOG(LogTemp, Warning, TEXT("BatonAttackStart"));
 	FVector Start = GetActorLocation();
 	FVector ForwardVector = GetActorForwardVector();
@@ -464,6 +476,7 @@ void APoliceCharacter::BatonAttack()
 			UE_LOG(LogTemp, Warning, TEXT("HitActor is not in SpawnedCharacters!"));
 		}
 	}
+	*/
 }
 
 void APoliceCharacter::OnAttackHit(AActor* HitActor)

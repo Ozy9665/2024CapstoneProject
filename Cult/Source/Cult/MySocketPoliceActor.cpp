@@ -435,13 +435,13 @@ void AMySocketPoliceActor::SendDogData() {
     }
 }
 
-void AMySocketPoliceActor::SendHitData(FHitPacket hitPacket) {
+void AMySocketPoliceActor::SendHitData(EWeaponType weapon) {
     if (ClientSocket != INVALID_SOCKET)
     {
         HitPacket Packet;
         Packet.header = hitHeader;
         Packet.size = sizeof(HitPacket);
-        Packet.data = hitPacket;
+        Packet.Weapon = weapon;
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(HitPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
