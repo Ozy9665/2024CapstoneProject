@@ -56,7 +56,7 @@ public:
 	void ProcessDisconnection(const char*);
 	void SendPlayerData();
 	void SendDogData();
-	void SendHitData(EWeaponType);
+	void SendHitData(HitPacket);
 	FPoliceCharacterState GetCharacterState();
 	Dog GetDog();
 	void SpawnCultistCharacter(const unsigned char);

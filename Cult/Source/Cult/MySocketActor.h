@@ -126,7 +126,9 @@ struct FImpactPacket
 	float MuzzleRoll;
 };
 
-struct FHitPacket {
+struct HitResultPacket {
+	uint8_t  header;
+	uint8_t  size;
 	uint8_t AttackerID;
 	uint8_t TargetID;
 	EWeaponType Weapon;
@@ -166,6 +168,8 @@ struct HitPacket {
 	uint8_t  header;
 	uint8_t  size;
 	EWeaponType Weapon;
+	FNetVec TraceStart;
+	FNetVec TraceDir;
 };
 
 struct IdOnlyPacket {

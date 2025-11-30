@@ -295,7 +295,16 @@ void APoliceCharacter::FireTaser()
 
 	if (MySocketPoliceActor)
 	{
-		MySocketPoliceActor->SendHitData(EWeaponType::Taser);
+		FVector CameraLocation;
+		FRotator CameraRotation;
+		GetActorEyesViewPoint(CameraLocation, CameraRotation);
+		HitPacket HitPacket;
+		HitPacket.header = hitHeader;
+		HitPacket.size = sizeof(HitPacket);
+		HitPacket.Weapon = EWeaponType::Taser;
+		HitPacket.TraceStart = AMySocketActor::ToNet(CameraLocation);
+		HitPacket.TraceDir = AMySocketActor::ToNet(CameraRotation.Vector());
+		MySocketPoliceActor->SendHitData(HitPacket);
 	}
 	/*
 	FVector CameraLocation;
@@ -356,7 +365,16 @@ void APoliceCharacter::ShootPistol()
 
 	if (MySocketPoliceActor)
 	{
-		MySocketPoliceActor->SendHitData(EWeaponType::Pistol);
+		FVector CameraLocation;
+		FRotator CameraRotation;
+		GetActorEyesViewPoint(CameraLocation, CameraRotation);
+		HitPacket HitPacket;
+		HitPacket.header = hitHeader;
+		HitPacket.size = sizeof(HitPacket);
+		HitPacket.Weapon = EWeaponType::Pistol;
+		HitPacket.TraceStart = AMySocketActor::ToNet(CameraLocation);
+		HitPacket.TraceDir = AMySocketActor::ToNet(CameraRotation.Vector());
+		MySocketPoliceActor->SendHitData(HitPacket);
 	}
 	/*
 	// 방법1. Muzzle 기준
@@ -365,10 +383,10 @@ void APoliceCharacter::ShootPistol()
 	FVector End = Start + (ForwardVector * 10000.0f);	// 사거리
 
 	// 방법2. 카메라기준
+	FVector TraceStart = CameraLocation;
 	FVector CameraLocation;
 	FRotator CameraRotation;
 	GetActorEyesViewPoint(CameraLocation, CameraRotation);
-	FVector TraceStart = CameraLocation;
 	FVector TraceEnd = TraceStart + (CameraRotation.Vector() * 10000.0f);	// 사거리
 
 	// 공통
@@ -427,7 +445,15 @@ void APoliceCharacter::BatonAttack()
 {
 	if (MySocketPoliceActor)
 	{
-		MySocketPoliceActor->SendHitData(EWeaponType::Baton);
+		FVector Start = GetActorLocation();
+		FVector ForwardVector = GetActorForwardVector();
+		HitPacket HitPacket;
+		HitPacket.header = hitHeader;
+		HitPacket.size = sizeof(HitPacket);
+		HitPacket.Weapon = EWeaponType::Baton;
+		HitPacket.TraceStart = AMySocketActor::ToNet(Start);
+		HitPacket.TraceDir = AMySocketActor::ToNet(ForwardVector);
+		MySocketPoliceActor->SendHitData(HitPacket);
 	}
 	/*
 	UE_LOG(LogTemp, Warning, TEXT("BatonAttackStart"));

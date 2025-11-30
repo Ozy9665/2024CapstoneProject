@@ -80,6 +80,14 @@ struct FVector {
 	double x;
 	double y;
 	double z;
+
+	FVector operator+(const FVector& other) const {
+		return { x + other.x, y + other.y, z + other.z };
+	}
+
+	FVector operator*(double s) const {
+		return { x * s, y * s, z * s };
+	}
 };
 
 struct FRotator {
@@ -214,7 +222,9 @@ struct FImpactPacket
 	float MuzzleRoll;
 };
 
-struct FHitPacket {
+struct HitResultPacket {
+	uint8_t  header;
+	uint8_t  size;
 	uint8_t AttackerID;
 	uint8_t TargetID;
 	EWeaponType Weapon;
@@ -254,6 +264,8 @@ struct HitPacket {
 	uint8_t  header;
 	uint8_t  size;
 	EWeaponType Weapon;
+	FVector TraceStart;
+	FVector TraceDir;
 };
 
 struct IdOnlyPacket {

@@ -823,6 +823,51 @@ std::optional<std::pair<FVector, FRotator>> GetMovePoint(int c_id, int targetId)
 	return std::make_pair(mid, rot);
 }
 
+void baton_sweep(int c_id) {
+
+}
+
+void line_trace(int c_id, HitPacket* p) {
+	auto& attacker = g_users[c_id];
+	int room = attacker.room_id;
+	if (room < 0) 
+		return;
+
+	FVector start{ p->TraceStart.x, p->TraceStart.y, p->TraceStart.z };
+	FVector dir{ p->TraceDir.x,   p->TraceDir.y,   p->TraceDir.z };
+	double range = (p->Weapon == EWeaponType::Taser) ? 1000.0 : 10000.0;
+	FVector end = start + dir * range;
+
+	for (int otherId : g_rooms[room].player_ids)
+	{
+		if (otherId == c_id || g_users[otherId].role != 0) 
+			continue;
+
+		auto& target = g_users[otherId];
+		if (!target.isValidSocket()) 
+			continue;
+
+		FVector targetPos{ 
+			target.cultist_state.PositionX, 
+			target.cultist_state.PositionY, 
+			target.cultist_state.PositionZ 
+		};
+
+		if (line_sphere_intersect(start, end, targetPos, 60.0))
+		{
+			HitResultPacket result;
+			result.header = hitHeader;
+			result.size = sizeof(HitResultPacket);
+			result.AttackerID = c_id;
+			result.TargetID = otherId;
+			result.Weapon = p->Weapon;
+
+			broadcast_in_room(c_id, room, &result, VIEW_RANGE);
+			return;
+		}
+	}
+}
+
 void process_packet(int c_id, char* packet) {
 	switch (packet[0]) {
 	case cultistHeader:
@@ -952,6 +997,22 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
+		switch (p->Weapon)
+		{
+		case EWeaponType::Baton:
+		{
+			baton_sweep(c_id);
+			break;
+		}
+		case EWeaponType::Taser:
+		case EWeaponType::Pistol:
+		{
+			line_trace(c_id, p);
+			break;
+		}
+		default:
+			break;
+		}
 		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
 		break;
 	}
