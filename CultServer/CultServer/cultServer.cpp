@@ -823,8 +823,98 @@ std::optional<std::pair<FVector, FRotator>> GetMovePoint(int c_id, int targetId)
 	return std::make_pair(mid, rot);
 }
 
-void baton_sweep(int c_id) {
+bool line_sphere_intersect(
+	const FVector& start, const FVector& end,
+	const FVector& center, double radius)
+{
+	FVector d{
+		end.x - start.x,
+		end.y - start.y,
+		end.z - start.z
+	};
 
+	FVector f{
+		start.x - center.x,
+		start.y - center.y,
+		start.z - center.z
+	};
+
+	double a = d.x * d.x + d.y * d.y + d.z * d.z;
+	double b = 2.0 * (f.x * d.x + f.y * d.y + f.z * d.z);
+	double c = (f.x * f.x + f.y * f.y + f.z * f.z) - (radius * radius);
+
+	double discriminant = b * b - 4.0 * a * c;
+
+	if (discriminant < 0.0)
+		return false; // 충돌 없음
+
+	discriminant = std::sqrt(discriminant);
+
+	double t1 = (-b - discriminant) / (2.0 * a);
+	double t2 = (-b + discriminant) / (2.0 * a);
+
+	return (t1 >= 0.0 && t1 <= 1.0) ||
+		(t2 >= 0.0 && t2 <= 1.0);
+}
+
+FVector rotation_to_forward(double pitchDeg, double yawDeg)
+{
+	double pitch = pitchDeg * PI / 180.0;
+	double yaw = yawDeg * PI / 180.0;
+
+	double cp = cos(pitch);
+	double sp = sin(pitch);
+	double cy = cos(yaw);
+	double sy = sin(yaw);
+
+	return FVector{
+		cp * cy,
+		cp * sy,
+		sp
+	};
+}
+
+void baton_sweep(int c_id, HitPacket* p)
+{
+	auto& attacker = g_users[c_id];
+	int room = attacker.room_id;
+	if (room < 0)
+		return;
+
+	FVector start{ p->TraceStart.x, p->TraceStart.y, p->TraceStart.z };
+	FVector forward{ p->TraceDir.x, p->TraceDir.y, p->TraceDir.z };
+
+	double range = 200.0;
+	FVector end = start + forward * range;
+
+	for (int otherId : g_rooms[room].player_ids)
+	{
+		if (otherId == c_id || g_users[otherId].role != 0)
+			continue;
+
+		auto& target = g_users[otherId];
+		if (!target.isValidSocket())
+			continue;
+
+		FVector targetPos{
+			target.cultist_state.PositionX,
+			target.cultist_state.PositionY,
+			target.cultist_state.PositionZ
+		};
+
+		if (line_sphere_intersect(start, end, targetPos, 50.0))
+		{
+			HitResultPacket result;
+			result.header = hitHeader;
+			result.size = sizeof(HitResultPacket);
+			result.AttackerID = c_id;
+			result.TargetID = otherId;
+			result.Weapon = EWeaponType::Baton;
+
+			broadcast_in_room(c_id, room, &result, VIEW_RANGE);
+			return;
+		}
+	}
 }
 
 void line_trace(int c_id, HitPacket* p) {
@@ -1001,7 +1091,7 @@ void process_packet(int c_id, char* packet) {
 		{
 		case EWeaponType::Baton:
 		{
-			baton_sweep(c_id);
+			baton_sweep(c_id, p);
 			break;
 		}
 		case EWeaponType::Taser:
