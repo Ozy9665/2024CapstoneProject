@@ -410,8 +410,8 @@ void AMySocketCultistActor::ProcessDogData(const char* Buffer) {
 
 void AMySocketCultistActor::ProcessHitData(const char* Buffer)
 {
-    FHitPacket ReceivedState;
-    memcpy(&ReceivedState, Buffer + 2, sizeof(FHitPacket));
+    HitResultPacket ReceivedState;
+    memcpy(&ReceivedState, Buffer, sizeof(HitResultPacket));
     {
         FScopeLock Lock(&CultistDataMutex);
         switch (ReceivedState.Weapon)

@@ -195,8 +195,8 @@ void AMySocketPoliceActor::ProcessPlayerData(const char* Buffer)
 
 void AMySocketPoliceActor::ProcessHitData(const char* Buffer)
 {
-    FHitPacket ReceivedState;
-    memcpy(&ReceivedState, Buffer + 2, sizeof(FHitPacket));
+    HitResultPacket ReceivedState;
+    memcpy(&ReceivedState, Buffer, sizeof(HitResultPacket));
     {
         FScopeLock Lock(&ReceivedDataMutex);
         switch (ReceivedState.Weapon)
