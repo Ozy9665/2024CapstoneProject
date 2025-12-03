@@ -889,7 +889,7 @@ void baton_sweep(int c_id, HitPacket* p)
 
 	for (int otherId : g_rooms[room].player_ids)
 	{
-		if (otherId == c_id || g_users[otherId].role != 0)
+		if (otherId == c_id || g_users[otherId].role != 0 || otherId == UINT8_MAX)
 			continue;
 
 		auto& target = g_users[otherId];
@@ -967,9 +967,9 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid CultistPacket size\n";
 			break;
 		}
-		if (!validate_cultist_state(p->state)) {
-			std::cout << "Suspicious cultist packet from c_id " << c_id << std::endl;
-		}
+		//if (!validate_cultist_state(p->state)) {
+		//	std::cout << "Suspicious cultist packet from c_id " << c_id << std::endl;
+		//}
 		g_users[c_id].cultist_state = p->state;
 
 		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
@@ -1038,9 +1038,9 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid PolicePacket size\n";
 			break;
 		}
-		if (!validate_police_state(p->state)) {
-			std::cout << "Suspicious police packet from c_id " << c_id << std::endl;
-		}
+		//if (!validate_police_state(p->state)) {
+		//	std::cout << "Suspicious police packet from c_id " << c_id << std::endl;
+		//}
 		g_users[c_id].police_state = p->state;
 
 		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);

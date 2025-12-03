@@ -410,20 +410,22 @@ void AMySocketCultistActor::ProcessDogData(const char* Buffer) {
 
 void AMySocketCultistActor::ProcessHitData(const char* Buffer)
 {
-    HitResultPacket ReceivedState;
-    memcpy(&ReceivedState, Buffer, sizeof(HitResultPacket));
+    HitResultPacket ReceivedPacket;
+    memcpy(&ReceivedPacket, Buffer, sizeof(HitResultPacket));
     {
-        FScopeLock Lock(&CultistDataMutex);
-        switch (ReceivedState.Weapon)
+        if (SpawnedPoliceCharacter.Key != ReceivedPacket.AttackerID) {
+            UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn attacker: %d"), ReceivedPacket.AttackerID);
+        }
+        switch (ReceivedPacket.Weapon)
         {
         case EWeaponType::Baton:
         {
-            APoliceCharacter* Attacker = Cast<APoliceCharacter>(SpawnedCultistCharacters.FindRef(ReceivedState.AttackerID));
+            APoliceCharacter* Attacker = Cast<APoliceCharacter>(SpawnedPoliceCharacter.Value);
             if (not Attacker) {
-                UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn attacker: %d"), ReceivedState.AttackerID);
+                UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with not attacker: %d"), ReceivedPacket.AttackerID);
                 return;
             }
-            if (ReceivedState.TargetID == my_ID)
+            if (ReceivedPacket.TargetID == my_ID)
             {
                 if (not MyCharacter)
                 {
@@ -436,9 +438,9 @@ void AMySocketCultistActor::ProcessHitData(const char* Buffer)
                     });
             }
             else {
-                ACultistCharacter* Target = Cast<ACultistCharacter>(SpawnedCultistCharacters.FindRef(ReceivedState.TargetID));
+                ACultistCharacter* Target = Cast<ACultistCharacter>(SpawnedCultistCharacters.FindRef(ReceivedPacket.TargetID));
                 if (not Target) {
-                    UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn Target: %d"), ReceivedState.TargetID);
+                    UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn Target: %d"), ReceivedPacket.TargetID);
                     return;
                 }
                 AsyncTask(ENamedThreads::GameThread, [this, Target, Attacker]()
@@ -451,7 +453,7 @@ void AMySocketCultistActor::ProcessHitData(const char* Buffer)
         }
         case EWeaponType::Pistol: 
         {
-            if (ReceivedState.TargetID == my_ID)
+            if (ReceivedPacket.TargetID == my_ID)
             {
                 if (not MyCharacter)
                 {
@@ -464,9 +466,9 @@ void AMySocketCultistActor::ProcessHitData(const char* Buffer)
                     });
             }
             else {
-                ACultistCharacter* Target = Cast<ACultistCharacter>(SpawnedCultistCharacters.FindRef(ReceivedState.TargetID));
+                ACultistCharacter* Target = Cast<ACultistCharacter>(SpawnedCultistCharacters.FindRef(ReceivedPacket.TargetID));
                 if (not Target) {
-                    UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn Target: %d"), ReceivedState.TargetID);
+                    UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn Target: %d"), ReceivedPacket.TargetID);
                     return;
                 }
                 AsyncTask(ENamedThreads::GameThread, [this, Target]()
@@ -474,17 +476,17 @@ void AMySocketCultistActor::ProcessHitData(const char* Buffer)
                         Target->TakeDamage(PistolAttackDamage);
                     });
             }
-            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
+            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedPacket.Weapon);
             break;
         }
         case EWeaponType::Taser:
         {
-            APoliceCharacter* Attacker = Cast<APoliceCharacter>(SpawnedCultistCharacters.FindRef(ReceivedState.AttackerID));
+            APoliceCharacter* Attacker = Cast<APoliceCharacter>(SpawnedPoliceCharacter.Value);
             if (not Attacker) {
-                UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn attacker: %d"), ReceivedState.AttackerID);
+                UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error not attacker: %d"), ReceivedPacket.AttackerID);
                 return;
             }
-            if (ReceivedState.TargetID == my_ID)
+            if (ReceivedPacket.TargetID == my_ID)
             {
                 if (not MyCharacter)
                 {
@@ -497,9 +499,9 @@ void AMySocketCultistActor::ProcessHitData(const char* Buffer)
                     });
             }
             else {
-                ACultistCharacter* Target = Cast<ACultistCharacter>(SpawnedCultistCharacters.FindRef(ReceivedState.TargetID));
+                ACultistCharacter* Target = Cast<ACultistCharacter>(SpawnedCultistCharacters.FindRef(ReceivedPacket.TargetID));
                 if (not Target) {
-                    UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn Target: %d"), ReceivedState.TargetID);
+                    UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn Target: %d"), ReceivedPacket.TargetID);
                     return;
                 }
                 AsyncTask(ENamedThreads::GameThread, [this, Target, Attacker]()
@@ -510,7 +512,7 @@ void AMySocketCultistActor::ProcessHitData(const char* Buffer)
             break;
         }
         default:
-            UE_LOG(LogTemp, Error, TEXT("EWeaponType Error: %d"), ReceivedState.Weapon);
+            UE_LOG(LogTemp, Error, TEXT("EWeaponType Error: %d"), ReceivedPacket.Weapon);
             break;
         }
     }
