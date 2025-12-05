@@ -22,6 +22,7 @@
 #include "error.h"
 #include "PoliceAI.h"
 #include "db.h"
+#include "map.h"
 
 #pragma comment(lib, "MSWSock.lib")
 #pragma comment (lib, "WS2_32.LIB")
@@ -1658,6 +1659,17 @@ void mainLoop(HANDLE h_iocp) {
 
 int main()
 {
+	std::vector<MapVertex> g_mapVertices;
+	std::vector<MapTriangle> g_mapTriangles;
+	if (!LoadOBJ("NewMap_LandMass_Navmesh.obj", g_mapVertices, g_mapTriangles))
+	{
+		std::cout << "OBJ load failed\n";
+		return 1;
+	}
+
+
+	std::cout << "Loaded map: vertices=" << g_mapVertices.size()
+		<< " triangles=" << g_mapTriangles.size() << "\n";
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));
 
