@@ -1661,7 +1661,7 @@ int main()
 {
 	std::vector<MapVertex> g_mapVertices;
 	std::vector<MapTriangle> g_mapTriangles;
-	if (!LoadOBJ("NewMap_LandMass_Navmesh.obj", g_mapVertices, g_mapTriangles))
+	if (!LoadOBJ("Level_2.obj", g_mapVertices, g_mapTriangles))
 	{
 		std::cout << "OBJ load failed\n";
 		return 1;
