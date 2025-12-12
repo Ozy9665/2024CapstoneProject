@@ -475,6 +475,11 @@ void HealTimerLoop() {
 	}
 }
 
+// map
+MapAABB g_mapAABB;
+std::vector<MapVertex> g_mapVertices;
+std::vector<MapTriangle> g_mapTriangles;
+
 void disconnect(int);
 void CommandWorker()
 {
@@ -1659,17 +1664,47 @@ void mainLoop(HANDLE h_iocp) {
 
 int main()
 {
-	std::vector<MapVertex> g_mapVertices;
-	std::vector<MapTriangle> g_mapTriangles;
-	if (!LoadOBJ("SM_MERGED_StaticMeshActor_NewmapLandmass.obj", g_mapVertices, g_mapTriangles))
+	if (!LoadOBJAndComputeAABB("SM_MERGED_StaticMeshActor_NewmapLandmass.obj", g_mapVertices, g_mapTriangles, g_mapAABB))
 	{
 		std::cout << "OBJ load failed\n";
 		return 1;
 	}
 
+	std::cout << "vertices = " << g_mapVertices.size() << "\n";
+	std::cout << "triangles = " << g_mapTriangles.size() << "\n";
 
-	std::cout << "Loaded map: vertices=" << g_mapVertices.size()
-		<< " triangles=" << g_mapTriangles.size() << "\n";
+	std::cout << "AABB min = ("
+		<< g_mapAABB.minX << ", "
+		<< g_mapAABB.minY << ", "
+		<< g_mapAABB.minZ << ")\n";
+
+	std::cout << "AABB max = ("
+		<< g_mapAABB.maxX << ", "
+		<< g_mapAABB.maxY << ", "
+		<< g_mapAABB.maxZ << ")\n";
+
+	std::cout << "v[0] = ("
+		<< g_mapVertices[0].x << ", "
+		<< g_mapVertices[0].y << ", "
+		<< g_mapVertices[0].z << ")\n";
+
+	auto& t = g_mapTriangles[0];
+	std::cout << "f[0] = ("
+		<< t.v0 << ", "
+		<< t.v1 << ", "
+		<< t.v2 << ")\n";
+
+	auto& t0 = g_mapTriangles[0];
+	auto& a = g_mapVertices[t0.v0];
+	auto& b = g_mapVertices[t0.v1];
+	auto& c = g_mapVertices[t0.v2];
+
+	std::cout << "tri[0]\n";
+	std::cout << " A (" << a.x << ", " << a.y << ", " << a.z << ")\n";
+	std::cout << " B (" << b.x << ", " << b.y << ", " << b.z << ")\n";
+	std::cout << " C (" << c.x << ", " << c.y << ", " << c.z << ")\n";
+
+
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));
 
