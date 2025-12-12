@@ -11,7 +11,6 @@ bool LoadOBJ(const std::string& path,
     std::string line;
     while (std::getline(file, line))
     {
-        std::cout << line << "\n";
         std::stringstream ss(line);
         std::string type;
         ss >> type;

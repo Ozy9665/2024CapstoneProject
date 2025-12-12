@@ -1661,7 +1661,7 @@ int main()
 {
 	std::vector<MapVertex> g_mapVertices;
 	std::vector<MapTriangle> g_mapTriangles;
-	if (!LoadOBJ("Level_2.obj", g_mapVertices, g_mapTriangles))
+	if (!LoadOBJ("SM_MERGED_StaticMeshActor_NewmapLandmass.obj", g_mapVertices, g_mapTriangles))
 	{
 		std::cout << "OBJ load failed\n";
 		return 1;

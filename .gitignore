@@ -2,6 +2,7 @@
 /Cult/.vs/
 /Cult/Windows/
 /Windows/
+*.obj
 # Unreal 관련
 *.suo
 *.sln
