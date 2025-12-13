@@ -53,7 +53,7 @@ bool LoadOBJAndComputeAABB(
     const std::string& path,
     std::vector<MapVertex>& outVertices,
     std::vector<MapTriangle>& outTriangles,
-    MapAABB& outAABB)
+    AABB& outAABB)
 {
     if (!LoadOBJ(path, outVertices, outTriangles))
         return false;
@@ -90,5 +90,54 @@ void BuildTriangles(
         tri.b = vertices[t.v1];
         tri.c = vertices[t.v2];
         outTris.push_back(tri);
+    }
+}
+
+void BuildTriangleAABBs(
+    const std::vector<MapTri>& tris,
+    std::vector<AABB>& outAABBs)
+{
+    outAABBs.clear();
+    outAABBs.reserve(tris.size());
+
+    for (const auto& t : tris)
+    {
+        AABB aabb;
+        aabb.minX = std::min({ t.a.x, t.b.x, t.c.x });
+        aabb.minY = std::min({ t.a.y, t.b.y, t.c.y });
+        aabb.minZ = std::min({ t.a.z, t.b.z, t.c.z });
+
+        aabb.maxX = std::max({ t.a.x, t.b.x, t.c.x });
+        aabb.maxY = std::max({ t.a.y, t.b.y, t.c.y });
+        aabb.maxZ = std::max({ t.a.z, t.b.z, t.c.z });
+
+        outAABBs.push_back(aabb);
+    }
+}
+
+void BuildSpatialGrid(
+    const std::vector<AABB>& triAABBs,
+    const AABB& mapAABB,
+    float cellSize,
+    SpatialGrid& outGrid)
+{
+    outGrid.clear();
+
+    for (int i = 0; i < (int)triAABBs.size(); ++i)
+    {
+        const AABB& a = triAABBs[i];
+
+        int minX = static_cast<int>(std::floor((a.minX - mapAABB.minX) / cellSize));
+        int maxX = static_cast<int>(std::floor((a.maxX - mapAABB.minX) / cellSize));
+        int minZ = static_cast<int>(std::floor((a.minZ - mapAABB.minZ) / cellSize));
+        int maxZ = static_cast<int>(std::floor((a.maxZ - mapAABB.minZ) / cellSize));
+
+        for (int x = minX; x <= maxX; ++x)
+        {
+            for (int z = minZ; z <= maxZ; ++z)
+            {
+                outGrid[{x, z}].push_back(i);
+            }
+        }
     }
 }

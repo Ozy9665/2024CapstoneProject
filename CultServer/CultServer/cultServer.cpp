@@ -476,9 +476,13 @@ void HealTimerLoop() {
 }
 
 // map
-MapAABB g_mapAABB;
-std::vector<MapVertex> g_mapVertices;
-std::vector<MapTriangle> g_mapTriangles;
+AABB g_mapAABB;								// ¸Ê ÀüÃ¼ AABB
+std::vector<MapVertex> g_mapVertices;		// OBJ Á¤Á¡(v)
+std::vector<MapTriangle> g_mapTriangles;	// OBJ ÀÎµ¦½º(f)
+std::vector<MapTri> g_mapTris;				// ½ÇÁ¦ »ï°¢Çü(ÁÂÇ¥)
+std::vector<AABB> g_triAABBs;				// »ï°¢Çüº° AABB
+SpatialGrid g_grid;              // °ø°£ ºÐÇÒ Grid
+float cellSize = 300.0f;         // ¼¿ Å©±â (UE ±âÁØ 200~500 ±ÇÀå)
 
 void disconnect(int);
 void CommandWorker()
@@ -1704,6 +1708,12 @@ int main()
 	std::cout << " B (" << b.x << ", " << b.y << ", " << b.z << ")\n";
 	std::cout << " C (" << c.x << ", " << c.y << ", " << c.z << ")\n";
 
+	BuildTriangles(g_mapVertices, g_mapTriangles, g_mapTris);
+	std::cout << "built tris = " << g_mapTris.size() << "\n";
+	BuildTriangleAABBs(g_mapTris, g_triAABBs);
+	std::cout << "tri AABBs = " << g_triAABBs.size() << "\n";
+	BuildSpatialGrid(g_triAABBs, g_mapAABB, cellSize, g_grid);
+	std::cout << "grid cells = " << g_grid.size() << "\n";
 
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));

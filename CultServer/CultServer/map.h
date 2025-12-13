@@ -3,6 +3,7 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
 
 struct MapVertex {
     float x, y, z;
@@ -17,7 +18,7 @@ bool LoadOBJ(const std::string&,
     std::vector<MapTriangle>&);
 
 
-struct MapAABB {
+struct AABB {
     float minX, minY, minZ;
     float maxX, maxY, maxZ;
 };
@@ -27,7 +28,7 @@ bool LoadOBJAndComputeAABB(
     const std::string& path,
     std::vector<MapVertex>&,
     std::vector<MapTriangle>&,
-    MapAABB&
+    AABB&
 );
 
 struct MapTri {
@@ -40,6 +41,33 @@ void BuildTriangles(
     std::vector<MapTri>&
 );
 
+void BuildTriangleAABBs(
+    const std::vector<MapTri>&,
+    std::vector<AABB>&
+);
+
+// XZ 기준 셀 키
+struct CellKey {
+    int x, z;
+    bool operator==(const CellKey& o) const {
+        return x == o.x && z == o.z;
+    }
+};
+
+struct CellKeyHash {
+    size_t operator()(const CellKey& k) const {
+        return (static_cast<size_t>(k.x) << 32) ^ static_cast<size_t>(k.z);
+    }
+};
+
+using SpatialGrid = std::unordered_map<CellKey, std::vector<int>, CellKeyHash>;
+
+void BuildSpatialGrid(
+    const std::vector<AABB>&,
+    const AABB&,
+    float,
+    SpatialGrid&
+);
 /*
 
 할 일
