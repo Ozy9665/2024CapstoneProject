@@ -68,6 +68,24 @@ void BuildSpatialGrid(
     float,
     SpatialGrid&
 );
+
+struct Ray {
+    float ox, oy, oz;
+    float dx, dy, dz;   // direction
+};
+
+bool LineTraceMap(
+    const Ray&,
+    float,
+    const std::vector<MapTri>&,
+    const std::vector<AABB>&,
+    const SpatialGrid&,
+    const AABB&,
+    float,
+    float&,
+    int&
+);
+
 /*
 
 «“ ¿œ

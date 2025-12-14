@@ -895,6 +895,19 @@ void baton_sweep(int c_id, HitPacket* p)
 	FVector forward{ p->TraceDir.x, p->TraceDir.y, p->TraceDir.z };
 
 	double range = 200.0;
+	// 유저간 충돌 전 지형 충돌 검사
+	Ray ray{ start.x, start.y, start.z ,forward.x, forward.y, forward.z };
+	float mapHitDist;
+	int mapTri;
+
+	if (LineTraceMap(
+		ray, static_cast<float>(range),
+		g_mapTris, g_triAABBs, g_grid,
+		g_mapAABB, cellSize, mapHitDist, mapTri))
+	{
+		range = mapHitDist;
+	}
+
 	FVector end = start + forward * range;
 
 	for (int otherId : g_rooms[room].player_ids)
@@ -936,6 +949,19 @@ void line_trace(int c_id, HitPacket* p) {
 	FVector start{ p->TraceStart.x, p->TraceStart.y, p->TraceStart.z };
 	FVector dir{ p->TraceDir.x,   p->TraceDir.y,   p->TraceDir.z };
 	double range = (p->Weapon == EWeaponType::Taser) ? 1000.0 : 10000.0;
+
+	Ray ray{ start.x, start.y, start.z ,dir.x, dir.y, dir.z };
+	float mapHitDist;
+	int mapTri;
+
+	if (LineTraceMap(
+		ray, static_cast<float>(range),
+		g_mapTris, g_triAABBs, g_grid,
+		g_mapAABB, cellSize, mapHitDist, mapTri))
+	{
+		range = mapHitDist;
+	}
+
 	FVector end = start + dir * range;
 
 	for (int otherId : g_rooms[room].player_ids)
@@ -1715,6 +1741,22 @@ int main()
 	BuildSpatialGrid(g_triAABBs, g_mapAABB, cellSize, g_grid);
 	std::cout << "grid cells = " << g_grid.size() << "\n";
 
+	Ray r;
+	r.ox = 0; r.oy = 1000; r.oz = 0;
+	r.dx = 0; r.dy = -1;  r.dz = 0;
+
+	float hitDist;
+	int hitTri;
+
+	if (LineTraceMap(r, 5000.0f, g_mapTris, g_triAABBs, g_grid,
+		g_mapAABB, cellSize, hitDist, hitTri))
+	{
+		std::cout << "HIT dist=" << hitDist << " tri=" << hitTri << "\n";
+	}
+	else {
+		std::cout << "NO HIT\n";
+	}
+	
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));
 
