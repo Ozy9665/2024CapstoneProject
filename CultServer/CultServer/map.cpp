@@ -127,14 +127,14 @@ void BuildSpatialGrid(
 
         int minX = static_cast<int>(std::floor((a.minX - mapAABB.minX) / cellSize));
         int maxX = static_cast<int>(std::floor((a.maxX - mapAABB.minX) / cellSize));
-        int minZ = static_cast<int>(std::floor((a.minZ - mapAABB.minZ) / cellSize));
-        int maxZ = static_cast<int>(std::floor((a.maxZ - mapAABB.minZ) / cellSize));
+        int minY = static_cast<int>(std::floor((a.minY - mapAABB.minY) / cellSize));
+        int maxY = static_cast<int>(std::floor((a.maxY - mapAABB.minY) / cellSize));
 
         for (int x = minX; x <= maxX; ++x)
         {
-            for (int z = minZ; z <= maxZ; ++z)
+            for (int y = minY; y <= maxY; ++y)
             {
-                outGrid[{x, z}].push_back(i);
+                outGrid[{x, y}].push_back(i);
             }
         }
     }
@@ -156,8 +156,27 @@ static bool RayAABB(const Ray& r, const AABB& a, float maxDist)
         };
 
     return slab(r.ox, r.dx, a.minX, a.maxX) &&
-        slab(r.oy, r.dy, a.minY, a.maxY) &&
-        slab(r.oz, r.dz, a.minZ, a.maxZ);
+        slab(r.oz, r.dz, a.minZ, a.maxZ) &&
+        slab(r.oy, r.dy, a.minY, a.maxY);
+}
+
+static bool RayAABB_XY(const Ray& r, const AABB& a, float maxDist)
+{
+    float tmin = 0.0f, tmax = maxDist;
+
+    auto slab = [&](float o, float d, float minv, float maxv) {
+        if (std::abs(d) < 1e-6f) return (o >= minv && o <= maxv);
+        float inv = 1.0f / d;
+        float t1 = (minv - o) * inv;
+        float t2 = (maxv - o) * inv;
+        if (t1 > t2) std::swap(t1, t2);
+        tmin = std::max(tmin, t1);
+        tmax = std::min(tmax, t2);
+        return tmin <= tmax;
+        };
+
+    return slab(r.ox, r.dx, a.minX, a.maxX) &&
+        slab(r.oy, r.dy, a.minY, a.maxY);
 }
 
 static bool RayTri(const Ray& r, const MapTri& t, float maxDist, float& outT)
@@ -209,29 +228,63 @@ bool LineTraceMap(
     outHitDist = maxDist;
     outTriIndex = -1;
 
-    int minX = (int)std::floor((std::min(ray.ox, ray.ox + ray.dx * maxDist) - mapAABB.minX) / cellSize);
-    int maxX = (int)std::floor((std::max(ray.ox, ray.ox + ray.dx * maxDist) - mapAABB.minX) / cellSize);
-    int minZ = (int)std::floor((std::min(ray.oz, ray.oz + ray.dz * maxDist) - mapAABB.minZ) / cellSize);
-    int maxZ = (int)std::floor((std::max(ray.oz, ray.oz + ray.dz * maxDist) - mapAABB.minZ) / cellSize);
+    int visitedCells = 0;      // 방문한 셀 수
+    int foundCells = 0;        // grid에서 실제로 찾은 셀 수
+    int candidateTris = 0;     // 셀에서 꺼낸 삼각형 후보 수
+    int passedXY = 0;          // RayAABB_XY 통과 수
+    int testedTri = 0;         // RayTri 실제 테스트 수
+
+    int minX = static_cast<int>(std::floor((std::min(ray.ox, ray.ox + ray.dx * maxDist) - mapAABB.minX) / cellSize));
+    int maxX = static_cast<int>(std::floor((std::max(ray.ox, ray.ox + ray.dx * maxDist) - mapAABB.minX) / cellSize));
+
+    int minY = static_cast<int>(std::floor((std::min(ray.oy, ray.oy + ray.dy * maxDist) - mapAABB.minY) / cellSize));
+    int maxY = static_cast<int>(std::floor((std::max(ray.oy, ray.oy + ray.dy * maxDist) - mapAABB.minY) / cellSize));
+
+    std::cout << "[LineTraceMap] cell X "
+        << minX << " ~ " << maxX
+        << " Y " << minY << " ~ " << maxY << "\n";
 
     for (int x = minX; x <= maxX; ++x)
-        for (int z = minZ; z <= maxZ; ++z)
+        for (int y = minY; y <= maxY; ++y)
         {
-            auto it = grid.find({ x,z });
-            if (it == grid.end()) continue;
+            ++visitedCells;
+
+            auto it = grid.find({ x, y });
+            if (it == grid.end()) {
+                std::cout << "[GridMiss] cell (" << x << "," << y << ")\n";
+                continue;
+            }
+            ++foundCells;
+            candidateTris += (int)it->second.size();
 
             for (int triIdx : it->second)
             {
-                if (!RayAABB(ray, triAABBs[triIdx], outHitDist))
+                if (!RayAABB_XY(ray, triAABBs[triIdx], outHitDist)) {
                     continue;
+                }
+
+                ++passedXY;
+                ++testedTri;
 
                 float tHit;
                 if (RayTri(ray, tris[triIdx], outHitDist, tHit))
                 {
+                    std::cout << "[MAP HIT] tri=" << triIdx
+                        << " dist=" << tHit << "\n";
                     outHitDist = tHit;
                     outTriIndex = triIdx;
                 }
             }
         }
+    static int dbg = 0;
+    if ((dbg++ % 30) == 0) {
+        std::cout << "[MapTrace] cells " << visitedCells
+            << " found " << foundCells
+            << " candTris " << candidateTris
+            << " passXY " << passedXY
+            << " triTest " << testedTri
+            << " hit " << (outTriIndex >= 0) << "\n";
+    }
+
     return outTriIndex >= 0;
 }

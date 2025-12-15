@@ -900,12 +900,28 @@ void baton_sweep(int c_id, HitPacket* p)
 	float mapHitDist;
 	int mapTri;
 
+	std::cout << "[BatonSweep] ray start = ("
+		<< ray.ox << ", "
+		<< ray.oy << ", "
+		<< ray.oz << ") dir = ("
+		<< ray.dx << ", "
+		<< ray.dy << ", "
+		<< ray.dz << ")\n";
+	std::cout << "[MapAABB] X "
+		<< g_mapAABB.minX << " ~ " << g_mapAABB.maxX
+		<< " Y " << g_mapAABB.minY << " ~ " << g_mapAABB.maxY
+		<< " Z " << g_mapAABB.minZ << " ~ " << g_mapAABB.maxZ << "\n";
+
 	if (LineTraceMap(
 		ray, static_cast<float>(range),
 		g_mapTris, g_triAABBs, g_grid,
 		g_mapAABB, cellSize, mapHitDist, mapTri))
 	{
+		std::cout << "LineTraceMap." << std::endl;
 		range = mapHitDist;
+	}
+	else{
+		std::cout << "!LineTraceMap." << std::endl;
 	}
 
 	FVector end = start + forward * range;
@@ -927,6 +943,7 @@ void baton_sweep(int c_id, HitPacket* p)
 
 		if (line_sphere_intersect(start, end, targetPos, 50.0))
 		{
+			std::cout << "line_sphere_intersect." << std::endl;
 			HitResultPacket result;
 			result.header = hitHeader;
 			result.size = sizeof(HitResultPacket);
@@ -1756,7 +1773,7 @@ int main()
 	else {
 		std::cout << "NO HIT\n";
 	}
-	
+
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));
 

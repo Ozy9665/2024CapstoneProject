@@ -393,7 +393,6 @@ void AMySocketCultistActor::ProcessDogData(const char* Buffer) {
         return;
     }
     if (Police->PoliceDogInstance) {
-        UE_LOG(LogTemp, Warning, TEXT("[DogData] Police->PoliceDogInstance"));
         // 개 상태 업데이트
         AsyncTask(ENamedThreads::GameThread, [PDI = Police->PoliceDogInstance, ReceivedDog]() {
             if (IsValid(PDI)) {
@@ -783,6 +782,8 @@ void AMySocketCultistActor::ProcessCharacterUpdates()
             }
         }
     }   
+    if (!SpawnedPoliceCharacter.Value)
+        return;
     {
         FScopeLock Lock(&PoliceDataMutex);
 
