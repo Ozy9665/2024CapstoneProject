@@ -900,7 +900,7 @@ void baton_sweep(int c_id, HitPacket* p)
 	float mapHitDist;
 	int mapTri;
 
-	std::cout << "[BatonSweep] ray start = ("
+	/*std::cout << "[BatonSweep] ray start = ("
 		<< ray.ox << ", "
 		<< ray.oy << ", "
 		<< ray.oz << ") dir = ("
@@ -910,7 +910,7 @@ void baton_sweep(int c_id, HitPacket* p)
 	std::cout << "[MapAABB] X "
 		<< g_mapAABB.minX << " ~ " << g_mapAABB.maxX
 		<< " Y " << g_mapAABB.minY << " ~ " << g_mapAABB.maxY
-		<< " Z " << g_mapAABB.minZ << " ~ " << g_mapAABB.maxZ << "\n";
+		<< " Z " << g_mapAABB.minZ << " ~ " << g_mapAABB.maxZ << "\n";*/
 
 	if (LineTraceMap(
 		ray, static_cast<float>(range),
@@ -1711,7 +1711,7 @@ void mainLoop(HANDLE h_iocp) {
 
 int main()
 {
-	if (!LoadOBJAndComputeAABB("SM_MERGED_StaticMeshActor_NewmapLandmass.obj", g_mapVertices, g_mapTriangles, g_mapAABB))
+	if (!LoadOBJAndComputeAABB("SM_MERGED_StaticMeshActor_centerWall.OBJ", g_mapVertices, g_mapTriangles, g_mapAABB))
 	{
 		std::cout << "OBJ load failed\n";
 		return 1;
@@ -1758,9 +1758,10 @@ int main()
 	BuildSpatialGrid(g_triAABBs, g_mapAABB, cellSize, g_grid);
 	std::cout << "grid cells = " << g_grid.size() << "\n";
 
-	Ray r;
-	r.ox = 0; r.oy = 1000; r.oz = 0;
-	r.dx = 0; r.dy = -1;  r.dz = 0;
+	Ray r{
+		{ -8159.82f, 3051.3f, -3014.86f },
+		{  0.911431f, -0.411453f, 0.0f }
+	};
 
 	float hitDist;
 	int hitTri;

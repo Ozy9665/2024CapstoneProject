@@ -23,8 +23,14 @@ bool LoadOBJ(const std::string& path,
 
         if (type == "v")
         {
+            float ox, oy, oz;
+            ss >> ox >> oy >> oz;
             MapVertex v{};
-            ss >> v.x >> v.y >> v.z;
+            // OBJ: X,Z = 평면 / Y = 높이
+            // UE : X,Y = 평면 / Z = 높이
+            v.x = ox;
+            v.y = oz;
+            v.z = oy;
             outVertices.push_back(v);
         }
         else if (type == "f")
@@ -155,9 +161,9 @@ static bool RayAABB(const Ray& r, const AABB& a, float maxDist)
         return tmin <= tmax;
         };
 
-    return slab(r.ox, r.dx, a.minX, a.maxX) &&
-        slab(r.oz, r.dz, a.minZ, a.maxZ) &&
-        slab(r.oy, r.dy, a.minY, a.maxY);
+    return slab(r.start.x, r.dir.x, a.minX, a.maxX) &&
+        slab(r.start.z, r.dir.z, a.minZ, a.maxZ) &&
+        slab(r.start.y, r.dir.y, a.minY, a.maxY);
 }
 
 static bool RayAABB_XY(const Ray& r, const AABB& a, float maxDist)
@@ -175,8 +181,8 @@ static bool RayAABB_XY(const Ray& r, const AABB& a, float maxDist)
         return tmin <= tmax;
         };
 
-    return slab(r.ox, r.dx, a.minX, a.maxX) &&
-        slab(r.oy, r.dy, a.minY, a.maxY);
+    return slab(r.start.x, r.dir.x, a.minX, a.maxX) &&
+        slab(r.start.y, r.dir.y, a.minY, a.maxY);
 }
 
 static bool RayTri(const Ray& r, const MapTri& t, float maxDist, float& outT)
@@ -190,15 +196,15 @@ static bool RayTri(const Ray& r, const MapTri& t, float maxDist, float& outT)
     float e1x = bx - ax, e1y = by - ay, e1z = bz - az;
     float e2x = cx - ax, e2y = cy - ay, e2z = cz - az;
 
-    float px = r.dy * e2z - r.dz * e2y;
-    float py = r.dz * e2x - r.dx * e2z;
-    float pz = r.dx * e2y - r.dy * e2x;
+    float px = r.dir.y * e2z - r.dir.z * e2y;
+    float py = r.dir.z * e2x - r.dir.x * e2z;
+    float pz = r.dir.x * e2y - r.dir.y * e2x;
 
     float det = e1x * px + e1y * py + e1z * pz;
     if (std::abs(det) < EPS) return false;
 
     float inv = 1.0f / det;
-    float tx = r.ox - ax, ty = r.oy - ay, tz = r.oz - az;
+    float tx = r.start.x - ax, ty = r.start.y - ay, tz = r.start.z - az;
 
     float u = (tx * px + ty * py + tz * pz) * inv;
     if (u < 0 || u > 1) return false;
@@ -207,7 +213,7 @@ static bool RayTri(const Ray& r, const MapTri& t, float maxDist, float& outT)
     float qy = tz * e1x - tx * e1z;
     float qz = tx * e1y - ty * e1x;
 
-    float v = (r.dx * qx + r.dy * qy + r.dz * qz) * inv;
+    float v = (r.dir.x * qx + r.dir.y * qy + r.dir.z * qz) * inv;
     if (v < 0 || u + v > 1) return false;
 
     float tHit = (e2x * qx + e2y * qy + e2z * qz) * inv;
@@ -234,11 +240,11 @@ bool LineTraceMap(
     int passedXY = 0;          // RayAABB_XY 통과 수
     int testedTri = 0;         // RayTri 실제 테스트 수
 
-    int minX = static_cast<int>(std::floor((std::min(ray.ox, ray.ox + ray.dx * maxDist) - mapAABB.minX) / cellSize));
-    int maxX = static_cast<int>(std::floor((std::max(ray.ox, ray.ox + ray.dx * maxDist) - mapAABB.minX) / cellSize));
+    int minX = static_cast<int>(std::floor((std::min(ray.start.x, ray.start.x + ray.dir.x * maxDist) - mapAABB.minX) / cellSize));
+    int maxX = static_cast<int>(std::floor((std::max(ray.start.x, ray.start.x + ray.dir.x * maxDist) - mapAABB.minX) / cellSize));
 
-    int minY = static_cast<int>(std::floor((std::min(ray.oy, ray.oy + ray.dy * maxDist) - mapAABB.minY) / cellSize));
-    int maxY = static_cast<int>(std::floor((std::max(ray.oy, ray.oy + ray.dy * maxDist) - mapAABB.minY) / cellSize));
+    int minY = static_cast<int>(std::floor((std::min(ray.start.y, ray.start.y + ray.dir.y * maxDist) - mapAABB.minY) / cellSize));
+    int maxY = static_cast<int>(std::floor((std::max(ray.start.y, ray.start.y + ray.dir.y * maxDist) - mapAABB.minY) / cellSize));
 
     std::cout << "[LineTraceMap] cell X "
         << minX << " ~ " << maxX
@@ -287,4 +293,37 @@ bool LineTraceMap(
     }
 
     return outTriIndex >= 0;
+}
+
+Vec3 WorldToLocalPoint(const Vec3& p, const Transform& t)
+{
+    Vec3 out;
+    out.x = (p.x - t.location.x) / t.scale.x;
+    out.y = (p.y - t.location.y) / t.scale.y;
+    out.z = (p.z - t.location.z) / t.scale.z;
+    return out;
+}
+
+Vec3 WorldToLocalDir(const Vec3& d, const Transform& t)
+{
+    Vec3 out;
+    out.x = d.x / t.scale.x;
+    out.y = d.y / t.scale.y;
+    out.z = d.z / t.scale.z;
+
+    // normalize
+    float len = sqrt(out.x * out.x + out.y * out.y + out.z * out.z);
+    out.x /= len;
+    out.y /= len;
+    out.z /= len;
+
+    return out;
+}
+
+Ray WorldToLocalRay(const Ray& worldRay, const Transform& t)
+{
+    Ray local;
+    local.start = WorldToLocalPoint(worldRay.start, t);
+    local.dir = WorldToLocalDir(worldRay.dir, t);
+    return local;
 }
