@@ -1711,7 +1711,7 @@ void mainLoop(HANDLE h_iocp) {
 
 int main()
 {
-	if (!LoadOBJAndComputeAABB("SM_MERGED_StaticMeshActor_centerWall.OBJ", g_mapVertices, g_mapTriangles, g_mapAABB))
+	if (!LoadOBJAndComputeAABB("SM_MERGED_StaticMeshActor_NewmapLandmass_transformBake.OBJ", g_mapVertices, g_mapTriangles, g_mapAABB))
 	{
 		std::cout << "OBJ load failed\n";
 		return 1;
