@@ -146,26 +146,6 @@ void BuildSpatialGrid(
     }
 }
 
-static bool RayAABB(const Ray& r, const AABB& a, float maxDist)
-{
-    float tmin = 0.0f, tmax = maxDist;
-
-    auto slab = [&](float o, float d, float minv, float maxv) {
-        if (std::abs(d) < 1e-6f) return (o >= minv && o <= maxv);
-        float inv = 1.0f / d;
-        float t1 = (minv - o) * inv;
-        float t2 = (maxv - o) * inv;
-        if (t1 > t2) std::swap(t1, t2);
-        tmin = std::max(tmin, t1);
-        tmax = std::min(tmax, t2);
-        return tmin <= tmax;
-        };
-
-    return slab(r.start.x, r.dir.x, a.minX, a.maxX) &&
-        slab(r.start.z, r.dir.z, a.minZ, a.maxZ) &&
-        slab(r.start.y, r.dir.y, a.minY, a.maxY);
-}
-
 static bool RayAABB_XY(const Ray& r, const AABB& a, float maxDist)
 {
     float tmin = 0.0f, tmax = maxDist;
@@ -257,7 +237,6 @@ bool LineTraceMap(
 
             auto it = grid.find({ x, y });
             if (it == grid.end()) {
-                std::cout << "[GridMiss] cell (" << x << "," << y << ")\n";
                 continue;
             }
             ++foundCells;
@@ -295,35 +274,13 @@ bool LineTraceMap(
     return outTriIndex >= 0;
 }
 
-Vec3 WorldToLocalPoint(const Vec3& p, const Transform& t)
-{
-    Vec3 out;
-    out.x = (p.x - t.location.x) / t.scale.x;
-    out.y = (p.y - t.location.y) / t.scale.y;
-    out.z = (p.z - t.location.z) / t.scale.z;
-    return out;
-}
-
-Vec3 WorldToLocalDir(const Vec3& d, const Transform& t)
-{
-    Vec3 out;
-    out.x = d.x / t.scale.x;
-    out.y = d.y / t.scale.y;
-    out.z = d.z / t.scale.z;
-
-    // normalize
-    float len = sqrt(out.x * out.x + out.y * out.y + out.z * out.z);
-    out.x /= len;
-    out.y /= len;
-    out.z /= len;
-
-    return out;
-}
-
-Ray WorldToLocalRay(const Ray& worldRay, const Transform& t)
+Ray ToLocalRay(const Ray& worldRay)
 {
     Ray local;
-    local.start = WorldToLocalPoint(worldRay.start, t);
-    local.dir = WorldToLocalDir(worldRay.dir, t);
+    local.start.x = worldRay.start.x - MAP_OFFSET.x;
+    local.start.y = worldRay.start.y - MAP_OFFSET.y;
+    local.start.z = worldRay.start.z - MAP_OFFSET.z;
+
+    local.dir = worldRay.dir;
     return local;
 }

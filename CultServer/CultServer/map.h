@@ -95,8 +95,6 @@ bool LineTraceMap(
     int&
 );
 
-Vec3 WorldToLocalPoint(const Vec3&, const Transform&);
+Ray ToLocalRay(const Ray&);
 
-Vec3 WorldToLocalDir(const Vec3&, const Transform&);
-
-Ray WorldToLocalRay(const Ray&, const Transform&);
+constexpr Vec3 MAP_OFFSET{ -4280.f, 13000.f, -3120.f };

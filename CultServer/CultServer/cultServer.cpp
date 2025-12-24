@@ -899,18 +899,19 @@ void baton_sweep(int c_id, HitPacket* p)
 	Ray ray{ start.x, start.y, start.z ,forward.x, forward.y, forward.z };
 	float mapHitDist;
 	int mapTri;
+	Ray local = ToLocalRay(ray);
 
-	/*std::cout << "[BatonSweep] ray start = ("
-		<< ray.ox << ", "
-		<< ray.oy << ", "
-		<< ray.oz << ") dir = ("
-		<< ray.dx << ", "
-		<< ray.dy << ", "
-		<< ray.dz << ")\n";
+	std::cout << "[BatonSweep] ray start = ("
+		<< ray.start.x << ", "
+		<< ray.start.y << ", "
+		<< ray.start.z << ") dir = ("
+		<< ray.dir.x << ", "
+		<< ray.dir.y << ", "
+		<< ray.dir.z << ")\n";
 	std::cout << "[MapAABB] X "
 		<< g_mapAABB.minX << " ~ " << g_mapAABB.maxX
 		<< " Y " << g_mapAABB.minY << " ~ " << g_mapAABB.maxY
-		<< " Z " << g_mapAABB.minZ << " ~ " << g_mapAABB.maxZ << "\n";*/
+		<< " Z " << g_mapAABB.minZ << " ~ " << g_mapAABB.maxZ << "\n";
 
 	if (LineTraceMap(
 		ray, static_cast<float>(range),
@@ -970,6 +971,7 @@ void line_trace(int c_id, HitPacket* p) {
 	Ray ray{ start.x, start.y, start.z ,dir.x, dir.y, dir.z };
 	float mapHitDist;
 	int mapTri;
+	Ray local = ToLocalRay(ray);
 
 	if (LineTraceMap(
 		ray, static_cast<float>(range),
@@ -1711,62 +1713,26 @@ void mainLoop(HANDLE h_iocp) {
 
 int main()
 {
-	if (!LoadOBJAndComputeAABB("SM_MERGED_StaticMeshActor_NewmapLandmass_transformBake.OBJ", g_mapVertices, g_mapTriangles, g_mapAABB))
+	if (!LoadOBJAndComputeAABB("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", g_mapVertices, g_mapTriangles, g_mapAABB))
 	{
 		std::cout << "OBJ load failed\n";
 		return 1;
 	}
 
-	std::cout << "vertices = " << g_mapVertices.size() << "\n";
-	std::cout << "triangles = " << g_mapTriangles.size() << "\n";
-
-	std::cout << "AABB min = ("
-		<< g_mapAABB.minX << ", "
-		<< g_mapAABB.minY << ", "
-		<< g_mapAABB.minZ << ")\n";
-
-	std::cout << "AABB max = ("
-		<< g_mapAABB.maxX << ", "
-		<< g_mapAABB.maxY << ", "
-		<< g_mapAABB.maxZ << ")\n";
-
-	std::cout << "v[0] = ("
-		<< g_mapVertices[0].x << ", "
-		<< g_mapVertices[0].y << ", "
-		<< g_mapVertices[0].z << ")\n";
-
-	auto& t = g_mapTriangles[0];
-	std::cout << "f[0] = ("
-		<< t.v0 << ", "
-		<< t.v1 << ", "
-		<< t.v2 << ")\n";
-
-	auto& t0 = g_mapTriangles[0];
-	auto& a = g_mapVertices[t0.v0];
-	auto& b = g_mapVertices[t0.v1];
-	auto& c = g_mapVertices[t0.v2];
-
-	std::cout << "tri[0]\n";
-	std::cout << " A (" << a.x << ", " << a.y << ", " << a.z << ")\n";
-	std::cout << " B (" << b.x << ", " << b.y << ", " << b.z << ")\n";
-	std::cout << " C (" << c.x << ", " << c.y << ", " << c.z << ")\n";
-
 	BuildTriangles(g_mapVertices, g_mapTriangles, g_mapTris);
-	std::cout << "built tris = " << g_mapTris.size() << "\n";
 	BuildTriangleAABBs(g_mapTris, g_triAABBs);
-	std::cout << "tri AABBs = " << g_triAABBs.size() << "\n";
 	BuildSpatialGrid(g_triAABBs, g_mapAABB, cellSize, g_grid);
-	std::cout << "grid cells = " << g_grid.size() << "\n";
 
 	Ray r{
 		{ -8159.82f, 3051.3f, -3014.86f },
 		{  0.911431f, -0.411453f, 0.0f }
 	};
+	Ray local = ToLocalRay(r);
 
 	float hitDist;
 	int hitTri;
 
-	if (LineTraceMap(r, 5000.0f, g_mapTris, g_triAABBs, g_grid,
+	if (LineTraceMap(local, 5000.0f, g_mapTris, g_triAABBs, g_grid,
 		g_mapAABB, cellSize, hitDist, hitTri))
 	{
 		std::cout << "HIT dist=" << hitDist << " tri=" << hitTri << "\n";
