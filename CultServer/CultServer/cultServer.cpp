@@ -914,7 +914,7 @@ void baton_sweep(int c_id, HitPacket* p)
 		<< " Z " << g_mapAABB.minZ << " ~ " << g_mapAABB.maxZ << "\n";
 
 	if (LineTraceMap(
-		ray, static_cast<float>(range),
+		local, static_cast<float>(range),
 		g_mapTris, g_triAABBs, g_grid,
 		g_mapAABB, cellSize, mapHitDist, mapTri))
 	{
@@ -974,7 +974,7 @@ void line_trace(int c_id, HitPacket* p) {
 	Ray local = ToLocalRay(ray);
 
 	if (LineTraceMap(
-		ray, static_cast<float>(range),
+		local, static_cast<float>(range),
 		g_mapTris, g_triAABBs, g_grid,
 		g_mapAABB, cellSize, mapHitDist, mapTri))
 	{
