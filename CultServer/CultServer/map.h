@@ -13,61 +13,14 @@ struct MapTriangle {
     int v0, v1, v2;
 };
 
-bool LoadOBJ(const std::string&,
-    std::vector<MapVertex>&,
-    std::vector<MapTriangle>&);
-
-
 struct AABB {
     float minX, minY, minZ;
     float maxX, maxY, maxZ;
 };
 
-
-bool LoadOBJAndComputeAABB(
-    const std::string& path,
-    std::vector<MapVertex>&,
-    std::vector<MapTriangle>&,
-    AABB&
-);
-
 struct MapTri {
     MapVertex a, b, c;
 };
-
-void BuildTriangles(
-    const std::vector<MapVertex>&,
-    const std::vector<MapTriangle>&,
-    std::vector<MapTri>&
-);
-
-void BuildTriangleAABBs(
-    const std::vector<MapTri>&,
-    std::vector<AABB>&
-);
-
-// XZ ±‚¡ÿ ºø ≈∞
-struct CellKey {
-    int x, z;
-    bool operator==(const CellKey& o) const {
-        return x == o.x && z == o.z;
-    }
-};
-
-struct CellKeyHash {
-    size_t operator()(const CellKey& k) const {
-        return (static_cast<size_t>(k.x) << 32) ^ static_cast<size_t>(k.z);
-    }
-};
-
-using SpatialGrid = std::unordered_map<CellKey, std::vector<int>, CellKeyHash>;
-
-void BuildSpatialGrid(
-    const std::vector<AABB>&,
-    const AABB&,
-    float,
-    SpatialGrid&
-);
 
 struct Vec3 {
     float x, y, z;
@@ -78,23 +31,58 @@ struct Ray {
     Vec3 dir;
 };
 
-struct Transform {
-    Vec3 location;
-    Vec3 scale;
+class MAP {
+public:
+    bool Load(const std::string&, const Vec3&);
+
+    bool LineTrace(
+        const Ray& worldRay,
+        float maxDist,
+        float& hitDist,
+        int& hitTriIndex
+    ) const;
+
+private:
+    struct CellKey {
+        int x, z;
+        bool operator==(const CellKey& o) const {
+            return x == o.x && z == o.z;
+        }
+    };
+
+    struct CellKeyHash {
+        size_t operator()(const CellKey& k) const {
+            return (static_cast<size_t>(k.x) << 32)
+                ^ static_cast<size_t>(k.z);
+        }
+    };
+
+    using SpatialGrid =
+        std::unordered_map<CellKey, std::vector<int>, CellKeyHash>;
+
+    std::vector<MapVertex> vertices;
+    std::vector<MapTriangle> triangles;
+    std::vector<MapTri> tris;
+
+    std::vector<AABB> triAABBs;
+    SpatialGrid grid;
+    AABB worldAABB;
+    float cellSize{ 200.f };
+    Vec3 offset;
+
+    static bool LoadOBJ(const std::string&,
+        std::vector<MapVertex>&,
+        std::vector<MapTriangle>&);
+
+    static bool LoadOBJAndComputeAABB(
+        const std::string&,
+        std::vector<MapVertex>&,
+        std::vector<MapTriangle>&,
+        AABB&
+    );
+
+    void BuildTriangles();
+    void BuildTriangleAABBs();
+    void BuildSpatialGrid();
+    Ray ToLocalRay(const Ray& worldRay) const;
 };
-
-bool LineTraceMap(
-    const Ray&,
-    float,
-    const std::vector<MapTri>&,
-    const std::vector<AABB>&,
-    const SpatialGrid&,
-    const AABB&,
-    float,
-    float&,
-    int&
-);
-
-Ray ToLocalRay(const Ray&);
-
-constexpr Vec3 MAP_OFFSET{ -4280.f, 13000.f, -3120.f };

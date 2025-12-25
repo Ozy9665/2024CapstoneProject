@@ -1,6 +1,27 @@
 #include "map.h"
+#include <algorithm>
+#include <cmath>
 
-bool LoadOBJ(const std::string& path,
+bool MAP::Load(const std::string& objPath, const Vec3& MapOffset)
+{
+    offset = MapOffset;
+    vertices.clear();
+    triangles.clear();
+    tris.clear();
+    triAABBs.clear();
+    grid.clear();
+
+    if (!LoadOBJAndComputeAABB(objPath, vertices, triangles, worldAABB))
+        return false;
+
+    BuildTriangles();
+    BuildTriangleAABBs();
+    BuildSpatialGrid();
+
+    return true;
+}
+
+bool MAP::LoadOBJ(const std::string& path,
     std::vector<MapVertex>& outVertices,
     std::vector<MapTriangle>& outTriangles)
 {
@@ -55,7 +76,7 @@ bool LoadOBJ(const std::string& path,
     return true;
 }
 
-bool LoadOBJAndComputeAABB(
+bool MAP::LoadOBJAndComputeAABB(
     const std::string& path,
     std::vector<MapVertex>& outVertices,
     std::vector<MapTriangle>& outTriangles,
@@ -82,29 +103,25 @@ bool LoadOBJAndComputeAABB(
     return true;
 }
 
-void BuildTriangles(
-    const std::vector<MapVertex>& vertices,
-    const std::vector<MapTriangle>& indices,
-    std::vector<MapTri>& outTris)
+void MAP::BuildTriangles()
 {
-    outTris.reserve(indices.size());
+    tris.clear();
+    tris.reserve(triangles.size());
 
-    for (const auto& t : indices)
+    for (const auto& t : triangles)
     {
         MapTri tri;
         tri.a = vertices[t.v0];
         tri.b = vertices[t.v1];
         tri.c = vertices[t.v2];
-        outTris.push_back(tri);
+        tris.push_back(tri);
     }
 }
 
-void BuildTriangleAABBs(
-    const std::vector<MapTri>& tris,
-    std::vector<AABB>& outAABBs)
+void MAP::BuildTriangleAABBs()
 {
-    outAABBs.clear();
-    outAABBs.reserve(tris.size());
+    triAABBs.clear();
+    triAABBs.reserve(tris.size());
 
     for (const auto& t : tris)
     {
@@ -117,30 +134,29 @@ void BuildTriangleAABBs(
         aabb.maxY = std::max({ t.a.y, t.b.y, t.c.y });
         aabb.maxZ = std::max({ t.a.z, t.b.z, t.c.z });
 
-        outAABBs.push_back(aabb);
+        triAABBs.push_back(aabb);
     }
 }
 
-void BuildSpatialGrid(
-    const std::vector<AABB>& triAABBs, const AABB& mapAABB,
-    float cellSize, SpatialGrid& outGrid)
+void MAP::BuildSpatialGrid()
 {
-    outGrid.clear();
+    grid.clear();
 
     for (int i = 0; i < (int)triAABBs.size(); ++i)
     {
         const AABB& a = triAABBs[i];
 
-        int minX = static_cast<int>(std::floor((a.minX - mapAABB.minX) / cellSize));
-        int maxX = static_cast<int>(std::floor((a.maxX - mapAABB.minX) / cellSize));
-        int minY = static_cast<int>(std::floor((a.minY - mapAABB.minY) / cellSize));
-        int maxY = static_cast<int>(std::floor((a.maxY - mapAABB.minY) / cellSize));
+        const int minX = (int)std::floor((a.minX - worldAABB.minX) / cellSize);
+        const int maxX = (int)std::floor((a.maxX - worldAABB.minX) / cellSize);
+
+        const int minZ = (int)std::floor((a.minZ - worldAABB.minZ) / cellSize);
+        const int maxZ = (int)std::floor((a.maxZ - worldAABB.minZ) / cellSize);
 
         for (int x = minX; x <= maxX; ++x)
         {
-            for (int y = minY; y <= maxY; ++y)
+            for (int z = minZ; z <= maxZ; ++z)
             {
-                outGrid[{x, y}].push_back(i);
+                grid[{ x, z }].push_back(i);
             }
         }
     }
@@ -204,83 +220,55 @@ static bool RayTri(const Ray& r, const MapTri& t, float maxDist, float& outT)
     return false;
 }
 
-bool LineTraceMap(
-    const Ray& ray, float maxDist,
-    const std::vector<MapTri>& tris,
-    const std::vector<AABB>& triAABBs,
-    const SpatialGrid& grid, const AABB& mapAABB,
-    float cellSize, float& outHitDist, int& outTriIndex)
+bool MAP::LineTrace(const Ray& worldRay, float maxDist, float& hitDist, int& hitTriIndex) const
 {
-    outHitDist = maxDist;
-    outTriIndex = -1;
+    const Ray ray = ToLocalRay(worldRay);
 
-    int visitedCells = 0;      // 방문한 셀 수
-    int foundCells = 0;        // grid에서 실제로 찾은 셀 수
-    int candidateTris = 0;     // 셀에서 꺼낸 삼각형 후보 수
-    int passedXY = 0;          // RayAABB_XY 통과 수
-    int testedTri = 0;         // RayTri 실제 테스트 수
+    hitDist = maxDist;
+    hitTriIndex = -1;
 
-    int minX = static_cast<int>(std::floor((std::min(ray.start.x, ray.start.x + ray.dir.x * maxDist) - mapAABB.minX) / cellSize));
-    int maxX = static_cast<int>(std::floor((std::max(ray.start.x, ray.start.x + ray.dir.x * maxDist) - mapAABB.minX) / cellSize));
+    const float endX = ray.start.x + ray.dir.x * maxDist;
+    const float endZ = ray.start.z + ray.dir.z * maxDist;
 
-    int minY = static_cast<int>(std::floor((std::min(ray.start.y, ray.start.y + ray.dir.y * maxDist) - mapAABB.minY) / cellSize));
-    int maxY = static_cast<int>(std::floor((std::max(ray.start.y, ray.start.y + ray.dir.y * maxDist) - mapAABB.minY) / cellSize));
+    const int minCellX = (int)std::floor((std::min(ray.start.x, endX) - worldAABB.minX) / cellSize);
+    const int maxCellX = (int)std::floor((std::max(ray.start.x, endX) - worldAABB.minX) / cellSize);
 
-    std::cout << "[LineTraceMap] cell X "
-        << minX << " ~ " << maxX
-        << " Y " << minY << " ~ " << maxY << "\n";
+    const int minCellZ = (int)std::floor((std::min(ray.start.z, endZ) - worldAABB.minZ) / cellSize);
+    const int maxCellZ = (int)std::floor((std::max(ray.start.z, endZ) - worldAABB.minZ) / cellSize);
 
-    for (int x = minX; x <= maxX; ++x)
-        for (int y = minY; y <= maxY; ++y)
+    for (int x = minCellX; x <= maxCellX; ++x)
+    {
+        for (int z = minCellZ; z <= maxCellZ; ++z)
         {
-            ++visitedCells;
-
-            auto it = grid.find({ x, y });
-            if (it == grid.end()) {
+            auto it = grid.find({ x, z });
+            if (it == grid.end())
                 continue;
-            }
-            ++foundCells;
-            candidateTris += (int)it->second.size();
 
             for (int triIdx : it->second)
             {
-                if (!RayAABB_XY(ray, triAABBs[triIdx], outHitDist)) {
+                if (!RayAABB_XY(ray, triAABBs[triIdx], hitDist))
                     continue;
-                }
 
-                ++passedXY;
-                ++testedTri;
-
-                float tHit;
-                if (RayTri(ray, tris[triIdx], outHitDist, tHit))
+                float tHit = 0.f;
+                if (RayTri(ray, tris[triIdx], hitDist, tHit))
                 {
-                    std::cout << "[MAP HIT] tri=" << triIdx
-                        << " dist=" << tHit << "\n";
-                    outHitDist = tHit;
-                    outTriIndex = triIdx;
+                    hitDist = tHit;
+                    hitTriIndex = triIdx;
                 }
             }
         }
-    static int dbg = 0;
-    if ((dbg++ % 30) == 0) {
-        std::cout << "[MapTrace] cells " << visitedCells
-            << " found " << foundCells
-            << " candTris " << candidateTris
-            << " passXY " << passedXY
-            << " triTest " << testedTri
-            << " hit " << (outTriIndex >= 0) << "\n";
     }
 
-    return outTriIndex >= 0;
+    return hitTriIndex >= 0;
 }
 
-Ray ToLocalRay(const Ray& worldRay)
+Ray MAP::ToLocalRay(const Ray& worldRay) const
 {
     Ray local;
-    local.start.x = worldRay.start.x - MAP_OFFSET.x;
-    local.start.y = worldRay.start.y - MAP_OFFSET.y;
-    local.start.z = worldRay.start.z - MAP_OFFSET.z;
-
+    local.start.x = worldRay.start.x - offset.x;
+    local.start.y = worldRay.start.y - offset.y;
+    local.start.z = worldRay.start.z - offset.z;
     local.dir = worldRay.dir;
+
     return local;
 }

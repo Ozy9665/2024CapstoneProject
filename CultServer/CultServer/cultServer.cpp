@@ -36,6 +36,9 @@ std::atomic<int> client_id = 0;
 std::unordered_map<int, SESSION> g_users;
 std::array<Room, MAX_ROOM> g_rooms;
 
+MAP NewmapLandmassMap;
+Vec3 NewmapLandmassOffset{ -4280.f, 13000.f, -3120.f };
+
 std::array<std::array<Altar, 5>, MAX_ROOM> g_altars{};
 
 void InitializeAltars(int room_num) {
@@ -475,15 +478,6 @@ void HealTimerLoop() {
 	}
 }
 
-// map
-AABB g_mapAABB;								// 맵 전체 AABB
-std::vector<MapVertex> g_mapVertices;		// OBJ 정점(v)
-std::vector<MapTriangle> g_mapTriangles;	// OBJ 인덱스(f)
-std::vector<MapTri> g_mapTris;				// 실제 삼각형(좌표)
-std::vector<AABB> g_triAABBs;				// 삼각형별 AABB
-SpatialGrid g_grid;              // 공간 분할 Grid
-float cellSize = 300.0f;         // 셀 크기 (UE 기준 200~500 권장)
-
 void disconnect(int);
 void CommandWorker()
 {
@@ -893,36 +887,16 @@ void baton_sweep(int c_id, HitPacket* p)
 
 	FVector start{ p->TraceStart.x, p->TraceStart.y, p->TraceStart.z };
 	FVector forward{ p->TraceDir.x, p->TraceDir.y, p->TraceDir.z };
+	Ray ray{ start.x, start.y, start.z ,forward.x, forward.y, forward.z };
 
 	double range = 200.0;
-	// 유저간 충돌 전 지형 충돌 검사
-	Ray ray{ start.x, start.y, start.z ,forward.x, forward.y, forward.z };
 	float mapHitDist;
 	int mapTri;
-	Ray local = ToLocalRay(ray);
 
-	std::cout << "[BatonSweep] ray start = ("
-		<< ray.start.x << ", "
-		<< ray.start.y << ", "
-		<< ray.start.z << ") dir = ("
-		<< ray.dir.x << ", "
-		<< ray.dir.y << ", "
-		<< ray.dir.z << ")\n";
-	std::cout << "[MapAABB] X "
-		<< g_mapAABB.minX << " ~ " << g_mapAABB.maxX
-		<< " Y " << g_mapAABB.minY << " ~ " << g_mapAABB.maxY
-		<< " Z " << g_mapAABB.minZ << " ~ " << g_mapAABB.maxZ << "\n";
-
-	if (LineTraceMap(
-		local, static_cast<float>(range),
-		g_mapTris, g_triAABBs, g_grid,
-		g_mapAABB, cellSize, mapHitDist, mapTri))
+	if (NewmapLandmassMap.LineTrace(
+		ray, static_cast<float>(range), mapHitDist, mapTri))
 	{
-		std::cout << "LineTraceMap." << std::endl;
 		range = mapHitDist;
-	}
-	else{
-		std::cout << "!LineTraceMap." << std::endl;
 	}
 
 	FVector end = start + forward * range;
@@ -966,17 +940,13 @@ void line_trace(int c_id, HitPacket* p) {
 
 	FVector start{ p->TraceStart.x, p->TraceStart.y, p->TraceStart.z };
 	FVector dir{ p->TraceDir.x,   p->TraceDir.y,   p->TraceDir.z };
-	double range = (p->Weapon == EWeaponType::Taser) ? 1000.0 : 10000.0;
-
 	Ray ray{ start.x, start.y, start.z ,dir.x, dir.y, dir.z };
+
+	double range = (p->Weapon == EWeaponType::Taser) ? 1000.0 : 10000.0;
 	float mapHitDist;
 	int mapTri;
-	Ray local = ToLocalRay(ray);
 
-	if (LineTraceMap(
-		local, static_cast<float>(range),
-		g_mapTris, g_triAABBs, g_grid,
-		g_mapAABB, cellSize, mapHitDist, mapTri))
+	if (NewmapLandmassMap.LineTrace(ray, static_cast<float>(range), mapHitDist, mapTri))
 	{
 		range = mapHitDist;
 	}
@@ -1713,32 +1683,10 @@ void mainLoop(HANDLE h_iocp) {
 
 int main()
 {
-	if (!LoadOBJAndComputeAABB("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", g_mapVertices, g_mapTriangles, g_mapAABB))
+	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset))
 	{
-		std::cout << "OBJ load failed\n";
+		std::cout << "MAP load failed\n";
 		return 1;
-	}
-
-	BuildTriangles(g_mapVertices, g_mapTriangles, g_mapTris);
-	BuildTriangleAABBs(g_mapTris, g_triAABBs);
-	BuildSpatialGrid(g_triAABBs, g_mapAABB, cellSize, g_grid);
-
-	Ray r{
-		{ -8159.82f, 3051.3f, -3014.86f },
-		{  0.911431f, -0.411453f, 0.0f }
-	};
-	Ray local = ToLocalRay(r);
-
-	float hitDist;
-	int hitTri;
-
-	if (LineTraceMap(local, 5000.0f, g_mapTris, g_triAABBs, g_grid,
-		g_mapAABB, cellSize, hitDist, hitTri))
-	{
-		std::cout << "HIT dist=" << hitDist << " tri=" << hitTri << "\n";
-	}
-	else {
-		std::cout << "NO HIT\n";
 	}
 
 	HANDLE h_iocp;
