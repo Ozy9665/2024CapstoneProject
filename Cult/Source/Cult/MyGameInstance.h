@@ -14,6 +14,8 @@ class CULT_API UMyGameInstance : public UGameInstance
 	GENERATED_BODY()
 
 public:
+	UMyGameInstance();
+
 	UPROPERTY(BlueprintReadWrite, Category = "Role Selection")
 	bool bIsCultist = false;
 
@@ -62,4 +64,10 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, Category = "Network")
 	TArray<FVector> RutialSpawnLocations;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Network")
+	FString ServerIP;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Network")
+	int32 ServerPort;
 };
