@@ -79,6 +79,8 @@ void AMyNetworkManagerActor::CheckServer()
     if(!CanConnectToServer(ServerIP, ServerPort))
     {
         UE_LOG(LogTemp, Error, TEXT("Server Is Closed."));
+        UE_LOG(LogTemp, Warning, TEXT("Try Connect IP=[%s], Port=%d"), *ServerIP, ServerPort);
+
         OnConnectFailed.Broadcast();
         return;
     }
