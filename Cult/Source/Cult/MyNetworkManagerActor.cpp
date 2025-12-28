@@ -34,7 +34,7 @@ void AMyNetworkManagerActor::BeginPlay()
         UE_LOG(LogTemp, Error, TEXT("WSAStartup failed: %d"), Result);
     }
 
-    CheckServer();
+    // CheckServer();
 }
 
 // Called every frame
@@ -79,9 +79,10 @@ void AMyNetworkManagerActor::CheckServer()
     if(!CanConnectToServer(ServerIP, ServerPort))
     {
         UE_LOG(LogTemp, Error, TEXT("Server Is Closed."));
+        OnConnectFailed.Broadcast();
         return;
-        // 서버 접속 실패시 게임 종료로 수정
     }
+    OnConnectSuccess.Broadcast();
 
     ReceiveData();
     GI->ClientSocket = ClientSocket;
