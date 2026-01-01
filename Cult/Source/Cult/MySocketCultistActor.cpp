@@ -1797,11 +1797,8 @@ void AMySocketCultistActor::SendQuit() {
     int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(NoticePacket), 0);
     if (BytesSent == SOCKET_ERROR)
     {
-        UE_LOG(LogTemp, Error, TEXT("SendDisconnection failed with error: %ld"), WSAGetLastError());
+        UE_LOG(LogTemp, Error, TEXT("SendQuit failed with error: %ld"), WSAGetLastError());
     }
-
-    closesocket(ClientSocket);
-    ClientSocket = INVALID_SOCKET;
 }
 
 void AMySocketCultistActor::SendDisconnection() {

@@ -338,22 +338,26 @@ void RoomWorkerLoop() {
 			PostQueuedCompletionStatus(g_h_iocp, pkt.size, static_cast<ULONG_PTR>(task.c_id), &eo->over);
 			continue;
 		}
-		case RM_DISCONNECT:
+		case RM_QUIT:
 		{
 			if (!g_users.count(task.c_id)) continue;
 			int room_id = task.room_id;
 			if (room_id < 0 || room_id >= MAX_ROOM) break;
 
-			if (0 == task.role && g_rooms[room_id].cultist >= 0) {
+			if (0 == task.role && g_rooms[room_id].cultist >= 1) {
 				g_rooms[room_id].cultist--;
 			}
-			else if (1 == task.role && g_rooms[room_id].police >= 0) {
+			else if (1 == task.role && g_rooms[room_id].police >= 1) {
 				g_rooms[room_id].police--;
 			}
+
+			uint8_t targets[MAX_PLAYERS_PER_ROOM];
+			std::memcpy(targets, g_rooms[room_id].player_ids, sizeof(targets));
 
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
 				if (g_rooms[room_id].player_ids[i] == static_cast<uint8_t>(task.c_id)) {
 					g_rooms[room_id].player_ids[i] = UINT8_MAX;
+					g_users[task.c_id].room_id = UINT8_MAX;
 					break;
 				}
 			}
@@ -363,7 +367,7 @@ void RoomWorkerLoop() {
 			pkt.size = sizeof(IdOnlyPacket);
 			pkt.id = static_cast<uint8_t>(task.c_id);
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				uint8_t other = g_rooms[room_id].player_ids[i];
+				uint8_t other = targets[i];
 				if (other == UINT8_MAX || !g_users.count(other) || !g_users[other].isValidSocket()) {
 					continue;
 				}
@@ -374,18 +378,13 @@ void RoomWorkerLoop() {
 			}
 			continue;
 		}
-		case RM_QUIT:
+		case RM_DISCONNECT:
 		{
 			if (!g_users.count(task.c_id)) continue;
+			if (g_users[task.c_id].room_id >= UINT8_MAX) break;
+
 			int room_id = task.room_id;
 			if (room_id < 0 || room_id >= MAX_ROOM) break;
-
-			if (0 == task.role && g_rooms[room_id].cultist >= 0) {
-				g_rooms[room_id].cultist--;
-			}
-			else if (1 == task.role && g_rooms[room_id].police >= 0) {
-				g_rooms[room_id].police--;
-			}
 
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
 				if (g_rooms[room_id].player_ids[i] == static_cast<uint8_t>(task.c_id)) {
@@ -393,6 +392,14 @@ void RoomWorkerLoop() {
 					break;
 				}
 			}
+
+			if (0 == task.role && g_rooms[room_id].cultist >= 1) {
+				g_rooms[room_id].cultist--;
+			}
+			else if (1 == task.role && g_rooms[room_id].police >= 1) {
+				g_rooms[room_id].police--;
+			}
+			continue;
 		}
 		default:
 			break;
@@ -1373,7 +1380,7 @@ void process_packet(int c_id, char* packet) {
 	case DisconnectionHeader: 
 	{
 		std::lock_guard<std::mutex> lk(g_room_mtx);
-		g_room_q.push(RoomTask{ c_id, RM_QUIT, g_users[c_id].role, g_users[c_id].room_id });
+		g_room_q.push(RoomTask{ c_id, RM_DISCONNECT, g_users[c_id].role, g_users[c_id].room_id });
 		g_room_cv.notify_one();
 		break;
 	}
@@ -1555,7 +1562,7 @@ void process_packet(int c_id, char* packet) {
 	case quitHeader:
 	{
 		std::lock_guard<std::mutex> lk(g_room_mtx);
-		g_room_q.push(RoomTask{ c_id, RM_DISCONNECT, g_users[c_id].role, g_users[c_id].room_id });
+		g_room_q.push(RoomTask{ c_id, RM_QUIT, g_users[c_id].role, g_users[c_id].room_id });
 		g_room_cv.notify_one();
 		break;
 	}
