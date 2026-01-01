@@ -511,7 +511,7 @@ void AMySocketCultistActor::ProcessHitData(const char* Buffer)
             break;
         }
         default:
-            UE_LOG(LogTemp, Error, TEXT("EWeaponType Error: %d"), ReceivedPacket.Weapon);
+            UE_LOG(LogTemp, Error, TEXT("[Cultist]: EWeaponType Error: %d"), ReceivedPacket.Weapon);
             break;
         }
     }
@@ -1452,7 +1452,7 @@ void AMySocketCultistActor::SpawnImpactEffect(const FImpactPacket& ReceivedImpac
         MuzzleLoc,
         MuzzleRot
     );
-}
+}   
 
 void AMySocketCultistActor::HideCharacter(int PlayerID, bool bHide) {
     AsyncTask(ENamedThreads::GameThread, [this, PlayerID, bHide]()

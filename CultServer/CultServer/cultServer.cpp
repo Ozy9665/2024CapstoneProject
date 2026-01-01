@@ -919,12 +919,13 @@ void baton_sweep(int c_id, HitPacket* p)
 		if (line_sphere_intersect(start, end, targetPos, 50.0))
 		{
 			std::cout << "line_sphere_intersect." << std::endl;
-			HitResultPacket result;
-			result.header = hitHeader;
-			result.size = sizeof(HitResultPacket);
-			result.AttackerID = c_id;
-			result.TargetID = otherId;
-			result.Weapon = EWeaponType::Baton;
+			HitResultPacket result{
+				hitHeader, 
+				sizeof(HitResultPacket), 
+				c_id,
+				otherId, 
+				EWeaponType::Baton
+			};
 
 			broadcast_in_room(c_id, room, &result, VIEW_RANGE);
 			return;
@@ -932,7 +933,7 @@ void baton_sweep(int c_id, HitPacket* p)
 	}
 }
 
-void line_trace(int c_id, HitPacket* p) {
+void line_trace(int c_id, HitPacket* p)	 {
 	auto& attacker = g_users[c_id];
 	int room = attacker.room_id;
 	if (room < 0) 
@@ -970,12 +971,13 @@ void line_trace(int c_id, HitPacket* p) {
 
 		if (line_sphere_intersect(start, end, targetPos, 60.0))
 		{
-			HitResultPacket result;
-			result.header = hitHeader;
-			result.size = sizeof(HitResultPacket);
-			result.AttackerID = c_id;
-			result.TargetID = otherId;
-			result.Weapon = p->Weapon;
+			HitResultPacket result{ 
+				hitHeader,
+				sizeof(HitResultPacket),
+				c_id, 
+				otherId, 
+				p->Weapon 
+			};
 
 			broadcast_in_room(c_id, room, &result, VIEW_RANGE);
 			return;
@@ -1128,7 +1130,6 @@ void process_packet(int c_id, char* packet) {
 		default:
 			break;
 		}
-		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
 		break;
 	}
 	case tryHealHeader: 

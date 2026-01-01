@@ -204,13 +204,13 @@ void AMySocketPoliceActor::ProcessHitData(const char* Buffer)
         case EWeaponType::Baton:
             break;
         case EWeaponType::Pistol:
-            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
+            UE_LOG(LogTemp, Error, TEXT("[Police]: EWeaponType received: %d"), ReceivedState.Weapon);
             break;
         case EWeaponType::Taser:
-            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
+            UE_LOG(LogTemp, Error, TEXT("[Police]: EWeaponType received: %d"), ReceivedState.Weapon);
             break;
         default:
-            UE_LOG(LogTemp, Error, TEXT("EWeaponType Error: %d"), ReceivedState.Weapon);
+            UE_LOG(LogTemp, Error, TEXT("[Police]: EWeaponType Error: %d"), ReceivedState.Weapon);
             break;
         }
     }
