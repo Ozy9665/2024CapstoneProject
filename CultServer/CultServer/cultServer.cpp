@@ -34,11 +34,12 @@ HANDLE g_h_iocp = nullptr;
 
 std::atomic<int> client_id = 0;
 std::unordered_map<int, SESSION> g_users;
-std::array<Room, MAX_ROOM> g_rooms;
 
 MAP NewmapLandmassMap;
-Vec3 NewmapLandmassOffset{ -4280.f, 13000.f, -3120.f };
+enum MAPTYPE { LANDMASS };
 
+std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
+// std::array<Room, MAX_ROOM> g_rooms;
 std::array<std::array<Altar, 5>, MAX_ROOM> g_altars{};
 
 void InitializeAltars(int room_num) {
@@ -194,13 +195,13 @@ void RoomWorkerLoop() {
 			pkt.size = sizeof(RoomsPakcet);
 
 			int inserted = 0;
-			for (const Room& r : g_rooms) {
+			for (const auto& r : g_rooms) {
 				if (inserted >= 10) break;
-				if (!r.isIngame) {
-					if ((role == 1 && r.police < MAX_POLICE_PER_ROOM) ||
-						(role == 0 && r.cultist < MAX_CULTIST_PER_ROOM))
+				if (!r.first.isIngame) {
+					if ((role == 1 && r.first.police < MAX_POLICE_PER_ROOM) ||
+						(role == 0 && r.first.cultist < MAX_CULTIST_PER_ROOM))
 					{
-						pkt.rooms[inserted++] = r;
+						pkt.rooms[inserted++] = r.first;
 					}
 				}
 			}
@@ -225,12 +226,12 @@ void RoomWorkerLoop() {
 			}
 			else {
 				if (0 == task.role) {
-					pkt.header = (g_rooms[room_id].cultist >= MAX_CULTIST_PER_ROOM) ? leaveHeader : enterHeader;
+					pkt.header = (g_rooms[room_id].first.cultist >= MAX_CULTIST_PER_ROOM) ? leaveHeader : enterHeader;
 					if (pkt.header == enterHeader) 
 						user.room_id = room_id;
 				}
 				else if (1 == task.role) {
-					pkt.header = (g_rooms[room_id].police >= MAX_POLICE_PER_ROOM) ? leaveHeader : enterHeader;
+					pkt.header = (g_rooms[room_id].first.police >= MAX_POLICE_PER_ROOM) ? leaveHeader : enterHeader;
 					if (pkt.header == enterHeader) 
 						user.room_id = room_id;
 				}
@@ -254,16 +255,16 @@ void RoomWorkerLoop() {
 			auto& me = g_users[task.c_id];
 
 			// 카운터, ingame, player_ids 갱신
-			if (1 == task.role) g_rooms[room_id].police++;
-			else if (0 == task.role) g_rooms[room_id].cultist++;
-			if (g_rooms[room_id].cultist >= MAX_CULTIST_PER_ROOM &&
-				g_rooms[room_id].police >= MAX_POLICE_PER_ROOM) {
-				g_rooms[room_id].isIngame = true;
+			if (1 == task.role) g_rooms[room_id].first.police++;
+			else if (0 == task.role) g_rooms[room_id].first.cultist++;
+			if (g_rooms[room_id].first.cultist >= MAX_CULTIST_PER_ROOM &&
+				g_rooms[room_id].first.police >= MAX_POLICE_PER_ROOM) {
+				g_rooms[room_id].first.isIngame = true;
 			}
 			me.room_id = room_id;
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				if (g_rooms[room_id].player_ids[i] == UINT8_MAX) {
-					g_rooms[room_id].player_ids[i] = static_cast<uint8_t>(task.c_id);
+				if (g_rooms[room_id].first.player_ids[i] == UINT8_MAX) {
+					g_rooms[room_id].first.player_ids[i] = static_cast<uint8_t>(task.c_id);
 					break;
 				}
 			}
@@ -284,7 +285,7 @@ void RoomWorkerLoop() {
 
 			// 서로 교환
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				uint8_t other = g_rooms[room_id].player_ids[i];
+				uint8_t other = g_rooms[room_id].first.player_ids[i];
 				if (other == UINT8_MAX || other == task.c_id) continue;
 				if (!g_users.count(other)) continue;
 
@@ -344,19 +345,19 @@ void RoomWorkerLoop() {
 			int room_id = task.room_id;
 			if (room_id < 0 || room_id >= MAX_ROOM) break;
 
-			if (0 == task.role && g_rooms[room_id].cultist >= 1) {
-				g_rooms[room_id].cultist--;
+			if (0 == task.role && g_rooms[room_id].first.cultist >= 1) {
+				g_rooms[room_id].first.cultist--;
 			}
-			else if (1 == task.role && g_rooms[room_id].police >= 1) {
-				g_rooms[room_id].police--;
+			else if (1 == task.role && g_rooms[room_id].first.police >= 1) {
+				g_rooms[room_id].first.police--;
 			}
 
 			uint8_t targets[MAX_PLAYERS_PER_ROOM];
-			std::memcpy(targets, g_rooms[room_id].player_ids, sizeof(targets));
+			std::memcpy(targets, g_rooms[room_id].first.player_ids, sizeof(targets));
 
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				if (g_rooms[room_id].player_ids[i] == static_cast<uint8_t>(task.c_id)) {
-					g_rooms[room_id].player_ids[i] = UINT8_MAX;
+				if (g_rooms[room_id].first.player_ids[i] == static_cast<uint8_t>(task.c_id)) {
+					g_rooms[room_id].first.player_ids[i] = UINT8_MAX;
 					g_users[task.c_id].room_id = UINT8_MAX;
 					break;
 				}
@@ -387,17 +388,17 @@ void RoomWorkerLoop() {
 			if (room_id < 0 || room_id >= MAX_ROOM) break;
 
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				if (g_rooms[room_id].player_ids[i] == static_cast<uint8_t>(task.c_id)) {
-					g_rooms[room_id].player_ids[i] = UINT8_MAX;
+				if (g_rooms[room_id].first.player_ids[i] == static_cast<uint8_t>(task.c_id)) {
+					g_rooms[room_id].first.player_ids[i] = UINT8_MAX;
 					break;
 				}
 			}
 
-			if (0 == task.role && g_rooms[room_id].cultist >= 1) {
-				g_rooms[room_id].cultist--;
+			if (0 == task.role && g_rooms[room_id].first.cultist >= 1) {
+				g_rooms[room_id].first.cultist--;
 			}
-			else if (1 == task.role && g_rooms[room_id].police >= 1) {
-				g_rooms[room_id].police--;
+			else if (1 == task.role && g_rooms[room_id].first.police >= 1) {
+				g_rooms[room_id].first.police--;
 			}
 			continue;
 		}
@@ -610,7 +611,7 @@ void broadcast_in_room(int sender_id, int room_id, const PacketT* packet, float 
 		return;
 	}
 
-	const Room& r = g_rooms[room_id];
+	const Room& r = g_rooms[room_id].first;
 
 	float view_range_sq = (view_range > 0) ? view_range * view_range : -1.0f;	// -1이면 전원에게 전송
 	
@@ -771,7 +772,7 @@ std::optional<int> SphereTraceClosestCultist(int centerId, float radius) {
 		std::cout << "User " << centerId << " room id error " << "\n";
 		return std::nullopt;
 	}
-	const Room& rm = g_rooms[roomId];
+	const Room& rm = g_rooms[roomId].first;
 
 	const float r2 = radius * radius;
 	float nearestId = std::numeric_limits<float>::max();
@@ -894,7 +895,14 @@ void baton_sweep(int c_id, HitPacket* p)
 
 	FVector start{ p->TraceStart.x, p->TraceStart.y, p->TraceStart.z };
 	FVector forward{ p->TraceDir.x, p->TraceDir.y, p->TraceDir.z };
-	Ray ray{ start.x, start.y, start.z ,forward.x, forward.y, forward.z };
+	Ray ray{
+		static_cast<float>(start.x),
+		static_cast<float>(start.y),
+		static_cast<float>(start.z),
+		static_cast<float>(forward.x),
+		static_cast<float>(forward.y),
+		static_cast<float>(forward.z)
+	};
 
 	double range = 200.0;
 	float mapHitDist;
@@ -908,7 +916,7 @@ void baton_sweep(int c_id, HitPacket* p)
 
 	FVector end = start + forward * range;
 
-	for (int otherId : g_rooms[room].player_ids)
+	for (int otherId : g_rooms[room].first.player_ids)
 	{
 		if (otherId == c_id || g_users[otherId].role != 0 || otherId == UINT8_MAX)
 			continue;
@@ -948,7 +956,14 @@ void line_trace(int c_id, HitPacket* p)	 {
 
 	FVector start{ p->TraceStart.x, p->TraceStart.y, p->TraceStart.z };
 	FVector dir{ p->TraceDir.x,   p->TraceDir.y,   p->TraceDir.z };
-	Ray ray{ start.x, start.y, start.z ,dir.x, dir.y, dir.z };
+	Ray ray{
+		static_cast<float>(start.x),
+		static_cast<float>(start.y),
+		static_cast<float>(start.z),
+		static_cast<float>(dir.x),
+		static_cast<float>(dir.y),
+		static_cast<float>(dir.z)
+	};
 
 	double range = (p->Weapon == EWeaponType::Taser) ? 1000.0 : 10000.0;
 	float mapHitDist;
@@ -961,7 +976,7 @@ void line_trace(int c_id, HitPacket* p)	 {
 
 	FVector end = start + dir * range;
 
-	for (int otherId : g_rooms[room].player_ids)
+	for (int otherId : g_rooms[room].first.player_ids)
 	{
 		if (otherId == c_id || g_users[otherId].role != 0) 
 			continue;
@@ -1396,7 +1411,7 @@ void process_packet(int c_id, char* packet) {
 
 		bool allCultistsDisabled = true;
 
-		const Room& r = g_rooms[room_id];
+		const Room& r = g_rooms[room_id].first;
 		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
 		{
 			uint8_t pid = r.player_ids[i];
@@ -1436,12 +1451,12 @@ void process_packet(int c_id, char* packet) {
 				disconnect(id);
 			}
 			// 매치가 끝났으니 room을 초기화
-			g_rooms[room_id].cultist = 0;
-			g_rooms[room_id].police = 0;
+			g_rooms[room_id].first.cultist = 0;
+			g_rooms[room_id].first.police = 0;
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				g_rooms[room_id].player_ids[i] = UINT8_MAX;
+				g_rooms[room_id].first.player_ids[i] = UINT8_MAX;
 			}
-			g_rooms[room_id].isIngame = false;
+			g_rooms[room_id].first.isIngame = false;
 		}
 		break;
 	}
@@ -1736,7 +1751,8 @@ int main()
 	//}
 
 	for (int i = 0; i < 100; ++i) {
-		g_rooms[i].room_id = i;
+		g_rooms[i].first.room_id = i;
+		g_rooms[i].second = LANDMASS;
 		InitializeAltars(i);
 	}
 	g_h_iocp = h_iocp;

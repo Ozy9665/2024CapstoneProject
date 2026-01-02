@@ -5,6 +5,7 @@
 #include <sstream>
 #include <unordered_map>
 
+
 struct MapVertex {
     float x, y, z;
 };
@@ -30,6 +31,8 @@ struct Ray {
     Vec3 start;
     Vec3 dir;
 };
+
+constexpr Vec3 NewmapLandmassOffset{ -4280.f, 13000.f, -3120.f };
 
 class MAP {
 public:
