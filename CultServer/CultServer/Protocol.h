@@ -16,12 +16,13 @@ constexpr int MAX_ROOM = 100;
 constexpr int MAX_PLAYERS_PER_ROOM = 5;
 constexpr int MAX_CULTIST_PER_ROOM = 4;
 constexpr int MAX_POLICE_PER_ROOM = 1;
+constexpr int MAX_ID = INT_MAX;
 
 constexpr float VIEW_RANGE = 3000.0f;           // 시야 반경
 constexpr float VIEW_RANGE_SQ = VIEW_RANGE * VIEW_RANGE;
 constexpr float SPHERE_TRACE_RADIUS = 200.0f;
 constexpr float HEAL_GAP = 100.0f;
-constexpr float PI = 3.141592;
+constexpr float PI = 3.141592f;
 
 constexpr float baseX = 110.f;
 constexpr float baseY = -1100.f;
@@ -97,11 +98,11 @@ struct FRotator {
 };
 
 struct Room {
-	uint8_t room_id;
+	int room_id;
 	uint8_t police = 0;
 	uint8_t cultist = 0;
 	bool isIngame = false;
-	uint8_t  player_ids[MAX_PLAYERS_PER_ROOM] = {
+	int  player_ids[MAX_PLAYERS_PER_ROOM] = {
 		UINT8_MAX, UINT8_MAX, UINT8_MAX,
 		UINT8_MAX, UINT8_MAX
 	};
@@ -184,11 +185,8 @@ struct FPoliceCharacterState
 struct FCultistCharacterState
 {
 	int PlayerID;
-	// 위치
 	float PositionX, PositionY, PositionZ;
-	// 회전
 	float RotationPitch, RotationYaw, RotationRoll;
-	// 속도
 	float VelocityX, VelocityY, VelocityZ, Speed;
 	float CurrentHealth;
 	// 상태
@@ -225,8 +223,8 @@ struct FImpactPacket
 struct HitResultPacket {
 	uint8_t  header;
 	uint8_t  size;
-	uint8_t AttackerID;
-	uint8_t TargetID;
+	int AttackerID;
+	int TargetID;
 	EWeaponType Weapon;
 };
 
@@ -271,7 +269,7 @@ struct HitPacket {
 struct IdOnlyPacket {
 	uint8_t header;
 	uint8_t size;
-	uint8_t id;
+	int id;
 };
 
 struct RoleOnlyPacket {
@@ -283,7 +281,7 @@ struct RoleOnlyPacket {
 struct IdRolePacket {
 	uint8_t header;
 	uint8_t size;
-	uint8_t id;
+	int id;
 	uint8_t role;
 };
 
@@ -313,7 +311,7 @@ struct NoticePacket {
 struct TreePacket {
 	uint8_t header;
 	uint8_t size;
-	uint8_t casterId;
+	int casterId;
 	FVector SpawnLoc;
 	FRotator SpawnRot;
 };
@@ -357,7 +355,6 @@ struct MovePacket {
 struct RitualNoticePacket {
 	uint8_t header;
 	uint8_t size;
-	uint8_t id;
 	uint8_t ritual_id;
 	uint8_t reason;
 	// reason 0 -> start
@@ -370,7 +367,6 @@ struct RitualNoticePacket {
 struct RitualGagePacket {
 	uint8_t header;
 	uint8_t size;
-	uint8_t id;
 	uint8_t ritual_id;
 	int gauge;
 };
@@ -404,7 +400,7 @@ class SESSION {
 public:
 	SOCKET			c_socket;
 	int				id;
-	int				role;
+	uint8_t			role;
 	char			state;
 	int				prev_remain;
 	int				room_id;
@@ -438,9 +434,9 @@ public:
 
 	const FPoliceCharacterState& getPoliceState() const;
 
-	void setRole(const int r);
+	void setRole(const uint8_t r);
 
-	int getRole() const;
+	uint8_t getRole() const;
 
 	SOCKET getSocket() const;
 

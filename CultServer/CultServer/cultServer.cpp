@@ -163,7 +163,7 @@ enum ROOM_EVENT { RM_REQ, RM_ENTER, RM_GAMESTART, RM_RITUAL, RM_DISCONNECT, RM_Q
 struct RoomTask {
 	int c_id;
 	ROOM_EVENT type;
-	int role;
+	uint8_t role;
 	int room_id;
 };
 
@@ -263,8 +263,8 @@ void RoomWorkerLoop() {
 			}
 			me.room_id = room_id;
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				if (g_rooms[room_id].first.player_ids[i] == UINT8_MAX) {
-					g_rooms[room_id].first.player_ids[i] = static_cast<uint8_t>(task.c_id);
+				if (g_rooms[room_id].first.player_ids[i] == INT_MAX) {
+					g_rooms[room_id].first.player_ids[i] = task.c_id;
 					break;
 				}
 			}
@@ -274,8 +274,8 @@ void RoomWorkerLoop() {
 				IdRolePacket pkt{};
 				pkt.header = connectionHeader;
 				pkt.size = sizeof(IdRolePacket);
-				pkt.id = static_cast<uint8_t>(task.c_id);
-				pkt.role = static_cast<uint8_t>(task.role);
+				pkt.id = task.c_id;
+				pkt.role = task.role;
 
 				EXP_OVER* eo = new EXP_OVER();
 				std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
@@ -285,8 +285,8 @@ void RoomWorkerLoop() {
 
 			// 서로 교환
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				uint8_t other = g_rooms[room_id].first.player_ids[i];
-				if (other == UINT8_MAX || other == task.c_id) continue;
+				int other = g_rooms[room_id].first.player_ids[i];
+				if (other == INT_MAX || other == task.c_id) continue;
 				if (!g_users.count(other)) continue;
 
 				// 다른 유저에게 나
@@ -294,8 +294,8 @@ void RoomWorkerLoop() {
 					IdRolePacket pkt{};
 					pkt.header = connectionHeader;
 					pkt.size = sizeof(IdRolePacket);
-					pkt.id = static_cast<uint8_t>(task.c_id);
-					pkt.role = static_cast<uint8_t>(task.role);
+					pkt.id = task.c_id;
+					pkt.role = task.role;
 
 					EXP_OVER* eo = new EXP_OVER();
 					std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
@@ -308,7 +308,7 @@ void RoomWorkerLoop() {
 					pkt.header = connectionHeader;
 					pkt.size = sizeof(IdRolePacket);
 					pkt.id = other;
-					pkt.role = static_cast<uint8_t>(g_users[other].getRole());
+					pkt.role = g_users[other].getRole();
 
 					EXP_OVER* eo = new EXP_OVER();
 					std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
@@ -352,13 +352,13 @@ void RoomWorkerLoop() {
 				g_rooms[room_id].first.police--;
 			}
 
-			uint8_t targets[MAX_PLAYERS_PER_ROOM];
+			int targets[MAX_PLAYERS_PER_ROOM];
 			std::memcpy(targets, g_rooms[room_id].first.player_ids, sizeof(targets));
 
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				if (g_rooms[room_id].first.player_ids[i] == static_cast<uint8_t>(task.c_id)) {
-					g_rooms[room_id].first.player_ids[i] = UINT8_MAX;
-					g_users[task.c_id].room_id = UINT8_MAX;
+				if (g_rooms[room_id].first.player_ids[i] == task.c_id) {
+					g_rooms[room_id].first.player_ids[i] = INT_MAX;
+					g_users[task.c_id].room_id = INT_MAX;
 					break;
 				}
 			}
@@ -366,10 +366,10 @@ void RoomWorkerLoop() {
 			IdOnlyPacket pkt;
 			pkt.header = DisconnectionHeader;
 			pkt.size = sizeof(IdOnlyPacket);
-			pkt.id = static_cast<uint8_t>(task.c_id);
+			pkt.id = task.c_id;
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				uint8_t other = targets[i];
-				if (other == UINT8_MAX || !g_users.count(other) || !g_users[other].isValidSocket()) {
+				int other = targets[i];
+				if (other == INT_MAX || !g_users.count(other) || !g_users[other].isValidSocket()) {
 					continue;
 				}
 				EXP_OVER* eo = new EXP_OVER();
@@ -382,14 +382,14 @@ void RoomWorkerLoop() {
 		case RM_DISCONNECT:
 		{
 			if (!g_users.count(task.c_id)) continue;
-			if (g_users[task.c_id].room_id >= UINT8_MAX) break;
+			if (g_users[task.c_id].room_id >= MAX_ROOM) break;
 
 			int room_id = task.room_id;
 			if (room_id < 0 || room_id >= MAX_ROOM) break;
 
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				if (g_rooms[room_id].first.player_ids[i] == static_cast<uint8_t>(task.c_id)) {
-					g_rooms[room_id].first.player_ids[i] = UINT8_MAX;
+				if (g_rooms[room_id].first.player_ids[i] == task.c_id) {
+					g_rooms[room_id].first.player_ids[i] = INT_MAX;
 					break;
 				}
 			}
@@ -616,8 +616,8 @@ void broadcast_in_room(int sender_id, int room_id, const PacketT* packet, float 
 	float view_range_sq = (view_range > 0) ? view_range * view_range : -1.0f;	// -1이면 전원에게 전송
 	
 	for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-		uint8_t other_id = r.player_ids[i];
-		if (other_id == UINT8_MAX || other_id == sender_id)
+		int other_id = r.player_ids[i];
+		if (other_id == INT_MAX || other_id == sender_id)
 			continue;
 
 		if (!g_users.count(other_id) || !g_users[other_id].isValidSocket())
@@ -633,7 +633,7 @@ void broadcast_in_room(int sender_id, int room_id, const PacketT* packet, float 
 				IdOnlyPacket appear;
 				appear.header = appearHeader;
 				appear.size = sizeof(IdOnlyPacket);
-				appear.id = static_cast<uint8_t>(sender_id);
+				appear.id = sender_id;
 				g_users[other_id].do_send_packet(&appear);
 			}
 
@@ -647,7 +647,7 @@ void broadcast_in_room(int sender_id, int room_id, const PacketT* packet, float 
 				IdOnlyPacket disappear;
 				disappear.header = disappearHeader;
 				disappear.size = sizeof(IdOnlyPacket);
-				disappear.id = static_cast<uint8_t>(sender_id);
+				disappear.id = sender_id;
 				g_users[other_id].do_send_packet(&disappear);
 			}
 
@@ -782,7 +782,7 @@ std::optional<int> SphereTraceClosestCultist(int centerId, float radius) {
 	for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
 	{
 		int other = rm.player_ids[i];
-		if (other == UINT8_MAX || other == centerId) 
+		if (other == INT_MAX || other == centerId)
 			continue;
 
 		auto it = g_users.find(other);
@@ -918,7 +918,7 @@ void baton_sweep(int c_id, HitPacket* p)
 
 	for (int otherId : g_rooms[room].first.player_ids)
 	{
-		if (otherId == c_id || g_users[otherId].role != 0 || otherId == UINT8_MAX)
+		if (otherId == c_id || g_users[otherId].role != 0 || otherId == INT_MAX)
 			continue;
 
 		auto& target = g_users[otherId];
@@ -1339,7 +1339,6 @@ void process_packet(int c_id, char* packet) {
 				RitualNoticePacket packet;
 				packet.header = ritualEndHeader;
 				packet.size = sizeof(RitualNoticePacket);
-				packet.id = c_id;
 				packet.ritual_id = ritual_id;
 				packet.reason = 4;
 				g_users[c_id].do_send_packet(&packet);
@@ -1360,7 +1359,6 @@ void process_packet(int c_id, char* packet) {
 				RitualNoticePacket packet;
 				packet.header = ritualEndHeader;
 				packet.size = sizeof(RitualNoticePacket);
-				packet.id = c_id;
 				packet.ritual_id = ritual_id;
 				packet.reason = 4;
 				g_users[c_id].do_send_packet(&packet);
@@ -1369,7 +1367,6 @@ void process_packet(int c_id, char* packet) {
 				RitualNoticePacket packet;
 				packet.header = ritualEndHeader;
 				packet.size = sizeof(RitualNoticePacket);
-				packet.id = c_id;
 				packet.ritual_id = ritual_id;
 				packet.reason = altar.gauge;
 				g_users[c_id].do_send_packet(&packet);
@@ -1414,8 +1411,8 @@ void process_packet(int c_id, char* packet) {
 		const Room& r = g_rooms[room_id].first;
 		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
 		{
-			uint8_t pid = r.player_ids[i];
-			if (pid == UINT8_MAX) continue;
+			int pid = r.player_ids[i];
+			if (pid == INT_MAX) continue;
 
 			if (g_users.count(pid) && g_users[pid].getRole() == 0 && g_users[pid].getState() != ST_DISABLE) {
 				allCultistsDisabled = false;
@@ -1435,8 +1432,8 @@ void process_packet(int c_id, char* packet) {
 			std::vector<int> ids_to_disconnect;
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
 			{
-				uint8_t pid = r.player_ids[i];
-				if (pid == UINT8_MAX) continue;
+				int pid = r.player_ids[i];
+				if (pid == INT_MAX) continue;
 
 				if (g_users.count(pid) && g_users[pid].isValidSocket())
 				{
@@ -1454,7 +1451,7 @@ void process_packet(int c_id, char* packet) {
 			g_rooms[room_id].first.cultist = 0;
 			g_rooms[room_id].first.police = 0;
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				g_rooms[room_id].first.player_ids[i] = UINT8_MAX;
+				g_rooms[room_id].first.player_ids[i] = INT_MAX;
 			}
 			g_rooms[room_id].first.isIngame = false;
 		}
@@ -1467,7 +1464,7 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid requestHeader size\n";
 			break;
 		}
-		int role = static_cast<int>(p->role);
+		uint8_t role = p->role;
 		{
 			std::lock_guard<std::mutex> lk(g_room_mtx);
 			g_room_q.push(RoomTask{ c_id, RM_REQ, role, -1 });

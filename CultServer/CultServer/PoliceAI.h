@@ -5,8 +5,6 @@
 #include <cmath>
 #include "Protocol.h"
 
-constexpr float ÆÄÀÌ{ 3.14 };
-
 void InitializeAISession(const int);
 void StartAIWorker();
 void StopAIWorker();

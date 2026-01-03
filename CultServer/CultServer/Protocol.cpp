@@ -77,12 +77,12 @@ const FPoliceCharacterState& SESSION::getPoliceState() const
 	return police_state;
 }
 
-void SESSION::setRole(const int r) {
+void SESSION::setRole(const uint8_t r) {
 	if(role != r)
 		role = r;
 }
 
-int SESSION::getRole() const {
+uint8_t SESSION::getRole() const {
 	return role;
 }
 

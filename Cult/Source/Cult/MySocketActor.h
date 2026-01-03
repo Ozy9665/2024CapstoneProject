@@ -16,7 +16,7 @@ struct Froom {
 	UPROPERTY(BlueprintReadWrite) uint8 police;
 	UPROPERTY(BlueprintReadWrite) uint8 cultist;
 	UPROPERTY(BlueprintReadWrite) bool isIngame;
-	UPROPERTY(BlueprintReadWrite) TArray<int32> player_ids;
+	UPROPERTY(BlueprintReadWrite) TArray<int> player_ids;
 };
 
 struct FNetVec {
@@ -50,7 +50,7 @@ struct Crow {
 
 struct FPoliceCharacterState
 {
-	int32 PlayerID;
+	int PlayerID;
 	// 위치
 	float PositionX;
 	float PositionY;
@@ -79,7 +79,7 @@ struct FPoliceCharacterState
 
 struct FCultistCharacterState
 {
-	int32 PlayerID;
+	int PlayerID;
 	// 위치
 	float PositionX;
 	float PositionY;
@@ -96,18 +96,18 @@ struct FCultistCharacterState
 
 	float CurrentHealth;
 	// 상태
-	uint8_t Crouch;
-	uint8_t ABP_IsPerforming;
-	uint8_t ABP_IsHitByAnAttack;
-	uint8_t ABP_IsFrontKO;
-	uint8_t ABP_IsElectric;
-	uint8_t ABP_TTStun;
-	uint8_t ABP_TTGetUp;
-	uint8_t ABP_IsDead;
-	uint8_t ABP_IsStunned;
-	uint8_t ABP_DoHeal;
-	uint8_t ABP_GetHeal;
-	uint8_t bIsPakour;
+	bool Crouch;
+	bool ABP_IsPerforming;
+	bool ABP_IsHitByAnAttack;
+	bool ABP_IsFrontKO;
+	bool ABP_IsElectric;
+	bool ABP_TTStun;
+	bool ABP_TTGetUp;
+	bool ABP_IsDead;
+	bool ABP_IsStunned;
+	bool ABP_DoHeal;
+	bool ABP_GetHeal;
+	bool bIsPakour;
 };
 
 struct FImpactPacket
@@ -129,8 +129,8 @@ struct FImpactPacket
 struct HitResultPacket {
 	uint8_t  header;
 	uint8_t  size;
-	uint8_t AttackerID;
-	uint8_t TargetID;
+	int AttackerID;
+	int TargetID;
 	EWeaponType Weapon;
 };
 
@@ -175,12 +175,19 @@ struct HitPacket {
 struct IdOnlyPacket {
 	uint8_t header;
 	uint8_t size;
-	uint8_t id;
+	int id;
 };
 
 struct RoleOnlyPacket {
 	uint8_t header;
 	uint8_t size;
+	uint8_t role;
+};
+
+struct IdRolePacket {
+	uint8_t header;
+	uint8_t size;
+	int id;
 	uint8_t role;
 };
 
@@ -218,9 +225,9 @@ struct NoticePacket {
 struct TreePacket {
 	uint8_t header;
 	uint8_t size;
-	uint8_t casterId;
-	FNetVec SpawnLoc;
-	FNetRot SpawnRot;
+	int casterId;
+	FVector SpawnLoc;
+	FRotator SpawnRot;
 };
 
 struct RitualPacket {
@@ -262,20 +269,18 @@ struct MovePacket {
 struct RitualNoticePacket {
 	uint8_t header;
 	uint8_t size;
-	uint8_t id;
 	uint8_t ritual_id;
 	uint8_t reason;
 	// reason 0 -> start
 	// reason 1 -> skill check suc
 	// reason 2 -> skill check fail
-	// reason 3 -> moved
+	// reason 3 -> end
 	// reason 4 -> ritial 100%
 };
 
 struct RitualGagePacket {
 	uint8_t header;
 	uint8_t size;
-	uint8_t id;
 	uint8_t ritual_id;
 	int gauge;
 };
