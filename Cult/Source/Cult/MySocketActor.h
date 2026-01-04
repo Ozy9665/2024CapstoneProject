@@ -226,8 +226,8 @@ struct TreePacket {
 	uint8_t header;
 	uint8_t size;
 	int casterId;
-	FVector SpawnLoc;
-	FRotator SpawnRot;
+	FNetVec SpawnLoc;
+	FNetRot SpawnRot;
 };
 
 struct RitualPacket {

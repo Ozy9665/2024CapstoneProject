@@ -1635,7 +1635,6 @@ void AMySocketCultistActor::SendStartRitual(uint8_t ritual_id) {
         RitualNoticePacket Packet;
         Packet.header = ritualStartHeader;
         Packet.size = sizeof(RitualNoticePacket);
-        Packet.id = MyCharacter->my_ID;
         Packet.ritual_id = ritual_id;
         Packet.reason = 0;
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RitualNoticePacket), 0);
@@ -1658,7 +1657,6 @@ void AMySocketCultistActor::SendRitualSkillCheck(uint8_t ritual_id, uint8_t reas
         RitualNoticePacket Packet;
         Packet.header = ritualDataHeader;
         Packet.size = sizeof(RitualNoticePacket);
-        Packet.id = MyCharacter->my_ID;
         Packet.ritual_id = ritual_id;
         Packet.reason = reason;
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RitualNoticePacket), 0);
@@ -1680,7 +1678,6 @@ void AMySocketCultistActor::SendEndRitual(uint8_t ritual_id, uint8_t reason) {
         RitualNoticePacket Packet;
         Packet.header = ritualEndHeader;
         Packet.size = sizeof(RitualNoticePacket);
-        Packet.id = MyCharacter->my_ID;
         Packet.ritual_id = ritual_id;
         Packet.reason = reason;
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(RitualNoticePacket), 0);

@@ -269,7 +269,7 @@ void APoliceCharacter::StartAttack()
 			ShootPistol();
 		}
 
-		//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
+		GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
 		break;
 	case EWeaponType::Taser:
 		if (bIsAiming)
@@ -280,7 +280,7 @@ void APoliceCharacter::StartAttack()
 			FireTaser();
 		}
 
-		//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
+		GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
 		break;
 	}
 
@@ -306,6 +306,7 @@ void APoliceCharacter::FireTaser()
 		HitPacket.TraceDir = AMySocketActor::ToNet(CameraRotation.Vector());
 		MySocketPoliceActor->SendHitData(HitPacket);
 	}
+	//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndPistolShoot, 1.1f, false);
 	/*
 	FVector CameraLocation;
 	FRotator CameraRotation;
@@ -376,6 +377,7 @@ void APoliceCharacter::ShootPistol()
 		HitPacket.TraceDir = AMySocketActor::ToNet(CameraRotation.Vector());
 		MySocketPoliceActor->SendHitData(HitPacket);
 	}
+	//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndPistolShoot, 1.1f, false);
 	/*
 	// 방법1. Muzzle 기준
 	FVector Start = MuzzleLocation->GetComponentLocation();
@@ -428,8 +430,6 @@ void APoliceCharacter::ShootPistol()
 
 	}
 	*/
-	//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndPistolShoot, 1.1f, false);
-
 }
 
 void APoliceCharacter::EndPistolShoot()
