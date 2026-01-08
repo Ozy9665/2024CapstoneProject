@@ -5,6 +5,7 @@
 #include <sstream>
 #include <unordered_map>
 
+// Map
 
 struct MapVertex {
     float x, y, z;
@@ -88,4 +89,24 @@ private:
     void BuildTriangleAABBs();
     void BuildSpatialGrid();
     Ray ToLocalRay(const Ray& worldRay) const;
+};
+
+
+// NevMesh
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+
+struct NavTri {
+    int v[3];        // vertex index
+    Vec3 center;     // 삼각형 중심 (A* 노드 위치)
+};
+
+class NEVMESH {
+public:
+    bool LoadFBX(const std::string& fbxPath);
+
+private:
+    std::vector<Vec3> navVertices;
+    std::vector<NavTri> navTris;
 };

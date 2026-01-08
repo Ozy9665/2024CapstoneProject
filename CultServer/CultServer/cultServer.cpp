@@ -1703,6 +1703,11 @@ void mainLoop(HANDLE h_iocp) {
 
 int main()
 {
+	// navmesh
+	{
+
+	}
+	// map
 	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset))
 	{
 		std::cout << "MAP load failed\n";
