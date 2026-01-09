@@ -38,6 +38,8 @@ std::unordered_map<int, SESSION> g_users;
 MAP NewmapLandmassMap;
 enum MAPTYPE { LANDMASS };
 
+NEVMESH NewmapLandmassMapNevMesh;
+
 std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
 // std::array<Room, MAX_ROOM> g_rooms;
 std::array<std::array<Altar, 5>, MAX_ROOM> g_altars{};
@@ -521,7 +523,37 @@ void CommandWorker()
 				std::cout << "[Command] Usage: disconnect <id>\n";
 			}
 		}
-		if (cmd == "add_ai")
+		else if (cmd == "find") 
+		{
+			int target_id1;
+			int target_id2;
+			if (iss >> target_id1 >> target_id2) 
+			{
+				if (g_users.count(target_id1))
+				{
+					std::cout << "[Command] Find ID: " << target_id1 << "\n";
+					if (g_users.count(target_id2))
+					{
+						std::cout << "[Command] Find ID: " << target_id2 << "\n";
+						auto& user1 = g_users[target_id1];
+						auto& user2 = g_users[target_id2];
+
+						Vec3 startPos{ user1.cultist_state.PositionX, user1.cultist_state.PositionY, user1.cultist_state.PositionZ };
+						Vec3 endPos{ user2.cultist_state.PositionX, user2.cultist_state.PositionY, user2.cultist_state.PositionZ };
+
+						int s = NewmapLandmassMapNevMesh.FindNearestTri(startPos);
+						int e = NewmapLandmassMapNevMesh.FindNearestTri(endPos);
+
+						std::vector<Vec3> path;
+						if (NewmapLandmassMapNevMesh.FindPath(s, e, path))
+						{
+							std::cout << "Path nodes: " << path.size();
+						}
+					}
+				}
+			}
+		}
+		else if (cmd == "add_ai")
 		{
 			int ai_id = client_id++;
 			std::cout << "[Command] New AI added. ID: " << ai_id << "\n";
@@ -1704,9 +1736,9 @@ void mainLoop(HANDLE h_iocp) {
 int main()
 {
 	// navmesh
-	{
 
-	}
+	NewmapLandmassMapNevMesh.LoadFBX("NavMesh_Raw.fbx");
+	
 	// map
 	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset))
 	{

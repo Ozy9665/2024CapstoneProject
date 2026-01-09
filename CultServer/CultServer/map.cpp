@@ -1,6 +1,7 @@
 #include "map.h"
 #include <algorithm>
 #include <cmath>
+#include <queue>
 
 bool MAP::Load(const std::string& objPath, const Vec3& MapOffset)
 {
@@ -271,4 +272,202 @@ Ray MAP::ToLocalRay(const Ray& worldRay) const
     local.dir = worldRay.dir;
 
     return local;
+}
+
+// NevMesh
+
+bool NEVMESH::LoadFBX(const std::string& fbxPath)
+{
+    Assimp::Importer importer;
+
+    const aiScene* scene = importer.ReadFile(
+        fbxPath,
+        aiProcess_Triangulate |
+        aiProcess_JoinIdenticalVertices |
+        aiProcess_GenNormals
+    );
+
+    if (!scene || !scene->HasMeshes())
+        return false;
+
+    navVertices.clear();
+    navTris.clear();
+
+    const aiMesh* mesh = scene->mMeshes[0];
+
+    // vertex 추출
+    navVertices.reserve(mesh->mNumVertices);
+    for (unsigned i = 0; i < mesh->mNumVertices; ++i)
+    {
+        const aiVector3D& v = mesh->mVertices[i];
+        navVertices.push_back(Vec3{ v.x, v.y, v.z });
+    }
+
+    // triangle 추출
+    navTris.reserve(mesh->mNumFaces);
+    for (unsigned i = 0; i < mesh->mNumFaces; ++i)
+    {
+        const aiFace& f = mesh->mFaces[i];
+        if (f.mNumIndices != 3)
+            continue;
+
+        NavTri tri{};
+        tri.v[0] = (int)f.mIndices[0];
+        tri.v[1] = (int)f.mIndices[1];
+        tri.v[2] = (int)f.mIndices[2];
+
+        // 삼각형 중심
+        const Vec3& a = navVertices[tri.v[0]];
+        const Vec3& b = navVertices[tri.v[1]];
+        const Vec3& c = navVertices[tri.v[2]];
+
+        tri.center = Vec3{
+            (a.x + b.x + c.x) / 3.0f,
+            (a.y + b.y + c.y) / 3.0f,
+            (a.z + b.z + c.z) / 3.0f
+        };
+
+        navTris.push_back(tri);
+    }
+
+    std::cout << "NavMesh: vertices: " << navVertices.size() << " tris: " << navTris.size() << std::endl;
+    
+    BuildAdjacency();
+    int totalEdges = 0;
+    for (auto& a : adjTris) totalEdges += (int)a.size();
+    std::cout << "Adjacency avg: " << totalEdges / (float)adjTris.size() << std::endl;
+
+    return !navVertices.empty() && !navTris.empty();
+}
+
+void NEVMESH::BuildAdjacency()
+{
+    adjTris.clear();
+    adjTris.resize(navTris.size());
+
+    struct Edge {
+        int a, b;
+        bool operator==(const Edge& o) const {
+            return a == o.a && b == o.b;
+        }
+    };
+
+    struct EdgeHash {
+        size_t operator()(const Edge& e) const {
+            return (size_t)e.a << 32 | (size_t)e.b;
+        }
+    };
+
+    std::unordered_map<Edge, int, EdgeHash> edgeMap;
+
+    for (int i = 0; i < (int)navTris.size(); ++i)
+    {
+        const NavTri& t = navTris[i];
+        for (int e = 0; e < 3; ++e)
+        {
+            int v0 = t.v[e];
+            int v1 = t.v[(e + 1) % 3];
+            if (v0 > v1) std::swap(v0, v1);
+
+            Edge edge{ v0, v1 };
+            auto it = edgeMap.find(edge);
+            if (it == edgeMap.end())
+            {
+                edgeMap[edge] = i;
+            }
+            else
+            {
+                int other = it->second;
+                adjTris[i].push_back(other);
+                adjTris[other].push_back(i);
+            }
+        }
+    }
+}
+
+int NEVMESH::FindNearestTri(const Vec3& p) const
+{
+    float best = FLT_MAX;
+    int idx = -1;
+
+    for (int i = 0; i < (int)navTris.size(); ++i)
+    {
+        float d = Dist(p, navTris[i].center);
+        if (d < best)
+        {
+            best = d;
+            idx = i;
+        }
+    }
+    return idx;
+}
+
+bool NEVMESH::FindPath(
+    int startTri,
+    int endTri,
+    std::vector<Vec3>& outPath
+) const
+{
+    outPath.clear();
+
+    if (startTri < 0 || endTri < 0)
+        return false;
+
+    const int N = (int)navTris.size();
+    std::vector<float> gScore(N, FLT_MAX);
+    std::vector<int> parent(N, -1);
+    std::vector<bool> closed(N, false);
+
+    auto heuristic = [&](int t) {
+        return Dist(navTris[t].center, navTris[endTri].center);
+        };
+
+    auto cmp = [&](int a, int b) {
+        return gScore[a] + heuristic(a) >
+            gScore[b] + heuristic(b);
+        };
+
+    std::priority_queue<int, std::vector<int>, decltype(cmp)> open(cmp);
+
+    gScore[startTri] = 0.f;
+    open.push(startTri);
+
+    while (!open.empty())
+    {
+        int cur = open.top();
+        open.pop();
+
+        if (closed[cur])
+            continue;
+
+        closed[cur] = true;
+
+        if (cur == endTri)
+        {
+            // 역추적
+            for (int t = cur; t != -1; t = parent[t])
+                outPath.push_back(navTris[t].center);
+
+            std::reverse(outPath.begin(), outPath.end());
+            return true;
+        }
+
+        for (int nxt : adjTris[cur])
+        {
+            if (closed[nxt]) continue;
+
+            float tentative =
+                gScore[cur] +
+                Dist(navTris[cur].center, navTris[nxt].center);
+
+            if (tentative < gScore[nxt])
+            {
+                gScore[nxt] = tentative;
+                parent[nxt] = cur;
+                open.push(nxt);
+            }
+        }
+    }
+
+    return false;
 }

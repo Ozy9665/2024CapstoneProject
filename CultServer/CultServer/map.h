@@ -102,11 +102,29 @@ struct NavTri {
     Vec3 center;     // 삼각형 중심 (A* 노드 위치)
 };
 
+struct AStarNode {
+    int tri;
+    float g, f;
+    int parent;
+};
+
+static float Dist(const Vec3& a, const Vec3& b)
+{
+    float dx = a.x - b.x;
+    float dy = a.y - b.y;
+    float dz = a.z - b.z;
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
 class NEVMESH {
 public:
     bool LoadFBX(const std::string& fbxPath);
+    void BuildAdjacency();
+    bool FindPath(int startTri, int endTri, std::vector<Vec3>& outPath) const;
+    int FindNearestTri(const Vec3& p) const;
 
 private:
     std::vector<Vec3> navVertices;
     std::vector<NavTri> navTris;
+    std::vector<std::vector<int>> adjTris;
 };
