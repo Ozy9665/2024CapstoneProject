@@ -45,11 +45,26 @@ void SESSION::do_recv()
 
 SESSION::SESSION() {}
 
-SESSION::SESSION(int session_id) : c_socket(INVALID_SOCKET), id(session_id), role(99)		// AI Session
+SESSION::SESSION(int session_id, uint8_t ai_role, int room_id) 
+	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id)		// AI Session
 {
-	AiState.PlayerID = id;
-	police_state = AiState;
-	std::cout << "AI SESSION 积己凳. ID: " << AiState.PlayerID << " role: 99 (PoliceAI)" << std::endl;
+	prev_remain = 0;
+	state = ST_FREE;
+	heal_gage = 0;
+	if (ai_role == 100)   // Cultist AI
+	{
+		cultist_state = CultistDummyState;
+		std::cout << "[AI] Cultist SESSION 积己 ID=" << id << "\n";
+	}
+	else if (ai_role == 101)  // Police AI
+	{
+		police_state = PoliceDummyState;
+		std::cout << "[AI] Police SESSION 积己 ID=" << id << "\n";
+	}
+	else
+	{
+		std::cout << "[AI] 舅 荐 绝绰 role: " << ai_role << "\n";
+	}
 }
 
 SESSION::~SESSION(){ }

@@ -21,6 +21,7 @@
 #include "Protocol.h"
 #include "error.h"
 #include "PoliceAI.h"
+#include "CultistAI.h"
 #include "db.h"
 #include "map.h"
 
@@ -34,10 +35,10 @@ HANDLE g_h_iocp = nullptr;
 
 std::atomic<int> client_id = 0;
 std::unordered_map<int, SESSION> g_users;
+std::unordered_set<int> g_cultist_ai_ids;
+std::unordered_set<int> g_police_ai_ids;
 
 MAP NewmapLandmassMap;
-enum MAPTYPE { LANDMASS };
-
 NEVMESH NewmapLandmassMapNevMesh;
 
 std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
@@ -523,41 +524,55 @@ void CommandWorker()
 				std::cout << "[Command] Usage: disconnect <id>\n";
 			}
 		}
-		else if (cmd == "find") 
-		{
-			int target_id1;
-			int target_id2;
-			if (iss >> target_id1 >> target_id2) 
-			{
-				if (g_users.count(target_id1))
-				{
-					std::cout << "[Command] Find ID: " << target_id1 << "\n";
-					if (g_users.count(target_id2))
-					{
-						std::cout << "[Command] Find ID: " << target_id2 << "\n";
-						auto& user1 = g_users[target_id1];
-						auto& user2 = g_users[target_id2];
-
-						Vec3 startPos{ user1.cultist_state.PositionX, user1.cultist_state.PositionY, user1.cultist_state.PositionZ };
-						Vec3 endPos{ user2.cultist_state.PositionX, user2.cultist_state.PositionY, user2.cultist_state.PositionZ };
-
-						int s = NewmapLandmassMapNevMesh.FindNearestTri(startPos);
-						int e = NewmapLandmassMapNevMesh.FindNearestTri(endPos);
-
-						std::vector<Vec3> path;
-						if (NewmapLandmassMapNevMesh.FindPath(s, e, path))
-						{
-							std::cout << "Path nodes: " << path.size();
-						}
-					}
-				}
-			}
-		}
 		else if (cmd == "add_ai")
 		{
+			int ai_role;
+			int room_id;
+
+			if (!(iss >> ai_role >> room_id))
+			{
+				std::cout << "[Command] Usage: add_ai <role> <room_id>\n";
+				continue;
+			}
+
+			if (ai_role != 100 && ai_role != 101)
+			{
+				std::cout << "[Command] Invalid ai role: " << ai_role << "\n";
+				continue;
+			}
+
+			if (room_id < 0 || room_id >= MAX_ROOM)
+			{
+				std::cout << "[Command] Invalid room id: " << room_id << "\n";
+				continue;
+			}
+
 			int ai_id = client_id++;
-			std::cout << "[Command] New AI added. ID: " << ai_id << "\n";
+
+			SESSION ai(ai_id, ai_role, room_id);
+			g_users.emplace(ai_id, std::move(ai));
+
+			auto& room = g_rooms[room_id];
+			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
+			{
+				if (room.first.player_ids[i] == INT_MAX)
+				{
+					room.first.player_ids[i] = static_cast<uint8_t>(ai_id);
+					break;
+				}
+			}
+
+			if (ai_role == 100)
+				room.first.cultist++;
+			else
+				room.first.police++;
+			g_cultist_ai_ids.insert(ai_id);
+
+			std::cout << "[Command] AI added. ID=" << ai_id
+				<< " role=" << ai_role
+				<< " room=" << room_id << "\n";
 		}
+
 		else if (cmd == "exit")
 		{
 			std::cout << "[Command] Exiting server.\n";
@@ -1736,7 +1751,6 @@ void mainLoop(HANDLE h_iocp) {
 int main()
 {
 	// navmesh
-
 	NewmapLandmassMapNevMesh.LoadFBX("NavMesh_Raw.fbx");
 	
 	// map
@@ -1795,6 +1809,7 @@ int main()
 	std::thread room_thread{ RoomWorkerLoop };
 	std::thread timer_thread{ HealTimerLoop };
 	std::thread command_thread{ CommandWorker };
+	std::thread ai_thread{ CultistAIWorkerLoop };
 	mainLoop(h_iocp);
 
 	g_db_cv.notify_all();
@@ -1803,7 +1818,7 @@ int main()
 	room_thread.join();
 	timer_thread.join();
 	command_thread.join();
-
+	ai_thread.join();
 
 	//StopAIWorker();
 	closesocket(g_s_socket);

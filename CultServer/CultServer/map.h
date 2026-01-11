@@ -1,3 +1,5 @@
+#pragma once
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -6,6 +8,7 @@
 #include <unordered_map>
 
 // Map
+enum MAPTYPE { LANDMASS };
 
 struct MapVertex {
     float x, y, z;
@@ -107,14 +110,6 @@ struct AStarNode {
     float g, f;
     int parent;
 };
-
-static float Dist(const Vec3& a, const Vec3& b)
-{
-    float dx = a.x - b.x;
-    float dy = a.y - b.y;
-    float dz = a.z - b.z;
-    return std::sqrt(dx * dx + dy * dy + dz * dz);
-}
 
 class NEVMESH {
 public:
