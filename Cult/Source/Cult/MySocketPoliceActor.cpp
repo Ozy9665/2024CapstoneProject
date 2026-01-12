@@ -100,11 +100,12 @@ void AMySocketPoliceActor::ReceiveData()
                     PendingBuffer.insert(PendingBuffer.end(), Buffer, Buffer + BytesReceived);
                     while (true) 
                     {
-                        if (PendingBuffer.size() < 2)
+                        if (PendingBuffer.size() < 3)
                             break;
 
                         uint8 PacketType = static_cast<uint8>(PendingBuffer[0]);
-                        uint8 PacketSize = static_cast<uint8>(PendingBuffer[1]);
+                        uint16 PacketSize;
+                        memcpy(&PacketSize, PendingBuffer.data() + 1, sizeof(uint16));
 
                         if (PendingBuffer.size() < PacketSize)
                             break;

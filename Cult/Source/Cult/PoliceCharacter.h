@@ -62,6 +62,13 @@ public:
 	float AimPitch;
 
 
+	// Basic / Sound Value / 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
+	float RunNoiseInterval = 0.5f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
+	float RunNoiseLoudness = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
+	bool bRunNoiseLooping = false;
 
 	// Combat
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category ="Weapon")
