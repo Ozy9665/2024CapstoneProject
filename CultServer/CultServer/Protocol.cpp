@@ -22,7 +22,9 @@ EXP_OVER::EXP_OVER()
 
 EXP_OVER::EXP_OVER(char* packet)
 {
-	wsabuf.len = packet[1];
+	uint16_t packet_size;
+	memcpy(&packet_size, packet + 1, sizeof(uint16_t));
+	wsabuf.len = packet_size;
 	wsabuf.buf = send_buffer;
 	ZeroMemory(&over, sizeof(over));
 	comp_type = OP_SEND;

@@ -198,17 +198,15 @@ void RoomWorkerLoop() {
 			pkt.size = sizeof(RoomsPakcet);
 
 			int inserted = 0;
-			for (const auto& r : g_rooms) {
-				if (inserted >= 10) break;
-				if (!r.first.isIngame) {
-					if ((role == 1 && r.first.police < MAX_POLICE_PER_ROOM) ||
-						(role == 0 && r.first.cultist < MAX_CULTIST_PER_ROOM))
-					{
-						pkt.rooms[inserted++] = r.first;
-					}
-				}
-			}
+			for (const auto& r : g_rooms)
+			{
+				if (inserted >= MAX_ROOM_LIST) break;
 
+				pkt.rooms[inserted].room_id = r.first.room_id;
+				pkt.rooms[inserted].police = r.first.police;
+				pkt.rooms[inserted].cultist = r.first.cultist;
+				++inserted;
+			}
 			EXP_OVER* eo = new EXP_OVER();
 			std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
 			eo->comp_type = OP_ROOM_REQ;
@@ -266,7 +264,7 @@ void RoomWorkerLoop() {
 			}
 			me.room_id = room_id;
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				if (g_rooms[room_id].first.player_ids[i] == INT_MAX) {
+				if (g_rooms[room_id].first.player_ids[i] == -1) {
 					g_rooms[room_id].first.player_ids[i] = task.c_id;
 					break;
 				}
@@ -289,7 +287,7 @@ void RoomWorkerLoop() {
 			// 서로 교환
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
 				int other = g_rooms[room_id].first.player_ids[i];
-				if (other == INT_MAX || other == task.c_id) continue;
+				if (other == -1 || other == task.c_id) continue;
 				if (!g_users.count(other)) continue;
 
 				// 다른 유저에게 나
@@ -360,8 +358,8 @@ void RoomWorkerLoop() {
 
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
 				if (g_rooms[room_id].first.player_ids[i] == task.c_id) {
-					g_rooms[room_id].first.player_ids[i] = INT_MAX;
-					g_users[task.c_id].room_id = INT_MAX;
+					g_rooms[room_id].first.player_ids[i] = -1;
+					g_users[task.c_id].room_id = -1;
 					break;
 				}
 			}
@@ -372,7 +370,7 @@ void RoomWorkerLoop() {
 			pkt.id = task.c_id;
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
 				int other = targets[i];
-				if (other == INT_MAX || !g_users.count(other) || !g_users[other].isValidSocket()) {
+				if (other == -1 || !g_users.count(other) || !g_users[other].isValidSocket()) {
 					continue;
 				}
 				EXP_OVER* eo = new EXP_OVER();
@@ -392,7 +390,7 @@ void RoomWorkerLoop() {
 
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
 				if (g_rooms[room_id].first.player_ids[i] == task.c_id) {
-					g_rooms[room_id].first.player_ids[i] = INT_MAX;
+					g_rooms[room_id].first.player_ids[i] = -1;
 					break;
 				}
 			}
@@ -490,6 +488,7 @@ void HealTimerLoop() {
 }
 
 void disconnect(int);
+
 void CommandWorker()
 {
 	while (true)
@@ -500,7 +499,7 @@ void CommandWorker()
 		if (line.empty())
 			continue;
 
-		std::istringstream iss(line);
+		std::istringstream iss(line);	
 		std::string cmd;
 		iss >> cmd;
 
@@ -546,33 +545,9 @@ void CommandWorker()
 				std::cout << "[Command] Invalid room id: " << room_id << "\n";
 				continue;
 			}
-
 			int ai_id = client_id++;
-
-			SESSION ai(ai_id, ai_role, room_id);
-			g_users.emplace(ai_id, std::move(ai));
-
-			auto& room = g_rooms[room_id];
-			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
-			{
-				if (room.first.player_ids[i] == INT_MAX)
-				{
-					room.first.player_ids[i] = static_cast<uint8_t>(ai_id);
-					break;
-				}
-			}
-
-			if (ai_role == 100)
-				room.first.cultist++;
-			else
-				room.first.police++;
-			g_cultist_ai_ids.insert(ai_id);
-
-			std::cout << "[Command] AI added. ID=" << ai_id
-				<< " role=" << ai_role
-				<< " room=" << room_id << "\n";
+			AddCutltistAi(ai_id, ai_role, room_id);
 		}
-
 		else if (cmd == "exit")
 		{
 			std::cout << "[Command] Exiting server.\n";
@@ -664,7 +639,7 @@ void broadcast_in_room(int sender_id, int room_id, const PacketT* packet, float 
 	
 	for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
 		int other_id = r.player_ids[i];
-		if (other_id == INT_MAX || other_id == sender_id)
+		if (other_id == -1 || other_id == sender_id)
 			continue;
 
 		if (!g_users.count(other_id) || !g_users[other_id].isValidSocket())
@@ -829,7 +804,7 @@ std::optional<int> SphereTraceClosestCultist(int centerId, float radius) {
 	for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
 	{
 		int other = rm.player_ids[i];
-		if (other == INT_MAX || other == centerId)
+		if (other == -1 || other == centerId)
 			continue;
 
 		auto it = g_users.find(other);
@@ -965,7 +940,7 @@ void baton_sweep(int c_id, HitPacket* p)
 
 	for (int otherId : g_rooms[room].first.player_ids)
 	{
-		if (otherId == c_id || g_users[otherId].role != 0 || otherId == INT_MAX)
+		if (otherId == c_id || g_users[otherId].role != 0 || otherId == -1)
 			continue;
 
 		auto& target = g_users[otherId];
@@ -1430,7 +1405,8 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid ConnectionPacket size\n";
 			break;
 		}
-		
+
+		p->id = c_id;
 		std::cout << "Client[" << c_id << "] connected" << std::endl;
 		// 새로 접속한 유저(id)에게 본인 id 확정 send
 		g_users[c_id].do_send_packet(p);
@@ -1459,7 +1435,7 @@ void process_packet(int c_id, char* packet) {
 		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
 		{
 			int pid = r.player_ids[i];
-			if (pid == INT_MAX) continue;
+			if (pid == -1) continue;
 
 			if (g_users.count(pid) && g_users[pid].getRole() == 0 && g_users[pid].getState() != ST_DISABLE) {
 				allCultistsDisabled = false;
@@ -1480,7 +1456,7 @@ void process_packet(int c_id, char* packet) {
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
 			{
 				int pid = r.player_ids[i];
-				if (pid == INT_MAX) continue;
+				if (pid == -1) continue;
 
 				if (g_users.count(pid) && g_users[pid].isValidSocket())
 				{
@@ -1498,7 +1474,7 @@ void process_packet(int c_id, char* packet) {
 			g_rooms[room_id].first.cultist = 0;
 			g_rooms[room_id].first.police = 0;
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				g_rooms[room_id].first.player_ids[i] = INT_MAX;
+				g_rooms[room_id].first.player_ids[i] = -1;
 			}
 			g_rooms[room_id].first.isIngame = false;
 		}
@@ -1800,6 +1776,12 @@ int main()
 
 	for (int i = 0; i < 100; ++i) {
 		g_rooms[i].first.room_id = i;
+		g_rooms[i].first.police = 0;
+		g_rooms[i].first.cultist = 0;
+		g_rooms[i].first.isIngame = false;
+        for (int j = 0; j < MAX_PLAYERS_PER_ROOM; ++j) {
+            g_rooms[i].first.player_ids[j] = -1;
+        }
 		g_rooms[i].second = LANDMASS;
 		InitializeAltars(i);
 	}

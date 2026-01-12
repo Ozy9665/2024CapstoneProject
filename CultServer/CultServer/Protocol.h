@@ -13,6 +13,7 @@
 constexpr short SERVER_PORT = 7777;
 constexpr int BUF_SIZE = 200;
 constexpr int MAX_ROOM = 100;
+constexpr int MAX_ROOM_LIST = 10;
 constexpr int MAX_PLAYERS_PER_ROOM = 5;
 constexpr int MAX_CULTIST_PER_ROOM = 4;
 constexpr int MAX_POLICE_PER_ROOM = 1;
@@ -99,13 +100,10 @@ struct FRotator {
 
 struct Room {
 	int room_id;
-	uint8_t police = 0;
-	uint8_t cultist = 0;
-	bool isIngame = false;
-	int  player_ids[MAX_PLAYERS_PER_ROOM] = {
-		INT_MAX, INT_MAX, INT_MAX,
-		INT_MAX, INT_MAX
-	};
+	uint8_t police;
+	uint8_t cultist;
+	uint8_t isIngame;
+	int  player_ids[MAX_PLAYERS_PER_ROOM];
 };
 
 struct Altar {
@@ -222,7 +220,7 @@ struct FImpactPacket
 
 struct HitResultPacket {
 	uint8_t  header;
-	uint8_t  size;
+	uint16_t  size;
 	int AttackerID;
 	int TargetID;
 	EWeaponType Weapon;
@@ -230,37 +228,37 @@ struct HitResultPacket {
 
 struct CultistPacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	FCultistCharacterState state;
 };
 
 struct CrowPacket {
 	uint8_t  header;
-	uint8_t size;
+	uint16_t size;
 	Crow crow;
 };
 
 struct PolicePacket {
 	uint8_t  header;
-	uint8_t size;
+	uint16_t size;
 	FPoliceCharacterState state;
 };
 
 struct DogPacket {
 	uint8_t  header;
-	uint8_t size;
+	uint16_t size;
 	Dog dog;
 };
 
 struct ParticlePacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	FImpactPacket data;
 };
 
 struct HitPacket {
 	uint8_t  header;
-	uint8_t  size;
+	uint16_t  size;
 	EWeaponType Weapon;
 	FVector TraceStart;
 	FVector TraceDir;
@@ -268,49 +266,49 @@ struct HitPacket {
 
 struct IdOnlyPacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	int id;
 };
 
 struct RoleOnlyPacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	uint8_t role;
 };
 
 struct IdRolePacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	int id;
 	uint8_t role;
 };
 
-struct RoomDataPacket {
-	uint8_t header;
-	uint8_t size;
-	Room room_data;
+struct RoomData {
+	int room_id;
+	uint8_t police;
+	uint8_t cultist;
 };
 
 struct RoomsPakcet {
 	uint8_t header;
-	uint8_t size;
-	Room rooms[10];
+	uint16_t  size;
+	RoomData rooms[MAX_ROOM_LIST];
 };
 
 struct RoomNumberPacket {
 	uint8_t header;
-	uint8_t size;
-	uint8_t room_number;
+	uint16_t size;
+	int room_number;
 };
 
 struct NoticePacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 };
 
 struct TreePacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	int casterId;
 	FVector SpawnLoc;
 	FRotator SpawnRot;
@@ -318,7 +316,7 @@ struct TreePacket {
 
 struct RitualPacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	FVector Loc1;
 	FVector Loc2;
 	FVector Loc3;
@@ -326,27 +324,27 @@ struct RitualPacket {
 
 struct IdPacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	char id[32];
 };
 
 struct IdPwPacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	char id[32];
 	char pw[32];
 };
 
 struct BoolPacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	bool result;
 	uint8_t reason;
 };
 
 struct MovePacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	FVector SpawnLoc;
 	FRotator SpawnRot;
 	bool isHealer;
@@ -354,7 +352,7 @@ struct MovePacket {
 
 struct RitualNoticePacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	uint8_t ritual_id;
 	uint8_t reason;
 	// reason 0 -> start
@@ -366,7 +364,7 @@ struct RitualNoticePacket {
 
 struct RitualGagePacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	uint8_t ritual_id;
 	int gauge;
 };

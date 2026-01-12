@@ -1,11 +1,47 @@
 #include "CultistAI.h"
 #include <chrono>
 #include <thread>
+#include <unordered_map>
+#include <unordered_set>
+#include <array>
 
 extern std::unordered_map<int, SESSION> g_users;
 extern std::unordered_set<int> g_cultist_ai_ids;
 extern std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
 extern NEVMESH NewmapLandmassMapNevMesh;
+
+void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
+{
+    SESSION ai(ai_id, ai_role, room_id);
+    g_users.emplace(ai_id, std::move(ai));
+    g_cultist_ai_ids.insert(ai_id);
+
+    auto& room = g_rooms[room_id];
+    for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
+    {
+        if (room.first.player_ids[i] == INT_MAX)
+        {
+            room.first.player_ids[i] = static_cast<uint8_t>(ai_id);
+            break;
+        }
+    }
+
+    if (ai_role == 100)
+        room.first.cultist++;
+    else
+        room.first.police++;
+    std::cout << "[Command] AI added. ID=" << ai_id
+        << " role=" << ai_role
+        << " room=" << room_id << "\n";
+
+    IdRolePacket pkt{};
+    pkt.header = connectionHeader;
+    pkt.size = sizeof(IdRolePacket);
+    pkt.id = ai_id;
+    pkt.role = ai_role;
+
+    BroadcastCultistAIState(ai, &pkt);
+}
 
 static int FindTargetCultist(int room_id, int self_id)
 {
@@ -88,7 +124,7 @@ void CultistAIWorkerLoop()
                 continue;
 
             SESSION& ai = it->second;
-            if (ai.role != 100) // Cultist AI만
+            if (ai.role != 0) // Cultist만
                 continue;
 
             int room_id = ai.room_id;
@@ -106,6 +142,11 @@ void CultistAIWorkerLoop()
             };
 
             MoveAlongPath(ai, targetPos, dt);
+            CultistPacket packet{};
+            packet.header = cultistHeader;
+            packet.size = sizeof(CultistPacket);
+            packet.state = ai.cultist_state;
+            BroadcastCultistAIState(ai, &packet);
         }
 
         // 60fps 유지
@@ -119,7 +160,8 @@ void CultistAIWorkerLoop()
     }
 }
 
-void BroadcastCultistAIState(const SESSION& ai)
+template <typename PacketT>
+void BroadcastCultistAIState(const SESSION& ai, const PacketT* packet)
 {
     if (ai.role != 100) // Cultist AI만
         return;
@@ -127,11 +169,6 @@ void BroadcastCultistAIState(const SESSION& ai)
     int room_id = ai.room_id;
     if (room_id < 0 || room_id >= MAX_ROOM)
         return;
-
-    CultistPacket pkt{};
-    pkt.header = cultistHeader;
-    pkt.size = sizeof(CultistPacket);
-    pkt.state = ai.cultist_state;
 
     auto& room = g_rooms[room_id].first;
     for (int pid : room.player_ids)
@@ -148,6 +185,6 @@ void BroadcastCultistAIState(const SESSION& ai)
         if (!target.isValidSocket() || !target.isValidState())
             continue;
 
-        target.do_send_packet(&pkt);
+        target.do_send_packet(&packet);
     }
 }
