@@ -299,11 +299,7 @@ void AMyNetworkManagerActor::ReceiveData()
                 uint8 PacketType = static_cast<uint8>(PendingBuffer[0]);
                 uint16 PacketSize;
                 memcpy(&PacketSize, PendingBuffer.data() + 1, sizeof(uint16));
-                UE_LOG(LogTemp, Warning, TEXT("packet type received: %d, packet size: %d"), PacketType, PacketSize);
-                UE_LOG(LogTemp, Warning,
-                    TEXT("recv bytes = %d, pending = %d"),
-                    BytesReceived,
-                    PendingBuffer.size());
+
                 if (PendingBuffer.size() < PacketSize)
                     continue;
                 const char* PacketData = PendingBuffer.data();

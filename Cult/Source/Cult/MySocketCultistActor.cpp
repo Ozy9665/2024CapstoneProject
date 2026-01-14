@@ -210,8 +210,8 @@ void AMySocketCultistActor::ReceiveData()
 
 void AMySocketCultistActor::ProcessCultistData(const char* Buffer)
 {
-    FCultistCharacterState ReceivedState;
-    memcpy(&ReceivedState, Buffer + 2, sizeof(FCultistCharacterState));
+    const CultistPacket* pkt = reinterpret_cast<const CultistPacket*>(Buffer);
+    const FCultistCharacterState& ReceivedState = pkt->state;
     {
         FScopeLock Lock(&CultistDataMutex);
         ReceivedCultistStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
@@ -220,25 +220,24 @@ void AMySocketCultistActor::ProcessCultistData(const char* Buffer)
 
 void AMySocketCultistActor::ProcessTreeData(const char* Buffer)
 {
-    TreePacket ReceivedSkill;
-    memcpy(&ReceivedSkill, Buffer, sizeof(TreePacket));
+    const TreePacket* ReceivedSkill = reinterpret_cast<const TreePacket*>(Buffer);
+    const int Key = ReceivedSkill->casterId;
 
-    const int Key = static_cast<int>(ReceivedSkill.casterId);
     ACharacter* FoundChar = SpawnedCultistCharacters.FindRef(Key);
     if (!FoundChar) {
-        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d not found"), ReceivedSkill.casterId);
+        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d not found"), Key);
         return;
     }
 
     ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
     if (!CasterCultist) {
-        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d is not Cultist"), ReceivedSkill.casterId);
+        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d is not Cultist"), Key);
         return;
     }
 
     TWeakObjectPtr<ACultistCharacter> WeakCaster = CasterCultist;
-    const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedSkill.SpawnLoc);
-    const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedSkill.SpawnRot);
+    const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedSkill->SpawnLoc);
+    const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedSkill->SpawnRot);
 
     AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot]() {
         ACultistCharacter* Caster = WeakCaster.Get();
@@ -258,26 +257,26 @@ void AMySocketCultistActor::ProcessTreeData(const char* Buffer)
         });
 }
 
-void AMySocketCultistActor::ProcessCrowSpawnData(const char* Buffer) {
-    Crow ReceivedCrow;
-    memcpy(&ReceivedCrow, Buffer + 2, sizeof(Crow));
+void AMySocketCultistActor::ProcessCrowSpawnData(const char* Buffer)
+{
+    const Crow* ReceivedCrow = reinterpret_cast<const Crow*>(Buffer);
+    const int Key = ReceivedCrow->owner;
 
-    const int Key = static_cast<int>(ReceivedCrow.owner);
     ACharacter* FoundChar = SpawnedCultistCharacters.FindRef(Key);
     if (!FoundChar) {
-        UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] caster %d not found"), ReceivedCrow.owner);
+        UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] caster %d not found"), Key);
         return;
     }
 
     ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
     if (!CasterCultist) {
-        UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] caster %d is not Cultist"), ReceivedCrow.owner);
+        UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] caster %d is not Cultist"), Key);
         return;
     }
 
     TWeakObjectPtr<ACultistCharacter> WeakCaster = CasterCultist;
-    const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedCrow.loc);
-    const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedCrow.rot);
+    const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedCrow->loc);
+    const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedCrow->rot);
 
     AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot]() {
         ACultistCharacter* Caster = WeakCaster.Get();
@@ -303,47 +302,47 @@ void AMySocketCultistActor::ProcessCrowSpawnData(const char* Buffer) {
     });
 }
 
-void AMySocketCultistActor::ProcessCrowData(const char* Buffer) {
-    Crow ReceivedCrow;
-    memcpy(&ReceivedCrow, Buffer + 2, sizeof(Crow));
+void AMySocketCultistActor::ProcessCrowData(const char* Buffer)
+{
+    const Crow* ReceivedCrow = reinterpret_cast<const Crow*>(Buffer);
+    const int Key = ReceivedCrow->owner;
 
-    const int Key = static_cast<int>(ReceivedCrow.owner);
     ACharacter* FoundChar = SpawnedCultistCharacters.FindRef(Key);
     if (!FoundChar) {
-        UE_LOG(LogTemp, Warning, TEXT("[CrowData] caster %d not found"), ReceivedCrow.owner);
+        UE_LOG(LogTemp, Warning, TEXT("[CrowData] caster %d not found"), Key);
         return;
     }
 
     ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
     if (!CasterCultist) {
-        UE_LOG(LogTemp, Warning, TEXT("[CrowData] caster %d is not Cultist"), ReceivedCrow.owner);
+        UE_LOG(LogTemp, Warning, TEXT("[CrowData] caster %d is not Cultist"), Key);
         return;
     }
     if (CasterCultist->CrowInstance && CasterCultist->crowIsAvailable) {
         // 까마귀 업데이트
         AsyncTask(ENamedThreads::GameThread, [CI = CasterCultist->CrowInstance, ReceivedCrow]() {
             if (IsValid(CI)) {
-                CI->SetActorLocation(AMySocketActor::ToUE(ReceivedCrow.loc));
-                CI->SetActorRotation(AMySocketActor::ToUE(ReceivedCrow.rot));
+                CI->SetActorLocation(AMySocketActor::ToUE(ReceivedCrow->loc));
+                CI->SetActorRotation(AMySocketActor::ToUE(ReceivedCrow->rot));
             }
         });
     }
 }
 
-void AMySocketCultistActor::ProcessCrowDisable(const char* Buffer) {
-    IdOnlyPacket packet;
-    memcpy(&packet, Buffer, sizeof(packet));
-    
-    const int Key = static_cast<int>(packet.id);
+void AMySocketCultistActor::ProcessCrowDisable(const char* Buffer) 
+{
+    const IdOnlyPacket* packet = reinterpret_cast<const IdOnlyPacket*>(Buffer);
+    const int Key = packet->id;
+
     ACharacter* FoundChar = SpawnedCultistCharacters.FindRef(Key);
     if (!FoundChar) {
-        UE_LOG(LogTemp, Warning, TEXT("[CrowDisable] caster %d not found"), packet.id);
+        UE_LOG(LogTemp, Warning, TEXT("[CrowDisable] caster %d not found"), Key);
         return;
     }
 
     ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
     if (!CasterCultist) {
-        UE_LOG(LogTemp, Warning, TEXT("[CrowDisable] caster %d is not Cultist"), packet.id);
+        UE_LOG(LogTemp, Warning, TEXT("[CrowDisable] caster %d is not Cultist"), Key);
         return;
     }
 
@@ -364,8 +363,8 @@ void AMySocketCultistActor::ProcessCrowDisable(const char* Buffer) {
 
 void AMySocketCultistActor::ProcessPoliceData(const char* Buffer)
 {
-    FPoliceCharacterState ReceivedState;
-    memcpy(&ReceivedState, Buffer + 2, sizeof(FPoliceCharacterState));
+    const PolicePacket* pkt = reinterpret_cast<const PolicePacket*>(Buffer);
+    const FPoliceCharacterState& ReceivedState = pkt->state;
     {
         FScopeLock Lock(&PoliceDataMutex);
         if (ReceivedState.PlayerID == ReceivedPoliceState.Key) {
@@ -374,11 +373,12 @@ void AMySocketCultistActor::ProcessPoliceData(const char* Buffer)
     }
 }
 
-void AMySocketCultistActor::ProcessDogData(const char* Buffer) {
-    Dog ReceivedDog;
-    memcpy(&ReceivedDog, Buffer + 2, sizeof(Dog));
-    
+void AMySocketCultistActor::ProcessDogData(const char* Buffer) 
+{
+    const DogPacket* pkt = reinterpret_cast<const DogPacket*>(Buffer);
+    const Dog ReceivedDog = pkt->dog;
     const int Key = static_cast<int>(ReceivedDog.owner);
+
     if (SpawnedPoliceCharacter.Key != Key) {
         UE_LOG(LogTemp, Warning, TEXT("[DogData] caster %d is not police"), ReceivedDog.owner);
     }
@@ -410,120 +410,121 @@ void AMySocketCultistActor::ProcessDogData(const char* Buffer) {
 
 void AMySocketCultistActor::ProcessHitData(const char* Buffer)
 {
-    HitResultPacket ReceivedPacket;
-    memcpy(&ReceivedPacket, Buffer, sizeof(HitResultPacket));
-    {
-        if (SpawnedPoliceCharacter.Key != ReceivedPacket.AttackerID) {
-            UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn attacker: %d"), ReceivedPacket.AttackerID);
-        }
-        switch (ReceivedPacket.Weapon)
-        {
-        case EWeaponType::Baton:
-        {
-            APoliceCharacter* Attacker = Cast<APoliceCharacter>(SpawnedPoliceCharacter.Value);
-            if (not Attacker) {
-                UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with not attacker: %d"), ReceivedPacket.AttackerID);
-                return;
-            }
-            if (ReceivedPacket.TargetID == my_ID)
-            {
-                if (not MyCharacter)
-                {
-                    UE_LOG(LogTemp, Error, TEXT("MyCharacter is null for self-hit!"));
-                    return;
-                }
-                AsyncTask(ENamedThreads::GameThread, [this, Attacker]()
-                    {
-                        MyCharacter->OnHitbyBaton(Attacker->GetActorLocation(), BatonAttackDamage);
-                    });
-            }
-            else {
-                ACultistCharacter* Target = Cast<ACultistCharacter>(SpawnedCultistCharacters.FindRef(ReceivedPacket.TargetID));
-                if (not Target) {
-                    UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn Target: %d"), ReceivedPacket.TargetID);
-                    return;
-                }
-                AsyncTask(ENamedThreads::GameThread, [this, Target, Attacker]()
-                    {
-                        Target->OnHitbyBaton(Attacker->GetActorLocation(), BatonAttackDamage);
-                    });
-            }
+    const HitResultPacket* ReceivedPacket = reinterpret_cast<const HitResultPacket*>(Buffer);
 
-            break;
+    if (SpawnedPoliceCharacter.Key != ReceivedPacket->AttackerID) {
+        UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn attacker: %d"), ReceivedPacket->AttackerID);
+    }
+    switch (ReceivedPacket->Weapon)
+    {
+    case EWeaponType::Baton:
+    {
+        APoliceCharacter* Attacker = Cast<APoliceCharacter>(SpawnedPoliceCharacter.Value);
+        if (not Attacker) {
+            UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with not attacker: %d"), ReceivedPacket->AttackerID);
+            return;
         }
-        case EWeaponType::Pistol: 
+        if (ReceivedPacket->TargetID == my_ID)
         {
-            if (ReceivedPacket.TargetID == my_ID)
+            if (not MyCharacter)
             {
-                if (not MyCharacter)
-                {
-                    UE_LOG(LogTemp, Error, TEXT("MyCharacter is null for self-hit!"));
-                    return;
-                }
-                AsyncTask(ENamedThreads::GameThread, [this]()
-                    {
-                        MyCharacter->TakeDamage(PistolAttackDamage);
-                    });
-            }
-            else {
-                ACultistCharacter* Target = Cast<ACultistCharacter>(SpawnedCultistCharacters.FindRef(ReceivedPacket.TargetID));
-                if (not Target) {
-                    UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn Target: %d"), ReceivedPacket.TargetID);
-                    return;
-                }
-                AsyncTask(ENamedThreads::GameThread, [this, Target]()
-                    {
-                        Target->TakeDamage(PistolAttackDamage);
-                    });
-            }
-            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedPacket.Weapon);
-            break;
-        }
-        case EWeaponType::Taser:
-        {
-            APoliceCharacter* Attacker = Cast<APoliceCharacter>(SpawnedPoliceCharacter.Value);
-            if (not Attacker) {
-                UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error not attacker: %d"), ReceivedPacket.AttackerID);
+                UE_LOG(LogTemp, Error, TEXT("MyCharacter is null for self-hit!"));
                 return;
             }
-            if (ReceivedPacket.TargetID == my_ID)
-            {
-                if (not MyCharacter)
+            AsyncTask(ENamedThreads::GameThread, [this, Attacker]()
                 {
-                    UE_LOG(LogTemp, Error, TEXT("MyCharacter is null for self-hit!"));
-                    return;
-                }
-                AsyncTask(ENamedThreads::GameThread, [this, Attacker]()
-                    {
-                        MyCharacter->GotHitTaser(Attacker);
-                    });
-            }
-            else {
-                ACultistCharacter* Target = Cast<ACultistCharacter>(SpawnedCultistCharacters.FindRef(ReceivedPacket.TargetID));
-                if (not Target) {
-                    UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn Target: %d"), ReceivedPacket.TargetID);
-                    return;
-                }
-                AsyncTask(ENamedThreads::GameThread, [this, Target, Attacker]()
-                    {
-                        Target->GotHitTaser(Attacker);
-                    });
-            }
-            break;
+                    MyCharacter->OnHitbyBaton(Attacker->GetActorLocation(), BatonAttackDamage);
+                });
         }
-        default:
-            UE_LOG(LogTemp, Error, TEXT("[Cultist]: EWeaponType Error: %d"), ReceivedPacket.Weapon);
-            break;
+        else {
+            ACultistCharacter* Target = Cast<ACultistCharacter>(SpawnedCultistCharacters.FindRef(ReceivedPacket->TargetID));
+            if (not Target) {
+                UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn Target: %d"), ReceivedPacket->TargetID);
+                return;
+            }
+            AsyncTask(ENamedThreads::GameThread, [this, Target, Attacker]()
+                {
+                    Target->OnHitbyBaton(Attacker->GetActorLocation(), BatonAttackDamage);
+                });
         }
+
+        break;
     }
+    case EWeaponType::Pistol: 
+    {
+        if (ReceivedPacket->TargetID == my_ID)
+        {
+            if (not MyCharacter)
+            {
+                UE_LOG(LogTemp, Error, TEXT("MyCharacter is null for self-hit!"));
+                return;
+            }
+            AsyncTask(ENamedThreads::GameThread, [this]()
+                {
+                    MyCharacter->TakeDamage(PistolAttackDamage);
+                });
+        }
+        else {
+            ACultistCharacter* Target = Cast<ACultistCharacter>(SpawnedCultistCharacters.FindRef(ReceivedPacket->TargetID));
+            if (not Target) {
+                UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn Target: %d"), ReceivedPacket->TargetID);
+                return;
+            }
+            AsyncTask(ENamedThreads::GameThread, [this, Target]()
+                {
+                    Target->TakeDamage(PistolAttackDamage);
+                });
+        }
+        UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedPacket->Weapon);
+        break;
+    }
+    case EWeaponType::Taser:
+    {
+        APoliceCharacter* Attacker = Cast<APoliceCharacter>(SpawnedPoliceCharacter.Value);
+        if (not Attacker) {
+            UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error not attacker: %d"), ReceivedPacket->AttackerID);
+            return;
+        }
+        if (ReceivedPacket->TargetID == my_ID)
+        {
+            if (not MyCharacter)
+            {
+                UE_LOG(LogTemp, Error, TEXT("MyCharacter is null for self-hit!"));
+                return;
+            }
+            AsyncTask(ENamedThreads::GameThread, [this, Attacker]()
+                {
+                    MyCharacter->GotHitTaser(Attacker);
+                });
+        }
+        else {
+            ACultistCharacter* Target = Cast<ACultistCharacter>(SpawnedCultistCharacters.FindRef(ReceivedPacket->TargetID));
+            if (not Target) {
+                UE_LOG(LogTemp, Error, TEXT("ProcessHitData failed with error spawn Target: %d"), ReceivedPacket->TargetID);
+                return;
+            }
+            AsyncTask(ENamedThreads::GameThread, [this, Target, Attacker]()
+                {
+                    Target->GotHitTaser(Attacker);
+                });
+        }
+        break;
+    }
+    default:
+        UE_LOG(LogTemp, Error, TEXT("[Cultist]: EWeaponType Error: %d"), ReceivedPacket->Weapon);
+        break;
+    }
+    
 }
 
-void AMySocketCultistActor::ProcessConnection(const char* Buffer) {
-    unsigned char connectedId = static_cast<unsigned char>(Buffer[2]);
-    unsigned char role = static_cast<unsigned char>(Buffer[3]);
+void AMySocketCultistActor::ProcessConnection(const char* Buffer) 
+{
+    const IdRolePacket* pkt = reinterpret_cast<const IdRolePacket*>(Buffer);
+    const int connectedId = pkt->id;
+    const uint8_t role = pkt->role;
     
     if (my_ID == -1) {
-        my_ID = static_cast<int>(connectedId);
+        my_ID = connectedId;
         UE_LOG(LogTemp, Warning, TEXT("Connected. My ID is: %d"), my_ID);
 
         if (MyCharacter) {
@@ -550,7 +551,8 @@ void AMySocketCultistActor::ProcessConnection(const char* Buffer) {
 
 void AMySocketCultistActor::ProcessDisconnection(const char* Buffer)
 {
-    int DisconnectedID = static_cast<int>(static_cast<unsigned char>(Buffer[2]));
+    const IdOnlyPacket* pkt = reinterpret_cast<const IdOnlyPacket*>(Buffer);
+    const int DisconnectedID = pkt->id;
     if (DisconnectedID == my_ID)
     {
         CloseConnection();
@@ -768,18 +770,19 @@ void AMySocketCultistActor::ProcessCharacterUpdates()
         FScopeLock Lock(&CultistDataMutex);
         for (auto& Pair : ReceivedCultistStates)
         {
+            const int PlayerID = Pair.Key;
             const FCultistCharacterState& State = Pair.Value;
 
-            if (ACharacter* FoundChar = SpawnedCultistCharacters.FindRef(Pair.Value.PlayerID))
+            if (ACharacter* FoundChar = SpawnedCultistCharacters.FindRef(PlayerID))
             {
-                if (ACultistCharacter* CultistChar = Cast<ACultistCharacter>(FoundChar)) 
+                if (ACultistCharacter* CultistChar = Cast<ACultistCharacter>(FoundChar))
                 {
                     UpdateCultistState(CultistChar, State);
                 }
             }
             else {
-                UE_LOG(LogTemp, Warning, TEXT("No Cultist PlayerID %d"), Pair.Value.PlayerID);
-                KeysToRemove.Add(Pair.Value.PlayerID);
+                UE_LOG(LogTemp, Warning, TEXT("No Cultist PlayerID %d"), PlayerID);
+                KeysToRemove.Add(PlayerID);
             }
         }
     }   
@@ -788,12 +791,8 @@ void AMySocketCultistActor::ProcessCharacterUpdates()
     {
         FScopeLock Lock(&PoliceDataMutex);
 
-        const int32 PID = ReceivedPoliceState.Key;
+        const int PID = SpawnedPoliceCharacter.Key;
         const FPoliceCharacterState& PoliceState = ReceivedPoliceState.Value;
-
-        if (SpawnedPoliceCharacter.Key != PID) {
-            UE_LOG(LogTemp, Warning, TEXT("PID %d is not Police"), PID);
-        }
 
         ACharacter* FoundChar = SpawnedPoliceCharacter.Value;
         if (FoundChar)
@@ -956,7 +955,7 @@ void AMySocketCultistActor::UpdateCultistAnimInstanceProperties(UAnimInstance* A
     }
 }
 
-void AMySocketCultistActor::SpawnCultistCharacter(const unsigned char PlayerID)
+void AMySocketCultistActor::SpawnCultistCharacter(const int PlayerID)
 {
     // 이미 캐릭터가 존재하면 아무 작업도 하지 않음
     if (SpawnedCultistCharacters.Contains(PlayerID))
@@ -1290,7 +1289,7 @@ void AMySocketCultistActor::UpdatePoliceAnimInstanceProperties(UAnimInstance* An
     }
 }
 
-void AMySocketCultistActor::SpawnPoliceCharacter(const unsigned char PlayerID)
+void AMySocketCultistActor::SpawnPoliceCharacter(const int PlayerID)
 {
     FActorSpawnParameters SpawnParams;
     SpawnParams.Owner = this;
@@ -1409,12 +1408,13 @@ void AMySocketCultistActor::SpawnPoliceAICharacter(const unsigned char PlayerID)
     }
 }
 
-void AMySocketCultistActor::ProcessParticleData(const char* Buffer) {
-    FImpactPacket ReceivedImpact;
-    memcpy(&ReceivedImpact, Buffer + 2, sizeof(FImpactPacket));
+void AMySocketCultistActor::ProcessParticleData(const char* Buffer) 
+{
+    const ParticlePacket* ReceivedImpact = reinterpret_cast<const ParticlePacket*>(Buffer);
+    const FImpactPacket Impact = ReceivedImpact->data;
     // Particles.Add(ReceivedImpact);
-    AsyncTask(ENamedThreads::GameThread, [this, ReceivedImpact]() {
-        SpawnImpactEffect(ReceivedImpact);
+    AsyncTask(ENamedThreads::GameThread, [this, Impact]() {
+        SpawnImpactEffect(Impact);
         });
 }
 
@@ -1490,12 +1490,11 @@ void AMySocketCultistActor::SendTryHeal()
 }
 
 void AMySocketCultistActor::ProcessDoHeal(const char* Buffer) {
-    MovePacket Received;
-    memcpy(&Received, Buffer, sizeof(MovePacket));
+    const MovePacket* Received = reinterpret_cast<const MovePacket*>(Buffer);
 
-    const FVector Goal = AMySocketActor::ToUE(Received.SpawnLoc);
-    const FRotator Face = AMySocketActor::ToUE(Received.SpawnRot);
-    const bool isHealer = Received.isHealer;
+    const FVector Goal = AMySocketActor::ToUE(Received->SpawnLoc);
+    const FRotator Face = AMySocketActor::ToUE(Received->SpawnRot);
+    const bool isHealer = Received->isHealer;
 
     AsyncTask(ENamedThreads::GameThread, [this, Goal, Face, isHealer]() {
         if (!MyCharacter) return;
@@ -1598,11 +1597,8 @@ void AMySocketCultistActor::ProcessEndHeal(const char* Buffer) {
     {
         return;
     }
-
-    BoolPacket Received;
-    //memcpy(&Received, Buffer, sizeof(MovePacket));
-    memcpy(&Received, Buffer, sizeof(BoolPacket));
-    if (Received.result) {
+    const BoolPacket* Received = reinterpret_cast<const BoolPacket*>(Buffer);
+    if (Received->result) {
         // 치료 성공 - hp회복, 상태 복구
         MyCharacter->CurrentHealth = 100.0f;
     }
@@ -1693,12 +1689,11 @@ void AMySocketCultistActor::SendEndRitual(uint8_t ritual_id, uint8_t reason) {
     }
 }
 
-void AMySocketCultistActor::ProcessRitualData(const char* Buffer) {
-    RitualGagePacket Received;
-    memcpy(&Received, Buffer, sizeof(RitualGagePacket));
-
-    const uint8_t ritual_id = Received.ritual_id;
-    const int gauge = Received.gauge;
+void AMySocketCultistActor::ProcessRitualData(const char* Buffer) 
+{
+    const RitualGagePacket* Received = reinterpret_cast<const RitualGagePacket*>(Buffer);
+    const uint8_t ritual_id = Received->ritual_id;
+    const int gauge = Received->gauge;
 
     AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
         // gauge으로 ritual gauge 수정
@@ -1719,17 +1714,15 @@ void AMySocketCultistActor::ProcessRitualData(const char* Buffer) {
 }
 
 void AMySocketCultistActor::ProcessRitualEnd(const char* Buffer) {
-    RitualNoticePacket Received;
-    memcpy(&Received, Buffer, sizeof(RitualNoticePacket));
-
-    if (Received.reason == 4) {
+    const RitualNoticePacket* Received = reinterpret_cast<const RitualNoticePacket*>(Buffer);
+    if (Received->reason == 4) {
         // 제단 100퍼센트 완료
         // 캐릭터 손 떼게 하고, 제단 100퍼센트로 수정
 
     }
     else {
-        const uint8_t ritual_id = Received.ritual_id;
-        const int gauge = Received.reason;
+        const uint8_t ritual_id = Received->ritual_id;
+        const int gauge = Received->reason;
         AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
             // gauge으로 ritual gauge 수정
 

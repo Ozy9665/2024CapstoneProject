@@ -348,11 +348,12 @@ void AMySocketPoliceActor::ProcessCrowDisable(const char* Buffer) {
 }
 
 void AMySocketPoliceActor::ProcessConnection(const char* Buffer) {
-    unsigned char connectedId = static_cast<unsigned char>(Buffer[2]);
-    unsigned char role = static_cast<unsigned char>(Buffer[3]);
+    const IdRolePacket* pkt = reinterpret_cast<const IdRolePacket*>(Buffer);
+    const int connectedId = pkt->id;
+    const uint8_t role = pkt->role;
 
     if (my_ID == -1) {
-        my_ID = static_cast<int>(connectedId);
+        my_ID = connectedId;
         UE_LOG(LogTemp, Warning, TEXT("Connected. My ID is: %d"), my_ID);
 
         if (MyCharacter) {
@@ -377,7 +378,8 @@ void AMySocketPoliceActor::ProcessConnection(const char* Buffer) {
 
 void AMySocketPoliceActor::ProcessDisconnection(const char* Buffer)
 {
-    int DisconnectedID = static_cast<int>(static_cast<unsigned char>(Buffer[2]));
+    const IdOnlyPacket* pkt = reinterpret_cast<const IdOnlyPacket*>(Buffer);
+    const int DisconnectedID = pkt->id;
     if (DisconnectedID == my_ID)
     {
         CloseConnection();

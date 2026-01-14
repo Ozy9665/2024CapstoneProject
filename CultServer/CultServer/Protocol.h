@@ -443,6 +443,6 @@ public:
 	bool isValidState() const;
 };
 
-constexpr FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
+constexpr FCultistCharacterState CultistDummyState{ -1, -8317.0, 3479.0, -2989.0, 0, 90, 0 };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,
 	false, false, false, EWeaponType::Baton, false, EVaultingType::OneHandVault, false, false, false, false };

@@ -21,17 +21,14 @@ void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
     {
         if (room.first.player_ids[i] == INT_MAX)
         {
-            room.first.player_ids[i] = static_cast<uint8_t>(ai_id);
+            room.first.player_ids[i] = ai_id;
+            room.first.cultist++;
             break;
         }
     }
 
-    if (ai_role == 100)
-        room.first.cultist++;
-    else
-        room.first.police++;
     std::cout << "[Command] AI added. ID=" << ai_id
-        << " role=" << ai_role
+        << " role=" << static_cast<int>(ai_role)
         << " room=" << room_id << "\n";
 
     IdRolePacket pkt{};
@@ -40,16 +37,40 @@ void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
     pkt.id = ai_id;
     pkt.role = ai_role;
 
-    BroadcastCultistAIState(ai, &pkt);
+    auto it = g_users.find(ai_id);
+    if (it != g_users.end())
+    {
+        BroadcastCultistAIState(it->second, &pkt);
+    }
+}
+
+static float Dist(const Vec3& a, const Vec3& b)
+{
+    float dx = a.x - b.x;
+    float dy = a.y - b.y;
+    float dz = a.z - b.z;
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
 static int FindTargetCultist(int room_id, int self_id)
 {
-    auto& room = g_rooms[room_id];
+    const auto& room = g_rooms[room_id];
+
+    int best_id = -1;
+    float best_dist = FLT_MAX;
+
+    const SESSION& ai = g_users[self_id];
+    Vec3 aiPos{
+        ai.cultist_state.PositionX,
+        ai.cultist_state.PositionY,
+        ai.cultist_state.PositionZ
+    };
 
     for (int pid : room.first.player_ids)
     {
-        if (pid == UINT8_MAX || pid == self_id)
+        if (pid == INT_MAX || pid == self_id)
+            continue;
+        if (g_cultist_ai_ids.count(pid))
             continue;
 
         auto it = g_users.find(pid);
@@ -58,11 +79,23 @@ static int FindTargetCultist(int room_id, int self_id)
 
         SESSION& target = it->second;
 
-        // Cultist 플레이어만 추적
-        if (target.role == 0 && target.isValidState())
-            return pid;
+        if (target.role != 0 || !target.isValidState())
+            continue;
+
+        Vec3 targetPos{
+           target.cultist_state.PositionX,
+           target.cultist_state.PositionY,
+           target.cultist_state.PositionZ
+        };
+
+        float d = Dist(aiPos, targetPos);
+        if (d < best_dist)
+        {
+            best_dist = d;
+            best_id = pid;
+        }
     }
-    return -1;
+    return best_id;
 }
 
 static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
@@ -124,7 +157,7 @@ void CultistAIWorkerLoop()
                 continue;
 
             SESSION& ai = it->second;
-            if (ai.role != 0) // Cultist만
+            if (ai.role != 100) // Cultist AI만
                 continue;
 
             int room_id = ai.room_id;
@@ -163,16 +196,23 @@ void CultistAIWorkerLoop()
 template <typename PacketT>
 void BroadcastCultistAIState(const SESSION& ai, const PacketT* packet)
 {
+    std::cout << "[Broadcast] enter. ai_id=" << ai.id
+        << " role=" << ai.role
+        << " room=" << ai.room_id << "\n";
+
     if (ai.role != 100) // Cultist AI만
         return;
 
     int room_id = ai.room_id;
+    std::cout << "[Broadcast] room_id=" << room_id << " players: ";
     if (room_id < 0 || room_id >= MAX_ROOM)
         return;
 
     auto& room = g_rooms[room_id].first;
+
     for (int pid : room.player_ids)
     {
+        std::cout << pid << " ";
         if (pid == INT_MAX || pid == ai.id)
             continue;
 
@@ -182,9 +222,10 @@ void BroadcastCultistAIState(const SESSION& ai, const PacketT* packet)
 
         SESSION& target = it->second;
 
-        if (!target.isValidSocket() || !target.isValidState())
+        if (!target.isValidSocket())
             continue;
 
-        target.do_send_packet(&packet);
+        std::cout << "[Broadcast] send to pid=" << pid << "\n";
+        target.do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
     }
 }

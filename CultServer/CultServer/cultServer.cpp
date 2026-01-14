@@ -546,7 +546,7 @@ void CommandWorker()
 				continue;
 			}
 			int ai_id = client_id++;
-			AddCutltistAi(ai_id, ai_role, room_id);
+			AddCutltistAi(ai_id, static_cast<uint8_t>(ai_role), room_id);
 		}
 		else if (cmd == "exit")
 		{

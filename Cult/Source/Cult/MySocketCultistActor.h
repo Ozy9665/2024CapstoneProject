@@ -72,10 +72,10 @@ public:
 	void ProcessCharacterUpdates();
 	void UpdateCultistState(ACharacter*, const FCultistCharacterState&);
 	void UpdateCultistAnimInstanceProperties(UAnimInstance*, const FCultistCharacterState&);
-	void SpawnCultistCharacter(const unsigned char);
+	void SpawnCultistCharacter(const int);
 	void UpdatePoliceState(ACharacter* Character, const FPoliceCharacterState&);
 	void UpdatePoliceAnimInstanceProperties(UAnimInstance*, const FPoliceCharacterState&);
-	void SpawnPoliceCharacter(const unsigned char);
+	void SpawnPoliceCharacter(const int);
 	void SpawnPoliceAICharacter(const unsigned char);
 	void ProcessParticleData(const char*);
 	void SpawnImpactEffect(const FImpactPacket&);
