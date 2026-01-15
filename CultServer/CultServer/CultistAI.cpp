@@ -19,10 +19,10 @@ void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
     auto& room = g_rooms[room_id];
     for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
     {
-        if (room.first.player_ids[i] == INT_MAX)
+        if (room.first.player_ids[i] == -1)
         {
             room.first.player_ids[i] = ai_id;
-            room.first.cultist++;
+            room.first.cultist += 1;
             break;
         }
     }

@@ -349,7 +349,7 @@ constexpr char idExistHeader = 15;
 constexpr char signUpHeader = 16;
 constexpr char quitHeader = 29;
 
-constexpr FCultistCharacterState CultistDummyState{ -1, -4280.0, -13000.0,  -3120.0, 0, 90, 0 };
+constexpr FCultistCharacterState CultistDummyState{ -1, -8029.0, 3099.0,  -2989.0, 0, 90, 0 };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,
 	false, false, false, EWeaponType::Baton, false, EVaultingType::OneHandVault, false, false, false, false };
 
