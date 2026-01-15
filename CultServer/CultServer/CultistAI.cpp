@@ -54,18 +54,10 @@ static float Dist(const Vec3& a, const Vec3& b)
 
 static int FindTargetCultist(int room_id, int self_id)
 {
+    if (room_id < 0 || room_id >= MAX_ROOM)
+        return -1;
+
     const auto& room = g_rooms[room_id];
-
-    int best_id = -1;
-    float best_dist = FLT_MAX;
-
-    const SESSION& ai = g_users[self_id];
-    Vec3 aiPos{
-        ai.cultist_state.PositionX,
-        ai.cultist_state.PositionY,
-        ai.cultist_state.PositionZ
-    };
-
     for (int pid : room.first.player_ids)
     {
         if (pid == INT_MAX || pid == self_id)
@@ -78,24 +70,11 @@ static int FindTargetCultist(int room_id, int self_id)
             continue;
 
         SESSION& target = it->second;
-
         if (target.role != 0 || !target.isValidState())
             continue;
 
-        Vec3 targetPos{
-           target.cultist_state.PositionX,
-           target.cultist_state.PositionY,
-           target.cultist_state.PositionZ
-        };
-
-        float d = Dist(aiPos, targetPos);
-        if (d < best_dist)
-        {
-            best_dist = d;
-            best_id = pid;
-        }
+        return pid;
     }
-    return best_id;
 }
 
 static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
@@ -114,10 +93,16 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
 
     std::vector<Vec3> path;
     if (!NewmapLandmassMapNevMesh.FindPath(s, e, path))
+    {
+        std::cout << "[AI MOVE] FindPath failed\n";
         return;
+    }
 
     if (path.size() < 2)
+    {
+        std::cout << "[AI MOVE] path too short\n";
         return;
+    }
 
     // 다음 목표 노드
     Vec3 next = path[1];
@@ -131,7 +116,10 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
 
     float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
     if (len < 1e-3f)
+    {
+        std::cout << "[AI MOVE] direction too small\n";
         return;
+    }
 
     dir.x /= len;
     dir.y /= len;
@@ -141,6 +129,11 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     ai.cultist_state.PositionX += dir.x * speed * deltaTime;
     ai.cultist_state.PositionY += dir.y * speed * deltaTime;
     ai.cultist_state.PositionZ += dir.z * speed * deltaTime;
+
+    std::cout << "[AI MOVE] newPos=("
+        << ai.cultist_state.PositionX << ","
+        << ai.cultist_state.PositionY << ","
+        << ai.cultist_state.PositionZ << ")\n";
 }
 
 void CultistAIWorkerLoop()
@@ -162,12 +155,10 @@ void CultistAIWorkerLoop()
 
             int room_id = ai.room_id;
             int target_id = FindTargetCultist(room_id, ai_id);
-
             if (target_id < 0)
                 continue;
 
             SESSION& target = g_users[target_id];
-
             Vec3 targetPos{
                 target.cultist_state.PositionX,
                 target.cultist_state.PositionY,
