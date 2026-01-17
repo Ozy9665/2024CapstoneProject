@@ -30,7 +30,6 @@ void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
     std::cout << "[Command] AI added. ID=" << ai_id
         << " role=" << static_cast<int>(ai_role)
         << " room=" << room_id << "\n";
-
     IdRolePacket pkt{};
     pkt.header = connectionHeader;
     pkt.size = sizeof(IdRolePacket);
@@ -187,15 +186,10 @@ void CultistAIWorkerLoop()
 template <typename PacketT>
 void BroadcastCultistAIState(const SESSION& ai, const PacketT* packet)
 {
-    std::cout << "[Broadcast] enter. ai_id=" << ai.id
-        << " role=" << ai.role
-        << " room=" << ai.room_id << "\n";
-
     if (ai.role != 100) // Cultist AI¸¸
         return;
 
     int room_id = ai.room_id;
-    std::cout << "[Broadcast] room_id=" << room_id << " players: ";
     if (room_id < 0 || room_id >= MAX_ROOM)
         return;
 
@@ -216,7 +210,6 @@ void BroadcastCultistAIState(const SESSION& ai, const PacketT* packet)
         if (!target.isValidSocket())
             continue;
 
-        std::cout << "[Broadcast] send to pid=" << pid << "\n";
         target.do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
     }
 }

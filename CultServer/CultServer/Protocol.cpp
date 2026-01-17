@@ -56,11 +56,13 @@ SESSION::SESSION(int session_id, uint8_t ai_role, int room_id)
 	if (ai_role == 100)   // Cultist AI
 	{
 		cultist_state = CultistDummyState;
+		cultist_state.PlayerID = session_id;
 		std::cout << "[AI] Cultist SESSION 持失 ID=" << id << "\n";
 	}
 	else if (ai_role == 101)  // Police AI
 	{
 		police_state = PoliceDummyState;
+		police_state.PlayerID = session_id;
 		std::cout << "[AI] Police SESSION 持失 ID=" << id << "\n";
 	}
 	else
