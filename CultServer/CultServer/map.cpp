@@ -275,11 +275,11 @@ Ray MAP::ToLocalRay(const Ray& worldRay) const
 }
 
 // NevMesh
-
-bool NEVMESH::LoadFBX(const std::string& fbxPath)
+bool NEVMESH::LoadFBX(const std::string& fbxPath, const Vec3& MapOffset)
 {
-    Assimp::Importer importer;
+    offset = MapOffset;
 
+    Assimp::Importer importer;
     const aiScene* scene = importer.ReadFile(
         fbxPath,
         aiProcess_Triangulate |
@@ -294,12 +294,11 @@ bool NEVMESH::LoadFBX(const std::string& fbxPath)
     navTris.clear();
 
     const aiMesh* mesh = scene->mMeshes[0];
-
-    // vertex ÃßÃâ
     navVertices.reserve(mesh->mNumVertices);
+
     for (unsigned i = 0; i < mesh->mNumVertices; ++i)
     {
-        const aiVector3D& v = mesh->mVertices[i];
+        aiVector3D v = mesh->mVertices[i];
         navVertices.push_back(Vec3{ v.x, v.y, v.z });
     }
 

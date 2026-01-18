@@ -113,13 +113,14 @@ struct AStarNode {
 
 class NEVMESH {
 public:
-    bool LoadFBX(const std::string& fbxPath);
+    bool LoadFBX(const std::string&, const Vec3&);
     void BuildAdjacency();
-    bool FindPath(int startTri, int endTri, std::vector<Vec3>& outPath) const;
-    int FindNearestTri(const Vec3& p) const;
+    bool FindPath(int, int, std::vector<Vec3>&) const;
+    int FindNearestTri(const Vec3& ) const;
 
 private:
     std::vector<Vec3> navVertices;
     std::vector<NavTri> navTris;
     std::vector<std::vector<int>> adjTris;
+    Vec3 offset;
 };

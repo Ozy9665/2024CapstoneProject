@@ -1727,14 +1727,14 @@ void mainLoop(HANDLE h_iocp) {
 int main()
 {
 	// navmesh
-	NewmapLandmassMapNevMesh.LoadFBX("NavMesh_Raw.fbx");
+	NewmapLandmassMapNevMesh.LoadFBX("NavMesh_Raw.fbx", NewmapLandmassOffset);
 	
 	// map
-	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset))
-	{
-		std::cout << "MAP load failed\n";
-		return 1;
-	}
+	//if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset))
+	//{
+	//	std::cout << "MAP load failed\n";
+	//	return 1;
+	//}
 
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));

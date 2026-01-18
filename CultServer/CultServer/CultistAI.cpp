@@ -106,7 +106,6 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     // 다음 목표 노드
     Vec3 next = path[1];
 
-    const float speed = 300.f; // cm/se
     Vec3 dir{
         next.x - cur.x,
         next.y - cur.y,
@@ -125,9 +124,16 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     dir.z /= len;
 
     // 위치 갱신
+    const float speed = 100.f; // cm/se
     ai.cultist_state.PositionX += dir.x * speed * deltaTime;
     ai.cultist_state.PositionY += dir.y * speed * deltaTime;
     ai.cultist_state.PositionZ += dir.z * speed * deltaTime;
+
+    //float maxMoveDist = MAX_SPEED * deltaTime;
+    //float moveDist = std::min(len, maxMoveDist);
+    //ai.cultist_state.PositionX += dir.x * moveDist;
+    //ai.cultist_state.PositionY += dir.y * moveDist;
+    //ai.cultist_state.PositionZ += dir.z * moveDist;
 
     std::cout << "[AI MOVE] newPos=("
         << ai.cultist_state.PositionX << ","
@@ -197,7 +203,6 @@ void BroadcastCultistAIState(const SESSION& ai, const PacketT* packet)
 
     for (int pid : room.player_ids)
     {
-        std::cout << pid << " ";
         if (pid == INT_MAX || pid == ai.id)
             continue;
 
