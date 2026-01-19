@@ -274,6 +274,136 @@ Ray MAP::ToLocalRay(const Ray& worldRay) const
     return local;
 }
 
+bool MAP::CanMove(const Vec3& from, const Vec3& to) const
+{
+    Ray ray;
+    ray.start = from;
+
+    Vec3 d{
+        to.x - from.x,
+        to.y - from.y,
+        0.f // 높이 무시
+    };
+
+    float len = std::sqrt(d.x * d.x + d.y * d.y);
+    if (len < 1e-3f)
+        return true;
+
+    ray.dir.x = d.x / len;
+    ray.dir.y = d.y / len;
+    ray.dir.z = 0.f;
+
+    float hitDist;
+    int hitTri;
+
+    return !LineTrace(ray, len, hitDist, hitTri);
+}
+
+int MAP::WorldToGridX(float x) const
+{
+    return (int)std::floor((x - worldAABB.minX) / cellSize);
+}
+
+int MAP::WorldToGridY(float y) const
+{
+    return (int)std::floor((y - worldAABB.minY) / cellSize);
+}
+
+Vec3 MAP::GridToWorld(int gx, int gy) const
+{
+    Vec3 w;
+    w.x = worldAABB.minX + (gx + 0.5f) * cellSize;
+    w.y = worldAABB.minY + (gy + 0.5f) * cellSize;
+    w.z = offset.z; // 고정 높이
+    return w;
+}
+
+static const int DIRS[4][2] = {
+    { 1, 0 }, { -1, 0 },
+    { 0, 1 }, { 0, -1 }
+};
+
+bool MAP::FindPath(
+    const Vec3& start, const Vec3& goal,
+    std::vector<Vec3>& outPath) const
+{
+    outPath.clear();
+
+    int sx = WorldToGridX(start.x);
+    int sy = WorldToGridY(start.y);
+    int gx = WorldToGridX(goal.x);
+    int gy = WorldToGridY(goal.y);
+
+    std::vector<NavNode> nodes;
+    NodeCompare comp{ &nodes };
+    std::priority_queue<int, std::vector<int>, NodeCompare> open(comp);
+    std::unordered_map<long long, int> visited;
+
+    auto key = [](int x, int y) {
+        return (static_cast<long long>(x) << 32) | (unsigned)y;
+        };
+
+    nodes.push_back({ sx, sy, 0.f, static_cast<float>(std::abs(gx - sx) + std::abs(gy - sy)), -1 });
+    open.push(0);
+    // visited[key(sx, sy)] = 0;
+
+    int goalIndex = -1;
+
+    while (!open.empty())
+    {
+        int curIdx = open.top();
+        open.pop();
+
+        auto& cur = nodes[curIdx];
+
+        long long ck = key(cur.x, cur.y);
+        if (visited.count(ck))
+            continue;
+
+        visited[ck] = curIdx;
+
+        if (cur.x == gx && cur.y == gy) {
+            goalIndex = curIdx;
+            break;
+        }
+
+        Vec3 curWorld = GridToWorld(cur.x, cur.y);
+
+        for (auto& d : DIRS)
+        {
+            int nx = cur.x + d[0];
+            int ny = cur.y + d[1];
+
+            long long k = key(nx, ny);
+            if (visited.count(k))
+                continue;
+
+            Vec3 nextWorld = GridToWorld(nx, ny);
+
+            if (!CanMove(curWorld, nextWorld))
+                continue;
+
+            float g = cur.g + cellSize;
+            float h = static_cast<float>(std::abs(gx - nx) + std::abs(gy - ny));
+
+            int idx = (int)nodes.size();
+            nodes.push_back({ nx, ny, g, h, curIdx });
+            //visited[k] = idx;
+            open.push(idx);
+        }
+    }
+
+    if (goalIndex < 0)
+        return false;
+
+    // 경로 복원
+    for (int i = goalIndex; i >= 0; i = nodes[i].parent)
+        outPath.push_back(GridToWorld(nodes[i].x, nodes[i].y));
+
+    std::reverse(outPath.begin(), outPath.end());
+    return true;
+}
+
 // NevMesh
 bool NEVMESH::LoadFBX(const std::string& fbxPath, const Vec3& MapOffset)
 {

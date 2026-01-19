@@ -9,6 +9,7 @@ extern std::unordered_map<int, SESSION> g_users;
 extern std::unordered_set<int> g_cultist_ai_ids;
 extern std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
 extern NEVMESH NewmapLandmassMapNevMesh;
+extern MAP NewmapLandmassMap;
 
 void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
 {
@@ -84,14 +85,8 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         ai.cultist_state.PositionZ
     };
 
-    int s = NewmapLandmassMapNevMesh.FindNearestTri(cur);
-    int e = NewmapLandmassMapNevMesh.FindNearestTri(targetPos);
-
-    if (s < 0 || e < 0)
-        return;
-
     std::vector<Vec3> path;
-    if (!NewmapLandmassMapNevMesh.FindPath(s, e, path))
+    if (!NewmapLandmassMap.FindPath(cur, targetPos, path))
     {
         std::cout << "[AI MOVE] FindPath failed\n";
         return;
@@ -109,10 +104,11 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     Vec3 dir{
         next.x - cur.x,
         next.y - cur.y,
-        next.z - cur.z
+        0.f
+        // next.z - cur.z
     };
-
-    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+    // float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
     if (len < 1e-3f)
     {
         std::cout << "[AI MOVE] direction too small\n";
@@ -121,13 +117,13 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
 
     dir.x /= len;
     dir.y /= len;
-    dir.z /= len;
+    // dir.z /= len;
 
     // 위치 갱신
     const float speed = 100.f; // cm/se
     ai.cultist_state.PositionX += dir.x * speed * deltaTime;
     ai.cultist_state.PositionY += dir.y * speed * deltaTime;
-    ai.cultist_state.PositionZ += dir.z * speed * deltaTime;
+    // ai.cultist_state.PositionZ += dir.z * speed * deltaTime;
 
     //float maxMoveDist = MAX_SPEED * deltaTime;
     //float moveDist = std::min(len, maxMoveDist);
@@ -138,7 +134,8 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     std::cout << "[AI MOVE] newPos=("
         << ai.cultist_state.PositionX << ","
         << ai.cultist_state.PositionY << ","
-        << ai.cultist_state.PositionZ << ")\n";
+        //<< ai.cultist_state.PositionZ 
+        << ")\n";
 }
 
 void CultistAIWorkerLoop()

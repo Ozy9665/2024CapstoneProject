@@ -38,6 +38,23 @@ struct Ray {
 
 constexpr Vec3 NewmapLandmassOffset{ -4280.f, 13000.f, -3120.f };
 
+struct NavNode {
+    int x, y;          // Grid ÁÂÇ¥ (XY Æò¸é)
+    float g, h;        // cost
+    int parent;        // index
+};
+
+struct NodeCompare
+{
+    const std::vector<NavNode>* nodes;
+
+    bool operator()(int a, int b) const
+    {
+        return (*nodes)[a].g + (*nodes)[a].h >
+            (*nodes)[b].g + (*nodes)[b].h;
+    }
+};
+
 class MAP {
 public:
     bool Load(const std::string&, const Vec3&);
@@ -48,6 +65,7 @@ public:
         float& hitDist,
         int& hitTriIndex
     ) const;
+    bool FindPath(const Vec3&, const Vec3&, std::vector<Vec3>&) const;
 
 private:
     struct CellKey {
@@ -92,6 +110,10 @@ private:
     void BuildTriangleAABBs();
     void BuildSpatialGrid();
     Ray ToLocalRay(const Ray& worldRay) const;
+    bool CanMove(const Vec3&, const Vec3&) const;
+    int WorldToGridX(float x) const;
+    int WorldToGridY(float y) const;
+    Vec3 GridToWorld(int gx, int gy) const;
 };
 
 
