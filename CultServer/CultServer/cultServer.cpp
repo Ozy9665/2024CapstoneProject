@@ -40,6 +40,7 @@ std::unordered_set<int> g_police_ai_ids;
 
 MAP NewmapLandmassMap;
 NEVMESH NewmapLandmassMapNevMesh;
+MAP TestNavMesh;
 
 std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
 // std::array<Room, MAX_ROOM> g_rooms;
@@ -1727,14 +1728,17 @@ void mainLoop(HANDLE h_iocp) {
 int main()
 {
 	// navmesh
-	NewmapLandmassMapNevMesh.LoadFBX("NavMesh_Raw.fbx", NewmapLandmassOffset);
-	
+	// NewmapLandmassMapNevMesh.LoadFBX("NavMesh_Raw.fbx", NewmapLandmassOffset);
+	TestNavMesh.Load("nav.obj_NavData_NewMapLandMass.obj", NewmapLandmassOffset);
+
+
+
 	// map
-	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset))
+	/*if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset))
 	{
 		std::cout << "MAP load failed\n";
 		return 1;
-	}
+	}*/
 
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));

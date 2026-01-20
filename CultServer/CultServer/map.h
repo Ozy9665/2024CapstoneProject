@@ -6,38 +6,9 @@
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
+#include "Protocol.h"
 
 // Map
-enum MAPTYPE { LANDMASS };
-
-struct MapVertex {
-    float x, y, z;
-};
-
-struct MapTriangle {
-    int v0, v1, v2;
-};
-
-struct AABB {
-    float minX, minY, minZ;
-    float maxX, maxY, maxZ;
-};
-
-struct MapTri {
-    MapVertex a, b, c;
-};
-
-struct Vec3 {
-    float x, y, z;
-};
-
-struct Ray {
-    Vec3 start;
-    Vec3 dir;
-};
-
-constexpr Vec3 NewmapLandmassOffset{ -4280.f, 13000.f, -3120.f };
-
 struct NavNode {
     int x, y;          // Grid ÁÂÇ¥ (XY Æò¸é)
     float g, h;        // cost
@@ -92,7 +63,7 @@ private:
     std::vector<AABB> triAABBs;
     SpatialGrid grid;
     AABB worldAABB;
-    float cellSize{ 200.f };
+    float cellSize{ 100.f };
     Vec3 offset;
 
     static bool LoadOBJ(const std::string&,

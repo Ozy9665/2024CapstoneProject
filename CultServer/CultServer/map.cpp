@@ -1,3 +1,5 @@
+#define NOMINMAX
+
 #include "map.h"
 #include <algorithm>
 #include <cmath>
@@ -18,6 +20,29 @@ bool MAP::Load(const std::string& objPath, const Vec3& MapOffset)
     BuildTriangles();
     BuildTriangleAABBs();
     BuildSpatialGrid();
+
+    std::cout << "cellSize = " << cellSize << std::endl;
+    std::cout
+        << "verts: " << vertices.size()
+        << " tris: " << triangles.size()
+        << " grid: " << grid.size()
+        << std::endl;
+    std::cout
+        << "AABB X: " << worldAABB.minX << " ~ " << worldAABB.maxX
+        << " Y: " << worldAABB.minY << " ~ " << worldAABB.maxY
+        << std::endl;
+
+    Vec3 a{ -10219.0, 2560.0, -3009.0 };
+    Vec3 b{ -10000, 2000, -3000.0 };
+
+    std::cout << "CanMove: " << CanMove(a, b) << std::endl;
+
+    std::vector<Vec3> path;
+    bool ok = FindPath(a, b, path);
+
+    std::cout << "path ok: " << ok
+        << " count: " << path.size()
+        << std::endl;
 
     return true;
 }

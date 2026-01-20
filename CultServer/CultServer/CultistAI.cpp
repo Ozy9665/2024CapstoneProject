@@ -10,6 +10,7 @@ extern std::unordered_set<int> g_cultist_ai_ids;
 extern std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
 extern NEVMESH NewmapLandmassMapNevMesh;
 extern MAP NewmapLandmassMap;
+extern MAP TestNavMesh;
 
 void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
 {
@@ -85,21 +86,19 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         ai.cultist_state.PositionZ
     };
 
-    std::vector<Vec3> path;
-    if (!NewmapLandmassMap.FindPath(cur, targetPos, path))
+    if (ai.path.empty() || Dist(cur, targetPos) > REPATH_DIST)
     {
-        std::cout << "[AI MOVE] FindPath failed\n";
-        return;
+        TestNavMesh.FindPath(cur, targetPos, ai.path);
     }
 
-    if (path.size() < 2)
+    if (ai.path.size() < 2)
     {
         std::cout << "[AI MOVE] path too short\n";
         return;
     }
 
     // 다음 목표 노드
-    Vec3 next = path[1];
+    Vec3 next = ai.path[1];
 
     Vec3 dir{
         next.x - cur.x,
@@ -109,6 +108,15 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     };
     float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
     // float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+    const float arriveDist = 30.f; // cm
+
+    if (len < arriveDist)
+    {
+        // 현재 노드에 도착했다고 판단
+        // 이번 tick에서는 이동하지 않음
+        return;
+    }
+
     if (len < 1e-3f)
     {
         std::cout << "[AI MOVE] direction too small\n";

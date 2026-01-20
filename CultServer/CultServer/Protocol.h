@@ -8,6 +8,7 @@
 #include <array>
 #include <unordered_set>
 #include <chrono>
+#include <vector>
 #include "error.h"
 
 constexpr short SERVER_PORT = 7777;
@@ -76,8 +77,41 @@ constexpr char ST_DISABLE{ 3 };
 // 방에 들어가서 ready버튼 누르면 ST_READY
 // 게임에 들어가면 ST_INGAME으로 바꾸면서 room도 is Ingame
 
-#pragma pack(push, 1)
+// map
+enum MAPTYPE { LANDMASS };
 
+struct Vec3 {
+	float x, y, z;
+};
+
+struct MapVertex {
+	float x, y, z;
+};
+
+struct MapTriangle {
+	int v0, v1, v2;
+};
+
+struct AABB {
+	float minX, minY, minZ;
+	float maxX, maxY, maxZ;
+};
+
+struct MapTri {
+	MapVertex a, b, c;
+};
+
+struct Ray {
+	Vec3 start;
+	Vec3 dir;
+};
+
+constexpr Vec3 NewmapLandmassOffset{ -4280.f, 13000.f, -3120.f };
+
+constexpr float REPATH_DIST{ 200.f };
+
+// packet
+#pragma pack(push, 1)
 struct FVector {
 	double x;
 	double y;
@@ -371,14 +405,6 @@ struct RitualGagePacket {
 
 #pragma pack(pop)
 
-constexpr FVector kPredefinedLocations[5] = {
-	{ -10740.0f, 10460.0f, -3124.0f },
-	{ -11450.0f,  4640.0f, -3126.0f },
-	{   1530.0f,  6070.0f, -3124.0f },
-	{   1450.0f, -1925.0f, -3124.0f },
-	{  -5730.0f,  1330.0f, -3110.0f }
-};
-
 class EXP_OVER {
 public:
 	EXP_OVER();
@@ -414,6 +440,7 @@ public:
 		Dog dog;
 		Crow crow;
 	};
+	std::vector<Vec3> path;
 	void do_recv();
 
 public:
@@ -446,3 +473,11 @@ public:
 constexpr FCultistCharacterState CultistDummyState{ -1, -10219.0, 2560.0, -3009.0, 0, 90, 0 };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,
 	false, false, false, EWeaponType::Baton, false, EVaultingType::OneHandVault, false, false, false, false };
+
+constexpr FVector kPredefinedLocations[5] = {
+	{ -10740.0f, 10460.0f, -3124.0f },
+	{ -11450.0f,  4640.0f, -3126.0f },
+	{   1530.0f,  6070.0f, -3124.0f },
+	{   1450.0f, -1925.0f, -3124.0f },
+	{  -5730.0f,  1330.0f, -3110.0f }
+};
