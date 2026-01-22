@@ -57,7 +57,7 @@ static int FindTargetCultist(int room_id, int self_id)
 {
     if (room_id < 0 || room_id >= MAX_ROOM)
         return -1;
-    // 방에서 나가도 계속 쫒아다님 room에서 안빠지나
+
     const auto& room = g_rooms[room_id];
     for (int pid : room.first.player_ids)
     {
@@ -147,6 +147,25 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
             ai.cultist_state.VelocityX * ai.cultist_state.VelocityX +
             ai.cultist_state.VelocityY * ai.cultist_state.VelocityY
         );
+
+    // state 회전 갱신
+    constexpr float RAD_TO_DEG = 180.f / PI;
+    Vec3 lookDir{
+    targetPos.x - cur.x,
+    targetPos.y - cur.y,
+    0.f
+    };
+
+    float lookLen = std::sqrt(lookDir.x * lookDir.x + lookDir.y * lookDir.y);
+    if (lookLen > 1e-3f)
+    {
+        lookDir.x /= lookLen;
+        lookDir.y /= lookLen;
+
+        constexpr float RAD_TO_DEG = 180.f / 3.1415926535f;
+        ai.cultist_state.RotationYaw =
+            std::atan2(lookDir.y, lookDir.x) * RAD_TO_DEG;
+    }
 
     std::cout << "[AI MOVE] newPos=("
         << ai.cultist_state.PositionX << ","
