@@ -57,7 +57,7 @@ static int FindTargetCultist(int room_id, int self_id)
 {
     if (room_id < 0 || room_id >= MAX_ROOM)
         return -1;
-
+    // 방에서 나가도 계속 쫒아다님 room에서 안빠지나
     const auto& room = g_rooms[room_id];
     for (int pid : room.first.player_ids)
     {
@@ -114,6 +114,13 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     {
         // 현재 노드에 도착했다고 판단
         // 이번 tick에서는 이동하지 않음
+        ai.path.erase(ai.path.begin());
+
+        ai.cultist_state.VelocityX = 0.f;
+        ai.cultist_state.VelocityY = 0.f;
+        ai.cultist_state.VelocityZ = 0.f;
+        ai.cultist_state.Speed = 0.f;
+
         return;
     }
 
@@ -128,16 +135,18 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     // dir.z /= len;
 
     // 위치 갱신
-    const float speed = 100.f; // cm/se
+    const float speed = 1200.f; // cm/se    // 600은 느림
     ai.cultist_state.PositionX += dir.x * speed * deltaTime;
     ai.cultist_state.PositionY += dir.y * speed * deltaTime;
     // ai.cultist_state.PositionZ += dir.z * speed * deltaTime;
 
-    //float maxMoveDist = MAX_SPEED * deltaTime;
-    //float moveDist = std::min(len, maxMoveDist);
-    //ai.cultist_state.PositionX += dir.x * moveDist;
-    //ai.cultist_state.PositionY += dir.y * moveDist;
-    //ai.cultist_state.PositionZ += dir.z * moveDist;
+    ai.cultist_state.VelocityX = dir.x * speed;
+    ai.cultist_state.VelocityY = dir.y * speed;
+    ai.cultist_state.VelocityZ = 0.f;
+    ai.cultist_state.Speed = std::sqrt(
+            ai.cultist_state.VelocityX * ai.cultist_state.VelocityX +
+            ai.cultist_state.VelocityY * ai.cultist_state.VelocityY
+        );
 
     std::cout << "[AI MOVE] newPos=("
         << ai.cultist_state.PositionX << ","
