@@ -58,10 +58,11 @@ static int FindTargetCultist(int room_id, int self_id)
     if (room_id < 0 || room_id >= MAX_ROOM)
         return -1;
 
-    const auto& room = g_rooms[room_id];
-    for (int pid : room.first.player_ids)
+    const auto& room = g_rooms[room_id].first;
+
+    for (int pid : room.player_ids)
     {
-        if (pid == INT_MAX || pid == self_id)
+        if (pid == -1 || pid == self_id)
             continue;
         if (g_cultist_ai_ids.count(pid))
             continue;
@@ -71,11 +72,16 @@ static int FindTargetCultist(int room_id, int self_id)
             continue;
 
         SESSION& target = it->second;
-        if (target.role != 0 || !target.isValidState())
+        if (target.room_id != room_id)
+            continue;
+        if (!target.isValidSocket())
+            continue;
+        if (target.role != 0)
             continue;
 
         return pid;
     }
+    return -1;
 }
 
 static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
@@ -89,11 +95,16 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     if (ai.path.empty() || Dist(cur, targetPos) > REPATH_DIST)
     {
         TestNavMesh.FindPath(cur, targetPos, ai.path);
+
+        if (ai.path.size() < 2)
+        {
+            ai.path.clear();
+            return;
+        }
     }
 
     if (ai.path.size() < 2)
     {
-        std::cout << "[AI MOVE] path too short\n";
         return;
     }
 
@@ -193,9 +204,11 @@ void CultistAIWorkerLoop()
 
             int room_id = ai.room_id;
             int target_id = FindTargetCultist(room_id, ai_id);
-            if (target_id < 0)
+            if (target_id < 0) {
+                std::cout << "[AI] no target in room " << room_id << "\n";
+                ai.path.clear();
                 continue;
-
+            }
             SESSION& target = g_users[target_id];
             Vec3 targetPos{
                 target.cultist_state.PositionX,
@@ -230,7 +243,9 @@ void BroadcastCultistAIState(const SESSION& ai, const PacketT* packet)
 
     int room_id = ai.room_id;
     if (room_id < 0 || room_id >= MAX_ROOM)
+    {
         return;
+    }
 
     auto& room = g_rooms[room_id].first;
 
