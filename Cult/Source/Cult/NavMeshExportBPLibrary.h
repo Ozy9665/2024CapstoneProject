@@ -20,5 +20,8 @@ public:
 	// 에디터에서 버튼으로 호출
 	UFUNCTION(CallInEditor, BlueprintCallable, Category = "NavMesh Export")
 	static bool ExportNavMeshOBJ(const FString& OutputObjPath, FString& OutError);
+
+	UFUNCTION(CallInEditor, BlueprintCallable, Category = "NavMesh Export")
+	static bool ExportDetourNavMeshBIN(const FString& OutputBinPath, FString& OutError);
 #endif
 };
