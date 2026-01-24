@@ -181,8 +181,8 @@ void AMySocketPoliceActor::ReceiveData()
 
 void AMySocketPoliceActor::ProcessPlayerData(const char* Buffer)
 {
-    FCultistCharacterState ReceivedState;
-    memcpy(&ReceivedState, Buffer + 2, sizeof(FCultistCharacterState));
+    const CultistPacket* pkt = reinterpret_cast<const CultistPacket*>(Buffer);
+    const FCultistCharacterState& ReceivedState = pkt->state;
     {
         FScopeLock Lock(&ReceivedDataMutex);
         ReceivedCultistStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
@@ -191,48 +191,30 @@ void AMySocketPoliceActor::ProcessPlayerData(const char* Buffer)
 
 void AMySocketPoliceActor::ProcessHitData(const char* Buffer)
 {
-    HitResultPacket ReceivedState;
-    memcpy(&ReceivedState, Buffer, sizeof(HitResultPacket));
-    {
-        FScopeLock Lock(&ReceivedDataMutex);
-        switch (ReceivedState.Weapon)
-        {
-        case EWeaponType::Baton:
-            break;
-        case EWeaponType::Pistol:
-            UE_LOG(LogTemp, Error, TEXT("[Police]: EWeaponType received: %d"), ReceivedState.Weapon);
-            break;
-        case EWeaponType::Taser:
-            UE_LOG(LogTemp, Error, TEXT("[Police]: EWeaponType received: %d"), ReceivedState.Weapon);
-            break;
-        default:
-            UE_LOG(LogTemp, Error, TEXT("[Police]: EWeaponType Error: %d"), ReceivedState.Weapon);
-            break;
-        }
-    }
+    const HitResultPacket* ReceivedPacket = reinterpret_cast<const HitResultPacket*>(Buffer);
+    UE_LOG(LogTemp, Error, TEXT("ProcessHitData error with attacker: %d"), ReceivedPacket->AttackerID);
 }
 
 void AMySocketPoliceActor::ProcessTreeData(const char* Buffer) 
 {
-    TreePacket ReceivedSkill;
-    memcpy(&ReceivedSkill, Buffer, sizeof(TreePacket));
-
-    const int Key = static_cast<int>(ReceivedSkill.casterId);
+    const TreePacket* ReceivedSkill = reinterpret_cast<const TreePacket*>(Buffer);
+    const int Key = ReceivedSkill->casterId;
+ 
     ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
     if (!FoundChar) {
-        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d not found"), ReceivedSkill.casterId);
+        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d not found"), Key);
         return;
     }
 
     ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
     if (!CasterCultist) {
-        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d is not Cultist"), ReceivedSkill.casterId);
+        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d is not Cultist"), Key);
         return;
     }
 
     TWeakObjectPtr<ACultistCharacter> WeakCaster = CasterCultist;
-    const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedSkill.SpawnLoc);
-    const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedSkill.SpawnRot);
+    const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedSkill->SpawnLoc);
+    const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedSkill->SpawnRot);
 
     AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot]() {
         ACultistCharacter* Caster = WeakCaster.Get();
@@ -252,26 +234,26 @@ void AMySocketPoliceActor::ProcessTreeData(const char* Buffer)
     });
 }
 
-void AMySocketPoliceActor::ProcessCrowSpawnData(const char* Buffer) {
-    Crow ReceivedCrow;
-    memcpy(&ReceivedCrow, Buffer + 2, sizeof(Crow));
+void AMySocketPoliceActor::ProcessCrowSpawnData(const char* Buffer) 
+{
+    const Crow* ReceivedCrow = reinterpret_cast<const Crow*>(Buffer);
+    const int Key = ReceivedCrow->owner;
 
-    const int Key = static_cast<int>(ReceivedCrow.owner);
     ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
     if (!FoundChar) {
-        UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] caster %d not found"), ReceivedCrow.owner);
+        UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] caster %d not found"), Key);
         return;
     }
 
     ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
     if (!CasterCultist) {
-        UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] caster %d is not Cultist"), ReceivedCrow.owner);
+        UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] caster %d is not Cultist"), Key);
         return;
     }
 
     TWeakObjectPtr<ACultistCharacter> WeakCaster = CasterCultist;
-    const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedCrow.loc);
-    const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedCrow.rot);
+    const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedCrow->loc);
+    const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedCrow->rot);
 
     AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot]() {
         ACultistCharacter* Caster = WeakCaster.Get();
@@ -296,54 +278,62 @@ void AMySocketPoliceActor::ProcessCrowSpawnData(const char* Buffer) {
         });
 }
 
-void AMySocketPoliceActor::ProcessCrowData(const char* Buffer) {
-    Crow ReceivedCrow;
-    memcpy(&ReceivedCrow, Buffer + 2, sizeof(Crow));
+void AMySocketPoliceActor::ProcessCrowData(const char* Buffer) 
+{
+    const Crow* ReceivedCrow = reinterpret_cast<const Crow*>(Buffer);
+    const int Key = ReceivedCrow->owner;
 
-    const int Key = static_cast<int>(ReceivedCrow.owner);
     ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
     if (!FoundChar) {
-        UE_LOG(LogTemp, Warning, TEXT("[CrowData] caster %d not found"), ReceivedCrow.owner);
+        UE_LOG(LogTemp, Warning, TEXT("[CrowData] caster %d not found"), Key);
         return;
     }
 
     ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
     if (!CasterCultist) {
-        UE_LOG(LogTemp, Warning, TEXT("[CrowData] caster %d is not Cultist"), ReceivedCrow.owner);
+        UE_LOG(LogTemp, Warning, TEXT("[CrowData] caster %d is not Cultist"), Key);
         return;
     }
     if (CasterCultist->CrowInstance) {
         // 까마귀 업데이트
         AsyncTask(ENamedThreads::GameThread, [CI = CasterCultist->CrowInstance, ReceivedCrow]() {
             if (IsValid(CI)) {
-                CI->SetActorLocation(AMySocketActor::ToUE(ReceivedCrow.loc));
-                CI->SetActorRotation(AMySocketActor::ToUE(ReceivedCrow.rot));
+                CI->SetActorLocation(AMySocketActor::ToUE(ReceivedCrow->loc));
+                CI->SetActorRotation(AMySocketActor::ToUE(ReceivedCrow->rot));
             }
             });
     }
 }
 
-void AMySocketPoliceActor::ProcessCrowDisable(const char* Buffer) {
-    IdOnlyPacket packet;
-    memcpy(&packet, Buffer + 2, sizeof(packet));
+void AMySocketPoliceActor::ProcessCrowDisable(const char* Buffer) 
+{
+    const IdOnlyPacket* packet = reinterpret_cast<const IdOnlyPacket*>(Buffer);
+    const int Key = packet->id;
 
-    const int Key = static_cast<int>(packet.id);
     ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
     if (!FoundChar) {
-        UE_LOG(LogTemp, Warning, TEXT("[CrowDisable] caster %d not found"), packet.id);
+        UE_LOG(LogTemp, Warning, TEXT("[CrowDisable] caster %d not found"), Key);
         return;
     }
 
     ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
     if (!CasterCultist) {
-        UE_LOG(LogTemp, Warning, TEXT("[CrowDisable] caster %d is not Cultist"), packet.id);
+        UE_LOG(LogTemp, Warning, TEXT("[CrowDisable] caster %d is not Cultist"), Key);
         return;
     }
 
     if (CasterCultist->CrowInstance)
     {
-        CasterCultist->CrowInstance->Destroy();
-        CasterCultist->CrowInstance = nullptr;
+        ACrowActor* CI = CasterCultist->CrowInstance;
+
+        AsyncTask(ENamedThreads::GameThread, [CasterCultist, CI]() {
+            if (IsValid(CI))
+            {
+                CI->Destroy();
+            }
+            CasterCultist->CrowInstance = nullptr;
+            CasterCultist->crowIsAvailable = false;
+            });
     }
 }
 
@@ -363,7 +353,7 @@ void AMySocketPoliceActor::ProcessConnection(const char* Buffer) {
     else {
         AsyncTask(ENamedThreads::GameThread, [this, connectedId, role]() mutable
             {
-                if (role == 0) // Cultist
+                if (role == 0 || role == 100) // Cultist
                 {
                     this->SpawnCultistCharacter(connectedId);
                 }
@@ -397,6 +387,7 @@ void AMySocketPoliceActor::SendPlayerData()
         Packet.header = policeHeader;
         Packet.size = sizeof(PolicePacket);
         Packet.state = GetCharacterState();
+        
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(PolicePacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
@@ -524,12 +515,13 @@ void AMySocketPoliceActor::SpawnCultistCharacter(const unsigned char PlayerID)
     SpawnParams.Owner = this;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-    ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
+    ACultistCharacter* NewCharacter = GetWorld()->SpawnActor<ACultistCharacter>(
         GI->CultistClientClass,
         FVector(CultistDummyState.PositionX, CultistDummyState.PositionY, CultistDummyState.PositionZ),
         FRotator(CultistDummyState.RotationPitch, CultistDummyState.RotationYaw, CultistDummyState.RotationRoll),
         SpawnParams
     );
+
     if (NewCharacter)
     {
         SpawnedCharacters.Add(PlayerID, NewCharacter);
@@ -567,9 +559,10 @@ void AMySocketPoliceActor::ProcessCharacterUpdates()
     FScopeLock Lock(&ReceivedDataMutex);
     for (auto& Pair : ReceivedCultistStates)
     {
+        const int PlayerID = Pair.Key;
         const FCultistCharacterState& State = Pair.Value;
 
-        if (ACharacter* FoundChar = SpawnedCharacters.FindRef(Pair.Value.PlayerID))
+        if (ACharacter* FoundChar = SpawnedCharacters.FindRef(PlayerID))
         {
             if (ACultistCharacter* CultistChar = Cast<ACultistCharacter>(FoundChar))
             {
@@ -577,8 +570,8 @@ void AMySocketPoliceActor::ProcessCharacterUpdates()
             }
         }
         else {
-            UE_LOG(LogTemp, Warning, TEXT("No PlayerID %d"), Pair.Value.PlayerID);
-            KeysToRemove.Add(Pair.Value.PlayerID);
+            UE_LOG(LogTemp, Warning, TEXT("No PlayerID %d"), PlayerID);
+            KeysToRemove.Add(PlayerID);
         }
     }
     for (int32 Key : KeysToRemove)
@@ -906,8 +899,6 @@ const TMap<int, ACharacter*>& AMySocketPoliceActor::GetSpawnedCharacters() const
 {
     return SpawnedCharacters;
 }
-
-
 
 // Called every frame
 void AMySocketPoliceActor::Tick(float DeltaTime)
