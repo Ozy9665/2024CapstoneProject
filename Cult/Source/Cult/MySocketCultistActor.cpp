@@ -444,7 +444,7 @@ void AMySocketCultistActor::ProcessHitData(const char* Buffer)
             }
             AsyncTask(ENamedThreads::GameThread, [this, Target, Attacker]()
                 {
-                    Target->OnHitbyBaton(Attacker->GetActorLocation(), BatonAttackDamage);
+                   // Target->OnHitbyBaton(Attacker->GetActorLocation(), BatonAttackDamage);
                 });
         }
 

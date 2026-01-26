@@ -470,7 +470,8 @@ public:
 	bool isValidState() const;
 };
 
-constexpr FCultistCharacterState CultistDummyState{ -1, -10219.0, 2560.0, -3009.0, 0, 90, 0 };
+constexpr FCultistCharacterState CultistDummyState{ -1, -10219.0f, 2560.0f, -3009.0f, 0.f, 90.f, 0.f, 0.f, 0.f, 0.f, 0.f,
+	false, false, false, false, false, false, false, false, false, false, false, false };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,
 	false, false, false, EWeaponType::Baton, false, EVaultingType::OneHandVault, false, false, false, false };
 

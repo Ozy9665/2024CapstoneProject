@@ -9,3 +9,5 @@ void CultistAIWorkerLoop();
 
 template <typename PacketT>
 void BroadcastCultistAIState(const SESSION& ai, const PacketT* packet);
+
+void ApplyBatonHitToAI(SESSION&, const Vec3&);
