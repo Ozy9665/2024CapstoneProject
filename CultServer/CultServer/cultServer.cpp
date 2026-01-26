@@ -39,7 +39,6 @@ std::unordered_set<int> g_cultist_ai_ids;
 std::unordered_set<int> g_police_ai_ids;
 
 MAP NewmapLandmassMap;
-NEVMESH NewmapLandmassMapNevMesh;
 MAP TestNavMesh;
 
 std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
@@ -931,8 +930,7 @@ void baton_sweep(int c_id, HitPacket* p)
 	float mapHitDist;
 	int mapTri;
 
-	if (NewmapLandmassMap.LineTrace(
-		ray, static_cast<float>(range), mapHitDist, mapTri))
+	if (NewmapLandmassMap.LineTrace(ray, static_cast<float>(range), mapHitDist, mapTri))
 	{
 		range = mapHitDist;
 	}
@@ -941,11 +939,11 @@ void baton_sweep(int c_id, HitPacket* p)
 
 	for (int otherId : g_rooms[room].first.player_ids)
 	{
-		if (otherId == c_id || g_users[otherId].role != 0 || otherId == -1)
+		if (otherId == c_id || g_users[otherId].role == 1 || otherId == -1)
 			continue;
 
 		auto& target = g_users[otherId];
-		if (!target.isValidSocket())
+		if (target.role != 100 && !target.isValidSocket())
 			continue;
 
 		FVector targetPos{
@@ -954,8 +952,36 @@ void baton_sweep(int c_id, HitPacket* p)
 			target.cultist_state.PositionZ
 		};
 
+		{
+			float dx = targetPos.x - start.x;
+			float dy = targetPos.y - start.y;
+			float dz = targetPos.z - start.z;
+
+			std::cout
+				<< "[BATON DEBUG] id=" << otherId
+				<< " role=" << target.role
+				<< " start=(" << start.x << "," << start.y << "," << start.z << ")"
+				<< " end=(" << end.x << "," << end.y << "," << end.z << ")"
+				<< " target=(" << targetPos.x << "," << targetPos.y << "," << targetPos.z << ")"
+				<< " dXY=" << std::sqrt(dx * dx + dy * dy)
+				<< " dZ=" << dz
+				<< std::endl;
+		}
+
+
 		if (line_sphere_intersect(start, end, targetPos, 50.0))
 		{
+			if (target.role == 100)
+			{
+				Vec3 attackerPos{
+					start.x,
+					start.y,
+					start.z
+				};
+				std::cout << "ai attacked" << std::endl;
+				ApplyBatonHitToAI(target, attackerPos);
+			}
+
 			std::cout << "line_sphere_intersect." << std::endl;
 			HitResultPacket result{
 				hitHeader, 
@@ -1001,11 +1027,11 @@ void line_trace(int c_id, HitPacket* p)	 {
 
 	for (int otherId : g_rooms[room].first.player_ids)
 	{
-		if (otherId == c_id || g_users[otherId].role != 0) 
+		if (otherId == c_id || g_users[otherId].role == 1 || otherId == -1)
 			continue;
 
 		auto& target = g_users[otherId];
-		if (!target.isValidSocket()) 
+		if (target.role != 100 && !target.isValidSocket())
 			continue;
 
 		FVector targetPos{ 
@@ -1728,11 +1754,7 @@ void mainLoop(HANDLE h_iocp) {
 int main()
 {
 	// navmesh
-	// NewmapLandmassMapNevMesh.LoadFBX("NavMesh_Raw.fbx", NewmapLandmassOffset);
 	TestNavMesh.Load("nav.obj_NavData_NewMapLandMass.obj", NewmapLandmassOffset);
-
-
-
 	// map
 	/*if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset))
 	{

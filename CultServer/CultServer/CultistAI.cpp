@@ -4,11 +4,11 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <array>
+#include <cmath>
 
 extern std::unordered_map<int, SESSION> g_users;
 extern std::unordered_set<int> g_cultist_ai_ids;
 extern std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
-extern NEVMESH NewmapLandmassMapNevMesh;
 extern MAP NewmapLandmassMap;
 extern MAP TestNavMesh;
 
@@ -92,7 +92,7 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         ai.cultist_state.PositionZ
     };
 
-    if (ai.path.empty() || Dist(cur, targetPos) > REPATH_DIST)
+    if (ai.path.empty())
     {
         TestNavMesh.FindPath(cur, targetPos, ai.path);
 
@@ -105,11 +105,12 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
 
     if (ai.path.size() < 2)
     {
+        ai.path.clear();
         return;
     }
 
     // 다음 목표 노드
-    Vec3 next = ai.path[1];
+    Vec3 next = ai.path.front();
 
     Vec3 dir{
         next.x - cur.x,
@@ -119,9 +120,8 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     };
     float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
     // float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
-    const float arriveDist = 30.f; // cm
-
-    if (len < arriveDist)
+    const float speed = 600.f; // cm/se    // 600은 느림
+    if (len <= speed * deltaTime)
     {
         // 현재 노드에 도착했다고 판단
         // 이번 tick에서는 이동하지 않음
@@ -146,7 +146,6 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     // dir.z /= len;
 
     // 위치 갱신
-    const float speed = 1200.f; // cm/se    // 600은 느림
     ai.cultist_state.PositionX += dir.x * speed * deltaTime;
     ai.cultist_state.PositionY += dir.y * speed * deltaTime;
     // ai.cultist_state.PositionZ += dir.z * speed * deltaTime;
@@ -177,21 +176,25 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         ai.cultist_state.RotationYaw =
             std::atan2(lookDir.y, lookDir.x) * RAD_TO_DEG;
     }
-
-    std::cout << "[AI MOVE] newPos=("
-        << ai.cultist_state.PositionX << ","
-        << ai.cultist_state.PositionY << ","
-        //<< ai.cultist_state.PositionZ 
-        << ")\n";
 }
 
 void CultistAIWorkerLoop()
 {
-    constexpr float dt = 1.0f / 60.0f;
+    using clock = std::chrono::steady_clock;
+    constexpr float fixed_dt = 1.0f / 60.0f;
+
+    auto nextTick = clock::now();
 
     while (true)
     {
-        auto tickStart = std::chrono::steady_clock::now();
+        auto now = clock::now();
+
+        std::chrono::duration<float> delta = now - nextTick + std::chrono::duration<float>(fixed_dt);
+        float dt = delta.count();
+
+        if (dt < 0.f) dt = 0.f;
+        if (dt > 0.05f) dt = 0.05f;
+
         for (int ai_id : g_cultist_ai_ids)
         {
             auto it = g_users.find(ai_id);
@@ -199,13 +202,21 @@ void CultistAIWorkerLoop()
                 continue;
 
             SESSION& ai = it->second;
-            if (ai.role != 100) // Cultist AI만
+            if (ai.role != 100)
                 continue;
 
-            int room_id = ai.room_id;
-            int target_id = FindTargetCultist(room_id, ai_id);
-            if (target_id < 0) {
-                std::cout << "[AI] no target in room " << room_id << "\n";
+            auto& st = ai.cultist_state;
+            if (st.ABP_IsDead || st.ABP_IsStunned || st.ABP_IsHitByAnAttack)
+            {
+                st.VelocityX = 0.f;
+                st.VelocityY = 0.f;
+                st.Speed = 0.f;
+                continue;
+            }
+
+            int target_id = FindTargetCultist(ai.room_id, ai.id);
+            if (target_id < 0)
+            {
                 ai.path.clear();
                 continue;
             }
@@ -224,14 +235,10 @@ void CultistAIWorkerLoop()
             BroadcastCultistAIState(ai, &packet);
         }
 
-        // 60fps 유지
-        auto tickEnd = std::chrono::steady_clock::now();
-        std::chrono::duration<float> elapsed = tickEnd - tickStart;
-        float sleepTime = dt - elapsed.count();
+        nextTick += std::chrono::duration_cast<clock::duration>(
+            std::chrono::duration<float>(fixed_dt));
 
-        if (sleepTime > 0.f)
-            std::this_thread::sleep_for(
-                std::chrono::duration<float>(sleepTime));
+        std::this_thread::sleep_until(nextTick);
     }
 }
 
@@ -264,5 +271,65 @@ void BroadcastCultistAIState(const SESSION& ai, const PacketT* packet)
             continue;
 
         target.do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
+    }
+}
+
+void ApplyBatonHitToAI(SESSION& ai, const Vec3& attackerPos)
+{
+    auto& st = ai.cultist_state;
+    if (st.ABP_IsDead)
+        return;
+
+    st.ABP_IsHitByAnAttack = 1;
+    st.ABP_IsPerforming = 0;
+    st.ABP_DoHeal = 0;
+    st.ABP_GetHeal = 0;
+
+    ai.path.clear();
+
+    Vec3 cur{
+        ai.cultist_state.PositionX,
+        ai.cultist_state.PositionY,
+        ai.cultist_state.PositionZ
+    };
+
+    Vec3 dir{
+        cur.x - attackerPos.x,
+        cur.y - attackerPos.y,
+        0.f
+    };
+
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+    if (len < 1e-3f)
+        return;
+
+    dir.x /= len;
+    dir.y /= len;
+
+    constexpr float pushDist = 120.f;
+
+    ai.cultist_state.PositionX += dir.x * pushDist;
+    ai.cultist_state.PositionY += dir.y * pushDist;
+
+    ai.cultist_state.VelocityX = 0.f;
+    ai.cultist_state.VelocityY = 0.f;
+    ai.cultist_state.VelocityZ = 0.f;
+    ai.cultist_state.Speed = 0.f;
+
+    constexpr float RAD_TO_DEG = 180.f / PI;
+    ai.cultist_state.RotationYaw = std::atan2(dir.y, dir.x) * RAD_TO_DEG;
+
+    st.CurrentHealth -= 50.f;
+    if (st.CurrentHealth <= 0.f)
+    {
+        if (st.ABP_IsStunned)
+        {
+            st.ABP_IsDead = 1;
+        }
+        else
+        {
+            st.ABP_IsStunned = 1;
+            st.ABP_TTStun = 1;
+        }
     }
 }
