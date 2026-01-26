@@ -231,9 +231,9 @@ void FExternExportNavMeshGenerator::ExternExportNavigationData(const FString& Fi
 
 
 					AdditionalData += FString::Printf(TEXT("# Region min size\n"));
-					AdditionalData += FString::Printf(TEXT("rd_rmis %d\n"), (uint32)FMath::Sqrt(CurrentGen->GetConfig().minRegionArea));
+					AdditionalData += FString::Printf(TEXT("rd_rmis %d\n"), (uint32)FMath::Sqrt((float)CurrentGen->GetConfig().minRegionArea));
 					AdditionalData += FString::Printf(TEXT("# Region merge size\n"));
-					AdditionalData += FString::Printf(TEXT("rd_rmas %d\n"), (uint32)FMath::Sqrt(CurrentGen->GetConfig().mergeRegionArea));
+					AdditionalData += FString::Printf(TEXT("rd_rmas %d\n"), (uint32)FMath::Sqrt((float)CurrentGen->GetConfig().mergeRegionArea));
 
 					AdditionalData += FString::Printf(TEXT("# maxVertsPerPoly\n"));
 					AdditionalData += FString::Printf(TEXT("rd_mvpp %d\n"), CurrentGen->GetConfig().maxVertsPerPoly);
@@ -241,9 +241,9 @@ void FExternExportNavMeshGenerator::ExternExportNavigationData(const FString& Fi
 					AdditionalData += FString::Printf(TEXT("rd_dsd %5.5f\n"), CurrentGen->GetConfig().detailSampleDist);
 					AdditionalData += FString::Printf(TEXT("# detailSampleMaxError\n"));
 					AdditionalData += FString::Printf(TEXT("rd_dsm %5.5f\n"), CurrentGen->GetConfig().detailSampleMaxError);
-					AdditionalData += FString::Printf(TEXT("# PolyMaxHeight\n"));
+					//AdditionalData += FString::Printf(TEXT("# PolyMaxHeight\n"));
 		#if ENGINE_MINOR_VERSION < 24
-					AdditionalData += FString::Printf(TEXT("rd_pmh %d\n"), CurrentGen->GetConfig().PolyMaxHeight);
+					//AdditionalData += FString::Printf(TEXT("rd_pmh %d\n"), CurrentGen->GetConfig().PolyMaxHeight);
 		#endif
 					AdditionalData += FString::Printf(TEXT("# minRegionArea\n"));
 					AdditionalData += FString::Printf(TEXT("rd_minra %d\n"), CurrentGen->GetConfig().minRegionArea);
