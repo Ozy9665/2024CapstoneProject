@@ -101,6 +101,7 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
             ai.path.clear();
             return;
         }
+        TestNavMesh.SmoothPath(ai.path);
     }
 
     if (ai.path.size() < 2)
@@ -120,7 +121,7 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     };
     float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
     // float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
-    const float speed = 600.f; // cm/se    // 600은 느림
+    const float speed = 600.f; // cm/s
     if (len <= speed * deltaTime)
     {
         // 현재 노드에 도착했다고 판단

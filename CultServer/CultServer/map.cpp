@@ -429,6 +429,41 @@ bool MAP::FindPath(
     return true;
 }
 
+void MAP::SmoothPath(std::vector<Vec3>& path) const
+{
+    if (path.size() < 3)
+        return;
+
+    std::vector<Vec3> smoothed;
+    smoothed.reserve(path.size());
+
+    size_t i = 0;
+    smoothed.push_back(path[0]);
+
+    while (i < path.size() - 1)
+    {
+        size_t farthest = i + 1;
+
+        // i에서 시작해서 최대한 멀리 직선 이동 가능한 노드 찾기
+        for (size_t j = i + 1; j < path.size(); ++j)
+        {
+            if (CanMove(path[i], path[j]))
+            {
+                farthest = j;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        smoothed.push_back(path[farthest]);
+        i = farthest;
+    }
+
+    path.swap(smoothed);
+}
+
 // NevMesh
 bool NEVMESH::LoadFBX(const std::string& fbxPath, const Vec3& MapOffset)
 {
