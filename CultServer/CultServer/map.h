@@ -37,6 +37,7 @@ public:
         int& hitTriIndex
     ) const;
     bool FindPath(const Vec3&, const Vec3&, std::vector<Vec3>&) const;
+    void SmoothPath(std::vector<Vec3>&) const;
 
 private:
     struct CellKey {
