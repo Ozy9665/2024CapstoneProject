@@ -43,20 +43,24 @@ MAP TestNavMesh;
 
 std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
 // std::array<Room, MAX_ROOM> g_rooms;
-std::array<std::array<Altar, 5>, MAX_ROOM> g_altars{};
+std::array<std::array<Altar, ALTAR_PER_ROOM>, MAX_ROOM> g_altars{};
 
 void InitializeAltars(int room_num) {
 	if (room_num < 0 || room_num >= static_cast<int>(g_altars.size())) {
 		return;
 	}
 
-	std::array<int, 5> order{ 0, 1, 2, 3, 4 };
-	for (int i = 0; i < 4; ++i) {
-		int j = i + rand() % (5 - i);
+	std::array<int, ALTAR_PER_ROOM> order;
+	for (int i = 0; i < ALTAR_PER_ROOM; ++i) {
+		order[i] = i;
+	}
+
+	for (int i = 0; i < ALTAR_PER_ROOM - 1; ++i) {
+		int j = i + rand() % (ALTAR_PER_ROOM - i);
 		std::swap(order[i], order[j]);
 	}
 
-	for (int i = 0; i < 5; ++i) {
+	for (int i = 0; i < ALTAR_PER_ROOM; ++i) {
 		g_altars[room_num][i].loc = kPredefinedLocations[order[i]];
 		g_altars[room_num][i].isActivated = false;
 		g_altars[room_num][i].id = i;
@@ -330,9 +334,9 @@ void RoomWorkerLoop() {
 			pkt.size = sizeof(RitualPacket);
 
 			const auto& altars = g_altars[room_id];
-			pkt.Loc1 = altars[0].loc;
-			pkt.Loc2 = altars[1].loc;
-			pkt.Loc3 = altars[2].loc;
+			for (int i = 0; i < ALTAR_PER_ROOM; ++i) {
+				pkt.Loc[i] = altars[i].loc;
+			}
 
 			EXP_OVER* eo = new EXP_OVER();
 			std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));

@@ -16,6 +16,7 @@ struct Froom {
 
 constexpr int MAX_PLAYERS_PER_ROOM = 5;
 constexpr int MAX_ROOM_LIST = 10;
+constexpr int ALTAR_PER_ROOM = 3;
 
 #pragma pack(push, 1)
 struct FNetVec {
@@ -235,12 +236,11 @@ struct TreePacket {
 	FNetRot SpawnRot;
 };
 
-struct RitualPacket {
+struct RitualPacket
+{
 	uint8_t header;
 	uint16_t size;
-	FNetVec Loc1;
-	FNetVec Loc2;
-	FNetVec Loc3;
+	FNetVec Loc[ALTAR_PER_ROOM];
 };
 
 struct IdPacket {

@@ -205,14 +205,13 @@ void AMyNetworkManagerActor::RequestRoomInfo()
 
 void AMyNetworkManagerActor::ProcessRoomInfo(const char* Buffer) 
 {
-    RoomsPakcet Packet;
-    memcpy(&Packet, Buffer, sizeof(RoomsPakcet));
+    const RoomsPakcet* Packet = reinterpret_cast<const RoomsPakcet*>(Buffer);
 
     rooms.Empty();
     rooms.Reserve(MAX_ROOM_LIST);
     for (int i = 0; i < MAX_ROOM_LIST; ++i)
     {
-        const RoomData& pr = Packet.rooms[i];
+        const RoomData& pr = Packet->rooms[i];
             
         Froom fr;
         fr.room_id = pr.room_id;
@@ -259,22 +258,19 @@ void AMyNetworkManagerActor::RequestRitualData() {
 
 void AMyNetworkManagerActor::ProcessRitualData(const char* Buffer)
 {
-    FNetVec n1{}, n2{}, n3{};
-    FMemory::Memcpy(&n1, Buffer + 2, 24);  // Loc1
-    FMemory::Memcpy(&n2, Buffer + 26, 24);  // Loc2
-    FMemory::Memcpy(&n3, Buffer + 50, 24);  // Loc3
+    const RitualPacket* pkt = reinterpret_cast<const RitualPacket*>(Buffer);
+    FVector L[ALTAR_PER_ROOM];
+    for (int i = 0; i < ALTAR_PER_ROOM; ++i)
+    {
+        L[i] = AMySocketActor::ToUE(pkt->Loc[i]);
+    }
 
-    const FVector L1 = AMySocketActor::ToUE(n1);
-    const FVector L2 = AMySocketActor::ToUE(n2);
-    const FVector L3 = AMySocketActor::ToUE(n3);
-
-    AsyncTask(ENamedThreads::GameThread, [this, L1, L2, L3]() {
+    AsyncTask(ENamedThreads::GameThread, [this, L]() {
         GI->RutialSpawnLocations.Empty();
-        GI->RutialSpawnLocations = TArray<FVector>{ L1, L2, L3 };
-        for (int32 i = 0; i < GI->RutialSpawnLocations.Num(); ++i)
+        for (int i = 0; i < ALTAR_PER_ROOM; ++i)
         {
-            const FVector& Loc = GI->RutialSpawnLocations[i];
-            UE_LOG(LogTemp, Warning, TEXT("RitualLocation[%d]: %s"), i, *Loc.ToString());
+            GI->RutialSpawnLocations.Add(L[i]);
+            UE_LOG(LogTemp, Warning, TEXT("RitualLocation[%d]: %s"), i, *L[i].ToString());
         }
         UE_LOG(LogTemp, Warning, TEXT("OnGameStartConfirmed: Ritual Saved."));
         OnGameStartConfirmed.Broadcast();

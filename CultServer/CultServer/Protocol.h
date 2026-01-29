@@ -19,6 +19,7 @@ constexpr int MAX_PLAYERS_PER_ROOM = 5;
 constexpr int MAX_CULTIST_PER_ROOM = 4;
 constexpr int MAX_POLICE_PER_ROOM = 1;
 constexpr int MAX_ID = INT_MAX;
+constexpr int ALTAR_PER_ROOM = 3;
 
 constexpr float VIEW_RANGE = 3000.0f;           // 시야 반경
 constexpr float VIEW_RANGE_SQ = VIEW_RANGE * VIEW_RANGE;
@@ -351,9 +352,7 @@ struct TreePacket {
 struct RitualPacket {
 	uint8_t header;
 	uint16_t size;
-	FVector Loc1;
-	FVector Loc2;
-	FVector Loc3;
+	FVector Loc[ALTAR_PER_ROOM];
 };	
 
 struct IdPacket {
