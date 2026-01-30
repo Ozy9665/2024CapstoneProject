@@ -5,12 +5,15 @@
 #include <unordered_set>
 #include <array>
 #include <cmath>
+#include <concurrent_priority_queue.h>
 
+using namespace std;
 extern std::unordered_map<int, SESSION> g_users;
 extern std::unordered_set<int> g_cultist_ai_ids;
 extern std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
 extern MAP NewmapLandmassMap;
 extern MAP TestNavMesh;
+extern concurrency::concurrent_priority_queue<TIMER_EVENT> timer_queue;
 
 void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
 {
@@ -206,29 +209,34 @@ void CultistAIWorkerLoop()
             if (ai.role != 100)
                 continue;
 
+            bool canMove = true;
             auto& st = ai.cultist_state;
             if (st.ABP_IsDead || st.ABP_IsStunned || st.ABP_IsHitByAnAttack)
             {
                 st.VelocityX = 0.f;
                 st.VelocityY = 0.f;
                 st.Speed = 0.f;
-                continue;
+                canMove = false;
             }
 
             int target_id = FindTargetCultist(ai.room_id, ai.id);
             if (target_id < 0)
             {
                 ai.path.clear();
-                continue;
+                canMove = false;
             }
-            SESSION& target = g_users[target_id];
-            Vec3 targetPos{
-                target.cultist_state.PositionX,
-                target.cultist_state.PositionY,
-                target.cultist_state.PositionZ
-            };
 
-            MoveAlongPath(ai, targetPos, dt);
+            if (canMove)
+            {
+                SESSION& target = g_users[target_id];
+                Vec3 targetPos{
+                    target.cultist_state.PositionX,
+                    target.cultist_state.PositionY,
+                    target.cultist_state.PositionZ
+                };
+
+                MoveAlongPath(ai, targetPos, dt);
+            }
             CultistPacket packet{};
             packet.header = cultistHeader;
             packet.size = sizeof(CultistPacket);
@@ -331,6 +339,14 @@ void ApplyBatonHitToAI(SESSION& ai, const Vec3& attackerPos)
         {
             st.ABP_IsStunned = 1;
             st.ABP_TTStun = 1;
+
+            TIMER_EVENT ev;
+            ev.c_id = ai.id;
+            ev.target_id = ai.id;
+            ev.event_id = EV_STUN;
+            ev.wakeup_time = std::chrono::system_clock::now() + 10s; // 스턴 시간
+
+            timer_queue.push(ev);
         }
     }
 }

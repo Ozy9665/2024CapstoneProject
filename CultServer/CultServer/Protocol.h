@@ -81,6 +81,35 @@ constexpr char ST_DISABLE{ 3 };
 // map
 enum MAPTYPE { LANDMASS };
 
+enum DB_EVENT { EV_LOGIN, EV_EXIST, EV_SIGNUP };
+struct DBTask {
+	int c_id;
+	DB_EVENT event_id;
+	std::string id;
+	std::string pw;
+};
+
+enum ROOM_EVENT { RM_REQ, RM_ENTER, RM_GAMESTART, RM_RITUAL, RM_DISCONNECT, RM_QUIT };
+struct RoomTask {
+	int c_id;
+	ROOM_EVENT type;
+	uint8_t role;
+	int room_id;
+};
+
+enum EVENT_TYPE { EV_HEAL, EV_STUN };
+struct TIMER_EVENT {
+	int c_id;
+	int target_id;
+	std::chrono::system_clock::time_point wakeup_time;
+	EVENT_TYPE event_id;
+
+	constexpr bool operator < (const TIMER_EVENT& Left) const
+	{
+		return (wakeup_time > Left.wakeup_time);
+	}
+};
+
 struct Vec3 {
 	float x, y, z;
 };
@@ -469,7 +498,7 @@ public:
 	bool isValidState() const;
 };
 
-constexpr FCultistCharacterState CultistDummyState{ -1, -10219.0f, 2560.0f, -3009.0f, 0.f, 90.f, 0.f, 0.f, 0.f, 0.f, 0.f,
+constexpr FCultistCharacterState CultistDummyState{ -1, -10219.0f, 2560.0f, -3009.0f, 0.f, 90.f, 0.f, 0.f, 0.f, 0.f, 100.f,
 	false, false, false, false, false, false, false, false, false, false, false, false };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,
 	false, false, false, EWeaponType::Baton, false, EVaultingType::OneHandVault, false, false, false, false };

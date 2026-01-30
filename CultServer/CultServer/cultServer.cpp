@@ -69,14 +69,6 @@ void InitializeAltars(int room_num) {
 }
 
 // db event 큐
-enum DB_EVENT { EV_LOGIN, EV_EXIST, EV_SIGNUP };
-struct DBTask {
-	int c_id;
-	DB_EVENT event_id;
-	std::string id;
-	std::string pw;
-};
-
 std::mutex g_db_mtx;
 std::condition_variable g_db_cv;
 std::queue<DBTask> g_db_q;
@@ -166,14 +158,6 @@ void DBWorkerLoop() {
 }
 
 // room thread
-enum ROOM_EVENT { RM_REQ, RM_ENTER, RM_GAMESTART, RM_RITUAL, RM_DISCONNECT, RM_QUIT };
-struct RoomTask {
-	int c_id;
-	ROOM_EVENT type;
-	uint8_t role;
-	int room_id;
-};
-
 std::mutex g_room_mtx;
 std::condition_variable g_room_cv;
 std::queue<RoomTask> g_room_q;
@@ -432,18 +416,6 @@ void RoomWorkerLoop() {
 	*/
  
 // heal timer queue
-enum EVENT_TYPE { EV_HEAL };
-struct TIMER_EVENT {
-	int c_id;
-	int target_id;
-	std::chrono::system_clock::time_point wakeup_time;
-	EVENT_TYPE event_id;
-
-	constexpr bool operator < (const TIMER_EVENT& Left) const
-	{
-		return (wakeup_time > Left.wakeup_time);
-	}
-};
 concurrency::concurrent_priority_queue<TIMER_EVENT> timer_queue;
 
 void HealTimerLoop() {
@@ -460,6 +432,7 @@ void HealTimerLoop() {
 			}
 			switch (ev.event_id) {
 			case EV_HEAL:
+			{
 				g_users[ev.c_id].heal_gage += 1;
 				if (g_users[ev.c_id].heal_gage < 10) {
 					ev.wakeup_time = std::chrono::system_clock::now() + 1s;
@@ -481,6 +454,20 @@ void HealTimerLoop() {
 					g_users[ev.target_id].do_send_packet(&packet);
 				}
 				break;
+			}
+			case EV_STUN:
+			{
+				auto& st = g_users[ev.c_id].cultist_state;
+
+				if (st.ABP_IsDead)
+					break;
+
+				// 스턴 해제
+				st.ABP_IsStunned = 0;
+				st.ABP_TTStun = 0;
+				st.CurrentHealth = 50.f;
+				break;
+			}
 			}
 		}
 		else
@@ -955,23 +942,6 @@ void baton_sweep(int c_id, HitPacket* p)
 			target.cultist_state.PositionY,
 			target.cultist_state.PositionZ
 		};
-
-		{
-			float dx = targetPos.x - start.x;
-			float dy = targetPos.y - start.y;
-			float dz = targetPos.z - start.z;
-
-			std::cout
-				<< "[BATON DEBUG] id=" << otherId
-				<< " role=" << target.role
-				<< " start=(" << start.x << "," << start.y << "," << start.z << ")"
-				<< " end=(" << end.x << "," << end.y << "," << end.z << ")"
-				<< " target=(" << targetPos.x << "," << targetPos.y << "," << targetPos.z << ")"
-				<< " dXY=" << std::sqrt(dx * dx + dy * dy)
-				<< " dZ=" << dz
-				<< std::endl;
-		}
-
 
 		if (line_sphere_intersect(start, end, targetPos, 50.0))
 		{
@@ -1760,11 +1730,11 @@ int main()
 	// navmesh
 	TestNavMesh.Load("nav.obj_NavData_NewMapLandMass.obj", NewmapLandmassOffset);
 	// map
-	/*if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset))
+	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset))
 	{
 		std::cout << "MAP load failed\n";
 		return 1;
-	}*/
+	}
 
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));
