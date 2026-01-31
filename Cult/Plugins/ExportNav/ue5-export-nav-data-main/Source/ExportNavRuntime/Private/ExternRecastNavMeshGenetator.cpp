@@ -30,9 +30,11 @@ void FExternExportNavMeshGenerator::ExternExportNavigationData(const FString& Fi
 	const double StartExportTime = FPlatformTime::Seconds();
 
 	FString CurrentTimeStr = FDateTime::Now().ToString();
+
 	for (int32 Index = 0; Index < NavSys->NavDataSet.Num(); ++Index)
 	{
-		// feed data from octtree and mark for rebuild				
+		// feed data from octtree and mark for rebuild		
+	
 		TNavStatArray<dtReal> CoordBuffer;
 		TNavStatArray<int32> IndexBuffer;
 		const ARecastNavMesh* NavData = Cast<const ARecastNavMesh>(NavSys->NavDataSet[Index]);
@@ -284,6 +286,7 @@ void FExternExportNavMeshGenerator::ExternExportNavigationData(const FString& Fi
 					const FString FilePathName = FileName;// FString::Printf(TEXT("_NavDataSet%d_%s.obj"), Index, *CurrentTimeStr);
 					ExportGeomToOBJFile(FilePathName, CoordBuffer, IndexBuffer, AdditionalData);
 				}
+
 		#if ENGINE_MAJOR_VERSION > 4 ||ENGINE_MINOR_VERSION >=26
 				);
 #endif
