@@ -28,7 +28,7 @@ struct NodeCompare
 
 class MAP {
 public:
-    bool Load(const std::string&, const Vec3&);
+    virtual bool Load(const std::string&, const Vec3&);
 
     bool LineTrace(
         const Ray& worldRay,
@@ -39,7 +39,7 @@ public:
     bool FindPath(const Vec3&, const Vec3&, std::vector<Vec3>&) const;
     void SmoothPath(std::vector<Vec3>&) const;
 
-private:
+protected:
     struct CellKey {
         int x, z;
         bool operator==(const CellKey& o) const {
@@ -67,11 +67,11 @@ private:
     float cellSize{ 100.f };
     Vec3 offset;
 
-    static bool LoadOBJ(const std::string&,
+    bool LoadOBJ(const std::string&,
         std::vector<MapVertex>&,
         std::vector<MapTriangle>&);
 
-    static bool LoadOBJAndComputeAABB(
+    bool LoadOBJAndComputeAABB(
         const std::string&,
         std::vector<MapVertex>&,
         std::vector<MapTriangle>&,
@@ -90,31 +90,20 @@ private:
 
 
 // NevMesh
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
 
-struct NavTri {
-    int v[3];        // vertex index
-    Vec3 center;     // 삼각형 중심 (A* 노드 위치)
-};
-
-struct AStarNode {
-    int tri;
-    float g, f;
-    int parent;
-};
-
-class NEVMESH {
+class NAVMESH : public MAP {
 public:
-    bool LoadFBX(const std::string&, const Vec3&);
-    void BuildAdjacency();
-    bool FindPath(int, int, std::vector<Vec3>&) const;
-    int FindNearestTri(const Vec3& ) const;
+    bool Load(const std::string&, const Vec3&) override;
 
 private:
-    std::vector<Vec3> navVertices;
-    std::vector<NavTri> navTris;
-    std::vector<std::vector<int>> adjTris;
-    Vec3 offset;
+    bool LoadNavOBJ(const std::string&,
+        std::vector<MapVertex>&,
+        std::vector<MapTriangle>&);
+
+    bool LoadOBJAndComputeAABB_Nav(
+        const std::string&,
+        std::vector<MapVertex>&,
+        std::vector<MapTriangle>&,
+        AABB&
+    );
 };

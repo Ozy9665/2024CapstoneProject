@@ -125,6 +125,11 @@ bool MAP::LoadOBJAndComputeAABB(
         outAABB.maxY = std::max(outAABB.maxY, v.y);
         outAABB.maxZ = std::max(outAABB.maxZ, v.z);
     }
+    std::cout
+        << "[OBJ AABB] "
+        << "X(" << outAABB.minX << " ~ " << outAABB.maxX << ") "
+        << "Y(" << outAABB.minY << " ~ " << outAABB.maxY << ") "
+        << "Z(" << outAABB.minZ << " ~ " << outAABB.maxZ << ")\n";
 
     return true;
 }
@@ -465,206 +470,131 @@ void MAP::SmoothPath(std::vector<Vec3>& path) const
 }
 
 // NevMesh
-bool NEVMESH::LoadFBX(const std::string& fbxPath, const Vec3& MapOffset)
+bool NAVMESH::Load(const std::string& objPath, const Vec3& MapOffset)
 {
     offset = MapOffset;
+    vertices.clear();
+    triangles.clear();
+    tris.clear();
+    triAABBs.clear();
+    grid.clear();
 
-    Assimp::Importer importer;
-    const aiScene* scene = importer.ReadFile(
-        fbxPath,
-        aiProcess_Triangulate |
-        aiProcess_JoinIdenticalVertices |
-        aiProcess_GenNormals
-    );
-
-    if (!scene || !scene->HasMeshes())
+    if (!LoadOBJAndComputeAABB_Nav(objPath, vertices, triangles, worldAABB))
         return false;
 
-    navVertices.clear();
-    navTris.clear();
+    BuildTriangles();
+    BuildTriangleAABBs();
+    BuildSpatialGrid();
 
-    const aiMesh* mesh = scene->mMeshes[0];
-    navVertices.reserve(mesh->mNumVertices);
+    std::cout << "cellSize = " << cellSize << std::endl;
+    std::cout
+        << "verts: " << vertices.size()
+        << " tris: " << triangles.size()
+        << " grid: " << grid.size()
+        << std::endl;
+    std::cout
+        << "AABB X: " << worldAABB.minX << " ~ " << worldAABB.maxX
+        << " Y: " << worldAABB.minY << " ~ " << worldAABB.maxY
+        << std::endl;
 
-    for (unsigned i = 0; i < mesh->mNumVertices; ++i)
-    {
-        aiVector3D v = mesh->mVertices[i];
-        navVertices.push_back(Vec3{ v.x, v.y, v.z });
-    }
+    Vec3 a{ -10219.0, 2560.0, -3009.0 };
+    Vec3 b{ -10000, 2000, -3000.0 };
 
-    // triangle 추출
-    navTris.reserve(mesh->mNumFaces);
-    for (unsigned i = 0; i < mesh->mNumFaces; ++i)
-    {
-        const aiFace& f = mesh->mFaces[i];
-        if (f.mNumIndices != 3)
-            continue;
+    std::cout << "CanMove: " << CanMove(a, b) << std::endl;
 
-        NavTri tri{};
-        tri.v[0] = (int)f.mIndices[0];
-        tri.v[1] = (int)f.mIndices[1];
-        tri.v[2] = (int)f.mIndices[2];
+    std::vector<Vec3> path;
+    bool ok = FindPath(a, b, path);
 
-        // 삼각형 중심
-        const Vec3& a = navVertices[tri.v[0]];
-        const Vec3& b = navVertices[tri.v[1]];
-        const Vec3& c = navVertices[tri.v[2]];
+    std::cout << "path ok: " << ok
+        << " count: " << path.size()
+        << std::endl;
 
-        tri.center = Vec3{
-            (a.x + b.x + c.x) / 3.0f,
-            (a.y + b.y + c.y) / 3.0f,
-            (a.z + b.z + c.z) / 3.0f
-        };
-
-        navTris.push_back(tri);
-    }
-
-    std::cout << "NavMesh: vertices: " << navVertices.size() << " tris: " << navTris.size() << std::endl;
-    
-    BuildAdjacency();
-    int totalEdges = 0;
-    for (auto& a : adjTris) totalEdges += (int)a.size();
-    std::cout << "Adjacency avg: " << totalEdges / (float)adjTris.size() << std::endl;
-
-    return !navVertices.empty() && !navTris.empty();
+    return true;
 }
 
-void NEVMESH::BuildAdjacency()
+bool NAVMESH::LoadNavOBJ(const std::string& path,
+    std::vector<MapVertex>& outVertices,
+    std::vector<MapTriangle>& outTriangles)
 {
-    adjTris.clear();
-    adjTris.resize(navTris.size());
-
-    struct Edge {
-        int a, b;
-        bool operator==(const Edge& o) const {
-            return a == o.a && b == o.b;
-        }
-    };
-
-    struct EdgeHash {
-        size_t operator()(const Edge& e) const {
-            return (size_t)e.a << 32 | (size_t)e.b;
-        }
-    };
-
-    std::unordered_map<Edge, int, EdgeHash> edgeMap;
-
-    for (int i = 0; i < (int)navTris.size(); ++i)
-    {
-        const NavTri& t = navTris[i];
-        for (int e = 0; e < 3; ++e)
-        {
-            int v0 = t.v[e];
-            int v1 = t.v[(e + 1) % 3];
-            if (v0 > v1) std::swap(v0, v1);
-
-            Edge edge{ v0, v1 };
-            auto it = edgeMap.find(edge);
-            if (it == edgeMap.end())
-            {
-                edgeMap[edge] = i;
-            }
-            else
-            {
-                int other = it->second;
-                adjTris[i].push_back(other);
-                adjTris[other].push_back(i);
-            }
-        }
-    }
-}
-
-static float Dist(const Vec3& a, const Vec3& b)
-{
-    float dx = a.x - b.x;
-    float dy = a.y - b.y;
-    float dz = a.z - b.z;
-    return std::sqrt(dx * dx + dy * dy + dz * dz);
-}
-
-int NEVMESH::FindNearestTri(const Vec3& p) const
-{
-    float best = FLT_MAX;
-    int idx = -1;
-
-    for (int i = 0; i < (int)navTris.size(); ++i)
-    {
-        float d = Dist(p, navTris[i].center);
-        if (d < best)
-        {
-            best = d;
-            idx = i;
-        }
-    }
-    return idx;
-}
-
-bool NEVMESH::FindPath(
-    int startTri,
-    int endTri,
-    std::vector<Vec3>& outPath
-) const
-{
-    outPath.clear();
-
-    if (startTri < 0 || endTri < 0)
+    std::ifstream file(path);
+    if (!file.is_open())
         return false;
 
-    const int N = (int)navTris.size();
-    std::vector<float> gScore(N, FLT_MAX);
-    std::vector<int> parent(N, -1);
-    std::vector<bool> closed(N, false);
-
-    auto heuristic = [&](int t) {
-        return Dist(navTris[t].center, navTris[endTri].center);
-        };
-
-    auto cmp = [&](int a, int b) {
-        return gScore[a] + heuristic(a) >
-            gScore[b] + heuristic(b);
-        };
-
-    std::priority_queue<int, std::vector<int>, decltype(cmp)> open(cmp);
-
-    gScore[startTri] = 0.f;
-    open.push(startTri);
-
-    while (!open.empty())
+    std::string line;
+    while (std::getline(file, line))
     {
-        int cur = open.top();
-        open.pop();
+        std::stringstream ss(line);
+        std::string type;
+        ss >> type;
 
-        if (closed[cur])
-            continue;
-
-        closed[cur] = true;
-
-        if (cur == endTri)
+        if (!type.empty() && (unsigned char)type[0] == 0xEF)
         {
-            // 역추적
-            for (int t = cur; t != -1; t = parent[t])
-                outPath.push_back(navTris[t].center);
-
-            std::reverse(outPath.begin(), outPath.end());
-            return true;
+            type = type.substr(3);
         }
 
-        for (int nxt : adjTris[cur])
+
+        if (type == "v")
         {
-            if (closed[nxt]) continue;
+            float ox, oy, oz;
+            ss >> ox >> oy >> oz;
+            MapVertex v{};
+            // OBJ: X,Z = 평면 / Y = 높이
+            // UE : X,Y = 평면 / Z = 높이
+            v.x = ox;
+            v.y = oy;
+            v.z = oz;
+            outVertices.push_back(v);
+        }
+        else if (type == "f")
+        {
+            MapTriangle t{};
+            std::string s0, s1, s2;
 
-            float tentative =
-                gScore[cur] +
-                Dist(navTris[cur].center, navTris[nxt].center);
+            ss >> s0 >> s1 >> s2;
 
-            if (tentative < gScore[nxt])
-            {
-                gScore[nxt] = tentative;
-                parent[nxt] = cur;
-                open.push(nxt);
-            }
+            auto parseIndex = [](const std::string& s) {
+                size_t pos = s.find('/');
+                return std::stoi(pos == std::string::npos ? s : s.substr(0, pos)) - 1;
+                };
+
+            t.v0 = parseIndex(s0);
+            t.v1 = parseIndex(s1);
+            t.v2 = parseIndex(s2);
+
+            outTriangles.push_back(t);
         }
     }
+    return true;
+}
 
-    return false;
+bool NAVMESH::LoadOBJAndComputeAABB_Nav(
+    const std::string& path,
+    std::vector<MapVertex>& outVertices,
+    std::vector<MapTriangle>& outTriangles,
+    AABB& outAABB)
+{
+    if (!LoadNavOBJ(path, outVertices, outTriangles))
+        return false;
+
+    // AABB 초기화
+    outAABB.minX = outAABB.minY = outAABB.minZ = FLT_MAX;
+    outAABB.maxX = outAABB.maxY = outAABB.maxZ = -FLT_MAX;
+
+    for (const auto& v : outVertices)
+    {
+        outAABB.minX = std::min(outAABB.minX, v.x);
+        outAABB.minY = std::min(outAABB.minY, v.y);
+        outAABB.minZ = std::min(outAABB.minZ, v.z);
+
+        outAABB.maxX = std::max(outAABB.maxX, v.x);
+        outAABB.maxY = std::max(outAABB.maxY, v.y);
+        outAABB.maxZ = std::max(outAABB.maxZ, v.z);
+    }
+    std::cout
+        << "[OBJ AABB] "
+        << "X(" << outAABB.minX << " ~ " << outAABB.maxX << ") "
+        << "Y(" << outAABB.minY << " ~ " << outAABB.maxY << ") "
+        << "Z(" << outAABB.minZ << " ~ " << outAABB.maxZ << ")\n";
+
+    return true;
 }

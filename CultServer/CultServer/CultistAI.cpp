@@ -12,7 +12,7 @@ extern std::unordered_map<int, SESSION> g_users;
 extern std::unordered_set<int> g_cultist_ai_ids;
 extern std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
 extern MAP NewmapLandmassMap;
-extern MAP TestNavMesh;
+extern NAVMESH TestNavMesh;
 extern concurrency::concurrent_priority_queue<TIMER_EVENT> timer_queue;
 
 void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)

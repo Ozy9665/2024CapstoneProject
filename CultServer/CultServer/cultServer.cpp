@@ -39,7 +39,7 @@ std::unordered_set<int> g_cultist_ai_ids;
 std::unordered_set<int> g_police_ai_ids;
 
 MAP NewmapLandmassMap;
-MAP TestNavMesh;
+NAVMESH TestNavMesh;
 
 std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
 // std::array<Room, MAX_ROOM> g_rooms;
@@ -1728,7 +1728,7 @@ void mainLoop(HANDLE h_iocp) {
 int main()
 {
 	// navmesh
-	TestNavMesh.Load("nav.obj_NavData_NewMapLandMass.obj", NewmapLandmassOffset);
+	TestNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset);
 	// map
 	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset))
 	{
