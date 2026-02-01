@@ -69,7 +69,8 @@ protected:
 
     bool LoadOBJ(const std::string&,
         std::vector<MapVertex>&,
-        std::vector<MapTriangle>&);
+        std::vector<MapTriangle>&
+    );
 
     bool LoadOBJAndComputeAABB(
         const std::string&,
@@ -98,7 +99,8 @@ public:
 private:
     bool LoadNavOBJ(const std::string&,
         std::vector<MapVertex>&,
-        std::vector<MapTriangle>&);
+        std::vector<MapTriangle>&
+    );
 
     bool LoadOBJAndComputeAABB_Nav(
         const std::string&,
@@ -106,4 +108,23 @@ private:
         std::vector<MapTriangle>&,
         AABB&
     );
+
+
+    struct QV {
+        int x, y, z;
+        bool operator==(const QV& o) const {
+            return x == o.x && y == o.y && z == o.z;
+        }
+    };
+
+    struct QVHash {
+        size_t operator()(const QV& v) const {
+            return (static_cast<size_t>(v.x) * 73856093) ^
+                (static_cast<size_t>(v.y) * 19349663) ^
+                (static_cast<size_t>(v.z) * 83492791);
+        }
+    };
+    float EPS = 0.001f; // 1mm
+
+    void WeldVertices(std::vector<MapVertex>&, std::vector<MapTriangle>&);
 };

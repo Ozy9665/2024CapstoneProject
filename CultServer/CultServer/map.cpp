@@ -481,21 +481,11 @@ bool NAVMESH::Load(const std::string& objPath, const Vec3& MapOffset)
 
     if (!LoadOBJAndComputeAABB_Nav(objPath, vertices, triangles, worldAABB))
         return false;
-
+    
+    WeldVertices(vertices, triangles);
     BuildTriangles();
     BuildTriangleAABBs();
     BuildSpatialGrid();
-
-    std::cout << "cellSize = " << cellSize << std::endl;
-    std::cout
-        << "verts: " << vertices.size()
-        << " tris: " << triangles.size()
-        << " grid: " << grid.size()
-        << std::endl;
-    std::cout
-        << "AABB X: " << worldAABB.minX << " ~ " << worldAABB.maxX
-        << " Y: " << worldAABB.minY << " ~ " << worldAABB.maxY
-        << std::endl;
 
     Vec3 a{ -10219.0, 2560.0, -3009.0 };
     Vec3 b{ -10000, 2000, -3000.0 };
@@ -538,8 +528,6 @@ bool NAVMESH::LoadNavOBJ(const std::string& path,
             float ox, oy, oz;
             ss >> ox >> oy >> oz;
             MapVertex v{};
-            // OBJ: X,Z = 평면 / Y = 높이
-            // UE : X,Y = 평면 / Z = 높이
             v.x = ox;
             v.y = oy;
             v.z = oz;
@@ -590,11 +578,52 @@ bool NAVMESH::LoadOBJAndComputeAABB_Nav(
         outAABB.maxY = std::max(outAABB.maxY, v.y);
         outAABB.maxZ = std::max(outAABB.maxZ, v.z);
     }
-    std::cout
-        << "[OBJ AABB] "
-        << "X(" << outAABB.minX << " ~ " << outAABB.maxX << ") "
-        << "Y(" << outAABB.minY << " ~ " << outAABB.maxY << ") "
-        << "Z(" << outAABB.minZ << " ~ " << outAABB.maxZ << ")\n";
 
     return true;
+}
+
+void NAVMESH::WeldVertices(
+    std::vector<MapVertex>& vertices,
+    std::vector<MapTriangle>& triangles)
+{
+    std::unordered_map<QV, int, QVHash> map;
+    std::vector<MapVertex> newVerts;
+    newVerts.reserve(vertices.size());
+
+    // old index → new index
+    std::vector<int> remap(vertices.size(), -1);
+
+    for (int i = 0; i < (int)vertices.size(); ++i)
+    {
+        const auto& v = vertices[i];
+
+        QV q{
+            (int)std::round(v.x / EPS),
+            (int)std::round(v.y / EPS),
+            (int)std::round(v.z / EPS)
+        };
+
+        auto it = map.find(q);
+        if (it == map.end())
+        {
+            int newIdx = (int)newVerts.size();
+            map[q] = newIdx;
+            remap[i] = newIdx;
+            newVerts.push_back(v);
+        }
+        else
+        {
+            remap[i] = it->second;
+        }
+    }
+
+    // triangle index remap
+    for (auto& t : triangles)
+    {
+        t.v0 = remap[t.v0];
+        t.v1 = remap[t.v1];
+        t.v2 = remap[t.v2];
+    }
+
+    vertices.swap(newVerts);
 }

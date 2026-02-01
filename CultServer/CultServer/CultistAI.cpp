@@ -104,7 +104,7 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
             ai.path.clear();
             return;
         }
-        TestNavMesh.SmoothPath(ai.path);
+        // TestNavMesh.SmoothPath(ai.path);
     }
 
     if (ai.path.size() < 2)
