@@ -92,6 +92,51 @@ protected:
 
 // NevMesh
 
+struct QV {
+    int x, y, z;
+    bool operator==(const QV& o) const {
+        return x == o.x && y == o.y && z == o.z;
+    }
+};
+
+struct QVHash {
+    size_t operator()(const QV& v) const {
+        return (static_cast<size_t>(v.x) * 73856093) ^
+            (static_cast<size_t>(v.y) * 19349663) ^
+            (static_cast<size_t>(v.z) * 83492791);
+    }
+};
+
+struct EdgeKey {
+    int a, b; // Ç×»ó a < b
+
+    bool operator==(const EdgeKey& o) const {
+        return a == o.a && b == o.b;
+    }
+};
+
+struct EdgeKeyHash {
+    size_t operator()(const EdgeKey& e) const {
+        return (static_cast<size_t>(e.a) << 32) ^ static_cast<size_t>(e.b);
+    }
+};
+
+struct TriNode {
+    int tri;
+    float g, f;
+    int parent;
+};
+
+struct TriNodeCompare
+{
+    const std::vector<TriNode>* nodes;
+
+    bool operator()(int a, int b) const
+    {
+        return (*nodes)[a].f > (*nodes)[b].f;
+    }
+};
+
 class NAVMESH : public MAP {
 public:
     bool Load(const std::string&, const Vec3&) override;
@@ -109,22 +154,22 @@ private:
         AABB&
     );
 
-
-    struct QV {
-        int x, y, z;
-        bool operator==(const QV& o) const {
-            return x == o.x && y == o.y && z == o.z;
-        }
-    };
-
-    struct QVHash {
-        size_t operator()(const QV& v) const {
-            return (static_cast<size_t>(v.x) * 73856093) ^
-                (static_cast<size_t>(v.y) * 19349663) ^
-                (static_cast<size_t>(v.z) * 83492791);
-        }
-    };
     float EPS = 0.001f; // 1mm
-
     void WeldVertices(std::vector<MapVertex>&, std::vector<MapTriangle>&);
+
+    std::vector<std::array<int, 3>> triNeighbors;
+    std::vector<Vec3> triCenters;
+   
+    EdgeKey MakeEdge(int v0, int v1)
+    {
+        return (v0 < v1) ? EdgeKey{ v0, v1 } : EdgeKey{ v1, v0 };
+    }
+
+    void BuildAdjacency();
+
+    void BuildTriCenters();
+
+    int FindContainingTriangle(const Vec3&) const;
+
+    bool FindTriPath(const Vec3&, const Vec3&, std::vector<int>&);
 };

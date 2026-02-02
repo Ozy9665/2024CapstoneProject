@@ -483,20 +483,22 @@ bool NAVMESH::Load(const std::string& objPath, const Vec3& MapOffset)
         return false;
     
     WeldVertices(vertices, triangles);
+    BuildAdjacency();
+    BuildTriCenters();
+
     BuildTriangles();
     BuildTriangleAABBs();
     BuildSpatialGrid();
 
     Vec3 a{ -10219.0, 2560.0, -3009.0 };
-    Vec3 b{ -10000, 2000, -3000.0 };
+    Vec3 b{ -5000, 2000, -3000.0 };
 
-    std::cout << "CanMove: " << CanMove(a, b) << std::endl;
+    std::vector<int> triPath;
+    bool ok = FindTriPath(a, b, triPath);
 
-    std::vector<Vec3> path;
-    bool ok = FindPath(a, b, path);
-
-    std::cout << "path ok: " << ok
-        << " count: " << path.size()
+    std::cout
+        << "[TRI A*] ok=" << ok
+        << " len=" << triPath.size()
         << std::endl;
 
     return true;
@@ -627,3 +629,179 @@ void NAVMESH::WeldVertices(
 
     vertices.swap(newVerts);
 }
+
+void NAVMESH::BuildAdjacency()
+{
+    triNeighbors.clear();
+    triNeighbors.resize(triangles.size(), { -1, -1, -1 });
+
+    std::unordered_map<EdgeKey, int, EdgeKeyHash> edgeOwner;
+
+    for (int ti = 0; ti < (int)triangles.size(); ++ti)
+    {
+        const auto& t = triangles[ti];
+        int vs[3] = { t.v0, t.v1, t.v2 };
+
+        for (int e = 0; e < 3; ++e)
+        {
+            int v0 = vs[e];
+            int v1 = vs[(e + 1) % 3];
+            EdgeKey key = MakeEdge(v0, v1);
+
+            auto it = edgeOwner.find(key);
+            if (it == edgeOwner.end())
+            {
+                edgeOwner[key] = ti;
+            }
+            else
+            {
+                int other = it->second;
+
+                // 서로 이웃으로 등록
+                for (int k = 0; k < 3; ++k)
+                {
+                    if (triNeighbors[ti][k] == -1) {
+                        triNeighbors[ti][k] = other;
+                        break;
+                    }
+                }
+                for (int k = 0; k < 3; ++k)
+                {
+                    if (triNeighbors[other][k] == -1) {
+                        triNeighbors[other][k] = ti;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void NAVMESH::BuildTriCenters()
+{
+    triCenters.resize(triangles.size());
+
+    for (int i = 0; i < (int)triangles.size(); ++i)
+    {
+        const auto& t = triangles[i];
+        const auto& a = vertices[t.v0];
+        const auto& b = vertices[t.v1];
+        const auto& c = vertices[t.v2];
+
+        triCenters[i] = {
+            (a.x + b.x + c.x) / 3.f,
+            (a.y + b.y + c.y) / 3.f,
+            (a.z + b.z + c.z) / 3.f
+        };
+    }
+}
+
+static bool PointInTri2D(const Vec3& p, const MapTri& t)
+{
+    auto sign = [](const Vec3& p1, const Vec3& p2, const Vec3& p3)
+        {
+            return (p1.x - p3.x) * (p2.y - p3.y)
+                - (p2.x - p3.x) * (p1.y - p3.y);
+        };
+
+    Vec3 a{ t.a.x, t.a.y, 0.f };
+    Vec3 b{ t.b.x, t.b.y, 0.f };
+    Vec3 c{ t.c.x, t.c.y, 0.f };
+
+    bool b1 = sign(p, a, b) < 0.f;
+    bool b2 = sign(p, b, c) < 0.f;
+    bool b3 = sign(p, c, a) < 0.f;
+
+    return (b1 == b2) && (b2 == b3);
+}
+
+int NAVMESH::FindContainingTriangle(const Vec3& pos) const
+{
+    for (int i = 0; i < (int)tris.size(); ++i)
+    {
+        if (PointInTri2D(pos, tris[i]))
+            return i;
+    }
+    return -1;
+}
+
+bool NAVMESH::FindTriPath(
+    const Vec3& start,
+    const Vec3& goal,
+    std::vector<int>& outTriPath)
+{
+    outTriPath.clear();
+
+    int startTri = FindContainingTriangle(start);
+    int goalTri = FindContainingTriangle(goal);
+
+    if (startTri < 0 || goalTri < 0)
+        return false;
+
+    std::vector<TriNode> nodes;
+    TriNodeCompare comp{ &nodes };
+    std::priority_queue<int, std::vector<int>, TriNodeCompare> open(comp);
+    std::unordered_map<int, int> visited;
+
+    auto heuristic = [&](int t) {
+        Vec3 d{
+            triCenters[t].x - goal.x,
+            triCenters[t].y - goal.y,
+            0.f
+        };
+        return std::sqrt(d.x * d.x + d.y * d.y);
+        };
+
+    nodes.push_back({ startTri, 0.f, heuristic(startTri), -1 });
+    open.push(0);
+
+    int goalIdx = -1;
+
+    while (!open.empty())
+    {
+        int curIdx = open.top();
+        open.pop();
+
+        auto& cur = nodes[curIdx];
+        if (visited.count(cur.tri))
+            continue;
+
+        visited[cur.tri] = curIdx;
+
+        if (cur.tri == goalTri)
+        {
+            goalIdx = curIdx;
+            break;
+        }
+
+        for (int nb : triNeighbors[cur.tri])
+        {
+            if (nb < 0 || visited.count(nb))
+                continue;
+
+            Vec3 d{
+                triCenters[nb].x - triCenters[cur.tri].x,
+                triCenters[nb].y - triCenters[cur.tri].y,
+                0.f
+            };
+            float dist = std::sqrt(d.x * d.x + d.y * d.y);
+
+            float g = cur.g + dist;
+            float f = g + heuristic(nb);
+
+            int idx = (int)nodes.size();
+            nodes.push_back({ nb, g, f, curIdx });
+            open.push(idx);
+        }
+    }
+
+    if (goalIdx < 0)
+        return false;
+
+    for (int i = goalIdx; i >= 0; i = nodes[i].parent)
+        outTriPath.push_back(nodes[i].tri);
+
+    std::reverse(outTriPath.begin(), outTriPath.end());
+    return true;
+}
+
