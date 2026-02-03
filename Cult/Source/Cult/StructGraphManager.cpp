@@ -203,107 +203,146 @@ float AStructGraphManager::OverlapArea2D(const FBox& A, const FBox& B, float Exp
 
 void AStructGraphManager::BuildSupportGraph()
 {
-	// 슬래브 노드 돌면서,  Supports 연결
+	static bool bPrintedOnce = false;   // 디버그 1회만
+	const bool bDoDebugPrint = !bPrintedOnce;
+	bPrintedOnce = true;
+
+
+	TMap<int32, int32> IdToIndex;
+	IdToIndex.Reserve(Nodes.Num());
+	for (int32 i = 0; i < Nodes.Num(); ++i)
+	{
+		IdToIndex.Add(Nodes[i].Id, i);
+	}
+	// 1) Supports 초기화
+	for (FStructGraphNode& N : Nodes)
+	{
+		if (N.Type == EStructNodeType::Slab)
+		{
+			N.Supports.Reset();
+			N.SupportWeights.Reset();
+		}
+	}
+
+	// 2) 후보 지지대 목록(기둥/벽) Id 모으기
+	TArray<int32> SupporterIds;
+	SupporterIds.Reserve(Nodes.Num());
+	for (const FStructGraphNode& N : Nodes)
+	{
+		if (N.Type == EStructNodeType::Column || N.Type == EStructNodeType::Wall)
+		{
+			SupporterIds.Add(N.Id);
+		}
+	}
+
+	// 3) 각 슬래브에 대해 지지대 찾기
 	for (FStructGraphNode& Slab : Nodes)
 	{
 		if (Slab.Type != EStructNodeType::Slab || !Slab.Comp) continue;
 
-		Slab.Supports.Reset();
-
 		const FBox SlabBox = GetCompBox(Slab.Comp);
+		const FVector SlabCenter = SlabBox.GetCenter();
 		const float SlabBottomZ = SlabBox.Min.Z;
 
-		for (const FStructGraphNode& Candidate : Nodes)
+		const int32 SlabFloor = Slab.FloorIndex;
+
+		for (int32 Sid : SupporterIds)
 		{
-			if ((Candidate.Type != EStructNodeType::Column && Candidate.Type != EStructNodeType::Wall) || !Candidate.Comp)
+			const int32* SupIdx = IdToIndex.Find(Sid);
+			if (!SupIdx) continue;
+			FStructGraphNode* Sup = &Nodes[*SupIdx];
+
+			if (!Sup->Comp) continue;
+
+			// 미지정일시 우선 통과
+			if (Sup->FloorIndex != -1 && Sup->FloorIndex != SlabFloor)
 				continue;
 
-			const FBox SupBox = GetCompBox(Candidate.Comp);
+			const FBox SupBox = GetCompBox(Sup->Comp);
+
 			const float SupTopZ = SupBox.Max.Z;
+			if (FMath::Abs(SupTopZ - SlabBottomZ) > SupportZTolerance) continue;
 
-			// Z 접촉 조건 + XY 겹침
-			const bool bZ = FMath::Abs(SlabBottomZ - SupTopZ) <= SupportZTolerance;
-			const bool bXY = Overlap2D(SlabBox, SupBox, SupportXYExpand);
+			if (!Overlap2D(SlabBox, SupBox, SupportXYExpand)) continue;
 
-			if (bZ && bXY)
-			{
-				Slab.Supports.Add(Candidate.Id);
-			}
-		}
-	}
-}
-
-void AStructGraphManager::ComputeLoadsFromScratch(float SeismicFactor)
-{
-	// CarryLoad 초기화
-	for (FStructGraphNode& N : Nodes)
-	{
-		N.CarriedLoad = 0.f;
-	}
-
-	TArray<int32> SlabIds;
-	for (const FStructGraphNode& N : Nodes)
-	{
-		if (N.Type == EStructNodeType::Slab) SlabIds.Add(N.Id);
-	}
-	SlabIds.Sort([&](int32 A, int32 B)
-		{
-			return Nodes[A].FloorIndex > Nodes[B].FloorIndex;
-		});
-
-	for (int32 SlabId : SlabIds)
-	{
-		FStructGraphNode& Slab = Nodes[SlabId];
-		if (Slab.State == EStructDamageState::Failed || !Slab.Comp) continue;
-
-		// 슬래브의 총 하중
-		const float TotalSlabLoad = Slab.SelfWeight + Slab.CarriedLoad;
-
-		// 유효 지지대 + 가중치
-		TArray<int32> ValidSupports;
-		TArray<float> Weights;
-		float SumW = 0.f;
-
-		const FBox SlabBox = GetCompBox(Slab.Comp);
-
-		for (int32 SupId : Slab.Supports)
-		{
-			FStructGraphNode& Sup = Nodes[SupId];
-			if (Sup.State == EStructDamageState::Failed || !Sup.Comp) continue;
-
-			const FBox SupBox = GetCompBox(Sup.Comp);
+			// ===== 가중치 계산 =====
 			const float Area = OverlapArea2D(SlabBox, SupBox, SupportXYExpand);
+			if (Area <= KINDA_SMALL_NUMBER) continue;
 
-			if (Area > KINDA_SMALL_NUMBER)
+			// 거리 가중치
+			const FVector SupCenter = SupBox.GetCenter();
+			const float Dist2D = FVector::Dist2D(SlabCenter, SupCenter);
+			const float Wdist = 1.f / FMath::Pow(Dist2D + WeightDistEpsilon, WeightDistPower);
+
+			// 타입 가중치
+			const float Wtype = (Sup->Type == EStructNodeType::Wall) ? WallTypeFactor : ColumnTypeFactor;
+
+			// 각도 가중치
+			float Wangle = 1.f;
+			if (Sup->Type == EStructNodeType::Column)
 			{
-				ValidSupports.Add(SupId);
-				Weights.Add(Area);
-				SumW += Area;
+				const FVector Up = FVector::UpVector;
+				const FVector ColUp = Sup->Comp->GetUpVector().GetSafeNormal();
+				const float Dot = FMath::Clamp(FVector::DotProduct(Up, ColUp), 0.f, 1.f);
+				Wangle = FMath::Pow(Dot, AnglePower);
+			}
+
+			const float Weight = Area * Wdist * Wtype * Wangle;
+
+			if (Weight > KINDA_SMALL_NUMBER)
+			{
+				Slab.Supports.Add(Sup->Id);
+				Slab.SupportWeights.Add(Weight);
 			}
 		}
 
-		// 지지대 없으면 fail
-		if (ValidSupports.Num() == 0 || SumW <= KINDA_SMALL_NUMBER)
+
+		if(bDoDebugPrint)
 		{
-			Slab.State = EStructDamageState::Failed;
-			if (Slab.Comp)
+			if (Slab.Supports.Num() == 0)
 			{
-				//Slab.Comp->SetSimulatePhysics(true);
-				//Slab.Comp->WakeAllRigidBodies();
-				OnNodeFailed(Slab.Comp, Slab.Utilization());
+				UE_LOG(LogTemp, Warning, TEXT("[StructGraph] Slab %d has NO supports! Floor=%d Comp=%s"),
+					Slab.Id, Slab.FloorIndex, *GetNameSafe(Slab.Comp));
 			}
-			continue;
-		}
 
-		// 지진 가중
-		const float EffectiveLoad = TotalSlabLoad * (1.f + SeismicFactor * SeismicToVerticalScale);
+			float SumW = 0.f;
+			for (float W : Slab.SupportWeights) SumW += W;
 
-		// 지지대로 분배
-		for (int32 i = 0; i < ValidSupports.Num(); ++i)
-		{
-			const float Share = EffectiveLoad * (Weights[i] / SumW);
-			Nodes[ValidSupports[i]].CarriedLoad += Share;
+			if (SumW > KINDA_SMALL_NUMBER)
+			{
+				for (float& W : Slab.SupportWeights)
+				{
+					W /= SumW; // 합이 1이 되게 정규화
+				}
+			}
+
+			UE_LOG(LogTemp, Log, TEXT("[StructGraph] Slab %d(Floor=%d) supports=%d sumW=%.3f boxMinZ=%.1f"),
+				Slab.Id, Slab.FloorIndex, Slab.Supports.Num(), SumW, SlabBottomZ);
+			struct FPair { int32 Id; float W; };
+			TArray<FPair> Pairs;
+			Pairs.Reserve(Slab.Supports.Num());
+			for (int32 i = 0; i < Slab.Supports.Num(); ++i)
+			{
+				Pairs.Add({ Slab.Supports[i], Slab.SupportWeights[i] });
+			}
+			Pairs.Sort([](const FPair& A, const FPair& B) { return A.W > B.W; });
+
+			const int32 TopN = FMath::Min(3, Pairs.Num());
+			for (int32 i = 0; i < TopN; ++i)
+			{
+				UE_LOG(LogTemp, Log, TEXT("   -> Sup %d w=%.3f"), Pairs[i].Id, Pairs[i].W);
+			}
+			float Check = 0.f;
+			for (float W : Slab.SupportWeights) Check += W;
+
+			if (!FMath::IsNearlyEqual(Check, 1.f, 0.01f) && Slab.SupportWeights.Num() > 0)
+			{
+				UE_LOG(LogTemp, Warning, TEXT("[StructGraph] Slab %d weight normalize check=%.3f (not ~1)"), Slab.Id, Check);
+			}
 		}
+		
+		UE_LOG(LogTemp, Log, TEXT("[Support] Slab %d Floor=%d Supports=%d"),
+			Slab.Id, Slab.FloorIndex, Slab.Supports.Num());
 	}
 }
 
@@ -347,10 +386,9 @@ bool AStructGraphManager::UpdateDamageStates(bool& bAnyNewFailures)
 
 void AStructGraphManager::SolveLoadsAndDamage()
 {
-	// 실패가 발생하면 지지 관계가 달라지고 다음 루프에서 재분배가 자동 반영
 	for (int32 Iter = 0; Iter < MaxSolveIterations; ++Iter)
 	{
-		// 지진 인자(정적 계산일 땐 0)
+		
 		const float Seismic = 0.f;
 
 		ComputeLoadsFromScratch(Seismic);
@@ -358,7 +396,7 @@ void AStructGraphManager::SolveLoadsAndDamage()
 		bool bNewFailures = false;
 		UpdateDamageStates(bNewFailures);
 
-		if (!bNewFailures) break; // 수렴
+		if (!bNewFailures) break; 
 	}
 
 	if (bDrawDebug)
@@ -439,4 +477,10 @@ void AStructGraphManager::StabilizeStructureComponent(UPrimitiveComponent* PC)
 
 	// 가장 핵심: 물리 충돌을 끊기
 	PC->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+}
+
+
+void AStructGraphManager::ComputeLoadsFromScratch(float SeismicFactor)
+{
+	// TODO: 하중 계산 구현 예정
 }
