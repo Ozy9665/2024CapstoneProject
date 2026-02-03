@@ -81,20 +81,20 @@ void AStructManager::DrawDebug()
 		const FVector P0 = A->GetActorLocation();
 
 		// 노드
-		const FString Txt = FString::Printf(TEXT("ID:%d  L:%.1f/%.1f"),
+		/*const FString Txt = FString::Printf(TEXT("ID:%d  L:%.1f/%.1f"),
 			Nodes[i].NodeId, Nodes[i].CurrentLoad, Nodes[i].Capacity);
 
-		DrawDebugString(GetWorld(), P0 + FVector(0, 0, 120), Txt, nullptr, FColor::Cyan, DebugDuration);
+		DrawDebugString(GetWorld(), P0 + FVector(0, 0, 120), Txt, nullptr, FColor::Cyan, DebugDuration);*/
 
 		// 오른쪽 이웃 연결선
-		if (Nodes[i].RightId != -1 && Nodes.IsValidIndex(Nodes[i].RightId))
-		{
-			AActor* B = Nodes[Nodes[i].RightId].Actor;
-			if (IsValid(B))
-			{
-				const FVector P1 = B->GetActorLocation();
-				DrawDebugLine(GetWorld(), P0, P1, FColor::Green, false, DebugDuration, 0, DebugLineThickness);
-			}
-		} 
+		//if (Nodes[i].RightId != -1 && Nodes.IsValidIndex(Nodes[i].RightId))
+		//{
+		//	AActor* B = Nodes[Nodes[i].RightId].Actor;
+		//	if (IsValid(B))
+		//	{
+		//		const FVector P1 = B->GetActorLocation();
+		//		DrawDebugLine(GetWorld(), P0, P1, FColor::Green, false, DebugDuration, 0, DebugLineThickness);
+		//	}
+		//} 
 	}
 }

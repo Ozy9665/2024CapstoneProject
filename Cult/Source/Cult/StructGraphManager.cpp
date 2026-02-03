@@ -12,6 +12,7 @@ AStructGraphManager::AStructGraphManager()
 void AStructGraphManager::BeginPlay()
 {
 	Super::BeginPlay();
+	UE_LOG(LogTemp, Warning, TEXT("[StructGraph] BeginPlay: %s"), *GetName());
 }
 
 void AStructGraphManager::InitializeFromBP(
