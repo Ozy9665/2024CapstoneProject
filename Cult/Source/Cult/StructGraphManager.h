@@ -1,0 +1,178 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+#include "StructGraphManager.generated.h"
+
+
+UENUM(BlueprintType)
+enum class EStructNodeType : uint8
+{
+	Slab,
+	Column,
+	Wall
+};
+
+UENUM(BlueprintType)
+enum class EStructDamageState : uint8
+{
+	Intact,
+	Yield,
+	Failed
+};
+
+USTRUCT(BlueprintType)
+struct FStructGraphNode
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	int32 Id = -1;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	EStructNodeType Type = EStructNodeType::Slab;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	EStructDamageState State = EStructDamageState::Intact;
+
+	// 층
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	int32 FloorIndex = -1;
+
+	UPROPERTY()
+	TObjectPtr<UPrimitiveComponent> Comp = nullptr;
+
+	// 하중/용량
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	float SelfWeight = 0.f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	float CarriedLoad = 0.f; // 위에서 내려온 누적 하중(재분배 후 값)
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	float Capacity = 1.f; // >0
+
+	// 슬래브가 지지받는 대상(기둥/벽) 노드 Id들
+	UPROPERTY()
+	TArray<int32> Supports;
+
+	// 계산용
+	float Utilization() const { return (Capacity <= KINDA_SMALL_NUMBER) ? 999.f : ((SelfWeight + CarriedLoad) / Capacity); }
+};
+
+UCLASS()
+class CULT_API AStructGraphManager : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	AStructGraphManager();
+
+	// 수집한 컴포넌트 배열 받고 그래프 구성 + 초기 계산
+	UFUNCTION(BlueprintCallable, Category = "StructGraph")
+	void InitializeFromBP(
+		const TArray<UStaticMeshComponent*>& InSlabL1,
+		const TArray<UStaticMeshComponent*>& InSlabL2,
+		const TArray<UStaticMeshComponent*>& InSlabL3,
+		const TArray<UStaticMeshComponent*>& InSlabRoof,
+		const TArray<UStaticMeshComponent*>& InColumns,
+		const TArray<UStaticMeshComponent*>& InWalls
+	);
+
+	UFUNCTION(BlueprintCallable, Category = "StructGraph")
+	void StartEarthquake();
+
+	UFUNCTION(BlueprintCallable, Category = "StructGraph")
+	void StopEarthquake();
+
+	UFUNCTION(BlueprintCallable, Category = "StructGraph")
+	void ResetStructure();
+
+	//
+	UFUNCTION(BlueprintNativeEvent, Category = "StructGraph|VFX")
+	void OnNodeYield(UPrimitiveComponent* Comp, float Utilization);
+
+	UFUNCTION(BlueprintNativeEvent, Category = "StructGraph|VFX")
+	void OnNodeFailed(UPrimitiveComponent* Comp, float Utilization);
+
+protected:
+	virtual void BeginPlay() override;
+
+private:
+	// ===== 파라미터(튜닝 포인트) =====
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Params")
+	float SupportZTolerance = 15.f; // 지지로 간주할 값
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Params")
+	float SupportXYExpand = 10.f;   // 바운드로 겹침 판정 완화
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Params")
+	float YieldThreshold = 0.85f;
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Params")
+	float FailureThreshold = 1.0f;
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Params")
+	int32 MaxSolveIterations = 6;   // 실패가 연쇄로 이어질 때 수렴 루프
+
+	// 지진 가중  수직하중 -> 연쇄붕괴
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Earthquake")
+	float SeismicBase = 0.35f;
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Earthquake")
+	float SeismicOmega = 3.5f; // 진동수(라디안/초)
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Earthquake")
+	float SeismicFloorAmplify = 0.10f; // 층이 높을수록 흔들림/요구량 증가
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Earthquake")
+	float SeismicToVerticalScale = 0.35f; // 수평 요구량 -> 수직 등가 스케일
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Debug")
+	bool bDrawDebug = true;
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Debug")
+	float DebugLineDuration = 0.f; // 0 - 한 프레임
+
+	// ===== 내부 데이터 =====
+	UPROPERTY()
+	TArray<FStructGraphNode> Nodes;
+
+	UPROPERTY()
+	TMap<TObjectPtr<UPrimitiveComponent>, FTransform> OriginalTransforms;
+
+	bool bRunning = false;
+	float Elapsed = 0.f;
+	FTimerHandle TickHandle;
+
+	// BP에서 넘어온 캐시
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> SlabL1;
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> SlabL2;
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> SlabL3;
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> SlabRoof;
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> Columns;
+	UPROPERTY()
+	TArray<TObjectPtr<UStaticMeshComponent>> Walls;
+
+private:
+	void BuildNodes();
+	void SaveOriginalTransforms();
+	void BuildSupportGraph();
+	void SolveLoadsAndDamage();
+
+	void ComputeLoadsFromScratch(float SeismicFactor);
+	bool UpdateDamageStates(bool& bAnyNewFailures);
+
+	int32 AddNode(EStructNodeType Type, UPrimitiveComponent* Comp, int32 FloorIndex);
+	FBox GetCompBox(UPrimitiveComponent* Comp) const;
+	static bool Overlap2D(const FBox& A, const FBox& B, float Expand);
+	static float OverlapArea2D(const FBox& A, const FBox& B, float Expand);
+
+	void DrawDebugGraph();
+	void TickEarthquake();
+};
