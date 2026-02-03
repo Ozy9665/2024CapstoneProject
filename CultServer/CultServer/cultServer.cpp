@@ -1730,11 +1730,11 @@ int main()
 	// navmesh
 	TestNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset);
 	// map
-	//if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset))
-	//{
-	//	std::cout << "MAP load failed\n";
-	//	return 1;
-	//}
+	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset))
+	{
+		std::cout << "MAP load failed\n";
+		return 1;
+	}
 
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));
