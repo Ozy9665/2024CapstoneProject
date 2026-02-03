@@ -56,8 +56,17 @@ struct FStructGraphNode
 	UPROPERTY()
 	TArray<int32> Supports;
 
+	UPROPERTY()
+	TArray<float> SupportWeights;
+
 	// 계산용
 	float Utilization() const { return (Capacity <= KINDA_SMALL_NUMBER) ? 999.f : ((SelfWeight + CarriedLoad) / Capacity); }
+
+	void ClearSupports()
+	{
+		Supports.Reset();
+		SupportWeights.Reset();
+	}
 };
 
 UCLASS()
@@ -92,6 +101,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
 	void ResetStructure();
 
+
+
 	//
 	UFUNCTION(BlueprintNativeEvent, Category = "StructGraph|VFX")
 	void OnNodeYield(UPrimitiveComponent* Comp, float Utilization);
@@ -109,6 +120,21 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Params")
 	float SupportXYExpand = 10.f;   // 바운드로 겹침 판정 완화
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Params")
+	float WeightDistEpsilon = 30.f; // cm
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Params")
+	float WeightDistPower = 2.f; // p=2 or 완만하게 1
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Params")
+	float WallTypeFactor = 1.15f; // 벽 지지 효율
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Params")
+	float ColumnTypeFactor = 1.00f;
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Params")
+	float AnglePower = 2.f; // 기둥 기울면 효율 감소
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Params")
 	float YieldThreshold = 0.85f;
