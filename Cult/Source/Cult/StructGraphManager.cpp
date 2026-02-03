@@ -40,6 +40,22 @@ void AStructGraphManager::InitializeFromBP(
 	// 초기 상태에서 1회 계산
 	SolveLoadsAndDamage();
 
+	// 임시 콜리전 조절 일괄적용
+	auto ApplyStabilize = [&](const TArray<TObjectPtr<UStaticMeshComponent>>& Arr)
+		{
+			for (UStaticMeshComponent* C : Arr)
+			{
+				StabilizeStructureComponent(C);
+			}
+		};
+
+	ApplyStabilize(SlabL1);
+	ApplyStabilize(SlabL2);
+	ApplyStabilize(SlabL3);
+	ApplyStabilize(SlabRoof);
+	ApplyStabilize(Columns);
+	ApplyStabilize(Walls);
+
 	UE_LOG(LogTemp, Warning, TEXT("[StructGraph] Initialized. Nodes=%d, Originals=%d"), Nodes.Num(), OriginalTransforms.Num());
 }
 
@@ -272,8 +288,8 @@ void AStructGraphManager::ComputeLoadsFromScratch(float SeismicFactor)
 			Slab.State = EStructDamageState::Failed;
 			if (Slab.Comp)
 			{
-				Slab.Comp->SetSimulatePhysics(true);
-				Slab.Comp->WakeAllRigidBodies();
+				//Slab.Comp->SetSimulatePhysics(true);
+				//Slab.Comp->WakeAllRigidBodies();
 				OnNodeFailed(Slab.Comp, Slab.Utilization());
 			}
 			continue;
@@ -308,8 +324,8 @@ bool AStructGraphManager::UpdateDamageStates(bool& bAnyNewFailures)
 			bAnyNewFailures = true;
 
 			// 물리 활성
-			N.Comp->SetSimulatePhysics(true);
-			N.Comp->WakeAllRigidBodies();
+			//N.Comp->SetSimulatePhysics(true);
+			//N.Comp->WakeAllRigidBodies();
 			OnNodeFailed(N.Comp, U);
 		}
 		else if (U >= YieldThreshold)
@@ -412,4 +428,15 @@ void AStructGraphManager::OnNodeFailed_Implementation(UPrimitiveComponent* Comp,
 {
 	UE_LOG(LogTemp, Warning, TEXT("[StructGraph] Failed: %s U=%.2f"),
 		Comp ? *Comp->GetName() : TEXT("null"), Utilization);
+}
+
+void AStructGraphManager::StabilizeStructureComponent(UPrimitiveComponent* PC)
+{
+	if (!PC) return;
+
+	PC->SetSimulatePhysics(false);
+	PC->SetEnableGravity(false);
+
+	// 가장 핵심: 물리 충돌을 끊기
+	PC->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 }

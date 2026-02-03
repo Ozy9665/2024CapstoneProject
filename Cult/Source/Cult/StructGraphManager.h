@@ -79,6 +79,10 @@ public:
 		const TArray<UStaticMeshComponent*>& InWalls
 	);
 
+	// 임시 콜리전 조절
+	UFUNCTION(BlueprintCallable, Category = "StructGraph")
+	static void StabilizeStructureComponent(UPrimitiveComponent* PC);
+
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
 	void StartEarthquake();
 
