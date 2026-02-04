@@ -715,14 +715,59 @@ static bool PointInTri2D(const Vec3& p, const MapTri& t)
     return (b1 == b2) && (b2 == b3);
 }
 
+float NAVMESH::TriHeightAtXY(int triIdx, float x, float y) const
+{
+    const MapTri& t = tris[triIdx];
+
+    const Vec3 a{ t.a.x, t.a.y, 0.f };
+    const Vec3 b{ t.b.x, t.b.y, 0.f };
+    const Vec3 c{ t.c.x, t.c.y, 0.f };
+    const Vec3 p{ x,     y,     0.f };
+
+    // 바리센트릭 계산
+    float denom =
+        (b.y - c.y) * (a.x - c.x) +
+        (c.x - b.x) * (a.y - c.y);
+
+    if (std::abs(denom) < 1e-6f)
+        return t.a.z; // degenerate fallback
+
+    float w1 =
+        ((b.y - c.y) * (p.x - c.x) +
+            (c.x - b.x) * (p.y - c.y)) / denom;
+
+    float w2 =
+        ((c.y - a.y) * (p.x - c.x) +
+            (a.x - c.x) * (p.y - c.y)) / denom;
+
+    float w3 = 1.f - w1 - w2;
+
+    return
+        w1 * t.a.z +
+        w2 * t.b.z +
+        w3 * t.c.z;
+}
+
 int NAVMESH::FindContainingTriangle(const Vec3& pos) const
 {
-    for (int i = 0; i < (int)tris.size(); ++i)
+    int best = -1;
+    float bestDz = FLT_MAX;
+
+    for (int i = 0; i < tris.size(); ++i)
     {
-        if (PointInTri2D(pos, tris[i]))
-            return i;
+        if (!PointInTri2D(pos, tris[i]))
+            continue;
+
+        float z = TriHeightAtXY(i, pos.x, pos.y);
+        float dz = std::abs(z - pos.z);
+
+        if (dz < bestDz)
+        {
+            bestDz = dz;
+            best = i;
+        }
     }
-    return -1;
+    return best;
 }
 
 bool NAVMESH::FindTriPath(
@@ -804,4 +849,3 @@ bool NAVMESH::FindTriPath(
     std::reverse(outTriPath.begin(), outTriPath.end());
     return true;
 }
-

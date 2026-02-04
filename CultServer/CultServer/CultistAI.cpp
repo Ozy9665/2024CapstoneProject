@@ -124,7 +124,7 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     };
     float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
     // float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
-    const float speed = 600.f; // cm/s
+    const float speed = 60.f; // 600cm/s
     if (len <= speed * deltaTime)
     {
         // 현재 노드에 도착했다고 판단
@@ -236,6 +236,8 @@ void CultistAIWorkerLoop()
                 };
 
                 MoveAlongPath(ai, targetPos, dt);
+
+
             }
             CultistPacket packet{};
             packet.header = cultistHeader;

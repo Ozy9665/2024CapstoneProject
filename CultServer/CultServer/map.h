@@ -169,6 +169,8 @@ private:
 
     void BuildTriCenters();
 
+    float TriHeightAtXY(int, float, float) const;
+
     int FindContainingTriangle(const Vec3&) const;
 
     bool FindTriPath(const Vec3&, const Vec3&, std::vector<int>&);
