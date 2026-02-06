@@ -37,13 +37,6 @@ bool MAP::Load(const std::string& objPath, const Vec3& MapOffset)
 
     std::cout << "CanMove: " << CanMove(a, b) << std::endl;
 
-    std::vector<Vec3> path;
-    bool ok = FindPath(a, b, path);
-
-    std::cout << "path ok: " << ok
-        << " count: " << path.size()
-        << std::endl;
-
     return true;
 }
 
@@ -348,127 +341,6 @@ Vec3 MAP::GridToWorld(int gx, int gy) const
     return w;
 }
 
-static const int DIRS[4][2] = {
-    { 1, 0 }, { -1, 0 },
-    { 0, 1 }, { 0, -1 }
-};
-
-bool MAP::FindPath(
-    const Vec3& start, const Vec3& goal,
-    std::vector<Vec3>& outPath) const
-{
-    outPath.clear();
-
-    int sx = WorldToGridX(start.x);
-    int sy = WorldToGridY(start.y);
-    int gx = WorldToGridX(goal.x);
-    int gy = WorldToGridY(goal.y);
-
-    std::vector<NavNode> nodes;
-    NodeCompare comp{ &nodes };
-    std::priority_queue<int, std::vector<int>, NodeCompare> open(comp);
-    std::unordered_map<long long, int> visited;
-
-    auto key = [](int x, int y) {
-        return (static_cast<long long>(x) << 32) | (unsigned)y;
-        };
-
-    nodes.push_back({ sx, sy, 0.f, static_cast<float>(std::abs(gx - sx) + std::abs(gy - sy)), -1 });
-    open.push(0);
-    // visited[key(sx, sy)] = 0;
-
-    int goalIndex = -1;
-
-    while (!open.empty())
-    {
-        int curIdx = open.top();
-        open.pop();
-
-        auto& cur = nodes[curIdx];
-
-        long long ck = key(cur.x, cur.y);
-        if (visited.count(ck))
-            continue;
-
-        visited[ck] = curIdx;
-
-        if (cur.x == gx && cur.y == gy) {
-            goalIndex = curIdx;
-            break;
-        }
-
-        Vec3 curWorld = GridToWorld(cur.x, cur.y);
-
-        for (auto& d : DIRS)
-        {
-            int nx = cur.x + d[0];
-            int ny = cur.y + d[1];
-
-            long long k = key(nx, ny);
-            if (visited.count(k))
-                continue;
-
-            Vec3 nextWorld = GridToWorld(nx, ny);
-
-            if (!CanMove(curWorld, nextWorld))
-                continue;
-
-            float g = cur.g + cellSize;
-            float h = static_cast<float>(std::abs(gx - nx) + std::abs(gy - ny));
-
-            int idx = (int)nodes.size();
-            nodes.push_back({ nx, ny, g, h, curIdx });
-            //visited[k] = idx;
-            open.push(idx);
-        }
-    }
-
-    if (goalIndex < 0)
-        return false;
-
-    // 경로 복원
-    for (int i = goalIndex; i >= 0; i = nodes[i].parent)
-        outPath.push_back(GridToWorld(nodes[i].x, nodes[i].y));
-
-    std::reverse(outPath.begin(), outPath.end());
-    return true;
-}
-
-void MAP::SmoothPath(std::vector<Vec3>& path) const
-{
-    if (path.size() < 3)
-        return;
-
-    std::vector<Vec3> smoothed;
-    smoothed.reserve(path.size());
-
-    size_t i = 0;
-    smoothed.push_back(path[0]);
-
-    while (i < path.size() - 1)
-    {
-        size_t farthest = i + 1;
-
-        // i에서 시작해서 최대한 멀리 직선 이동 가능한 노드 찾기
-        for (size_t j = i + 1; j < path.size(); ++j)
-        {
-            if (CanMove(path[i], path[j]))
-            {
-                farthest = j;
-            }
-            else
-            {
-                break;
-            }
-        }
-
-        smoothed.push_back(path[farthest]);
-        i = farthest;
-    }
-
-    path.swap(smoothed);
-}
-
 // NevMesh
 bool NAVMESH::Load(const std::string& objPath, const Vec3& MapOffset)
 {
@@ -630,6 +502,11 @@ void NAVMESH::WeldVertices(
     vertices.swap(newVerts);
 }
 
+static EdgeKey MakeEdge(int v0, int v1)
+{
+    return (v0 < v1) ? EdgeKey{ v0, v1 } : EdgeKey{ v1, v0 };
+}
+
 void NAVMESH::BuildAdjacency()
 {
     triNeighbors.clear();
@@ -694,6 +571,39 @@ void NAVMESH::BuildTriCenters()
             (a.z + b.z + c.z) / 3.f
         };
     }
+}
+
+bool NAVMESH::GetSharedEdge(int t0, int t1, Vec3& outA, Vec3& outB) const
+{
+    const MapTriangle& A = triangles[t0];
+    const MapTriangle& B = triangles[t1];
+
+    int a[3] = { A.v0, A.v1, A.v2 };
+    int b[3] = { B.v0, B.v1, B.v2 };
+
+    int shared[2];
+    int count = 0;
+
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
+            if (a[i] == b[j])
+                shared[count++] = a[i];
+
+    if (count != 2)
+        return false;
+
+    outA = Vec3{
+        vertices[shared[0]].x,
+        vertices[shared[0]].y,
+        vertices[shared[0]].z
+    };
+
+    outB = Vec3{
+        vertices[shared[1]].x,
+        vertices[shared[1]].y,
+        vertices[shared[1]].z
+    };
+    return true;
 }
 
 static bool PointInTri2D(const Vec3& p, const MapTri& t)
@@ -848,4 +758,25 @@ bool NAVMESH::FindTriPath(
 
     std::reverse(outTriPath.begin(), outTriPath.end());
     return true;
+}
+
+Vec3 NAVMESH::GetTriCenter(int triIdx) const
+{
+    return triCenters[triIdx];
+}
+
+void NAVMESH::BuildPortals(
+    const std::vector<int>& triPath,
+    std::vector<std::pair<Vec3, Vec3>>& portals)
+{
+    portals.clear();
+
+    for (size_t i = 0; i + 1 < triPath.size(); ++i)
+    {
+        Vec3 a, b;
+        if (GetSharedEdge(triPath[i], triPath[i + 1], a, b))
+        {
+            portals.emplace_back(a, b);
+        }
+    }
 }

@@ -97,14 +97,27 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
 
     if (ai.path.empty())
     {
-        TestNavMesh.FindPath(cur, targetPos, ai.path);
-
-        if (ai.path.size() < 2)
+        std::vector<int> triPath;
+        if (!TestNavMesh.FindTriPath(cur, targetPos, triPath) ||
+            triPath.size() < 2)
         {
-            ai.path.clear();
             return;
         }
-        // TestNavMesh.SmoothPath(ai.path);
+
+        std::vector<std::pair<Vec3, Vec3>> portals;
+        TestNavMesh.BuildPortals(triPath, portals);
+
+        if (portals.empty())
+            return;
+
+        std::vector<Vec3> smoothPath;
+        if (!TestNavMesh.SmoothPath(cur, targetPos, portals, smoothPath) ||
+            smoothPath.size() < 2) 
+        {
+            return;
+        }
+
+        ai.path = smoothPath;
     }
 
     if (ai.path.size() < 2)
@@ -124,7 +137,7 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     };
     float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
     // float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
-    const float speed = 60.f; // 600cm/s
+    const float speed = 300.f; // 600cm/s
     if (len <= speed * deltaTime)
     {
         // 현재 노드에 도착했다고 판단

@@ -36,8 +36,6 @@ public:
         float& hitDist,
         int& hitTriIndex
     ) const;
-    bool FindPath(const Vec3&, const Vec3&, std::vector<Vec3>&) const;
-    void SmoothPath(std::vector<Vec3>&) const;
 
 protected:
     struct CellKey {
@@ -89,7 +87,6 @@ protected:
     Vec3 GridToWorld(int gx, int gy) const;
 };
 
-
 // NevMesh
 
 struct QV {
@@ -137,41 +134,45 @@ struct TriNodeCompare
     }
 };
 
+struct Portal
+{
+    Vec3 left;
+    Vec3 right;
+};
+
 class NAVMESH : public MAP {
 public:
     bool Load(const std::string&, const Vec3&) override;
-
+    bool FindTriPath(const Vec3&, const Vec3&, std::vector<int>&);
+    Vec3 GetTriCenter(int) const;
+    void BuildPortals(const std::vector<int>& triPath,
+        std::vector<std::pair<Vec3, Vec3>>& portals);
+    bool SmoothPath(const Vec3&, const Vec3&,
+        const std::vector<std::pair<Vec3, Vec3>>&,
+        std::vector<Vec3>&) const;
+    
 private:
     bool LoadNavOBJ(const std::string&,
         std::vector<MapVertex>&,
-        std::vector<MapTriangle>&
-    );
+        std::vector<MapTriangle>&);
 
-    bool LoadOBJAndComputeAABB_Nav(
-        const std::string&,
-        std::vector<MapVertex>&,
-        std::vector<MapTriangle>&,
-        AABB&
-    );
+    bool LoadOBJAndComputeAABB_Nav(const std::string&,
+        std::vector<MapVertex>&, std::vector<MapTriangle>&, AABB&);
 
     float EPS = 0.001f; // 1mm
     void WeldVertices(std::vector<MapVertex>&, std::vector<MapTriangle>&);
 
     std::vector<std::array<int, 3>> triNeighbors;
     std::vector<Vec3> triCenters;
-   
-    EdgeKey MakeEdge(int v0, int v1)
-    {
-        return (v0 < v1) ? EdgeKey{ v0, v1 } : EdgeKey{ v1, v0 };
-    }
+    std::vector<Portal> portals;
 
     void BuildAdjacency();
 
     void BuildTriCenters();
 
+    bool GetSharedEdge(int, int, Vec3&, Vec3&) const;
+
     float TriHeightAtXY(int, float, float) const;
 
     int FindContainingTriangle(const Vec3&) const;
-
-    bool FindTriPath(const Vec3&, const Vec3&, std::vector<int>&);
 };
