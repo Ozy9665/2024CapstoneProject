@@ -131,9 +131,9 @@ int32 AStructGraphManager::AddNode(EStructNodeType Type, UPrimitiveComponent* Co
 		Node.SelfWeight = Volume * Density;
 
 		// 용량: 기둥/벽  강, 슬래브 약
-		const float Strength = (Type == EStructNodeType::Column) ? 0.18f :
-			(Type == EStructNodeType::Wall) ? 0.12f : 0.08f;
-		Node.Capacity = FMath::Max(0.01f, Volume * Strength * 0.00002f);
+		const float Strength = (Type == EStructNodeType::Column) ? 3.0f :
+			(Type == EStructNodeType::Wall) ? 2.0f : 1.0f;
+		Node.Capacity = FMath::Max(1.f, Volume * Strength * 0.000001f);
 	}
 
 	Nodes.Add(Node);
