@@ -59,6 +59,12 @@ struct FStructGraphNode
 	UPROPERTY()
 	TArray<float> SupportWeights;
 
+	UPROPERTY()
+	TArray<int32> DownSlabs;
+
+	UPROPERTY()
+	TArray<float> DownWeights;
+
 	// 계산용
 	float Utilization() const { return (Capacity <= KINDA_SMALL_NUMBER) ? 999.f : ((SelfWeight + CarriedLoad) / Capacity); }
 
@@ -66,6 +72,12 @@ struct FStructGraphNode
 	{
 		Supports.Reset();
 		SupportWeights.Reset();
+	}
+
+	void ClearDown()
+	{
+		DownSlabs.Reset();
+		DownWeights.Reset();
 	}
 };
 
@@ -205,4 +217,14 @@ private:
 
 	void DrawDebugGraph();
 	void TickEarthquake();
+
+	// Down graph
+	void BuildDownGraph();
+
+	// BFS -> 지지대가 Ground까지 연결되는지
+	bool IsConnectedToGround_BFS(int32 StartNodeId, TMap<int32, bool>& Cache) const;
+
+	// Box helper
+	static float GetTopZ(const FBox& Box) { return Box.Max.Z; }
+	static float GetBottomZ(const FBox& Box) { return Box.Min.Z; }
 };

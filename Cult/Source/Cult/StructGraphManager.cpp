@@ -36,9 +36,10 @@ void AStructGraphManager::InitializeFromBP(
 	BuildNodes();
 	SaveOriginalTransforms();
 	BuildSupportGraph();
+	BuildDownGraph();
 
-	// 우선 그래프 확인
-	//SolveLoadsAndDamage();
+	// 1회 계산
+	SolveLoadsAndDamage();
 
 	// 임시 콜리전 조절 일괄적용
 	auto ApplyStabilize = [&](const TArray<TObjectPtr<UStaticMeshComponent>>& Arr)
@@ -201,6 +202,8 @@ float AStructGraphManager::OverlapArea2D(const FBox& A, const FBox& B, float Exp
 	return Ox * Oy;
 }
 
+
+// BuildSupportGraph
 void AStructGraphManager::BuildSupportGraph()
 {
 	// Id->Index 맵
@@ -324,6 +327,156 @@ void AStructGraphManager::BuildSupportGraph()
 	}
 }
 
+
+// BuildDownGraph
+void AStructGraphManager::BuildDownGraph()
+{
+	// 1) 기둥/벽 Down 초기화
+	for (FStructGraphNode& N : Nodes)
+	{
+		if (N.Type == EStructNodeType::Column || N.Type == EStructNodeType::Wall)
+		{
+			N.ClearDown();
+		}
+	}
+
+	// 2) 슬래브 Id 수집
+	TArray<int32> SlabIds;
+	SlabIds.Reserve(Nodes.Num());
+	for (const FStructGraphNode& N : Nodes)
+	{
+		if (N.Type == EStructNodeType::Slab)
+		{
+			SlabIds.Add(N.Id);
+		}
+	}
+
+	// 3) 각 기둥/벽에서 아래층 슬래브 찾기
+	for (FStructGraphNode& Sup : Nodes)
+	{
+		if (!(Sup.Type == EStructNodeType::Column || Sup.Type == EStructNodeType::Wall))
+			continue;
+		if (!Sup.Comp)
+			continue;
+
+		const FBox SupBox = GetCompBox(Sup.Comp);
+		const float SupBottomZ = GetBottomZ(SupBox);
+
+		float SumW = 0.f;
+
+		for (int32 SlabId : SlabIds)
+		{
+			FStructGraphNode& Slab = Nodes[SlabId];
+			if (!Slab.Comp) continue;
+
+			const FBox SlabBox = GetCompBox(Slab.Comp);
+			const float SlabTopZ = GetTopZ(SlabBox);
+
+			// Z 조건: 지지대 바닥이 슬래브 상단에 닿는다
+			if (FMath::Abs(SupBottomZ - SlabTopZ) > SupportZTolerance)
+				continue;
+
+			// XY 겹침
+			if (!Overlap2D(SupBox, SlabBox, SupportXYExpand))
+				continue;
+
+			const float Area = OverlapArea2D(SupBox, SlabBox, SupportXYExpand);
+			if (Area <= KINDA_SMALL_NUMBER)
+				continue;
+
+			// 타입 효율
+			const float Wtype = (Sup.Type == EStructNodeType::Wall) ? WallTypeFactor : ColumnTypeFactor;
+
+			const float W = Area * Wtype;
+			Sup.DownSlabs.Add(Slab.Id);
+			Sup.DownWeights.Add(W);
+			SumW += W;
+		}
+
+		// 정규화
+		if (SumW > KINDA_SMALL_NUMBER)
+		{
+			for (float& W : Sup.DownWeights)
+			{
+				W /= SumW;
+			}
+		}
+
+		UE_LOG(LogTemp, Log, TEXT("[Down] Sup %d Type=%d DownSlabs=%d SumW=%.3f BottomZ=%.1f"),
+			Sup.Id, (int32)Sup.Type, Sup.DownSlabs.Num(), SumW, SupBottomZ);
+	}
+}
+
+bool AStructGraphManager::IsConnectedToGround_BFS(int32 StartNodeId, TMap<int32, bool>& Cache) const
+{
+	if (!Nodes.IsValidIndex(StartNodeId))
+	{
+		Cache.Add(StartNodeId, false);
+		return false;
+	}
+
+	if (const bool* Found = Cache.Find(StartNodeId))
+	{
+		return *Found;
+	}
+
+	TSet<int32> Visited;
+	TQueue<int32> Q;
+
+	Q.Enqueue(StartNodeId);
+	Visited.Add(StartNodeId);
+
+	while (!Q.IsEmpty())
+	{
+		int32 CurId;
+		Q.Dequeue(CurId);
+
+		if (!Nodes.IsValidIndex(CurId))
+			continue;
+
+		const FStructGraphNode& Cur = Nodes[CurId];
+
+		// 실패 노드는 경로에서 제외
+		if (Cur.State == EStructDamageState::Failed)
+			continue;
+
+		// Ground 성공 판정 :  L1 슬래브 (MVP)
+		if (Cur.Type == EStructNodeType::Slab && Cur.FloorIndex == 1)
+		{
+			Cache.Add(StartNodeId, true);
+			return true;
+		}
+
+		// 그래프 진행:
+		// Slab -> Supports
+		if (Cur.Type == EStructNodeType::Slab)
+		{
+			for (int32 SupId : Cur.Supports)
+			{
+				if (!Visited.Contains(SupId))
+				{
+					Visited.Add(SupId);
+					Q.Enqueue(SupId);
+				}
+			}
+		}
+		// Supporter -> DownSlabs
+		else if (Cur.Type == EStructNodeType::Column || Cur.Type == EStructNodeType::Wall)
+		{
+			for (int32 SlabId : Cur.DownSlabs)
+			{
+				if (!Visited.Contains(SlabId))
+				{
+					Visited.Add(SlabId);
+					Q.Enqueue(SlabId);
+				}
+			}
+		}
+	}
+
+	Cache.Add(StartNodeId, false);
+	return false;
+}
 
 
 bool AStructGraphManager::UpdateDamageStates(bool& bAnyNewFailures)
@@ -463,81 +616,109 @@ void AStructGraphManager::StabilizeStructureComponent(UPrimitiveComponent* PC)
 
 void AStructGraphManager::ComputeLoadsFromScratch(float SeismicFactor)
 {
-	//모든 노드 carried load 초기화
+	// 초기화
 	for (FStructGraphNode& N : Nodes)
 	{
 		N.CarriedLoad = 0.f;
 	}
-	// Floor별 슬래브를 모아 위에서 아래로 처리할 수 있게 정렬 준비
-	TArray<int32> SlabIndices;
-	SlabIndices.Reserve(Nodes.Num());
 
-	int32 MaxFloor = -999;
-	int32 MinFloor = 999;
+	// BFS 캐시
+	TMap<int32, bool> GroundCache;
 
-	for (int32 i = 0; i < Nodes.Num(); ++i)
+	// 반복 완화
+	const int32 RelaxIters = 8;
+
+	for (int32 It = 0; It < RelaxIters; ++It)
 	{
-		if (Nodes[i].Type == EStructNodeType::Slab)
+		// 슬래브 -> 지지대로 분배
+		for (FStructGraphNode& Slab : Nodes)
 		{
-			SlabIndices.Add(i);
-			MaxFloor = FMath::Max(MaxFloor, Nodes[i].FloorIndex);
-			MinFloor = FMath::Min(MinFloor, Nodes[i].FloorIndex);
+			if (Slab.Type != EStructNodeType::Slab) continue;
+			if (!Slab.Comp) continue;
+			if (Slab.State == EStructDamageState::Failed) continue;
+
+			const float Total = Slab.SelfWeight + Slab.CarriedLoad;
+
+			if (Slab.FloorIndex == 1)
+				continue;
+
+			// 유효 지지대만 필터링 (BFS로 Ground 연결성 확인)
+			float SumW = 0.f;
+			TArray<int32> ValidIdx;
+			ValidIdx.Reserve(Slab.Supports.Num());
+
+			for (int32 i = 0; i < Slab.Supports.Num(); ++i)
+			{
+				if (!Slab.SupportWeights.IsValidIndex(i)) continue;
+
+				const int32 SupId = Slab.Supports[i];
+				if (!Nodes.IsValidIndex(SupId)) continue;
+
+				const FStructGraphNode& Sup = Nodes[SupId];
+				if (Sup.State == EStructDamageState::Failed) continue;
+
+				// 핵심 Ground까지 연결된 지지대만 인정
+				if (!IsConnectedToGround_BFS(SupId, GroundCache)) continue;
+
+				ValidIdx.Add(i);
+				SumW += Slab.SupportWeights[i];
+			}
+
+			// 지지대가 없으면 다음 단계에서 Utilization로 Fail 유도
+			if (ValidIdx.Num() == 0 || SumW <= KINDA_SMALL_NUMBER)
+				continue;
+
+			for (int32 i : ValidIdx)
+			{
+				const int32 SupId = Slab.Supports[i];
+				const float W = Slab.SupportWeights[i] / SumW; // 안전 정규화
+				Nodes[SupId].CarriedLoad += Total * W;
+			}
 		}
-	}
 
-	SlabIndices.Sort([&](int32 A, int32 B)
+		// 지지대 -> 아래층 슬래브로 전달 
+		for (FStructGraphNode& Sup : Nodes)
 		{
-			return Nodes[A].FloorIndex > Nodes[B].FloorIndex; // 높은 층부터
-		});
-
-	// 지진파동을 수직 등가하중으로
-	auto GetSeismicMultiplier = [&](int32 FloorIndex) -> float
-		{
-			const float FloorAmp = 1.f + (SeismicFloorAmplify * FMath::Max(0, FloorIndex));
-			// 수평 -> 수직 등가 반영 스케일
-			return 1.f + (FMath::Abs(SeismicFactor) * SeismicToVerticalScale * FloorAmp);
-		};
-
-	// 슬래브 하중을 지지대로 분배 (위->아래)
-	for (int32 SlabIdx : SlabIndices)
-	{
-		FStructGraphNode& Slab = Nodes[SlabIdx];
-		if (!Slab.Comp) continue;
-
-		// 슬래브가 실제로 내려보낼 총 하중
-		const float SeisMul = GetSeismicMultiplier(Slab.FloorIndex);
-		const float TotalDownLoad = (Slab.SelfWeight + Slab.CarriedLoad) * SeisMul;
-
-		// 지지대가 없으면 -> Ground로
-		if (Slab.Supports.Num() == 0)
-		{
-			// MVP에서는 그냥 소멸 처리 (ground)
-			continue;
-		}
-
-		// weights 배열 길이 확인
-		if (Slab.SupportWeights.Num() != Slab.Supports.Num())
-		{
-			UE_LOG(LogTemp, Error, TEXT("[Load] Slab %d supports/weights mismatch"), Slab.Id);
-			continue;
-		}
-
-		// 분배
-		for (int32 k = 0; k < Slab.Supports.Num(); ++k)
-		{
-			const int32 SupId = Slab.Supports[k];
-			const float W = Slab.SupportWeights[k];
-			// Sup Id = Nodes 인덱스
-			if (!Nodes.IsValidIndex(SupId)) continue;
-			FStructGraphNode& Sup = Nodes[SupId];
-
-			// 지지대가 이미 Failed MVP에서는  받지 못함 처리
+			if (!(Sup.Type == EStructNodeType::Column || Sup.Type == EStructNodeType::Wall)) continue;
+			if (!Sup.Comp) continue;
 			if (Sup.State == EStructDamageState::Failed) continue;
 
-			Sup.CarriedLoad += TotalDownLoad * W;
+			const float Total = Sup.SelfWeight + Sup.CarriedLoad;
+
+			// 아래 연결이 없으면 기초로 내려간 것으로 간주
+			if (Sup.DownSlabs.Num() == 0)
+				continue;
+
+			float SumW = 0.f;
+			for (float W : Sup.DownWeights) SumW += W;
+			if (SumW <= KINDA_SMALL_NUMBER) continue;
+
+			for (int32 i = 0; i < Sup.DownSlabs.Num(); ++i)
+			{
+				if (!Sup.DownWeights.IsValidIndex(i)) continue;
+
+				const int32 DownSlabId = Sup.DownSlabs[i];
+				if (!Nodes.IsValidIndex(DownSlabId)) continue;
+
+				if (Nodes[DownSlabId].State == EStructDamageState::Failed) continue;
+
+				const float W = Sup.DownWeights[i] / SumW;
+				Nodes[DownSlabId].CarriedLoad += Total * W;
+			}
 		}
 	}
 
-	// TODO - 하중 완료.
-	// 다음 단계 -> Failed 지지대가 생기면 그 하중을 다른 지지대로 재분배 루프
+	// 지진(전단/수평)을 요구량 증가로 MVP 반영
+	if (FMath::Abs(SeismicFactor) > KINDA_SMALL_NUMBER)
+	{
+		const float Seis = FMath::Abs(SeismicFactor);
+
+		for (FStructGraphNode& N : Nodes)
+		{
+			// 상층 증폭
+			const float Amp = 1.f + SeismicFloorAmplify * FMath::Max(0, N.FloorIndex - 1);
+			N.CarriedLoad *= (1.f + Seis * SeismicToVerticalScale * Amp);
+		}
+	}
 }
+
