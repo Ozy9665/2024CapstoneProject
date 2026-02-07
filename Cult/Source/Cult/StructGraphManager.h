@@ -114,6 +114,15 @@ public:
 	void ResetStructure();
 
 
+	// 초기 캘리브레이션
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Calib")
+	float TargetInitialUtilization = 0.35f; // 초기 평균 U 목표
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Calib")
+	float CapacitySafetyFactor = 2.5f; // 추가 여유
+
+	UFUNCTION(BlueprintCallable, Category = "StructGraph|Calib")
+	void CalibrateCapacitiesFromInitialState();
 
 	//
 	UFUNCTION(BlueprintNativeEvent, Category = "StructGraph|VFX")

@@ -38,6 +38,10 @@ void AStructGraphManager::InitializeFromBP(
 	BuildSupportGraph();
 	BuildDownGraph();
 
+	//초기 캘리브레이션
+	CalibrateCapacitiesFromInitialState();
+
+
 	// 1회 계산
 	SolveLoadsAndDamage();
 
@@ -485,6 +489,7 @@ bool AStructGraphManager::UpdateDamageStates(bool& bAnyNewFailures)
 
 	for (FStructGraphNode& N : Nodes)
 	{
+		if (N.Type == EStructNodeType::Slab)continue;
 		if (!N.Comp) continue;
 		if (N.State == EStructDamageState::Failed) continue;
 
@@ -591,14 +596,20 @@ void AStructGraphManager::TickEarthquake()
 
 void AStructGraphManager::OnNodeYield_Implementation(UPrimitiveComponent* Comp, float Utilization)
 {
-	UE_LOG(LogTemp, Log, TEXT("[StructGraph] Yield: %s U=%.2f"),
-		Comp ? *Comp->GetName() : TEXT("null"), Utilization);
+	AActor* ActorOwner = Comp ? Comp->GetOwner() : nullptr;
+	UE_LOG(LogTemp, Log, TEXT("[StructGraph] Yield: Actor=%s Comp=%s U=%.2f"),
+		ActorOwner ? *ActorOwner->GetName() : TEXT("null"),
+		Comp ? *Comp->GetName() : TEXT("null"),
+		Utilization);
 }
 
 void AStructGraphManager::OnNodeFailed_Implementation(UPrimitiveComponent* Comp, float Utilization)
 {
-	UE_LOG(LogTemp, Warning, TEXT("[StructGraph] Failed: %s U=%.2f"),
-		Comp ? *Comp->GetName() : TEXT("null"), Utilization);
+	AActor* ActorOwner = Comp ? Comp->GetOwner() : nullptr;
+	UE_LOG(LogTemp, Warning, TEXT("[StructGraph] Failed: Actor=%s Comp=%s U=%.2f"),
+		ActorOwner ? *ActorOwner->GetName() : TEXT("null"),
+		Comp ? *Comp->GetName() : TEXT("null"),
+		Utilization);
 }
 
 void AStructGraphManager::StabilizeStructureComponent(UPrimitiveComponent* PC)
@@ -613,112 +624,143 @@ void AStructGraphManager::StabilizeStructureComponent(UPrimitiveComponent* PC)
 }
 
 
-
 void AStructGraphManager::ComputeLoadsFromScratch(float SeismicFactor)
 {
-	// 초기화
+	// 0) 초기화
 	for (FStructGraphNode& N : Nodes)
 	{
 		N.CarriedLoad = 0.f;
 	}
 
-	// BFS 캐시
+	// 1) 슬래브 -> 지지대(기둥/벽)로 "슬래브 자중" 분배
 	TMap<int32, bool> GroundCache;
 
-	// 반복 완화
-	const int32 RelaxIters = 8;
-
-	for (int32 It = 0; It < RelaxIters; ++It)
+	for (FStructGraphNode& Slab : Nodes)
 	{
-		// 슬래브 -> 지지대로 분배
-		for (FStructGraphNode& Slab : Nodes)
+		if (Slab.Type != EStructNodeType::Slab) continue;
+		if (!Slab.Comp) continue;
+		if (Slab.State == EStructDamageState::Failed) continue;
+
+		// L1 슬래브는 Ground로 간주: 분배 생략
+		if (Slab.FloorIndex == 1) continue;
+
+		const float SlabLoad = Slab.SelfWeight; //MVP: 자중만
+
+		float SumW = 0.f;
+		TArray<int32> ValidIdx;
+		ValidIdx.Reserve(Slab.Supports.Num());
+
+		for (int32 i = 0; i < Slab.Supports.Num(); ++i)
 		{
-			if (Slab.Type != EStructNodeType::Slab) continue;
-			if (!Slab.Comp) continue;
-			if (Slab.State == EStructDamageState::Failed) continue;
+			if (!Slab.SupportWeights.IsValidIndex(i)) continue;
 
-			const float Total = Slab.SelfWeight + Slab.CarriedLoad;
+			const int32 SupId = Slab.Supports[i];
+			if (!Nodes.IsValidIndex(SupId)) continue;
 
-			if (Slab.FloorIndex == 1)
-				continue;
-
-			// 유효 지지대만 필터링 (BFS로 Ground 연결성 확인)
-			float SumW = 0.f;
-			TArray<int32> ValidIdx;
-			ValidIdx.Reserve(Slab.Supports.Num());
-
-			for (int32 i = 0; i < Slab.Supports.Num(); ++i)
-			{
-				if (!Slab.SupportWeights.IsValidIndex(i)) continue;
-
-				const int32 SupId = Slab.Supports[i];
-				if (!Nodes.IsValidIndex(SupId)) continue;
-
-				const FStructGraphNode& Sup = Nodes[SupId];
-				if (Sup.State == EStructDamageState::Failed) continue;
-
-				// 핵심 Ground까지 연결된 지지대만 인정
-				if (!IsConnectedToGround_BFS(SupId, GroundCache)) continue;
-
-				ValidIdx.Add(i);
-				SumW += Slab.SupportWeights[i];
-			}
-
-			// 지지대가 없으면 다음 단계에서 Utilization로 Fail 유도
-			if (ValidIdx.Num() == 0 || SumW <= KINDA_SMALL_NUMBER)
-				continue;
-
-			for (int32 i : ValidIdx)
-			{
-				const int32 SupId = Slab.Supports[i];
-				const float W = Slab.SupportWeights[i] / SumW; // 안전 정규화
-				Nodes[SupId].CarriedLoad += Total * W;
-			}
-		}
-
-		// 지지대 -> 아래층 슬래브로 전달 
-		for (FStructGraphNode& Sup : Nodes)
-		{
-			if (!(Sup.Type == EStructNodeType::Column || Sup.Type == EStructNodeType::Wall)) continue;
-			if (!Sup.Comp) continue;
+			const FStructGraphNode& Sup = Nodes[SupId];
 			if (Sup.State == EStructDamageState::Failed) continue;
 
-			const float Total = Sup.SelfWeight + Sup.CarriedLoad;
+			// Ground 연결된 지지대만
+			if (!IsConnectedToGround_BFS(SupId, GroundCache)) continue;
 
-			// 아래 연결이 없으면 기초로 내려간 것으로 간주
-			if (Sup.DownSlabs.Num() == 0)
-				continue;
+			ValidIdx.Add(i);
+			SumW += Slab.SupportWeights[i];
+		}
 
-			float SumW = 0.f;
-			for (float W : Sup.DownWeights) SumW += W;
-			if (SumW <= KINDA_SMALL_NUMBER) continue;
+		if (ValidIdx.Num() == 0 || SumW <= KINDA_SMALL_NUMBER)
+			continue;
 
-			for (int32 i = 0; i < Sup.DownSlabs.Num(); ++i)
-			{
-				if (!Sup.DownWeights.IsValidIndex(i)) continue;
-
-				const int32 DownSlabId = Sup.DownSlabs[i];
-				if (!Nodes.IsValidIndex(DownSlabId)) continue;
-
-				if (Nodes[DownSlabId].State == EStructDamageState::Failed) continue;
-
-				const float W = Sup.DownWeights[i] / SumW;
-				Nodes[DownSlabId].CarriedLoad += Total * W;
-			}
+		for (int32 i : ValidIdx)
+		{
+			const int32 SupId = Slab.Supports[i];
+			const float W = Slab.SupportWeights[i] / SumW;
+			Nodes[SupId].CarriedLoad += SlabLoad * W;
 		}
 	}
 
-	// 지진(전단/수평)을 요구량 증가로 MVP 반영
+	// 2) 지지대 -> 아래 슬래브로 전달 (DownGraph)
+	//    여기서도 "지지대 자중 + 위에서 받은 하중"만 1회 전달
+	for (FStructGraphNode& Sup : Nodes)
+	{
+		if (!(Sup.Type == EStructNodeType::Column || Sup.Type == EStructNodeType::Wall)) continue;
+		if (!Sup.Comp) continue;
+		if (Sup.State == EStructDamageState::Failed) continue;
+
+		const float Total = Sup.SelfWeight + Sup.CarriedLoad;
+
+		if (Sup.DownSlabs.Num() == 0)
+			continue; // 기초로 내려간 것으로 간주
+
+		float SumW = 0.f;
+		for (float W : Sup.DownWeights) SumW += W;
+		if (SumW <= KINDA_SMALL_NUMBER) continue;
+
+		for (int32 i = 0; i < Sup.DownSlabs.Num(); ++i)
+		{
+			if (!Sup.DownWeights.IsValidIndex(i)) continue;
+
+			const int32 DownSlabId = Sup.DownSlabs[i];
+			if (!Nodes.IsValidIndex(DownSlabId)) continue;
+
+			if (Nodes[DownSlabId].State == EStructDamageState::Failed) continue;
+
+			const float W = Sup.DownWeights[i] / SumW;
+			Nodes[DownSlabId].CarriedLoad += Total * W; //아래 슬래브에 "지지대 하중" 누적
+		}
+	}
+
+	// 지진 요구량 반영
 	if (FMath::Abs(SeismicFactor) > KINDA_SMALL_NUMBER)
 	{
 		const float Seis = FMath::Abs(SeismicFactor);
-
 		for (FStructGraphNode& N : Nodes)
 		{
-			// 상층 증폭
 			const float Amp = 1.f + SeismicFloorAmplify * FMath::Max(0, N.FloorIndex - 1);
 			N.CarriedLoad *= (1.f + Seis * SeismicToVerticalScale * Amp);
 		}
 	}
 }
 
+
+// 초기 캘리브레이션
+void AStructGraphManager::CalibrateCapacitiesFromInitialState()
+{
+	// 초기 상태에서 1회 하중 계산 후,
+	// Column/Wall의 평균 Utilization을 Target으로 맞추도록 Capacity를 스케일링
+
+	// 1) 한번 계산
+	ComputeLoadsFromScratch(0.f);
+
+	double SumU = 0.0;
+	int32 Count = 0;
+
+	for (FStructGraphNode& N : Nodes)
+	{
+		if (!(N.Type == EStructNodeType::Column || N.Type == EStructNodeType::Wall)) continue;
+		if (!N.Comp) continue;
+
+		const float U = N.Utilization();
+		if (!FMath::IsFinite(U) || U <= 0.f) continue;
+
+		SumU += U;
+		Count++;
+	}
+
+	if (Count == 0) return;
+
+	const float AvgU = (float)(SumU / (double)Count);
+
+	const float TargetU = FMath::Max(0.05f, TargetInitialUtilization);
+	const float Scale = (AvgU / TargetU) * CapacitySafetyFactor;
+
+	if (!FMath::IsFinite(Scale) || Scale <= 0.f) return;
+
+	for (FStructGraphNode& N : Nodes)
+	{
+		if (!(N.Type == EStructNodeType::Column || N.Type == EStructNodeType::Wall)) continue;
+		N.Capacity *= Scale;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[Calib] AvgU=%.3f Target=%.3f Scale=%.3f (CapacitySafetyFactor=%.2f)"),
+		AvgU, TargetU, Scale, CapacitySafetyFactor);
+}
