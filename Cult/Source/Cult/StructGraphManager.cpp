@@ -45,6 +45,9 @@ void AStructGraphManager::InitializeFromBP(
 	// 1회 계산
 	SolveLoadsAndDamage();
 
+	CacheBaseCapacities();
+
+
 	// 임시 콜리전 조절 일괄적용
 	auto ApplyStabilize = [&](const TArray<TObjectPtr<UStaticMeshComponent>>& Arr)
 		{
@@ -489,23 +492,37 @@ bool AStructGraphManager::UpdateDamageStates(bool& bAnyNewFailures)
 
 	for (FStructGraphNode& N : Nodes)
 	{
-		if (N.Type == EStructNodeType::Slab)continue;
 		if (!N.Comp) continue;
 		if (N.State == EStructDamageState::Failed) continue;
 
 		const float U = N.Utilization();
 
-		if (U >= FailureThreshold)
+		// 슬래브는  Yield만 허용 
+		if (N.Type == EStructNodeType::Slab)
+		{
+			if (U >= YieldStart)
+			{
+				if (N.State != EStructDamageState::Yield)
+				{
+					N.State = EStructDamageState::Yield;
+					OnNodeYield(N.Comp, U);
+				}
+			}
+			else
+			{
+				N.State = EStructDamageState::Intact;
+			}
+			continue;
+		}
+
+		// Column/Wall은 정상 Fail/Yield 판정
+		if (U >= FailStart)
 		{
 			N.State = EStructDamageState::Failed;
 			bAnyNewFailures = true;
-
-			// 물리 활성
-			//N.Comp->SetSimulatePhysics(true);
-			//N.Comp->WakeAllRigidBodies();
 			OnNodeFailed(N.Comp, U);
 		}
-		else if (U >= YieldThreshold)
+		else if (U >= YieldStart)
 		{
 			if (N.State != EStructDamageState::Yield)
 			{
@@ -571,19 +588,25 @@ void AStructGraphManager::DrawDebugGraph()
 
 void AStructGraphManager::TickEarthquake()
 {
-	Elapsed += 0.05f;
+	const float Dt = 0.05f;
+	Elapsed += Dt;
 
 	// 시간에 따라 진동
 	const float Wave = FMath::Sin(Elapsed * SeismicOmega);
-
 	const float SeismicFactor = SeismicBase * Wave;
 
 	for (int32 Iter = 0; Iter < MaxSolveIterations; ++Iter)
 	{
 		ComputeLoadsFromScratch(SeismicFactor);
 
+		// 지진/전단 요구량 증가
+		ApplySeismicAndShearDemands(SeismicFactor);
+
 		bool bNewFailures = false;
 		UpdateDamageStates(bNewFailures);
+
+		AccumulateDamage(Dt);
+
 
 		if (!bNewFailures) break;
 	}
@@ -763,4 +786,74 @@ void AStructGraphManager::CalibrateCapacitiesFromInitialState()
 
 	UE_LOG(LogTemp, Warning, TEXT("[Calib] AvgU=%.3f Target=%.3f Scale=%.3f (CapacitySafetyFactor=%.2f)"),
 		AvgU, TargetU, Scale, CapacitySafetyFactor);
+}
+
+void AStructGraphManager::CacheBaseCapacities()
+{
+	for (FStructGraphNode& N : Nodes)
+	{
+		N.BaseCapacity = FMath::Max(0.01f, N.Capacity);
+		N.Damage = 0.f;
+	}
+}
+
+void AStructGraphManager::ApplySeismicAndShearDemands(float SeismicFactor)
+{
+	const float Seis = FMath::Abs(SeismicFactor);
+	if (Seis <= KINDA_SMALL_NUMBER) return;
+
+	for (FStructGraphNode& N : Nodes)
+	{
+		if (!N.Comp) continue;
+		if (N.State == EStructDamageState::Failed) continue;
+
+		const int32 Floor = N.FloorIndex;
+
+		// 1) 상층 증폭
+		const float Amp = 1.f + SeismicFloorAmplify * FMath::Max(0, Floor - 1);
+
+		// 2) 전단 증폭
+		float Soft = 1.f;
+		if (Floor == SoftStoryFloor)
+		{
+			Soft = SoftStoryBoost;
+		}
+
+		// 3) 전단 요구량을 등가 수직으로 환산
+		const float DemandBase = (N.SelfWeight + N.CarriedLoad);
+		const float Added = DemandBase * Seis * ShearToVerticalScale * Amp * Soft;
+
+		N.CarriedLoad += Added;
+	}
+}
+
+void AStructGraphManager::AccumulateDamage(float DeltaTime)
+{
+	for (FStructGraphNode& N : Nodes)
+	{
+		if (!N.Comp) continue;
+		if (N.State == EStructDamageState::Failed) continue;
+
+		const float U = N.Utilization();
+
+		// Yield 이상부터 누적 손상
+		if (U >= YieldStart)
+		{
+			float Rate = DamageRateYield;
+			if (U >= FailStart) Rate = DamageRateFailed;
+
+			// U가 클수록 추가 손상
+			const float UFactor = FMath::Clamp((U - YieldStart) / (FailStart - YieldStart + 1e-3f), 0.f, 2.f);
+
+			N.Damage = FMath::Clamp(N.Damage + Rate * (0.5f + UFactor) * DeltaTime, 0.f, 1.f);
+
+			// Damage에 따라 용량 감소 (점진 붕괴)
+			const float Loss = CapacityLossAtFullDamage * N.Damage; // 0~CapacityLossAtFullDamage
+			N.Capacity = FMath::Max(0.01f, N.BaseCapacity * (1.f - Loss));
+		}
+		else
+		{
+			//
+		}
+	}
 }

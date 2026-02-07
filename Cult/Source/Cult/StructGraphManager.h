@@ -65,6 +65,12 @@ struct FStructGraphNode
 	UPROPERTY()
 	TArray<float> DownWeights;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	float BaseCapacity = 0.f;   // 초기화 이후 용량
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	float Damage = 0.f;         // 누적 손상(0~1)
+
 	// 계산용
 	float Utilization() const { return (Capacity <= KINDA_SMALL_NUMBER) ? 999.f : ((SelfWeight + CarriedLoad) / Capacity); }
 
@@ -131,6 +137,14 @@ public:
 	UFUNCTION(BlueprintNativeEvent, Category = "StructGraph|VFX")
 	void OnNodeFailed(UPrimitiveComponent* Comp, float Utilization);
 
+	UFUNCTION(BlueprintCallable, Category = "StructGraph|Damage")
+	void CacheBaseCapacities();
+	UFUNCTION(BlueprintCallable, Category = "StructGraph|Damage")
+	void ApplySeismicAndShearDemands(float SeismicFactor);
+	
+	UFUNCTION(BlueprintCallable, Category = "StructGraph|Damage")
+	void AccumulateDamage(float DeltaTime);
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -158,12 +172,6 @@ private:
 	float AnglePower = 2.f; // 기둥 기울면 효율 감소
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Params")
-	float YieldThreshold = 0.85f;
-
-	UPROPERTY(EditAnywhere, Category = "StructGraph|Params")
-	float FailureThreshold = 1.0f;
-
-	UPROPERTY(EditAnywhere, Category = "StructGraph|Params")
 	int32 MaxSolveIterations = 6;   // 실패가 연쇄로 이어질 때 수렴 루프
 
 	// 지진 가중  수직하중 -> 연쇄붕괴
@@ -184,6 +192,31 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Debug")
 	float DebugLineDuration = 0.f; // 0 - 한 프레임
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Shear")
+	int32 SoftStoryFloor = 1; // 전단 집중 층 (1층)
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Shear")
+	float SoftStoryBoost = 2.0f; // 전단 증폭
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Shear")
+	float ShearToVerticalScale = 0.25f; // 전단 요구량을 등가 수직으로 변환
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Damage")
+	float DamageRateYield = 0.08f; // 초당 누적 속도
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Damage")
+	float DamageRateFailed = 0.25f; // 초당 누적 속도(파괴 직전 가속)
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Damage")
+	float CapacityLossAtFullDamage = 0.65f; // Damage=1 일 때 용량이 65% 감소
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Damage")
+	float YieldStart = 0.85f;
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Damage")
+	float FailStart = 1.0f;
+
 
 	// ===== 내부 데이터 =====
 	UPROPERTY()
@@ -209,6 +242,7 @@ private:
 	TArray<TObjectPtr<UStaticMeshComponent>> Columns;
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> Walls;
+
 
 private:
 	void BuildNodes();
