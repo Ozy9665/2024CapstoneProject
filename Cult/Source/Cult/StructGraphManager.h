@@ -80,6 +80,16 @@ struct FStructGraphNode
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	float Damage = 0.f;         // 누적 손상(0~1)
 
+	// 연출1~3
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	float DamageAccum = 0.f;   // 0~무한 (누적)
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	float Crack01 = 0.f;       // 0~1 (Stage1)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	float Spall01 = 0.f;       // 0~1 (Stage2 박리 레벨)
+
+
 	// 계산용
 	float Utilization() const { return (Capacity <= KINDA_SMALL_NUMBER) ? 999.f : ((SelfWeight + CarriedLoad) / Capacity); }
 
