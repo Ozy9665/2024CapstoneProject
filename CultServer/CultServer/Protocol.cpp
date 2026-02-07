@@ -48,11 +48,9 @@ void SESSION::do_recv()
 SESSION::SESSION() {}
 
 SESSION::SESSION(int session_id, uint8_t ai_role, int room_id) 
-	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id)		// AI Session
+	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id),
+	prev_remain{}, state{ ST_FREE }, heal_gage{}, lastTargetPos{} // AI Session
 {
-	prev_remain = 0;
-	state = ST_FREE;
-	heal_gage = 0;
 	if (ai_role == 100)   // Cultist AI
 	{
 		cultist_state = CultistDummyState;

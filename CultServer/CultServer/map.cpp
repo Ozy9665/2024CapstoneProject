@@ -774,9 +774,130 @@ void NAVMESH::BuildPortals(
     for (size_t i = 0; i + 1 < triPath.size(); ++i)
     {
         Vec3 a, b;
-        if (GetSharedEdge(triPath[i], triPath[i + 1], a, b))
+        if (!GetSharedEdge(triPath[i], triPath[i + 1], a, b))
+            continue;
+
+        // 삼각형 진행 방향
+        Vec3 from = GetTriCenter(triPath[i]);
+        Vec3 to = GetTriCenter(triPath[i + 1]);
+        Vec3 dir{
+            to.x - from.x,
+            to.y - from.y,
+            0.f
+        };
+
+        // edge 방향
+        Vec3 edge{
+            b.x - a.x,
+            b.y - a.y,
+            0.f
+        };
+
+        // left/right 결정
+        float cross = dir.x * edge.y - dir.y * edge.x;
+
+        if (cross > 0.f)
         {
+            // a가 left, b가 right
             portals.emplace_back(a, b);
         }
+        else
+        {
+            // b가 left, a가 right
+            portals.emplace_back(b, a);
+        }
     }
+}
+
+bool NAVMESH::SmoothPath(
+    const Vec3& start,
+    const Vec3& goal,
+    const std::vector<std::pair<Vec3, Vec3>>& portals,
+    std::vector<Vec3>& outPath) const
+{
+    std::cout << "[FUNNEL] start=("
+        << start.x << "," << start.y << ") "
+        << "goal=(" << goal.x << "," << goal.y << ") "
+        << "portals=" << portals.size() << "\n";
+
+    outPath.clear();
+    if (portals.empty())
+        return false;
+
+    Vec3 apex = start;
+    Vec3 left = portals[0].first;
+    Vec3 right = portals[0].second;
+
+    int apexIndex = 0;
+    int leftIndex = 0;
+    int rightIndex = 0;
+
+    outPath.push_back(apex);
+
+    auto triArea2 = [](const Vec3& a, const Vec3& b, const Vec3& c) {
+        return (b.x - a.x) * (c.y - a.y)
+            - (b.y - a.y) * (c.x - a.x);
+        };
+
+    for (int i = 1; i < (int)portals.size(); ++i)
+    {
+        std::cout << "[FUNNEL] i=" << i
+            << " apex=(" << apex.x << "," << apex.y << ") "
+            << "L=(" << left.x << "," << left.y << ") "
+            << "R=(" << right.x << "," << right.y << ")\n";
+
+        const Vec3& newLeft = portals[i].first;
+        const Vec3& newRight = portals[i].second;
+
+        // 오
+        if (triArea2(apex, right, newRight) <= 0.f)
+        {
+            if (apexIndex == rightIndex ||
+                triArea2(apex, left, newRight) > 0.f)
+            {
+                right = newRight;
+                rightIndex = i;
+            }
+            else
+            {
+                outPath.push_back(left);
+                apex = left;
+                apexIndex = leftIndex;
+
+                left = apex;
+                right = apex;
+                leftIndex = apexIndex;
+                rightIndex = apexIndex;
+                i = apexIndex;
+                continue;
+            }
+        }
+
+        // 왼
+        if (triArea2(apex, left, newLeft) >= 0.f)
+        {
+            if (apexIndex == leftIndex ||
+                triArea2(apex, right, newLeft) < 0.f)
+            {
+                left = newLeft;
+                leftIndex = i;
+            }
+            else
+            {
+                outPath.push_back(right);
+                apex = right;
+                apexIndex = rightIndex;
+
+                left = apex;
+                right = apex;
+                leftIndex = apexIndex;
+                rightIndex = apexIndex;
+                i = apexIndex;
+                continue;
+            }
+        }
+    }
+
+    outPath.push_back(goal);
+    return outPath.size() >= 2;
 }

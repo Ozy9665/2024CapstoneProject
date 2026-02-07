@@ -138,8 +138,6 @@ struct Ray {
 
 constexpr Vec3 NewmapLandmassOffset{ -4280.f, 13000.f, -3120.f };
 
-constexpr float REPATH_DIST{ 200.f };
-
 // packet
 #pragma pack(push, 1)
 struct FVector {
@@ -469,6 +467,7 @@ public:
 		Crow crow;
 	};
 	std::vector<Vec3> path;
+	Vec3 lastTargetPos;
 	void do_recv();
 
 public:

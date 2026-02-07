@@ -95,12 +95,24 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         ai.cultist_state.PositionZ
     };
 
+    float dx = targetPos.x - ai.lastTargetPos.x;
+    float dy = targetPos.y - ai.lastTargetPos.y;
+    float dist2 = dx * dx + dy * dy;
+
+    if (dist2 > REPATH_DIST * REPATH_DIST)
+    {
+        // 타겟이 충분히 이동, 경로 무효화
+        ai.lastTargetPos = targetPos;
+        ai.path.clear();
+    }
+
     if (ai.path.empty())
     {
         std::vector<int> triPath;
-        if (!TestNavMesh.FindTriPath(cur, targetPos, triPath) ||
-            triPath.size() < 2)
+        if (!TestNavMesh.FindTriPath(cur, targetPos, triPath))
         {
+            std::cout << "TestNavMesh.FindTriPath fail" << "\n";
+            ai.path.clear();
             return;
         }
 
@@ -112,17 +124,15 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
 
         std::vector<Vec3> smoothPath;
         if (!TestNavMesh.SmoothPath(cur, targetPos, portals, smoothPath) ||
-            smoothPath.size() < 2) 
+            smoothPath.size() < 2)
         {
             return;
         }
-
         ai.path = smoothPath;
     }
 
-    if (ai.path.size() < 2)
+    if (ai.path.empty())
     {
-        ai.path.clear();
         return;
     }
 
@@ -176,7 +186,6 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         );
 
     // state 회전 갱신
-    constexpr float RAD_TO_DEG = 180.f / PI;
     Vec3 lookDir{
     targetPos.x - cur.x,
     targetPos.y - cur.y,
@@ -189,7 +198,6 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         lookDir.x /= lookLen;
         lookDir.y /= lookLen;
 
-        constexpr float RAD_TO_DEG = 180.f / 3.1415926535f;
         ai.cultist_state.RotationYaw =
             std::atan2(lookDir.y, lookDir.x) * RAD_TO_DEG;
     }
@@ -198,8 +206,6 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
 void CultistAIWorkerLoop()
 {
     using clock = std::chrono::steady_clock;
-    constexpr float fixed_dt = 1.0f / 60.0f;
-
     auto nextTick = clock::now();
 
     while (true)
@@ -249,8 +255,6 @@ void CultistAIWorkerLoop()
                 };
 
                 MoveAlongPath(ai, targetPos, dt);
-
-
             }
             CultistPacket packet{};
             packet.header = cultistHeader;
@@ -330,17 +334,14 @@ void ApplyBatonHitToAI(SESSION& ai, const Vec3& attackerPos)
     dir.x /= len;
     dir.y /= len;
 
-    constexpr float pushDist = 120.f;
+
 
     ai.cultist_state.PositionX += dir.x * pushDist;
     ai.cultist_state.PositionY += dir.y * pushDist;
-
     ai.cultist_state.VelocityX = 0.f;
     ai.cultist_state.VelocityY = 0.f;
     ai.cultist_state.VelocityZ = 0.f;
     ai.cultist_state.Speed = 0.f;
-
-    constexpr float RAD_TO_DEG = 180.f / PI;
     ai.cultist_state.RotationYaw = std::atan2(dir.y, dir.x) * RAD_TO_DEG;
 
     st.CurrentHealth -= 50.f;
