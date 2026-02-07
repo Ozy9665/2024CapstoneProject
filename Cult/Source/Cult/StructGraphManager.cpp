@@ -520,7 +520,18 @@ bool AStructGraphManager::UpdateDamageStates(bool& bAnyNewFailures)
 		{
 			N.State = EStructDamageState::Failed;
 			bAnyNewFailures = true;
+
+			// Fail된 조각만 물리 활성
+			if (UPrimitiveComponent* PC = N.Comp)
+			{
+				PC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+				PC->SetSimulatePhysics(true);
+				PC->SetEnableGravity(true);
+				PC->WakeAllRigidBodies();
+			}
+
 			OnNodeFailed(N.Comp, U);
+
 		}
 		else if (U >= YieldStart)
 		{
@@ -535,7 +546,6 @@ bool AStructGraphManager::UpdateDamageStates(bool& bAnyNewFailures)
 			N.State = EStructDamageState::Intact;
 		}
 	}
-
 	return true;
 }
 
@@ -588,25 +598,60 @@ void AStructGraphManager::DrawDebugGraph()
 
 void AStructGraphManager::TickEarthquake()
 {
-	const float Dt = 0.05f;
-	Elapsed += Dt;
+	Elapsed += 0.05f;
 
-	// 시간에 따라 진동
-	const float Wave = FMath::Sin(Elapsed * SeismicOmega);
-	const float SeismicFactor = SeismicBase * Wave;
+	const float T1 = Phase1_Duration;
+	const float T2 = Phase1_Duration + Phase2_Duration;
+	const float T3 = Phase1_Duration + Phase2_Duration + Phase3_Duration;
 
+	// 단계 판정
+	if (Elapsed < T1) QuakePhase = EQuakePhase::Micro;
+	else if (Elapsed < T2) QuakePhase = EQuakePhase::Progress;
+	else if (Elapsed < T3) QuakePhase = EQuakePhase::Collapse;
+	else
+	{
+		StopEarthquake3Phase();
+		return;
+	}
+
+	// 단계별 요구량 설정
+	float LocalBase = 0.0f;
+	float LocalOmega = SeismicOmega;
+
+	switch (QuakePhase)
+	{
+	case EQuakePhase::Micro:
+		// 약한 흔들림 + 램프업
+		LocalBase = FMath::Lerp(0.05f, 0.20f, Elapsed / FMath::Max(0.01f, T1));
+		LocalOmega = SeismicOmega * 0.7f;
+		break;
+
+	case EQuakePhase::Progress:
+		// 손상/파편 유도
+		LocalBase = 0.35f;
+		LocalOmega = SeismicOmega * 1.0f;
+		break;
+
+	case EQuakePhase::Collapse:
+		// 큰 진폭 + 약간 빠른 주파수
+		LocalBase = 0.55f;
+		LocalOmega = SeismicOmega * 1.2f;
+		break;
+
+	default:
+		break;
+	}
+
+	const float Wave = FMath::Sin(Elapsed * LocalOmega);
+	const float SeismicFactor = LocalBase * Wave;
+
+	// 해석 + 손상
 	for (int32 Iter = 0; Iter < MaxSolveIterations; ++Iter)
 	{
 		ComputeLoadsFromScratch(SeismicFactor);
 
-		// 지진/전단 요구량 증가
-		ApplySeismicAndShearDemands(SeismicFactor);
-
 		bool bNewFailures = false;
 		UpdateDamageStates(bNewFailures);
-
-		AccumulateDamage(Dt);
-
 
 		if (!bNewFailures) break;
 	}
@@ -856,4 +901,29 @@ void AStructGraphManager::AccumulateDamage(float DeltaTime)
 			//
 		}
 	}
+}
+
+
+// 지진
+
+void AStructGraphManager::StartEarthquake3Phase()
+{
+	if (bRunning) return;
+	bRunning = true;
+	Elapsed = 0.f;
+	QuakePhase = EQuakePhase::Micro;
+
+	GetWorldTimerManager().SetTimer(
+		TickHandle,
+		this,
+		&AStructGraphManager::TickEarthquake,
+		0.05f,
+		true
+	);
+}
+
+void AStructGraphManager::StopEarthquake3Phase()
+{
+	StopEarthquake();
+	QuakePhase = EQuakePhase::Idle;
 }

@@ -21,6 +21,15 @@ enum class EStructDamageState : uint8
 	Failed
 };
 
+UENUM(BlueprintType)
+enum class EQuakePhase : uint8
+{
+	Idle,
+	Micro,
+	Progress,
+	Collapse
+};
+
 USTRUCT(BlueprintType)
 struct FStructGraphNode
 {
@@ -144,6 +153,24 @@ public:
 	
 	UFUNCTION(BlueprintCallable, Category = "StructGraph|Damage")
 	void AccumulateDamage(float DeltaTime);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake")
+	float Phase1_Duration = 3.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake")
+	float Phase2_Duration = 6.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake")
+	float Phase3_Duration = 6.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Quake")
+	EQuakePhase QuakePhase = EQuakePhase::Idle;
+
+	UFUNCTION(BlueprintCallable, Category = "Quake")
+	void StartEarthquake3Phase();
+
+	UFUNCTION(BlueprintCallable, Category = "Quake")
+	void StopEarthquake3Phase();
 
 protected:
 	virtual void BeginPlay() override;
