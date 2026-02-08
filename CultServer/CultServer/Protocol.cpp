@@ -49,7 +49,7 @@ SESSION::SESSION() {}
 
 SESSION::SESSION(int session_id, uint8_t ai_role, int room_id) 
 	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id),
-	prev_remain{}, state{ ST_FREE }, heal_gage{}, lastTargetPos{} // AI Session
+	prev_remain{}, state{ ST_FREE }, heal_gage{}, lastTargetPos{}, lastSnapPos{}, snapStreak{} // AI Session
 {
 	if (ai_role == 100)   // Cultist AI
 	{

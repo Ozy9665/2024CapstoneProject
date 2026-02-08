@@ -242,6 +242,10 @@ void CultistAIWorkerLoop()
             if (target_id < 0)
             {
                 ai.path.clear();
+                ai.cultist_state.VelocityX = 0.f;
+                ai.cultist_state.VelocityY = 0.f;
+                ai.cultist_state.VelocityZ = 0.f;
+                ai.cultist_state.Speed = 0.f;
                 canMove = false;
             }
 
@@ -334,8 +338,6 @@ void ApplyBatonHitToAI(SESSION& ai, const Vec3& attackerPos)
     dir.x /= len;
     dir.y /= len;
 
-
-
     ai.cultist_state.PositionX += dir.x * pushDist;
     ai.cultist_state.PositionY += dir.y * pushDist;
     ai.cultist_state.VelocityX = 0.f;
@@ -344,7 +346,7 @@ void ApplyBatonHitToAI(SESSION& ai, const Vec3& attackerPos)
     ai.cultist_state.Speed = 0.f;
     ai.cultist_state.RotationYaw = std::atan2(dir.y, dir.x) * RAD_TO_DEG;
 
-    st.CurrentHealth -= 50.f;
+    st.CurrentHealth -= 100.f;
     if (st.CurrentHealth <= 0.f)
     {
         if (st.ABP_IsStunned)

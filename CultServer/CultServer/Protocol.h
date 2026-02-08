@@ -468,6 +468,8 @@ public:
 	};
 	std::vector<Vec3> path;
 	Vec3 lastTargetPos;
+	Vec3 lastSnapPos;
+	int  snapStreak;
 	void do_recv();
 
 public:

@@ -150,6 +150,11 @@ public:
     bool SmoothPath(const Vec3&, const Vec3&,
         const std::vector<std::pair<Vec3, Vec3>>&,
         std::vector<Vec3>&) const;
+    static bool PointInTri2D(const Vec3&, const MapTri&);
+    int FindContainingTriangle(const Vec3&) const;
+    bool ClipSegmentToTriangle(const Vec3& from,
+        const Vec3& to, int triIdx, Vec3& out) const;
+    const MapTri& GetTri(int) const;
     
 private:
     bool LoadNavOBJ(const std::string&,
@@ -159,7 +164,6 @@ private:
     bool LoadOBJAndComputeAABB_Nav(const std::string&,
         std::vector<MapVertex>&, std::vector<MapTriangle>&, AABB&);
 
-    float EPS = 0.001f; // 1mm
     void WeldVertices(std::vector<MapVertex>&, std::vector<MapTriangle>&);
 
     std::vector<std::array<int, 3>> triNeighbors;
@@ -174,5 +178,8 @@ private:
 
     float TriHeightAtXY(int, float, float) const;
 
-    int FindContainingTriangle(const Vec3&) const;
 };
+
+constexpr float EPS = 0.001f; // 1mm
+constexpr float SNAP_MAX = 80.f;
+constexpr float snapMax2 = SNAP_MAX * SNAP_MAX;

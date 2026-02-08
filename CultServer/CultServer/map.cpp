@@ -606,7 +606,7 @@ bool NAVMESH::GetSharedEdge(int t0, int t1, Vec3& outA, Vec3& outB) const
     return true;
 }
 
-static bool PointInTri2D(const Vec3& p, const MapTri& t)
+bool NAVMESH::PointInTri2D(const Vec3& p, const MapTri& t)
 {
     auto sign = [](const Vec3& p1, const Vec3& p2, const Vec3& p3)
         {
@@ -623,6 +623,47 @@ static bool PointInTri2D(const Vec3& p, const MapTri& t)
     bool b3 = sign(p, c, a) < 0.f;
 
     return (b1 == b2) && (b2 == b3);
+}
+
+static float Dist2_PointSeg2D(const Vec3& p, const Vec3& a, const Vec3& b)
+{
+    const float abx = b.x - a.x;
+    const float aby = b.y - a.y;
+    const float apx = p.x - a.x;
+    const float apy = p.y - a.y;
+
+    const float ab2 = abx * abx + aby * aby;
+    if (ab2 < 1e-8f) {
+        const float dx = p.x - a.x;
+        const float dy = p.y - a.y;
+        return dx * dx + dy * dy;
+    }
+
+    float t = (apx * abx + apy * aby) / ab2;
+    t = std::max(0.f, std::min(1.f, t));
+
+    const float cx = a.x + abx * t;
+    const float cy = a.y + aby * t;
+
+    const float dx = p.x - cx;
+    const float dy = p.y - cy;
+    return dx * dx + dy * dy;
+}
+
+static float Dist2_PointTri2D(const Vec3& p, const MapTri& t)
+{
+    const Vec3 a{ t.a.x, t.a.y, 0.f };
+    const Vec3 b{ t.b.x, t.b.y, 0.f };
+    const Vec3 c{ t.c.x, t.c.y, 0.f };
+
+    // 이미 안에 들어가면 0
+    if (NAVMESH::PointInTri2D(p, t))
+        return 0.f;
+
+    const float d0 = Dist2_PointSeg2D(p, a, b);
+    const float d1 = Dist2_PointSeg2D(p, b, c);
+    const float d2 = Dist2_PointSeg2D(p, c, a);
+    return std::min(d0, std::min(d1, d2));
 }
 
 float NAVMESH::TriHeightAtXY(int triIdx, float x, float y) const
@@ -677,18 +718,42 @@ int NAVMESH::FindContainingTriangle(const Vec3& pos) const
             best = i;
         }
     }
-    return best;
+
+    if (best >= 0)
+        return best;
+
+    int snap = -1;
+    float bestD2 = FLT_MAX;
+
+    for (int i = 0; i < (int)tris.size(); ++i)
+    {
+        const float d2 = Dist2_PointTri2D(pos, tris[i]);
+        if (d2 < bestD2) { bestD2 = d2; snap = i; }
+    }
+
+    if (snap >= 0 && bestD2 <= snapMax2)
+    {
+        return snap;
+    }
+
+    return -1;
 }
 
 bool NAVMESH::FindTriPath(
-    const Vec3& start,
-    const Vec3& goal,
+    const Vec3& start, const Vec3& goal,
     std::vector<int>& outTriPath)
 {
     outTriPath.clear();
 
     int startTri = FindContainingTriangle(start);
     int goalTri = FindContainingTriangle(goal);
+
+    auto degree = [&](int t) {
+        int c = 0;
+        for (int nb : triNeighbors[t])
+            if (nb >= 0) ++c;
+        return c;
+        };
 
     if (startTri < 0 || goalTri < 0)
         return false;
@@ -750,8 +815,12 @@ bool NAVMESH::FindTriPath(
         }
     }
 
-    if (goalIdx < 0)
+    if (goalIdx < 0) {
+        std::cout << "[TRI A* FAIL] explored=" << visited.size()
+            << " startTri=" << startTri
+            << " goalTri=" << goalTri << "\n";
         return false;
+    }
 
     for (int i = goalIdx; i >= 0; i = nodes[i].parent)
         outTriPath.push_back(nodes[i].tri);
@@ -810,16 +879,10 @@ void NAVMESH::BuildPortals(
 }
 
 bool NAVMESH::SmoothPath(
-    const Vec3& start,
-    const Vec3& goal,
+    const Vec3& start, const Vec3& goal,
     const std::vector<std::pair<Vec3, Vec3>>& portals,
     std::vector<Vec3>& outPath) const
 {
-    std::cout << "[FUNNEL] start=("
-        << start.x << "," << start.y << ") "
-        << "goal=(" << goal.x << "," << goal.y << ") "
-        << "portals=" << portals.size() << "\n";
-
     outPath.clear();
     if (portals.empty())
         return false;
@@ -841,11 +904,6 @@ bool NAVMESH::SmoothPath(
 
     for (int i = 1; i < (int)portals.size(); ++i)
     {
-        std::cout << "[FUNNEL] i=" << i
-            << " apex=(" << apex.x << "," << apex.y << ") "
-            << "L=(" << left.x << "," << left.y << ") "
-            << "R=(" << right.x << "," << right.y << ")\n";
-
         const Vec3& newLeft = portals[i].first;
         const Vec3& newRight = portals[i].second;
 
@@ -900,4 +958,51 @@ bool NAVMESH::SmoothPath(
 
     outPath.push_back(goal);
     return outPath.size() >= 2;
+}
+
+bool NAVMESH::ClipSegmentToTriangle(
+    const Vec3& from, const Vec3& to,
+    int triIdx, Vec3& out) const
+{
+    const MapTri& t = tris[triIdx];
+    const Vec3 A{ t.a.x, t.a.y, 0.f };
+    const Vec3 B{ t.b.x, t.b.y, 0.f };
+    const Vec3 C{ t.c.x, t.c.y, 0.f };
+
+    float tMin = 1.0f;
+
+    auto clipEdge = [&](const Vec3& a, const Vec3& b)
+        {
+            Vec3 edge{ b.x - a.x, b.y - a.y, 0.f };
+            Vec3 normal{ edge.y, -edge.x, 0.f }; // outward
+
+            float d0 = (from.x - a.x) * normal.x + (from.y - a.y) * normal.y;
+            float d1 = (to.x - a.x) * normal.x + (to.y - a.y) * normal.y;
+
+            if (d0 >= 0 && d1 >= 0) 
+                return true;
+            if (d0 < 0 && d1 < 0) 
+                return false;
+
+            float tHit = d0 / (d0 - d1);
+            tMin = std::min(tMin, tHit);
+            return true;
+        };
+
+    if (!clipEdge(A, B)) 
+        return false;
+    if (!clipEdge(B, C)) 
+        return false;
+    if (!clipEdge(C, A)) 
+        return false;
+
+    out.x = from.x + (to.x - from.x) * tMin;
+    out.y = from.y + (to.y - from.y) * tMin;
+    out.z = from.z;
+    return true;
+}
+
+const MapTri& NAVMESH::GetTri(int idx) const
+{ 
+    return tris[idx]; 
 }
