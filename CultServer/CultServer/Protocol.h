@@ -138,6 +138,9 @@ struct Ray {
 
 constexpr Vec3 NewmapLandmassOffset{ -4280.f, 13000.f, -3120.f };
 
+
+enum AIState { Patrol, Chase, Runaway, Ritual, Heal };
+
 // packet
 #pragma pack(push, 1)
 struct FVector {
@@ -451,7 +454,10 @@ public:
 	SOCKET			c_socket;
 	int				id;
 	uint8_t			role;
-	char			state;
+	union {
+		char		state;
+		AIState		ai_state;
+	};
 	int				prev_remain;
 	int				room_id;
 	union {
@@ -470,6 +476,7 @@ public:
 	Vec3 lastTargetPos;
 	Vec3 lastSnapPos;
 	int  snapStreak;
+	int target_id;
 	void do_recv();
 
 public:

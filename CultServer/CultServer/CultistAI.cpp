@@ -56,37 +56,6 @@ static float Dist(const Vec3& a, const Vec3& b)
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-static int FindTargetCultist(int room_id, int self_id)
-{
-    if (room_id < 0 || room_id >= MAX_ROOM)
-        return -1;
-
-    const auto& room = g_rooms[room_id].first;
-
-    for (int pid : room.player_ids)
-    {
-        if (pid == -1 || pid == self_id)
-            continue;
-        if (g_cultist_ai_ids.count(pid))
-            continue;
-
-        auto it = g_users.find(pid);
-        if (it == g_users.end())
-            continue;
-
-        SESSION& target = it->second;
-        if (target.room_id != room_id)
-            continue;
-        if (!target.isValidSocket())
-            continue;
-        if (target.role != 0)
-            continue;
-
-        return pid;
-    }
-    return -1;
-}
-
 static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
 {
     Vec3 cur{
@@ -203,6 +172,130 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     }
 }
 
+static int FindTargetCultist(int room_id, int self_id)
+{
+    if (room_id < 0 || room_id >= MAX_ROOM)
+        return -1;
+
+    const auto& room = g_rooms[room_id].first;
+
+    for (int pid : room.player_ids)
+    {
+        if (pid == -1 || pid == self_id)
+            continue;
+        if (g_cultist_ai_ids.count(pid))
+            continue;
+
+        auto it = g_users.find(pid);
+        if (it == g_users.end())
+            continue;
+
+        SESSION& target = it->second;
+        if (target.room_id != room_id)
+            continue;
+        if (!target.isValidSocket())
+            continue;
+        if (target.role != 0)
+            continue;
+
+        return pid;
+    }
+    return -1;
+}
+static int  FindNearbyPolice(int room_id, int self_id);
+static int  FindNearbyCultist(int room_id, int self_id);
+static int  FindLowHpCultist(int room_id, int self_id);
+static bool IsNearAltar(SESSION& ai);
+
+static void UpdateAIState(SESSION& ai)
+{
+    // 경찰 발견 Runaway
+    int police_id = FindNearbyPolice(ai.room_id, ai.id);
+    if (police_id >= 0)
+    {
+        ai.ai_state = AIState::Runaway;
+        ai.target_id = police_id;
+        return;
+    }
+
+    // 유저 발견 Chase
+    int cultist_id = FindNearbyCultist(ai.room_id, ai.id);
+    if (cultist_id >= 0)
+    {
+        ai.ai_state = AIState::Chase;
+        ai.target_id = cultist_id;
+        return;
+    }
+
+    // 근처 HP 낮은 유저 Heal
+    int lowhp_id = FindLowHpCultist(ai.room_id, ai.id);
+    if (lowhp_id >= 0)
+    {
+        ai.ai_state = AIState::Heal;
+        ai.target_id = lowhp_id;
+        return;
+    }
+
+    // 제단 발견 Ritual
+    if (IsNearAltar(ai))
+    {
+        ai.ai_state = AIState::Ritual;
+        return;
+    }
+
+    // 기본 상태
+    ai.ai_state = AIState::Patrol;
+}
+
+
+static void ExecuteAIState(SESSION& ai, float dt) 
+{
+    switch (ai.ai_state)
+    {
+    case AIState::Patrol:
+    {
+        break;
+    }
+    case AIState::Chase:
+    {
+        int target_id = FindTargetCultist(ai.room_id, ai.id);
+        if (target_id < 0)
+        {
+            ai.path.clear();
+            ai.cultist_state.VelocityX = 0.f;
+            ai.cultist_state.VelocityY = 0.f;
+            ai.cultist_state.VelocityZ = 0.f;
+            ai.cultist_state.Speed = 0.f;
+            return;
+        }
+
+        SESSION& target = g_users[target_id];
+        Vec3 targetPos{
+            target.cultist_state.PositionX,
+            target.cultist_state.PositionY,
+            target.cultist_state.PositionZ
+        };
+
+        MoveAlongPath(ai, targetPos, dt);
+        break;
+    }
+    case AIState::Runaway:
+    {
+        break;
+    }
+    case AIState::Ritual:
+    {
+        break;
+    }
+    case AIState::Heal:
+    {
+        break;
+    }
+    default:
+        break;
+    }
+}
+
 void CultistAIWorkerLoop()
 {
     using clock = std::chrono::steady_clock;
@@ -237,28 +330,11 @@ void CultistAIWorkerLoop()
                 st.Speed = 0.f;
                 canMove = false;
             }
-
-            int target_id = FindTargetCultist(ai.room_id, ai.id);
-            if (target_id < 0)
-            {
-                ai.path.clear();
-                ai.cultist_state.VelocityX = 0.f;
-                ai.cultist_state.VelocityY = 0.f;
-                ai.cultist_state.VelocityZ = 0.f;
-                ai.cultist_state.Speed = 0.f;
-                canMove = false;
-            }
-
+        
             if (canMove)
             {
-                SESSION& target = g_users[target_id];
-                Vec3 targetPos{
-                    target.cultist_state.PositionX,
-                    target.cultist_state.PositionY,
-                    target.cultist_state.PositionZ
-                };
-
-                MoveAlongPath(ai, targetPos, dt);
+                UpdateAIState(ai);
+                ExecuteAIState(ai, dt);
             }
             CultistPacket packet{};
             packet.header = cultistHeader;

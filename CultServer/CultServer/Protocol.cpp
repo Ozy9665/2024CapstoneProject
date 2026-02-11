@@ -48,13 +48,14 @@ void SESSION::do_recv()
 SESSION::SESSION() {}
 
 SESSION::SESSION(int session_id, uint8_t ai_role, int room_id) 
-	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id),
+	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id), target_id{ -1 },
 	prev_remain{}, state{ ST_FREE }, heal_gage{}, lastTargetPos{}, lastSnapPos{}, snapStreak{} // AI Session
 {
 	if (ai_role == 100)   // Cultist AI
 	{
 		cultist_state = CultistDummyState;
 		cultist_state.PlayerID = session_id;
+		ai_state = AIState::Patrol;
 		std::cout << "[AI] Cultist SESSION »ý¼º ID=" << id << "\n";
 	}
 	else if (ai_role == 101)  // Police AI
