@@ -927,3 +927,87 @@ void AStructGraphManager::StopEarthquake3Phase()
 	StopEarthquake();
 	QuakePhase = EQuakePhase::Idle;
 }
+
+
+
+
+
+
+
+
+
+// 지진
+void AStructGraphManager::SetQuakeStage(EQuakeStage NewStage)
+{
+	QuakeStage = NewStage;
+
+	switch (QuakeStage)
+	{
+	case EQuakeStage::Stage1: TriggerStage1(); break;
+	case EQuakeStage::Stage2: TriggerStage2(); break;
+	case EQuakeStage::Stage3: TriggerStage3(); break;
+	default: break;
+	}
+}
+
+void AStructGraphManager::TriggerStage1()
+{
+	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage1 Start"));
+	SeismicBase = Stage1_SeismicBase;     // 기존 변수 사용
+	SeismicOmega = Stage1_Omega;
+
+	StartEarthquake(); // 타이머 진동 시작
+}
+
+void AStructGraphManager::TriggerStage2()
+{
+	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage2 Start (Local damage)"));
+
+	// Stage1 - 계속 흔들리게, 부분 파손만 추가로
+	// GC/머터리얼 아직 준비중 / MVP는 Yield 강제 트리거만
+	// Stage2Targets가 비어있으면 자동으로 Wall 중 일부를 채우기
+	if (Stage2Targets.Num() == 0)
+	{
+		for (FStructGraphNode& N : Nodes)
+		{
+			if (N.Type == EStructNodeType::Wall && N.Comp)
+			{
+				Stage2Targets.Add(N.Comp);
+			}
+		}
+	}
+
+	// 일부만 골라 Yield로 바꿔 금이 갔다/부분 파손을 연출 트리거로
+	int32 Applied = 0;
+	for (UPrimitiveComponent* C : Stage2Targets)
+	{
+		if (!IsValid(C)) continue;
+		if (Applied >= Stage2_LocalDamageCount) break;
+
+		// Node 찾아서 상태만 올리기 실제 파편/GC는 BP에서 연결
+		for (FStructGraphNode& N : Nodes)
+		{
+			if (N.Comp == C && N.State != EStructDamageState::Failed)
+			{
+				N.State = EStructDamageState::Yield;
+				OnNodeYield(C, 1.0f + Stage2_LocalDamageStrength); // Utilization 연출용
+				Applied++;
+				break;
+			}
+		}
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage2 Applied=%d"), Applied);
+}
+
+void AStructGraphManager::TriggerStage3()
+{
+	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage3 Start (Chain collapse)"));
+	SeismicBase = Stage3_SeismicBase;
+	SeismicOmega = Stage3_Omega;
+
+	// Stage3에서는 Fail이 나올 수 있게 Threshold를 살짝 낮추거나,
+	// “실패 시 물리 enable”을 켤 수도 있음
+	// 지금은 MVP로 이벤트만 확실히 터지게 진행.
+	StartEarthquake();
+}

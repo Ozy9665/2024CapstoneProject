@@ -4,6 +4,14 @@
 #include "GameFramework/Actor.h"
 #include "StructGraphManager.generated.h"
 
+UENUM(BlueprintType)
+enum class EQuakeStage : uint8
+{
+	None,
+	Stage1,
+	Stage2,
+	Stage3
+};
 
 UENUM(BlueprintType)
 enum class EStructNodeType : uint8
@@ -114,6 +122,7 @@ class CULT_API AStructGraphManager : public AActor
 public:
 	AStructGraphManager();
 
+
 	// 수집한 컴포넌트 배열 받고 그래프 구성 + 초기 계산
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
 	void InitializeFromBP(
@@ -182,8 +191,47 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Quake")
 	void StopEarthquake3Phase();
 
+	// 지진
+	UFUNCTION(BlueprintCallable, Category = "Quake")
+	void SetQuakeStage(EQuakeStage NewStage);
+
+	UFUNCTION(BlueprintCallable, Category = "Quake")
+	void TriggerStage1();
+
+	UFUNCTION(BlueprintCallable, Category = "Quake")
+	void TriggerStage2();
+
+	UFUNCTION(BlueprintCallable, Category = "Quake")
+	void TriggerStage3();
+
 protected:
 	virtual void BeginPlay() override;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake")
+	EQuakeStage QuakeStage = EQuakeStage::None;
+
+	// Stage 파라미터 (MVP)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage1")
+	float Stage1_SeismicBase = 0.12f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage1")
+	float Stage1_Omega = 6.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage2")
+	int32 Stage2_LocalDamageCount = 2; // 벽 1~2개 정도
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage2")
+	float Stage2_LocalDamageStrength = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3")
+	float Stage3_SeismicBase = 0.35f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3")
+	float Stage3_Omega = 8.0f;
+
+	// Stage2에서의 부분 파손 대상 후보?
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage2")
+	TArray<TObjectPtr<UPrimitiveComponent>> Stage2Targets;
 
 private:
 	// ===== 파라미터(튜닝 포인트) =====
