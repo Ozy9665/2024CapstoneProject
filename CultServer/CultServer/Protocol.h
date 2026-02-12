@@ -466,7 +466,7 @@ public:
 	};
 	std::unordered_set<int> visible_ids;
 	std::string account_id;
-	int heal_gage;
+	int heal_gauge;
 	int heal_partner;
 	union {
 		Dog dog;

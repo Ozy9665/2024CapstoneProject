@@ -42,7 +42,6 @@ MAP NewmapLandmassMap;
 NAVMESH TestNavMesh;
 
 std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
-// std::array<Room, MAX_ROOM> g_rooms;
 std::array<std::array<Altar, ALTAR_PER_ROOM>, MAX_ROOM> g_altars{};
 
 void InitializeAltars(int room_num) {
@@ -423,35 +422,48 @@ void HealTimerLoop() {
 		TIMER_EVENT ev;
 		auto current_time = std::chrono::system_clock::now();
 		if (true == timer_queue.try_pop(ev)) {
-			if (!g_users[ev.c_id].cultist_state.ABP_DoHeal ||
-				!g_users[ev.target_id].cultist_state.ABP_GetHeal) {
-				continue;
-			}
 			if (ev.wakeup_time > current_time) {
 				std::this_thread::sleep_until(ev.wakeup_time);
 			}
+
+			SESSION& actor = g_users[ev.c_id];
+			SESSION& target = g_users[ev.target_id];
+
 			switch (ev.event_id) {
 			case EV_HEAL:
 			{
-				g_users[ev.c_id].heal_gage += 1;
-				if (g_users[ev.c_id].heal_gage < 10) {
+				if (!actor.cultist_state.ABP_DoHeal ||
+					!target.cultist_state.ABP_GetHeal) {
+					continue;
+				}
+
+				target.heal_gauge += 1;
+				if (target.heal_gauge < 10) {
 					ev.wakeup_time = std::chrono::system_clock::now() + 1s;
 					ev.event_id = EV_HEAL;
 					timer_queue.push(ev);
 				}
-				else if (g_users[ev.c_id].heal_gage >= 10) {
+				else if (target.heal_gauge >= 10) {
 					// 락 걸기
-					if (g_users[ev.c_id].cultist_state.CurrentHealth + 50 > 100)
-						g_users[ev.c_id].cultist_state.CurrentHealth = 100;
-					else
-						g_users[ev.c_id].cultist_state.CurrentHealth += 10;
-					g_users[ev.c_id].heal_gage = 0;
+					target.heal_gauge = 0;
+					if (target.cultist_state.CurrentHealth + 50 >= 100) {
+						target.cultist_state.CurrentHealth = 100;
+					}
+					else {
+						target.cultist_state.CurrentHealth += 50.f;
+					}
+
+					actor.cultist_state.ABP_DoHeal = 0;
+					actor.heal_partner = -1;
+					target.cultist_state.ABP_GetHeal = 0;
+					target.heal_partner = -1;
+
 					BoolPacket packet;
 					packet.header = endHealHeader;
 					packet.result = true;
 					packet.size = sizeof(BoolPacket);
-					g_users[ev.c_id].do_send_packet(&packet);
-					g_users[ev.target_id].do_send_packet(&packet);
+					actor.do_send_packet(&packet);
+					target.do_send_packet(&packet);
 				}
 				break;
 			}
@@ -818,34 +830,6 @@ std::optional<int> SphereTraceClosestCultist(int centerId, float radius) {
 		}
 	}
 	return bestId;
-}
-
-std::optional<std::pair<FVector, FRotator>> GetMovePoint(int c_id, int targetId) {
-	auto itHealer = g_users.find(c_id);
-	auto itTarget = g_users.find(targetId);
-	if (itHealer == g_users.end() || itTarget == g_users.end()) {
-		return std::nullopt;
-	}
-
-	const SESSION& healer = itHealer->second;
-	const SESSION& target = itTarget->second;
-
-	FVector mid{
-		 static_cast<double>((healer.cultist_state.PositionX + target.cultist_state.PositionX) * 0.5),
-		 static_cast<double>((healer.cultist_state.PositionY + target.cultist_state.PositionY) * 0.5),
-		 static_cast<double>((healer.cultist_state.PositionZ + target.cultist_state.PositionZ) * 0.5)
-	};
-
-	const double dx = static_cast<double>(target.cultist_state.PositionX - healer.cultist_state.PositionX);
-	const double dy = static_cast<double>(target.cultist_state.PositionY - healer.cultist_state.PositionY);
-
-	double yawHealer = std::atan2(dy, dx) * 180.0 / PI;
-	if (yawHealer < 0.0) {
-		yawHealer += 360.0;
-	}
-	FRotator rot{ 0.0, yawHealer, 0.0 };
-
-	return std::make_pair(mid, rot);
 }
 
 bool line_sphere_intersect(
@@ -1644,7 +1628,7 @@ void mainLoop(HANDLE h_iocp) {
 			sess.c_socket = g_c_socket;
 			sess.role = -1;
 			sess.room_id = -1;
-			sess.heal_gage = 0;
+			sess.heal_gauge = 0;
 			g_users.insert(std::make_pair(new_id, sess));	// 여기 emplace로 바꿀 순 없을까?
 			CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket), h_iocp, new_id, 0);
 			g_users[new_id].do_recv();
