@@ -48,8 +48,9 @@ void SESSION::do_recv()
 SESSION::SESSION() {}
 
 SESSION::SESSION(int session_id, uint8_t ai_role, int room_id) 
-	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id), target_id{ -1 },
-	prev_remain{}, state{ ST_FREE }, heal_gage{}, lastTargetPos{}, lastSnapPos{}, snapStreak{} // AI Session
+	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id), 
+	target_id{ -1 }, prev_remain{}, state{ ST_FREE }, heal_gauge{}, 
+	lastTargetPos{}, lastSnapPos{}, snapStreak{}, patrol_target{}, has_patrol_target{ false }  // AI Session
 {
 	if (ai_role == 100)   // Cultist AI
 	{

@@ -472,11 +472,15 @@ public:
 		Dog dog;
 		Crow crow;
 	};
+	// ai
 	std::vector<Vec3> path;
 	Vec3 lastTargetPos;
 	Vec3 lastSnapPos;
 	int  snapStreak;
 	int target_id;
+	Vec3 patrol_target;
+	bool has_patrol_target;
+
 	void do_recv();
 
 public:

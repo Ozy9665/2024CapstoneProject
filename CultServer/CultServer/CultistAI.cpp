@@ -315,6 +315,7 @@ static void UpdateAIState(SESSION& ai)
         // 치료 중이었을 때의 로직 추가, packet보내야함. 
         ai.ai_state = AIState::Runaway;
         ai.target_id = police_id;
+        ai.has_patrol_target = false;
         return;
     }
 
@@ -342,6 +343,7 @@ static void UpdateAIState(SESSION& ai)
     {
         ai.ai_state = AIState::Chase;
         ai.target_id = cultist_id;
+        ai.has_patrol_target = false;
         return;
     }
 
@@ -349,6 +351,7 @@ static void UpdateAIState(SESSION& ai)
     if (IsNearAltar(ai))
     {
         ai.ai_state = AIState::Ritual;
+        ai.has_patrol_target = false;
         return;
     }
 
@@ -362,6 +365,42 @@ static void ExecuteAIState(SESSION& ai, float dt)
     {
     case AIState::Patrol:
     {
+        Vec3 cur{
+            ai.cultist_state.PositionX,
+            ai.cultist_state.PositionY,
+            ai.cultist_state.PositionZ
+        };
+
+        // 목적지 없으면 새로 생성
+        if (!ai.has_patrol_target)
+        {
+            int curTri = TestNavMesh.FindContainingTriangle(cur);
+            if (curTri < 0)
+                return;
+
+            // 랜덤 이웃 삼각형 선택
+            int randomTri = TestNavMesh.GetRandomTriangle(curTri, 10);
+            if (randomTri < 0)
+                return;
+
+            Vec3 randomPoint = TestNavMesh.GetTriCenter(randomTri);
+
+            ai.patrol_target = randomPoint;
+            ai.has_patrol_target = true;
+            ai.path.clear();
+        }
+
+        float dist = Dist(cur, ai.patrol_target);
+
+        // 도착했으면 새 목적지 만들기
+        if (dist < 50.f)
+        {
+            ai.has_patrol_target = false;
+            ai.path.clear();
+            return;
+        }
+
+        MoveAlongPath(ai, ai.patrol_target, dt);
         break;
     }
     case AIState::Chase:
@@ -382,81 +421,23 @@ static void ExecuteAIState(SESSION& ai, float dt)
             return;
 
         SESSION& target = it->second;
-        Vec3 selfPos{
-           ai.cultist_state.PositionX,
-           ai.cultist_state.PositionY,
-           ai.cultist_state.PositionZ
-        };
-        Vec3 targetPos{
-            target.cultist_state.PositionX,
-            target.cultist_state.PositionY,
-            target.cultist_state.PositionZ
-        };
-
-        float dist = Dist(selfPos, targetPos);
 
         if (target.cultist_state.CurrentHealth <= 50.f &&
-            dist <= SPHERE_TRACE_RADIUS &&
             !ai.cultist_state.ABP_DoHeal &&
             !target.cultist_state.ABP_GetHeal)
         {
-            auto moveOpt = GetMovePoint(ai.id, target_id);
-            if (!moveOpt)
-                return;
-
-            auto [moveLoc, moveRot] = *moveOpt;
-
-            Vec3 healMovePos{
-                static_cast<float>(moveLoc.x),
-                static_cast<float>(moveLoc.y),
-                static_cast<float>(moveLoc.z)
-            };
-
-            float moveDist = Dist(selfPos, healMovePos);
-
-            if (moveDist > 30.f)   // 충분히 가까워 지기 전까지 이동만
-            {
-                MoveAlongPath(ai, healMovePos, dt);
-                return;
-            }
-
-            const double rad = moveRot.yaw * PI / 180.0;
-            const double dirX = std::cos(rad);
-            const double dirY = std::sin(rad);
-            FVector targetPos{
-                moveLoc.x + dirX * (HEAL_GAP * 0.5),
-                moveLoc.y + dirY * (HEAL_GAP * 0.5),
-                moveLoc.z
-            };
-            double yaw = std::fmod(moveRot.yaw + 180.0, 360.0);
-            if (yaw < 0.0) {
-                yaw += 360.0;
-            }
-
-            MovePacket pkt;
-            pkt.header = doHealHeader;
-            pkt.size = sizeof(MovePacket);
-            pkt.SpawnLoc = targetPos;
-            pkt.SpawnRot.yaw = yaw;
-            pkt.isHealer = false;
-            target.heal_partner = ai.id;
-            target.do_send_packet(&pkt);
-
-            // Heal 시작
-            TIMER_EVENT ev;
-            ev.wakeup_time = std::chrono::system_clock::now() + 1s;
-            ev.c_id = ai.id;
-            ev.target_id = target_id;
-            ev.event_id = EV_HEAL;
-            timer_queue.push(ev);
-
-            ai.cultist_state.ABP_DoHeal = 1;
             ai.heal_partner = target_id;
             ai.ai_state = AIState::Heal;
             ai.path.clear();
             return;
         }
 
+        Vec3 targetPos{
+            target.cultist_state.PositionX,
+            target.cultist_state.PositionY,
+            target.cultist_state.PositionZ
+        };
+           
         MoveAlongPath(ai, targetPos, dt);
         break;
     }
@@ -470,6 +451,88 @@ static void ExecuteAIState(SESSION& ai, float dt)
     }
     case AIState::Heal:
     {
+        int target_id = ai.heal_partner;
+        if (target_id < 0)
+            return;
+
+        auto it = g_users.find(target_id);
+        if (it == g_users.end())
+            return;
+
+        SESSION& target = it->second;
+
+        auto moveOpt = GetMovePoint(ai.id, target_id);
+        if (!moveOpt)
+            return;
+
+        if (ai.cultist_state.ABP_DoHeal)
+        {
+            ai.cultist_state.VelocityX = 0.f;
+            ai.cultist_state.VelocityY = 0.f;
+            ai.cultist_state.Speed = 0.f;
+            return;
+        }
+
+        auto moveOpt = GetMovePoint(ai.id, target_id);
+        if (!moveOpt)
+            return;
+        auto [moveLoc, moveRot] = *moveOpt;
+
+        Vec3 selfPos{
+        ai.cultist_state.PositionX,
+        ai.cultist_state.PositionY,
+        ai.cultist_state.PositionZ
+        };
+
+        Vec3 healMovePos{
+            static_cast<float>(moveLoc.x),
+            static_cast<float>(moveLoc.y),
+            static_cast<float>(moveLoc.z)
+        };
+
+        float moveDist = Dist(selfPos, healMovePos);
+
+        if (moveDist > 30.f)   // 충분히 가까워 지기 전까지 이동만
+        {
+            MoveAlongPath(ai, healMovePos, dt);
+            return;
+        }
+
+        const double rad = moveRot.yaw * PI / 180.0;
+        const double dirX = std::cos(rad);
+        const double dirY = std::sin(rad);
+        FVector targetPos{
+            moveLoc.x + dirX * (HEAL_GAP * 0.5),
+            moveLoc.y + dirY * (HEAL_GAP * 0.5),
+            moveLoc.z
+        };
+        double yaw = std::fmod(moveRot.yaw + 180.0, 360.0);
+        if (yaw < 0.0) {
+            yaw += 360.0;
+        }
+
+        MovePacket pkt;
+        pkt.header = doHealHeader;
+        pkt.size = sizeof(MovePacket);
+        pkt.SpawnLoc = targetPos;
+        pkt.SpawnRot.yaw = yaw;
+        pkt.isHealer = false;
+        target.heal_partner = ai.id;
+        target.do_send_packet(&pkt);
+
+        // Heal 시작
+        TIMER_EVENT ev;
+        ev.wakeup_time = std::chrono::system_clock::now() + 1s;
+        ev.c_id = ai.id;
+        ev.target_id = target_id;
+        ev.event_id = EV_HEAL;
+        timer_queue.push(ev);
+
+        ai.cultist_state.ABP_DoHeal = 1;
+        ai.heal_partner = target_id;
+        ai.ai_state = AIState::Heal;
+        ai.path.clear();
+        return;
         break;
     }
     default:
@@ -624,4 +687,32 @@ void ApplyBatonHitToAI(SESSION& ai, const Vec3& attackerPos)
             timer_queue.push(ev);
         }
     }
+}
+
+std::optional<std::pair<FVector, FRotator>> GetMovePoint(int c_id, int targetId) {
+    auto itHealer = g_users.find(c_id);
+    auto itTarget = g_users.find(targetId);
+    if (itHealer == g_users.end() || itTarget == g_users.end()) {
+        return std::nullopt;
+    }
+
+    const SESSION& healer = itHealer->second;
+    const SESSION& target = itTarget->second;
+
+    FVector mid{
+         static_cast<double>((healer.cultist_state.PositionX + target.cultist_state.PositionX) * 0.5),
+         static_cast<double>((healer.cultist_state.PositionY + target.cultist_state.PositionY) * 0.5),
+         static_cast<double>((healer.cultist_state.PositionZ + target.cultist_state.PositionZ) * 0.5)
+    };
+
+    const double dx = static_cast<double>(target.cultist_state.PositionX - healer.cultist_state.PositionX);
+    const double dy = static_cast<double>(target.cultist_state.PositionY - healer.cultist_state.PositionY);
+
+    double yawHealer = std::atan2(dy, dx) * 180.0 / PI;
+    if (yawHealer < 0.0) {
+        yawHealer += 360.0;
+    }
+    FRotator rot{ 0.0, yawHealer, 0.0 };
+
+    return std::make_pair(mid, rot);
 }

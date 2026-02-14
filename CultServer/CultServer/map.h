@@ -140,6 +140,12 @@ struct Portal
     Vec3 right;
 };
 
+struct Triangle
+{
+    Vec3 v0, v1, v2;
+    int neighbors[3];  // °¢ edgeÀÇ ÀÌ¿ô »ï°¢Çü ÀÎµ¦½º
+};
+
 class NAVMESH : public MAP {
 public:
     bool Load(const std::string&, const Vec3&) override;
@@ -155,7 +161,8 @@ public:
     bool ClipSegmentToTriangle(const Vec3& from,
         const Vec3& to, int triIdx, Vec3& out) const;
     const MapTri& GetTri(int) const;
-    
+    int GetRandomTriangle(int, int) const;
+
 private:
     bool LoadNavOBJ(const std::string&,
         std::vector<MapVertex>&,
@@ -183,32 +190,3 @@ private:
 constexpr float EPS = 0.001f; // 1mm
 constexpr float SNAP_MAX = 80.f;
 constexpr float snapMax2 = SNAP_MAX * SNAP_MAX;
-
-
-std::optional<std::pair<FVector, FRotator>> GetMovePoint(int c_id, int targetId) {
-    auto itHealer = g_users.find(c_id);
-    auto itTarget = g_users.find(targetId);
-    if (itHealer == g_users.end() || itTarget == g_users.end()) {
-        return std::nullopt;
-    }
-
-    const SESSION& healer = itHealer->second;
-    const SESSION& target = itTarget->second;
-
-    FVector mid{
-         static_cast<double>((healer.cultist_state.PositionX + target.cultist_state.PositionX) * 0.5),
-         static_cast<double>((healer.cultist_state.PositionY + target.cultist_state.PositionY) * 0.5),
-         static_cast<double>((healer.cultist_state.PositionZ + target.cultist_state.PositionZ) * 0.5)
-    };
-
-    const double dx = static_cast<double>(target.cultist_state.PositionX - healer.cultist_state.PositionX);
-    const double dy = static_cast<double>(target.cultist_state.PositionY - healer.cultist_state.PositionY);
-
-    double yawHealer = std::atan2(dy, dx) * 180.0 / PI;
-    if (yawHealer < 0.0) {
-        yawHealer += 360.0;
-    }
-    FRotator rot{ 0.0, yawHealer, 0.0 };
-
-    return std::make_pair(mid, rot);
-}

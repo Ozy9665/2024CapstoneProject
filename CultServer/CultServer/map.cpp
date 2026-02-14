@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <queue>
+#include <random>
 
 bool MAP::Load(const std::string& objPath, const Vec3& MapOffset)
 {
@@ -1005,4 +1006,33 @@ bool NAVMESH::ClipSegmentToTriangle(
 const MapTri& NAVMESH::GetTri(int idx) const
 { 
     return tris[idx]; 
+}
+
+int NAVMESH::GetRandomTriangle(int startTri, int steps) const
+{
+    if (startTri < 0 || startTri >= (int)triNeighbors.size())
+        return -1;
+
+    int cur = startTri;
+    static std::default_random_engine dre{ std::random_device()() };
+
+    for (int i = 0; i < steps; ++i)
+    {
+        const auto& neighbors = triNeighbors[cur];
+
+        std::vector<int> valid;
+        for (int k = 0; k < 3; ++k)
+        {
+            if (neighbors[k] >= 0)
+                valid.push_back(neighbors[k]);
+        }
+
+        if (valid.empty())
+            break;
+
+        std::uniform_int_distribution<int> dist(0, valid.size() - 1);
+        cur = valid[dist(dre)];
+    }
+
+    return cur;
 }
