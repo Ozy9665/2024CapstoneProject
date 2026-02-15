@@ -1,3 +1,5 @@
+#define NOMINMAX
+
 #include "CultistAI.h"
 #include <chrono>
 #include <thread>
@@ -6,6 +8,7 @@
 #include <array>
 #include <cmath>
 #include <concurrent_priority_queue.h>
+#include <random>
 
 using namespace std;
 extern std::unordered_map<int, SESSION> g_users;
@@ -460,6 +463,125 @@ static void ExecuteAIState(SESSION& ai, float dt)
     }
     case AIState::Runaway:
     {
+        // EQS Score =
+        //    0.45 * 거리 점수
+        //    + 0.30 * 방향 점수
+        //    + 0.15 * 가시성 점수
+        //    + 0.10 * NavMesh 경로 점수
+        int police_id = ai.target_id;
+        if (police_id < 0)
+            return;
+
+        auto it = g_users.find(police_id);
+        if (it == g_users.end())
+            return;
+
+        SESSION& police = it->second;
+
+        Vec3 selfPos{
+        ai.cultist_state.PositionX,
+        ai.cultist_state.PositionY,
+        ai.cultist_state.PositionZ
+        };
+
+        Vec3 policePos{
+            police.police_state.PositionX,
+            police.police_state.PositionY,
+            police.police_state.PositionZ
+        };
+
+        // 후보 생성 (원형 샘플)
+        Vec3 bestPos = selfPos;
+        float bestScore = -FLT_MAX;
+        
+        static std::default_random_engine dre{ std::random_device()() };
+        std::uniform_real_distribution<float> angleDist(0.f, 2.f * PI);
+
+        for (int i = 0; i < sampleCount; ++i)
+        {
+            float angle = angleDist(dre);
+
+            Vec3 candidate{
+                selfPos.x + std::cos(angle) * sampleRadius,
+                selfPos.y + std::sin(angle) * sampleRadius,
+                selfPos.z
+            };
+
+            int tri = TestNavMesh.FindContainingTriangle(candidate);
+            if (tri < 0)
+                continue;
+
+            float score = 0.f;
+
+            // 거리 점수
+            float distPolice = Dist(candidate, policePos);
+            float distScore = std::min(distPolice / (sampleRadius * 2.f), 1.f);
+            score += distScore * 1000.f * 0.45f;
+
+            // 방향 점수 (반대 방향 선호)
+            Vec3 fleeDir{
+                selfPos.x - policePos.x,
+                selfPos.y - policePos.y,
+                0.f
+            };
+            Vec3 moveDir{
+                candidate.x - selfPos.x,
+                candidate.y - selfPos.y,
+                0.f
+            };
+
+            float len1 = std::sqrt(fleeDir.x * fleeDir.x + fleeDir.y * fleeDir.y);
+            float len2 = std::sqrt(moveDir.x * moveDir.x + moveDir.y * moveDir.y);
+
+            if (len1 > 1e-3f && len2 > 1e-3f)
+            {
+                fleeDir.x /= len1; fleeDir.y /= len1;
+                moveDir.x /= len2; moveDir.y /= len2;
+
+                float dot = fleeDir.x * moveDir.x + fleeDir.y * moveDir.y;
+                score += ((dot + 1.f) * 0.5f) * 1000.f * 0.30f;
+            }
+
+            // 가시성 점수 (벽 뒤 선호)
+            Ray ray;
+            ray.start = policePos;
+
+            Vec3 d{
+                candidate.x - policePos.x,
+                candidate.y - policePos.y,
+                0.f
+            };
+
+            float len = std::sqrt(d.x * d.x + d.y * d.y);
+            if (len > 1e-3f)
+            {
+                ray.dir.x = d.x / len;
+                ray.dir.y = d.y / len;
+                ray.dir.z = 0.f;
+
+                float hitDist;
+                int hitTri;
+
+                if (NewmapLandmassMap.LineTrace(ray, len, hitDist, hitTri))
+                    score += 500.f * 0.15f; // 벽 뒤면 보너스
+            }
+
+            // NavMesh 경로 점수
+            std::vector<int> triPath;
+            if (TestNavMesh.FindTriPath(policePos, candidate, triPath))
+            {
+                float pathScore = std::min((float)triPath.size() / 50.f, 1.f);
+                score += pathScore * 1000.f * 0.10f;
+            }
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestPos = candidate;
+            }
+        }
+
+        MoveAlongPath(ai, bestPos, dt);
         break;
     }
     case AIState::Ritual: 

@@ -18,3 +18,5 @@ constexpr float RAD_TO_DEG{ 180.f / PI };
 constexpr float fixed_dt{ 1.0f / 60.0f };
 constexpr float pushDist{ 120.f };
 constexpr float REPATH_DIST{ 200.f };
+constexpr int sampleCount{ 12 };
+constexpr float sampleRadius{ 1500.f };
