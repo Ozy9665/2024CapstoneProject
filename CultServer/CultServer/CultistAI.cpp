@@ -312,10 +312,27 @@ static void UpdateAIState(SESSION& ai)
     int police_id = FindNearbyPolice(ai.room_id, ai.id);
     if (police_id >= 0)
     {
-        // 치료 중이었을 때의 로직 추가, packet보내야함. 
+        if (ai.ai_state == AIState::Heal && ai.heal_partner >= 0)
+        {
+            auto it = g_users.find(ai.heal_partner);
+            if (it != g_users.end())
+            {
+                NoticePacket packet;
+                packet.header = endHealHeader;
+                packet.size = sizeof(NoticePacket);
+
+                it->second.do_send_packet(&packet);
+            }
+
+            // Heal 상태 해제
+            ai.cultist_state.ABP_DoHeal = 0;
+            ai.cultist_state.ABP_GetHeal = 0;
+            ai.heal_partner = -1;
+        }
         ai.ai_state = AIState::Runaway;
         ai.target_id = police_id;
         ai.has_patrol_target = false;
+        ai.path.clear();
         return;
     }
 
