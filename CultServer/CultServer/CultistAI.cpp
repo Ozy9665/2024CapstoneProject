@@ -374,7 +374,7 @@ static void UpdateAIState(SESSION& ai)
         ai.path.clear();
         return;
     }
-
+    // 치료 중
     if (ai.ai_state == AIState::Heal)
     {
         if (!ai.cultist_state.ABP_DoHeal &&
@@ -392,7 +392,7 @@ static void UpdateAIState(SESSION& ai)
 
         return;
     }
-
+    // 제단 진행 중
     if (ai.ai_state == AIState::Ritual)
     {
         if (ai.ritual_id < 0)
@@ -665,48 +665,6 @@ static void ExecuteAIState(SESSION& ai, float dt)
         MoveAlongPath(ai, bestPos, dt);
         break;
     }
-    case AIState::Ritual:
-    {
-        if (ai.ritual_id < 0)
-        {
-            ai.ai_state = AIState::Patrol;
-            break;
-        }
-
-        Vec3 selfPos{
-            ai.cultist_state.PositionX,
-            ai.cultist_state.PositionY,
-            ai.cultist_state.PositionZ
-        };
-
-        Altar& altar = g_altars[ai.room_id][ai.ritual_id];
-        Vec3 altarPos{
-            static_cast<float>(altar.loc.x),
-            static_cast<float>(altar.loc.y),
-            static_cast<float>(altar.loc.z)
-        };
-
-        float dist = Dist(selfPos, altarPos);
-
-        // 아직 멀면 이동
-        if (dist > 100.f)
-        {
-            MoveAlongPath(ai, altarPos, dt);
-            break;
-        }
-
-        // 도착 → Ritual 시작
-        if (!altar.isActivated)
-        {
-            altar.isActivated = true;
-            altar.time = std::chrono::system_clock::now();
-
-            std::cout << "[AI RitualStart] ai=" << ai.id
-                << " altar=" << ai.ritual_id << "\n";
-        }
-
-        break;
-    }
     case AIState::Heal:
     {
         int target_id = ai.heal_partner;
@@ -791,6 +749,48 @@ static void ExecuteAIState(SESSION& ai, float dt)
         ai.ai_state = AIState::Heal;
         ai.path.clear();
         return;
+        break;
+    }
+    case AIState::Ritual:
+    {
+        if (ai.ritual_id < 0)
+        {
+            ai.ai_state = AIState::Patrol;
+            break;
+        }
+
+        Vec3 selfPos{
+            ai.cultist_state.PositionX,
+            ai.cultist_state.PositionY,
+            ai.cultist_state.PositionZ
+        };
+
+        Altar& altar = g_altars[ai.room_id][ai.ritual_id];
+        Vec3 altarPos{
+            static_cast<float>(altar.loc.x),
+            static_cast<float>(altar.loc.y),
+            static_cast<float>(altar.loc.z)
+        };
+
+        float dist = Dist(selfPos, altarPos);
+
+        // 아직 멀면 이동
+        if (dist > 100.f)
+        {
+            MoveAlongPath(ai, altarPos, dt);
+            break;
+        }
+
+        // 도착 → Ritual 시작
+        if (!altar.isActivated)
+        {
+            altar.isActivated = true;
+            altar.time = std::chrono::system_clock::now();
+
+            std::cout << "[AI RitualStart] ai=" << ai.id
+                << " altar=" << ai.ritual_id << "\n";
+        }
+
         break;
     }
     default:
