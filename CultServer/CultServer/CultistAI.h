@@ -20,3 +20,5 @@ constexpr float pushDist{ 120.f };
 constexpr float REPATH_DIST{ 200.f };
 constexpr int sampleCount{ 12 };
 constexpr float sampleRadius{ 1500.f };
+constexpr float ALTAR_TRIGGER_RANGE{ 600.f };
+constexpr float ALTAR_TRIGGER_RANGE_SQ{ ALTAR_TRIGGER_RANGE * ALTAR_TRIGGER_RANGE };

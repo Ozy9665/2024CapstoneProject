@@ -480,6 +480,7 @@ public:
 	int target_id;
 	Vec3 patrol_target;
 	bool has_patrol_target;
+	int ritual_id;
 
 	void do_recv();
 
