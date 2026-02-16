@@ -38,6 +38,7 @@ enum class EQuakePhase : uint8
 	Collapse
 };
 
+// 그래프 노드
 USTRUCT(BlueprintType)
 struct FStructGraphNode
 {
@@ -114,6 +115,10 @@ struct FStructGraphNode
 	}
 };
 
+
+
+
+// 클래스 
 UCLASS()
 class CULT_API AStructGraphManager : public AActor
 {
@@ -138,6 +143,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
 	static void StabilizeStructureComponent(UPrimitiveComponent* PC);
 
+	// 지진
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
 	void StartEarthquake();
 
@@ -147,6 +153,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
 	void ResetStructure();
 
+	UFUNCTION(BlueprintCallable, Category = "Quake")
+	void SetQuakeStage(EQuakeStage NewStage);
+
+	UFUNCTION(BlueprintCallable, Category = "Quake")
+	void TriggerStage1();
+
+	UFUNCTION(BlueprintCallable, Category = "Quake")
+	void TriggerStage2();
+
+	UFUNCTION(BlueprintCallable, Category = "Quake")
+	void TriggerStage3();
 
 	// 초기 캘리브레이션
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Calib")
@@ -191,18 +208,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Quake")
 	void StopEarthquake3Phase();
 
-	// 지진
-	UFUNCTION(BlueprintCallable, Category = "Quake")
-	void SetQuakeStage(EQuakeStage NewStage);
-
-	UFUNCTION(BlueprintCallable, Category = "Quake")
-	void TriggerStage1();
-
-	UFUNCTION(BlueprintCallable, Category = "Quake")
-	void TriggerStage2();
-
-	UFUNCTION(BlueprintCallable, Category = "Quake")
-	void TriggerStage3();
 
 protected:
 	virtual void BeginPlay() override;
@@ -232,6 +237,8 @@ protected:
 	// Stage2에서의 부분 파손 대상 후보?
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage2")
 	TArray<TObjectPtr<UPrimitiveComponent>> Stage2Targets;
+
+
 
 private:
 	// ===== 파라미터(튜닝 포인트) =====
