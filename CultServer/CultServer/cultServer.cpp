@@ -1726,8 +1726,6 @@ int main()
 	WSADATA WSAData;
 	WSAStartup(MAKEWORD(2, 0), &WSAData);
 
-	//std::thread CommandThread(CommandWorker);
-
 	g_s_socket = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
 	if (g_s_socket <= 0) {
 		std::cout << "Failed to create socket" << std::endl;

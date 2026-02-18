@@ -110,7 +110,13 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     }
 
     // 다음 목표 노드
-    Vec3 next = ai.path.front();
+    Vec3 next;
+    if (ai.path.size() >= 2) {
+        next = ai.path[1];
+    }
+    else {
+        next = ai.path[0];
+    }
 
     Vec3 dir{
         next.x - cur.x,
@@ -326,6 +332,9 @@ static bool IsNearAltar(SESSION& ai)
         if (altar.isActivated)
             continue;
 
+        if (altar.gauge >= 100)
+            continue;
+
         float dx = selfPos.x - (float)altar.loc.x;
         float dy = selfPos.y - (float)altar.loc.y;
         float dist2 = dx * dx + dy * dy;
@@ -519,7 +528,12 @@ static void ExecuteAIState(SESSION& ai, float dt)
 
         auto it = g_users.find(target_id);
         if (it == g_users.end())
-            return;
+        {
+            ai.target_id = -1;
+            ai.ai_state = AIState::Patrol;
+            ai.path.clear();
+            break;
+        }
 
         SESSION& target = it->second;
 
@@ -533,12 +547,27 @@ static void ExecuteAIState(SESSION& ai, float dt)
             return;
         }
 
+        Vec3 selfPos{
+            ai.cultist_state.PositionX,
+            ai.cultist_state.PositionY,
+            ai.cultist_state.PositionZ
+        };
         Vec3 targetPos{
             target.cultist_state.PositionX,
             target.cultist_state.PositionY,
             target.cultist_state.PositionZ
         };
            
+        if (Dist(selfPos, targetPos) <= CHASE_STOP_RANGE)
+        {
+            ai.path.clear();
+            ai.cultist_state.VelocityX = 0.f;
+            ai.cultist_state.VelocityY = 0.f;
+            ai.cultist_state.VelocityZ = 0.f;
+            ai.cultist_state.Speed = 0.f;
+            return;
+        }
+
         MoveAlongPath(ai, targetPos, dt);
         break;
     }
@@ -675,13 +704,7 @@ static void ExecuteAIState(SESSION& ai, float dt)
         if (it == g_users.end())
             return;
 
-        SESSION& target = it->second;
-
-        auto moveOpt = GetMovePoint(ai.id, target_id);
-        if (!moveOpt)
-            return;
-
-        if (ai.cultist_state.ABP_DoHeal)
+        if (ai.cultist_state.ABP_DoHeal || ai.cultist_state.ABP_GetHeal)
         {
             ai.cultist_state.VelocityX = 0.f;
             ai.cultist_state.VelocityY = 0.f;
@@ -689,9 +712,12 @@ static void ExecuteAIState(SESSION& ai, float dt)
             return;
         }
 
+        SESSION& target = it->second;
+
         auto moveOpt = GetMovePoint(ai.id, target_id);
         if (!moveOpt)
             return;
+
         auto [moveLoc, moveRot] = *moveOpt;
 
         Vec3 selfPos{
@@ -775,16 +801,19 @@ static void ExecuteAIState(SESSION& ai, float dt)
         float dist = Dist(selfPos, altarPos);
 
         // 아직 멀면 이동
-        if (dist > 100.f)
+        if (dist > CHASE_STOP_RANGE)
         {
             MoveAlongPath(ai, altarPos, dt);
             break;
         }
 
-        // 도착 → Ritual 시작
+        // 도착, Ritual 시작
         if (!altar.isActivated)
         {
             altar.isActivated = true;
+            ai.cultist_state.VelocityX = 0.f;
+            ai.cultist_state.VelocityY = 0.f;
+            ai.cultist_state.Speed = 0.f;
             altar.time = std::chrono::system_clock::now();
 
             std::cout << "[AI RitualStart] ai=" << ai.id

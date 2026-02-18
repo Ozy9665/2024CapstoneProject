@@ -49,7 +49,7 @@ SESSION::SESSION() {}
 
 SESSION::SESSION(int session_id, uint8_t ai_role, int room_id) 
 	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id), 
-	target_id{ -1 }, prev_remain{}, state{ ST_FREE }, heal_gauge{}, 
+	target_id{ -1 }, prev_remain{}, ai_state{ AIState::Patrol }, heal_gauge{},
 	lastTargetPos{}, lastSnapPos{}, snapStreak{}, patrol_target{}, has_patrol_target{ false },
 	ritual_id{ -1 }// AI Session
 {
@@ -57,7 +57,6 @@ SESSION::SESSION(int session_id, uint8_t ai_role, int room_id)
 	{
 		cultist_state = CultistDummyState;
 		cultist_state.PlayerID = session_id;
-		ai_state = AIState::Patrol;
 		std::cout << "[AI] Cultist SESSION »ý¼º ID=" << id << "\n";
 	}
 	else if (ai_role == 101)  // Police AI

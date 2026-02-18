@@ -22,3 +22,4 @@ constexpr int sampleCount{ 12 };
 constexpr float sampleRadius{ 1500.f };
 constexpr float ALTAR_TRIGGER_RANGE{ 600.f };
 constexpr float ALTAR_TRIGGER_RANGE_SQ{ ALTAR_TRIGGER_RANGE * ALTAR_TRIGGER_RANGE };
+constexpr float CHASE_STOP_RANGE{ 50.f };
