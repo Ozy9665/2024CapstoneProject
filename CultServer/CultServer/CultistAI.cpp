@@ -422,40 +422,6 @@ static void UpdateAIState(SESSION& ai)
             ai.ai_state = AIState::Patrol;
             return;
         }
-
-        Altar& altar = g_altars[ai.room_id][ai.ritual_id];
-
-        if (!altar.isActivated)
-        {
-            altar.isActivated = true;
-            altar.time = std::chrono::system_clock::now();
-            return;
-        }
-
-        auto now = std::chrono::system_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - altar.time).count();
-
-        if (elapsed > 0)
-        {
-            int add = static_cast<int>(elapsed / 100); // 0.1초당 1%
-            if (add > 0)
-            {
-                altar.gauge = std::min(100, altar.gauge + add);
-                altar.time = now;
-            }
-        }
-
-        if (altar.gauge >= 100)
-        {
-            altar.gauge = 100;
-            altar.isActivated = false;
-
-            std::cout << "[AI Ritual Complete] ai=" << ai.id
-                << " altar=" << ai.ritual_id << "\n";
-
-            ai.ritual_id = -1;
-            ai.ai_state = AIState::Patrol;
-        }
         return;
     }
 
@@ -858,8 +824,32 @@ static void ExecuteAIState(SESSION& ai, float dt)
             altar.time = std::chrono::system_clock::now();
             std::cout << "[AI RitualStart] ai=" << ai.id
                 << " altar=" << ai.ritual_id << "\n";
+            break;
+        }
+        auto now = std::chrono::system_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - altar.time).count();
+
+        if (elapsed > 0)
+        {
+            int add = static_cast<int>(elapsed / 100); // 0.1초당 1%
+            if (add > 0)
+            {
+                altar.gauge = std::min(100, altar.gauge + add);
+                altar.time = now;
+            }
         }
 
+        if (altar.gauge >= 100)
+        {
+            altar.gauge = 100;
+            altar.isActivated = false;
+
+            std::cout << "[AI Ritual Complete] ai=" << ai.id
+                << " altar=" << ai.ritual_id << "\n";
+
+            ai.ritual_id = -1;
+            ai.ai_state = AIState::Patrol;
+        }
         break;
     }
     default:
