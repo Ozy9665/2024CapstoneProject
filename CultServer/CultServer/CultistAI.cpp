@@ -60,13 +60,28 @@ static float Dist(const Vec3& a, const Vec3& b)
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+static void StopMovement(SESSION& ai)
+{
+    ai.cultist_state.VelocityX = 0.f;
+    ai.cultist_state.VelocityY = 0.f;
+    ai.cultist_state.VelocityZ = 0.f;
+    ai.cultist_state.Speed = 0.f;
+}
+
 static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
 {
+
     Vec3 cur{
         ai.cultist_state.PositionX,
         ai.cultist_state.PositionY,
         ai.cultist_state.PositionZ
     };
+
+    if (Dist(cur, targetPos) <= CHASE_STOP_RANGE)
+    {
+        StopMovement(ai);
+        return;
+    }
 
     float dx = targetPos.x - ai.lastTargetPos.x;
     float dy = targetPos.y - ai.lastTargetPos.y;
@@ -85,6 +100,7 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         if (!TestNavMesh.FindTriPath(cur, targetPos, triPath))
         {
             std::cout << "TestNavMesh.FindTriPath fail" << "\n";
+            StopMovement(ai);
             ai.path.clear();
             return;
         }
@@ -92,13 +108,16 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         std::vector<std::pair<Vec3, Vec3>> portals;
         TestNavMesh.BuildPortals(triPath, portals);
 
-        if (portals.empty())
+        if (portals.empty()) {
+            StopMovement(ai);
             return;
+        }
 
         std::vector<Vec3> smoothPath;
         if (!TestNavMesh.SmoothPath(cur, targetPos, portals, smoothPath) ||
             smoothPath.size() < 2)
         {
+            StopMovement(ai);
             return;
         }
         ai.path = smoothPath;
@@ -106,6 +125,7 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
 
     if (ai.path.empty())
     {
+        StopMovement(ai);
         return;
     }
 
@@ -132,18 +152,14 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         // 현재 노드에 도착했다고 판단
         // 이번 tick에서는 이동하지 않음
         ai.path.erase(ai.path.begin());
-
-        ai.cultist_state.VelocityX = 0.f;
-        ai.cultist_state.VelocityY = 0.f;
-        ai.cultist_state.VelocityZ = 0.f;
-        ai.cultist_state.Speed = 0.f;
-
+        StopMovement(ai);
         return;
     }
 
     if (len < 1e-3f)
     {
         std::cout << "[AI MOVE] direction too small\n";
+        StopMovement(ai);
         return;
     }
 
@@ -375,6 +391,8 @@ static void UpdateAIState(SESSION& ai)
         }
         else if (ai.ai_state == AIState::Ritual)
         {
+            Altar& altar = g_altars[ai.room_id][ai.ritual_id];
+            altar.isActivated = false;
             ai.ritual_id = -1;
         }
         ai.ai_state = AIState::Runaway;
@@ -393,12 +411,7 @@ static void UpdateAIState(SESSION& ai)
             ai.target_id = -1;
             ai.path.clear();
         }
-
-        ai.cultist_state.VelocityX = 0.f;
-        ai.cultist_state.VelocityY = 0.f;
-        ai.cultist_state.VelocityZ = 0.f;
-        ai.cultist_state.Speed = 0.f;
-
+        StopMovement(ai);
         return;
     }
     // 제단 진행 중
@@ -451,6 +464,20 @@ static void UpdateAIState(SESSION& ai)
     {
         ai.ai_state = AIState::Ritual;
         ai.has_patrol_target = false;
+        ai.path.clear();
+        return;
+    }
+
+    // 이미 Chase중
+    if (ai.ai_state == AIState::Chase && ai.target_id >= 0)
+    {
+        auto it = g_users.find(ai.target_id);
+        if (it == g_users.end())
+        {
+            ai.ai_state = AIState::Patrol;
+            ai.target_id = -1;
+            return;
+        }
         return;
     }
 
@@ -458,11 +485,30 @@ static void UpdateAIState(SESSION& ai)
     int cultist_id = FindNearbyCultist(ai.room_id, ai.id);
     if (cultist_id >= 0)
     {
-        ai.ai_state = AIState::Chase;
-        ai.target_id = cultist_id;
-        ai.has_patrol_target = false;
-        ai.path.clear();
-        return;
+        auto it = g_users.find(cultist_id);
+        if (it != g_users.end())
+        {
+            Vec3 selfPos{
+               ai.cultist_state.PositionX,
+               ai.cultist_state.PositionY,
+               ai.cultist_state.PositionZ
+            };
+            Vec3 targetPos{
+                it->second.cultist_state.PositionX,
+                it->second.cultist_state.PositionY,
+                it->second.cultist_state.PositionZ
+            };
+
+            float dist = Dist(selfPos, targetPos);
+            if (dist <= CHASE_START_RANGE)
+            {
+                ai.ai_state = AIState::Chase;
+                ai.target_id = cultist_id;
+                ai.has_patrol_target = false;
+                ai.path.clear();
+                return;
+            }
+        }
     }
 
     // 기본 상태
@@ -519,10 +565,7 @@ static void ExecuteAIState(SESSION& ai, float dt)
         if (target_id < 0)
         {
             ai.path.clear();
-            ai.cultist_state.VelocityX = 0.f;
-            ai.cultist_state.VelocityY = 0.f;
-            ai.cultist_state.VelocityZ = 0.f;
-            ai.cultist_state.Speed = 0.f;
+            StopMovement(ai);
             return;
         }
 
@@ -536,7 +579,6 @@ static void ExecuteAIState(SESSION& ai, float dt)
         }
 
         SESSION& target = it->second;
-
         if (target.cultist_state.CurrentHealth <= 50.f &&
             !ai.cultist_state.ABP_DoHeal &&
             !target.cultist_state.ABP_GetHeal)
@@ -548,23 +590,23 @@ static void ExecuteAIState(SESSION& ai, float dt)
         }
 
         Vec3 selfPos{
-            ai.cultist_state.PositionX,
-            ai.cultist_state.PositionY,
-            ai.cultist_state.PositionZ
+           ai.cultist_state.PositionX,
+           ai.cultist_state.PositionY,
+           ai.cultist_state.PositionZ
         };
+
         Vec3 targetPos{
             target.cultist_state.PositionX,
             target.cultist_state.PositionY,
             target.cultist_state.PositionZ
         };
-           
-        if (Dist(selfPos, targetPos) <= CHASE_STOP_RANGE)
+
+        float dist = Dist(selfPos, targetPos);
+        if (dist <= CHASE_STOP_RANGE)
         {
             ai.path.clear();
-            ai.cultist_state.VelocityX = 0.f;
-            ai.cultist_state.VelocityY = 0.f;
-            ai.cultist_state.VelocityZ = 0.f;
-            ai.cultist_state.Speed = 0.f;
+            ai.has_patrol_target = false;
+            StopMovement(ai);
             return;
         }
 
@@ -706,9 +748,7 @@ static void ExecuteAIState(SESSION& ai, float dt)
 
         if (ai.cultist_state.ABP_DoHeal || ai.cultist_state.ABP_GetHeal)
         {
-            ai.cultist_state.VelocityX = 0.f;
-            ai.cultist_state.VelocityY = 0.f;
-            ai.cultist_state.Speed = 0.f;
+            StopMovement(ai);
             return;
         }
 
@@ -801,21 +841,21 @@ static void ExecuteAIState(SESSION& ai, float dt)
         float dist = Dist(selfPos, altarPos);
 
         // 아직 멀면 이동
-        if (dist > CHASE_STOP_RANGE)
+        if (dist >= CHASE_STOP_RANGE)
         {
             MoveAlongPath(ai, altarPos, dt);
             break;
         }
 
+        ai.has_patrol_target = false;
+        StopMovement(ai);
+        ai.path.clear();
+
         // 도착, Ritual 시작
         if (!altar.isActivated)
         {
             altar.isActivated = true;
-            ai.cultist_state.VelocityX = 0.f;
-            ai.cultist_state.VelocityY = 0.f;
-            ai.cultist_state.Speed = 0.f;
             altar.time = std::chrono::system_clock::now();
-
             std::cout << "[AI RitualStart] ai=" << ai.id
                 << " altar=" << ai.ritual_id << "\n";
         }
@@ -856,9 +896,7 @@ void CultistAIWorkerLoop()
             auto& st = ai.cultist_state;
             if (st.ABP_IsDead || st.ABP_IsStunned || st.ABP_IsHitByAnAttack)
             {
-                st.VelocityX = 0.f;
-                st.VelocityY = 0.f;
-                st.Speed = 0.f;
+                StopMovement(ai);
                 canMove = false;
             }
         
@@ -947,10 +985,7 @@ void ApplyBatonHitToAI(SESSION& ai, const Vec3& attackerPos)
 
     ai.cultist_state.PositionX += dir.x * pushDist;
     ai.cultist_state.PositionY += dir.y * pushDist;
-    ai.cultist_state.VelocityX = 0.f;
-    ai.cultist_state.VelocityY = 0.f;
-    ai.cultist_state.VelocityZ = 0.f;
-    ai.cultist_state.Speed = 0.f;
+    StopMovement(ai);
     ai.cultist_state.RotationYaw = std::atan2(dir.y, dir.x) * RAD_TO_DEG;
 
     st.CurrentHealth -= 100.f;
