@@ -509,13 +509,33 @@ static void ExecuteAIState(SESSION& ai, float dt)
 
             ai.patrol_target = randomPoint;
             ai.has_patrol_target = true;
+            ai.stuck_ticks = 0;
+            ai.last_dist_to_target = FLT_MAX;
             ai.path.clear();
         }
 
         float dist = Dist(cur, ai.patrol_target);
 
         // 도착했으면 새 목적지 만들기
-        if (dist < 50.f)
+        if (dist < CHASE_STOP_RANGE)
+        {
+            ai.has_patrol_target = false;
+            ai.path.clear();
+            return;
+        }
+
+        if (dist > ai.last_dist_to_target - 5.f)
+        {
+            ai.stuck_ticks++;
+        }
+        else
+        {
+            ai.stuck_ticks = 0;
+        }
+
+        ai.last_dist_to_target = dist;
+
+        if (ai.stuck_ticks > 60)
         {
             ai.has_patrol_target = false;
             ai.path.clear();

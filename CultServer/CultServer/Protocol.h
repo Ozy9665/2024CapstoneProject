@@ -461,26 +461,28 @@ public:
 	int				prev_remain;
 	int				room_id;
 	union {
-		FCultistCharacterState cultist_state;
-		FPoliceCharacterState police_state;
+		FCultistCharacterState	cultist_state;
+		FPoliceCharacterState	police_state;
 	};
 	std::unordered_set<int> visible_ids;
-	std::string account_id;
-	int heal_gauge;
-	int heal_partner;
+	std::string				account_id;
+	int						heal_gauge;
+	int						heal_partner;
 	union {
-		Dog dog;
-		Crow crow;
+		Dog		dog;
+		Crow	crow;
 	};
 	// ai
-	std::vector<Vec3> path;
-	Vec3 lastTargetPos;
-	Vec3 lastSnapPos;
-	int  snapStreak;
-	int target_id;
-	Vec3 patrol_target;
-	bool has_patrol_target;
-	int ritual_id;
+	std::vector<Vec3>	path;
+	Vec3				lastTargetPos;
+	Vec3				lastSnapPos;
+	int					snapStreak;
+	int					target_id;
+	Vec3				patrol_target;
+	bool				has_patrol_target;
+	int					ritual_id;
+	float				last_dist_to_target;
+	int					stuck_ticks;
 
 	void do_recv();
 
