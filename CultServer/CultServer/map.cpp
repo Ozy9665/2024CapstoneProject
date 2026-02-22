@@ -22,22 +22,6 @@ bool MAP::Load(const std::string& objPath, const Vec3& MapOffset)
     BuildTriangleAABBs();
     BuildSpatialGrid();
 
-    std::cout << "cellSize = " << cellSize << std::endl;
-    std::cout
-        << "verts: " << vertices.size()
-        << " tris: " << triangles.size()
-        << " grid: " << grid.size()
-        << std::endl;
-    std::cout
-        << "AABB X: " << worldAABB.minX << " ~ " << worldAABB.maxX
-        << " Y: " << worldAABB.minY << " ~ " << worldAABB.maxY
-        << std::endl;
-
-    Vec3 a{ -10219.0, 2560.0, -3009.0 };
-    Vec3 b{ -10000, 2000, -3000.0 };
-
-    std::cout << "CanMove: " << CanMove(a, b) << std::endl;
-
     return true;
 }
 
@@ -119,11 +103,6 @@ bool MAP::LoadOBJAndComputeAABB(
         outAABB.maxY = std::max(outAABB.maxY, v.y);
         outAABB.maxZ = std::max(outAABB.maxZ, v.z);
     }
-    std::cout
-        << "[OBJ AABB] "
-        << "X(" << outAABB.minX << " ~ " << outAABB.maxX << ") "
-        << "Y(" << outAABB.minY << " ~ " << outAABB.maxY << ") "
-        << "Z(" << outAABB.minZ << " ~ " << outAABB.maxZ << ")\n";
 
     return true;
 }
@@ -166,22 +145,26 @@ void MAP::BuildTriangleAABBs()
 void MAP::BuildSpatialGrid()
 {
     grid.clear();
+    grid.reserve(triAABBs.size());
+
+    const float baseX = worldAABB.minX;
+    const float baseZ = worldAABB.minZ;
 
     for (int i = 0; i < (int)triAABBs.size(); ++i)
     {
         const AABB& a = triAABBs[i];
 
-        const int minX = (int)std::floor((a.minX - worldAABB.minX) / cellSize);
-        const int maxX = (int)std::floor((a.maxX - worldAABB.minX) / cellSize);
-
-        const int minZ = (int)std::floor((a.minZ - worldAABB.minZ) / cellSize);
-        const int maxZ = (int)std::floor((a.maxZ - worldAABB.minZ) / cellSize);
+        const int minX = static_cast<int>(std::floor((a.minX - baseX) * invCell));
+        const int maxX = static_cast<int>(std::floor((a.maxX - baseX) * invCell));
+        const int minZ = static_cast<int>(std::floor((a.minZ - baseZ) * invCell));
+        const int maxZ = static_cast<int>(std::floor((a.maxZ - baseZ) * invCell));
 
         for (int x = minX; x <= maxX; ++x)
         {
             for (int z = minZ; z <= maxZ; ++z)
             {
-                grid[{ x, z }].push_back(i);
+                auto [it, inserted] = grid.try_emplace(CellKey{ x, z });
+                it->second.push_back(i);
             }
         }
     }
@@ -252,23 +235,58 @@ bool MAP::LineTrace(const Ray& worldRay, float maxDist, float& hitDist, int& hit
     hitDist = maxDist;
     hitTriIndex = -1;
 
+    const float baseX = worldAABB.minX;
+    const float baseZ = worldAABB.minZ;
+
+    auto toCellX = [&](float x)
+        {
+            return (int)std::floor((x - baseX) * invCell);
+        };
+
+    auto toCellZ = [&](float z)
+        {
+            return (int)std::floor((z - baseZ) * invCell);
+        };
+
+    int cx = toCellX(ray.start.x);
+    int cz = toCellZ(ray.start.z);
+
     const float endX = ray.start.x + ray.dir.x * maxDist;
     const float endZ = ray.start.z + ray.dir.z * maxDist;
 
-    const int minCellX = (int)std::floor((std::min(ray.start.x, endX) - worldAABB.minX) / cellSize);
-    const int maxCellX = (int)std::floor((std::max(ray.start.x, endX) - worldAABB.minX) / cellSize);
+    const int endCellX = toCellX(endX);
+    const int endCellZ = toCellZ(endZ);
 
-    const int minCellZ = (int)std::floor((std::min(ray.start.z, endZ) - worldAABB.minZ) / cellSize);
-    const int maxCellZ = (int)std::floor((std::max(ray.start.z, endZ) - worldAABB.minZ) / cellSize);
+    const int stepX = (ray.dir.x > 0.f) ? 1 : (ray.dir.x < 0.f ? -1 : 0);
+    const int stepZ = (ray.dir.z > 0.f) ? 1 : (ray.dir.z < 0.f ? -1 : 0);
 
-    for (int x = minCellX; x <= maxCellX; ++x)
-    {
-        for (int z = minCellZ; z <= maxCellZ; ++z)
+    auto boundaryX = [&](int x)
         {
-            auto it = grid.find({ x, z });
-            if (it == grid.end())
-                continue;
+            return baseX + (x + (stepX > 0 ? 1 : 0)) * cellSize;
+        };
 
+    auto boundaryZ = [&](int z)
+        {
+            return baseZ + (z + (stepZ > 0 ? 1 : 0)) * cellSize;
+        };
+
+    float tMaxX = (stepX == 0) ? FLT_MAX
+        : (boundaryX(cx) - ray.start.x) / ray.dir.x;
+
+    float tMaxZ = (stepZ == 0) ? FLT_MAX
+        : (boundaryZ(cz) - ray.start.z) / ray.dir.z;
+
+    const float tDeltaX = (stepX == 0) ? FLT_MAX
+        : (cellSize / std::abs(ray.dir.x));
+
+    const float tDeltaZ = (stepZ == 0) ? FLT_MAX
+        : (cellSize / std::abs(ray.dir.z));
+
+    while (true)
+    {
+        auto it = grid.find({ cx, cz });
+        if (it != grid.end())
+        {
             for (int triIdx : it->second)
             {
                 if (!RayAABB_XY(ray, triAABBs[triIdx], hitDist))
@@ -281,7 +299,28 @@ bool MAP::LineTrace(const Ray& worldRay, float maxDist, float& hitDist, int& hit
                     hitTriIndex = triIdx;
                 }
             }
+
+            if (hitTriIndex >= 0 &&
+                std::min(tMaxX, tMaxZ) > hitDist)
+                break;
         }
+
+        if (cx == endCellX && cz == endCellZ)
+            break;
+
+        if (tMaxX < tMaxZ)
+        {
+            cx += stepX;
+            tMaxX += tDeltaX;
+        }
+        else
+        {
+            cz += stepZ;
+            tMaxZ += tDeltaZ;
+        }
+
+        if (std::min(tMaxX, tMaxZ) > maxDist)
+            break;
     }
 
     return hitTriIndex >= 0;
@@ -362,17 +401,6 @@ bool NAVMESH::Load(const std::string& objPath, const Vec3& MapOffset)
     BuildTriangles();
     BuildTriangleAABBs();
     BuildSpatialGrid();
-
-    Vec3 a{ -10219.0, 2560.0, -3009.0 };
-    Vec3 b{ -5000, 2000, -3000.0 };
-
-    std::vector<int> triPath;
-    bool ok = FindTriPath(a, b, triPath);
-
-    std::cout
-        << "[TRI A*] ok=" << ok
-        << " len=" << triPath.size()
-        << std::endl;
 
     return true;
 }
@@ -510,46 +538,32 @@ static EdgeKey MakeEdge(int v0, int v1)
 
 void NAVMESH::BuildAdjacency()
 {
-    triNeighbors.clear();
-    triNeighbors.resize(triangles.size(), { -1, -1, -1 });
+    triNeighbors.assign(triangles.size(), { -1, -1, -1 });
 
-    std::unordered_map<EdgeKey, int, EdgeKeyHash> edgeOwner;
+    struct Owner { int tri; int edge; };
+    std::unordered_map<EdgeKey, Owner, EdgeKeyHash> edgeOwner;
+    edgeOwner.reserve(triangles.size() * 3);
 
     for (int ti = 0; ti < (int)triangles.size(); ++ti)
     {
         const auto& t = triangles[ti];
-        int vs[3] = { t.v0, t.v1, t.v2 };
+        const int vs[3] = { t.v0, t.v1, t.v2 };
 
         for (int e = 0; e < 3; ++e)
         {
-            int v0 = vs[e];
-            int v1 = vs[(e + 1) % 3];
-            EdgeKey key = MakeEdge(v0, v1);
+            const int v0 = vs[e];
+            const int v1 = vs[(e + 1) % 3];
+            const EdgeKey key = MakeEdge(v0, v1);
 
-            auto it = edgeOwner.find(key);
-            if (it == edgeOwner.end())
+            if (auto it = edgeOwner.find(key); it == edgeOwner.end())
             {
-                edgeOwner[key] = ti;
+                edgeOwner.emplace(key, Owner{ ti, e });
             }
             else
             {
-                int other = it->second;
-
-                // 서로 이웃으로 등록
-                for (int k = 0; k < 3; ++k)
-                {
-                    if (triNeighbors[ti][k] == -1) {
-                        triNeighbors[ti][k] = other;
-                        break;
-                    }
-                }
-                for (int k = 0; k < 3; ++k)
-                {
-                    if (triNeighbors[other][k] == -1) {
-                        triNeighbors[other][k] = ti;
-                        break;
-                    }
-                }
+                const Owner other = it->second;
+                triNeighbors[ti][e] = other.tri;
+                triNeighbors[other.tri][other.edge] = ti;
             }
         }
     }
@@ -700,42 +714,73 @@ float NAVMESH::TriHeightAtXY(int triIdx, float x, float y) const
         w3 * t.c.z;
 }
 
-int NAVMESH::FindContainingTriangle(const Vec3& pos) const
+void NAVMESH::TryCellContain(int cx, int cz,
+    const Vec3& pos, int& bestTri, float& bestDz) const
 {
-    int best = -1;
-    float bestDz = FLT_MAX;
+    auto it = grid.find(CellKey{ cx, cz });
+    if (it == grid.end()) return;
 
-    for (int i = 0; i < tris.size(); ++i)
+    for (int triIdx : it->second)
     {
-        if (!PointInTri2D(pos, tris[i]))
+        if (!PointInTri2D(pos, tris[triIdx]))
             continue;
 
-        float z = TriHeightAtXY(i, pos.x, pos.y);
-        float dz = std::abs(z - pos.z);
+        const float z0 = TriHeightAtXY(triIdx, pos.x, pos.y);
+        const float dz = std::abs(z0 - pos.z);
 
         if (dz < bestDz)
         {
             bestDz = dz;
-            best = i;
+            bestTri = triIdx;
+        }
+    }
+}
+
+int NAVMESH::TryCellSnapRing(int cx, int cz,
+    const Vec3& pos, float& bestD2) const
+{
+    int snap = -1;
+
+    for (int dx = -1; dx <= 1; ++dx)
+    {
+        for (int dz = -1; dz <= 1; ++dz)
+        {
+            auto it = grid.find(CellKey{ cx + dx, cz + dz });
+            if (it == grid.end())
+                continue;
+
+            for (int triIdx : it->second)
+            {
+                const float d2 = Dist2_PointTri2D(pos, tris[triIdx]);
+                if (d2 < bestD2)
+                {
+                    bestD2 = d2;
+                    snap = triIdx;
+                }
+            }
         }
     }
 
-    if (best >= 0)
+    return snap;
+}
+
+int NAVMESH::FindContainingTriangle(const Vec3& pos) const
+{
+    const int cx = (int)std::floor((pos.x - worldAABB.minX) * invCell);
+    const int cz = (int)std::floor((pos.z - worldAABB.minZ) * invCell);
+
+    int best = -1;
+    float bestDz = FLT_MAX;
+
+    TryCellContain(cx, cz, pos, best, bestDz);
+    if (best >= 0) 
         return best;
 
-    int snap = -1;
     float bestD2 = FLT_MAX;
-
-    for (int i = 0; i < (int)tris.size(); ++i)
-    {
-        const float d2 = Dist2_PointTri2D(pos, tris[i]);
-        if (d2 < bestD2) { bestD2 = d2; snap = i; }
-    }
+    int snap = TryCellSnapRing(cx, cz, pos, bestD2);
 
     if (snap >= 0 && bestD2 <= snapMax2)
-    {
         return snap;
-    }
 
     return -1;
 }
@@ -1030,7 +1075,7 @@ int NAVMESH::GetRandomTriangle(int startTri, int steps) const
         if (valid.empty())
             break;
 
-        std::uniform_int_distribution<int> dist(0, valid.size() - 1);
+        std::uniform_int_distribution<size_t> dist(0, valid.size() - 1);
         cur = valid[dist(dre)];
     }
 

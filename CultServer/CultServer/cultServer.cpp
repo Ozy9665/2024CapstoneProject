@@ -932,9 +932,9 @@ void baton_sweep(int c_id, HitPacket* p)
 			if (target.role == 100)
 			{
 				Vec3 attackerPos{
-					start.x,
-					start.y,
-					start.z
+					static_cast<float>(start.x),
+					static_cast<float>(start.y),
+					static_cast<float>(start.z)
 				};
 				std::cout << "ai attacked" << std::endl;
 				ApplyBatonHitToAI(target, attackerPos);

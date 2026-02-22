@@ -63,6 +63,7 @@ protected:
     SpatialGrid grid;
     AABB worldAABB;
     float cellSize{ 100.f };
+    float invCell{ 1.0f / cellSize };
     Vec3 offset;
 
     bool LoadOBJ(const std::string&,
@@ -185,6 +186,11 @@ private:
 
     float TriHeightAtXY(int, float, float) const;
 
+    void TryCellContain(int, int, const Vec3&,
+        int& bestTri, float& bestDz) const;
+
+    int TryCellSnapRing(int, int, const Vec3&,
+        float& bestD2) const;
 };
 
 constexpr float EPS = 0.001f; // 1mm
