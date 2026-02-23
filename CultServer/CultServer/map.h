@@ -164,6 +164,8 @@ public:
     const MapTri& GetTri(int) const;
     int GetRandomTriangle(int, int) const;
 
+    std::vector<int> triComponentId;
+
 private:
     bool LoadNavOBJ(const std::string&,
         std::vector<MapVertex>&,
@@ -181,6 +183,8 @@ private:
     void BuildAdjacency();
 
     void BuildTriCenters();
+
+    void BuildComponents();
 
     bool GetSharedEdge(int, int, Vec3&, Vec3&) const;
 

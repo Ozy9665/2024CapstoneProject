@@ -401,6 +401,10 @@ static void UpdateAIState(SESSION& ai)
         ai.path.clear();
         return;
     }
+    if (ai.ai_state == AIState::Runaway) {
+        ai.has_runaway_target = false;
+        ai.runaway_ticks = 0;
+    }
     // 치료 중
     if (ai.ai_state == AIState::Heal)
     {
@@ -602,10 +606,10 @@ static void ExecuteAIState(SESSION& ai, float dt)
     case AIState::Runaway:
     {
         // EQS Score =
-        //    0.45 * 거리 점수
-        //    + 0.30 * 방향 점수
+        //    0.30 * 거리 점수
+        //    + 0.20 * 방향 점수
         //    + 0.15 * 가시성 점수
-        //    + 0.10 * NavMesh 경로 점수
+        //    + 0.35 * NavMesh 경로 점수
         int police_id = ai.target_id;
         if (police_id < 0)
             return;
@@ -635,6 +639,12 @@ static void ExecuteAIState(SESSION& ai, float dt)
         static std::default_random_engine dre{ std::random_device()() };
         std::uniform_real_distribution<float> angleDist(0.f, 2.f * PI);
 
+        int selfTri = TestNavMesh.FindContainingTriangle(selfPos);
+        if (selfTri < 0) {
+            std::cout << "if (selfTri < 0)" << std::endl;
+            return;
+        }
+
         for (int i = 0; i < sampleCount; ++i)
         {
             float angle = angleDist(dre);
@@ -654,7 +664,7 @@ static void ExecuteAIState(SESSION& ai, float dt)
             // 거리 점수
             float distPolice = Dist(candidate, policePos);
             float distScore = std::min(distPolice / (sampleRadius * 2.f), 1.f);
-            score += distScore * 1000.f * 0.45f;
+            score += distScore * 1000.f * 0.30f;
 
             // 방향 점수 (반대 방향 선호)
             Vec3 fleeDir{
@@ -677,7 +687,7 @@ static void ExecuteAIState(SESSION& ai, float dt)
                 moveDir.x /= len2; moveDir.y /= len2;
 
                 float dot = fleeDir.x * moveDir.x + fleeDir.y * moveDir.y;
-                score += ((dot + 1.f) * 0.5f) * 1000.f * 0.30f;
+                score += ((dot + 1.f) * 0.5f) * 1000.f * 0.20f;
             }
 
             // 가시성 점수 (벽 뒤 선호)
@@ -705,13 +715,24 @@ static void ExecuteAIState(SESSION& ai, float dt)
             }
 
             // NavMesh 경로 점수
-            std::vector<int> triPath;
-            if (TestNavMesh.FindTriPath(policePos, candidate, triPath))
+            int candTri = tri;
+
+            if (TestNavMesh.triComponentId[selfTri] != TestNavMesh.triComponentId[candTri])
             {
-                float pathScore = std::min((float)triPath.size() / 50.f, 1.f);
-                score += pathScore * 1000.f * 0.10f;
+                continue;   // 연결 안 됨
             }
 
+            std::vector<int> triPath;
+            if (TestNavMesh.FindTriPath(selfPos, candidate, triPath))
+            {
+                float pathScore = std::min(static_cast<float>(triPath.size()) / 50.f, 1.f);
+                score += pathScore * 1000.f * 0.35f;
+            }
+            else
+            {
+                continue; // 도망 경로 자체가 없으면 후보 탈락
+            }
+            
             if (score > bestScore)
             {
                 bestScore = score;
@@ -719,7 +740,16 @@ static void ExecuteAIState(SESSION& ai, float dt)
             }
         }
 
-        MoveAlongPath(ai, bestPos, dt);
+        if (!ai.has_runaway_target || ai.runaway_ticks > 60)
+        {
+            ai.runaway_target = bestPos;
+            ai.has_runaway_target = true;
+            ai.runaway_ticks = 0;
+            ai.path.clear();
+        }
+
+        ai.runaway_ticks++;
+        MoveAlongPath(ai, ai.runaway_target, dt);
         break;
     }
     case AIState::Heal:
@@ -829,6 +859,7 @@ static void ExecuteAIState(SESSION& ai, float dt)
         // 아직 멀면 이동
         if (dist >= CHASE_STOP_RANGE)
         {
+            std::cout << " if (dist >= CHASE_STOP_RANGE)\n";
             MoveAlongPath(ai, altarPos, dt);
             break;
         }

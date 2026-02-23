@@ -483,6 +483,9 @@ public:
 	int					ritual_id;
 	float				last_dist_to_target;
 	int					stuck_ticks;
+	Vec3				runaway_target;
+	bool				has_runaway_target;
+	int					runaway_ticks;
 
 	void do_recv();
 

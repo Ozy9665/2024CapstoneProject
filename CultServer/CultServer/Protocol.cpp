@@ -51,7 +51,8 @@ SESSION::SESSION(int session_id, uint8_t ai_role, int room_id)
 	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id), 
 	target_id{ -1 }, prev_remain{}, ai_state{ AIState::Patrol }, heal_gauge{},
 	lastTargetPos{}, lastSnapPos{}, snapStreak{}, patrol_target{}, has_patrol_target{ false },
-	ritual_id{ -1 }, last_dist_to_target{ FLT_MAX }, stuck_ticks{ 0 } // AI Session
+	ritual_id{ -1 }, last_dist_to_target{ FLT_MAX }, stuck_ticks{},
+	runaway_target{}, has_runaway_target{ false }, runaway_ticks{}// AI Session
 {
 	if (ai_role == 100)   // Cultist AI
 	{

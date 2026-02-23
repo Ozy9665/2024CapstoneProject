@@ -401,6 +401,7 @@ bool NAVMESH::Load(const std::string& objPath, const Vec3& MapOffset)
     BuildTriangles();
     BuildTriangleAABBs();
     BuildSpatialGrid();
+    BuildComponents();
 
     return true;
 }
@@ -585,6 +586,39 @@ void NAVMESH::BuildTriCenters()
             (a.y + b.y + c.y) / 3.f,
             (a.z + b.z + c.z) / 3.f
         };
+    }
+}
+
+void NAVMESH::BuildComponents()
+{
+    triComponentId.assign(triNeighbors.size(), -1);
+
+    int compId = 0;
+
+    for (int i = 0; i < (int)triNeighbors.size(); ++i)
+    {
+        if (triComponentId[i] != -1)
+            continue;
+
+        std::queue<int> q;
+        q.push(i);
+        triComponentId[i] = compId;
+
+        while (!q.empty())
+        {
+            int t = q.front(); q.pop();
+
+            for (int nb : triNeighbors[t])
+            {
+                if (nb >= 0 && triComponentId[nb] == -1)
+                {
+                    triComponentId[nb] = compId;
+                    q.push(nb);
+                }
+            }
+        }
+
+        compId++;
     }
 }
 
