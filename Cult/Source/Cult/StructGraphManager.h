@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "GeometryCollection/GeometryCollectionComponent.h"
 #include "StructGraphManager.generated.h"
 
 UENUM(BlueprintType)
@@ -208,6 +209,39 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Quake")
 	void StopEarthquake3Phase();
 
+	// Geometry Collection 
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
+	FName GCWallTag = "GCWALL";
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
+	float Stage2_PulseInterval = 0.2f; // 0.15~0.25
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
+	float Stage2_Duration = 4.0f; // 3~6
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
+	float Stage2_DamageMin = 5000.f;
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
+	float Stage2_DamageMax = 30000.f;
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
+	float Stage2_ImpulseScale = 0.6f;
+
+	FTimerHandle Stage2Timer;
+	float Stage2Elapsed = 0.f;
+
+	UFUNCTION()
+	void TriggerPulse2();
+
+	// GC 찾기 + 데미지 적용
+	UGeometryCollectionComponent* FindNearestGC(const FVector& WorldPoint) const;
+	void ApplyDamageToGC(UGeometryCollectionComponent* GC, const FVector& HitPoint, float Damage);
+	static void ApplyStrainToGC(
+		UGeometryCollectionComponent* GCComp,
+		const FVector& HitPoint,
+		float Radius,
+		float StrainMagnitude);
 
 protected:
 	virtual void BeginPlay() override;
