@@ -142,7 +142,7 @@ public:
 
 	// 임시 콜리전 조절
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
-	static void StabilizeStructureComponent(UPrimitiveComponent* PC);
+	void StabilizeStructureComponent(UPrimitiveComponent* PC);
 
 	// 지진
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
@@ -213,6 +213,12 @@ public:
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
 	FName GCWallTag = "GCWALL";
 
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2|Strain")
+	float Stage2_Str_Radius = 180.f;   // 120~300
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2|Strain")
+	float Stage2_Str_Magnitude = 45000.f; 
+
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
 	float Stage2_PulseInterval = 0.2f; // 0.15~0.25
 
@@ -236,7 +242,6 @@ public:
 
 	// GC 찾기 + 데미지 적용
 	UGeometryCollectionComponent* FindNearestGC(const FVector& WorldPoint) const;
-	void ApplyDamageToGC(UGeometryCollectionComponent* GC, const FVector& HitPoint, float Damage);
 	static void ApplyStrainToGC(
 		UGeometryCollectionComponent* GCComp,
 		const FVector& HitPoint,

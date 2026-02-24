@@ -5,7 +5,8 @@
 #include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "GeometryCollection/GeometryCollectionComponent.h"
-#include "Field/FieldSystemObjects.h"          
+#include "Field/FieldSystemObjects.h"      
+#include "Field/FieldSystemTypes.h"
 #include "Field/FieldSystemComponent.h"
 
 AStructGraphManager::AStructGraphManager()
@@ -691,8 +692,10 @@ void AStructGraphManager::StabilizeStructureComponent(UPrimitiveComponent* PC)
 	PC->SetSimulatePhysics(false);
 	PC->SetEnableGravity(false);
 
-	// 가장 핵심: 물리 충돌을 끊기
-	PC->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	PC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+
+	PC->SetLinearDamping(2.0f);
+	PC->SetAngularDamping(2.0f);
 }
 
 
@@ -965,50 +968,24 @@ void AStructGraphManager::TriggerStage1()
 
 void AStructGraphManager::TriggerStage2()
 {
-	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage2 Start (Local strain on GC walls)"));
+	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage2 Start (Local strain pulses on GC walls)"));
 
-	// Stage1은 계속 흔들림 유지
+	// Stage1 흔들림 유지
 	SeismicBase = Stage1_SeismicBase;
 	SeismicOmega = Stage1_Omega;
 	StartEarthquake();
 
-	// GC_WALL 찾기
-	TArray<AActor*> Found;
-	UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName("GC_WALL"), Found);
-	UE_LOG(LogTemp, Warning, TEXT("[GC] Found GC_WALL=%d"), Found.Num());
+	// Stage2 펄스 타이머 시작
+	Stage2Elapsed = 0.f;
+	GetWorldTimerManager().ClearTimer(Stage2Timer);
 
-	int32 Applied = 0;
-
-	// 랜덤하게 몇 개만 적용
-	for (AActor* A : Found)
-	{
-		if (Applied >= Stage2_LocalDamageCount) break;
-		if (!IsValid(A)) continue;
-
-		// 액터에서 GeometryCollectionComponent 찾기
-		UGeometryCollectionComponent* GCComp = A->FindComponentByClass<UGeometryCollectionComponent>();
-		if (!IsValid(GCComp)) continue;
-
-		// HitPoint: 일단 바운드 중심(더 자연스럽게 하고 싶으면 랜덤 오프셋)
-		FVector Origin, Extent;
-		A->GetActorBounds(true, Origin, Extent);
-
-		FVector HitPoint = Origin;
-		HitPoint += FVector(
-			FMath::FRandRange(-Extent.X * 0.5f, Extent.X * 0.5f),
-			FMath::FRandRange(-Extent.Y * 0.5f, Extent.Y * 0.5f),
-			FMath::FRandRange(-Extent.Z * 0.3f, Extent.Z * 0.3f)
-		);
-
-		ApplyStrainToGC(GCComp, HitPoint, Stage2_Str_Radius, Stage2_Str_Magnitude);
-
-		// 연출 트리거(원하면 같이)
-		OnNodeYield(GCComp, 1.0f + Stage2_LocalDamageStrength);
-
-		Applied++;
-	}
-
-	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage2 Applied=%d"), Applied);
+	GetWorldTimerManager().SetTimer(
+		Stage2Timer,
+		this,
+		&AStructGraphManager::TriggerPulse2,
+		Stage2_PulseInterval,
+		true
+	);
 }
 
 void AStructGraphManager::TriggerStage3()
@@ -1017,9 +994,6 @@ void AStructGraphManager::TriggerStage3()
 	SeismicBase = Stage3_SeismicBase;
 	SeismicOmega = Stage3_Omega;
 
-	// Stage3에서는 Fail이 나올 수 있게 Threshold를 살짝 낮추거나,
-	// “실패 시 물리 enable”을 켤 수도 있음
-	// 지금은 MVP로 이벤트만 확실히 터지게 진행.
 	StartEarthquake();
 }
 
@@ -1051,27 +1025,26 @@ UGeometryCollectionComponent* AStructGraphManager::FindNearestGC(const FVector& 
 	return BestGC;
 }
 
-// 데미지 적용
-void AStructGraphManager::ApplyDamageToGC(UGeometryCollectionComponent* GC, const FVector& HitPoint, float Damage)
-{
-	if (!IsValid(GC)) return;
 
-	// 임펄스 방향은 랜덤(지진의 불규칙성)
-	const FVector Dir = FMath::VRand().GetSafeNormal();
-	const float Impulse = Damage * Stage2_ImpulseScale;
-
-	// Chaos GC: ApplyDamage가 가장 간단한 “국부 파손 트리거”
-	GC->ApplyDamage(Damage, HitPoint, Dir, Impulse);
-}
 
 void AStructGraphManager::TriggerPulse2()
 {
-	// Stage2 펄스: GC_WALL 중 1~2개만 찍어서 strain
+	Stage2Elapsed += Stage2_PulseInterval;
+	if (Stage2Elapsed >= Stage2_Duration)
+	{
+		GetWorldTimerManager().ClearTimer(Stage2Timer);
+		UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage2 End"));
+		return;
+	}
+
+	// GC_WALL 찾기
 	TArray<AActor*> Found;
-	UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName("GC_WALL"), Found);
+	UGameplayStatics::GetAllActorsWithTag(GetWorld(), GCWallTag, Found);
 	if (Found.Num() == 0) return;
 
-	const int32 PickCount = FMath::Min(2, Found.Num());
+	//  랜덤으로
+	const int32 PickCount = FMath::Min(Stage2_LocalDamageCount, Found.Num());
+
 	for (int32 i = 0; i < PickCount; ++i)
 	{
 		AActor* A = Found[FMath::RandRange(0, Found.Num() - 1)];
@@ -1083,13 +1056,49 @@ void AStructGraphManager::TriggerPulse2()
 		FVector Origin, Extent;
 		A->GetActorBounds(true, Origin, Extent);
 
-		FVector HitPoint = Origin + FVector(
-			FMath::FRandRange(-Extent.X, Extent.X),
-			FMath::FRandRange(-Extent.Y, Extent.Y),
-			FMath::FRandRange(-Extent.Z * 0.5f, Extent.Z * 0.5f)
+		// HitPoint 랜덤
+		const FVector HitPoint = Origin + FVector(
+			FMath::FRandRange(-Extent.X * 0.5f, Extent.X * 0.5f),
+			FMath::FRandRange(-Extent.Y * 0.5f, Extent.Y * 0.5f),
+			FMath::FRandRange(-Extent.Z * 0.3f, Extent.Z * 0.3f)
 		);
 
 		ApplyStrainToGC(GCComp, HitPoint, Stage2_Str_Radius, Stage2_Str_Magnitude);
+
+		// 연출용 이벤트 BP에서 처리
 		OnNodeYield(GCComp, 1.0f + Stage2_LocalDamageStrength);
 	}
+}
+
+
+void AStructGraphManager::ApplyStrainToGC(
+	UGeometryCollectionComponent* GCComp,
+	const FVector& HitPoint,
+	float Radius,
+	float StrainMagnitude)
+{
+	if (!IsValid(GCComp)) return;
+
+	URadialFalloff* Falloff = NewObject<URadialFalloff>(GCComp);
+	if (!Falloff) return;
+
+	Falloff->SetRadialFalloff(
+		StrainMagnitude,         
+		0.0f,                    
+		1.0f,                    
+		0.0f,                    
+		Radius,                  
+		HitPoint,                
+		EFieldFalloffType::Field_FallOff_None // 우선 None
+	);
+
+	UFieldSystemMetaDataIteration* Iter = NewObject<UFieldSystemMetaDataIteration>(GCComp);
+	if (Iter) Iter->Iterations = 1;
+
+	GCComp->ApplyPhysicsField(
+		true,
+		EGeometryCollectionPhysicsTypeEnum::Chaos_ExternalClusterStrain,
+		Iter,
+		Falloff
+	);
 }

@@ -8,7 +8,14 @@ public class Cult : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore","UMG" ,"AIModule","NavigationSystem", "Navmesh", "Niagara", "Landscape", "ProceduralMeshComponent" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore","UMG" ,"AIModule","NavigationSystem", "Navmesh", "Niagara", "Landscape", "ProceduralMeshComponent",   "GeometryCollectionEngine",
+    "ChaosSolverEngine","FieldSystemEngine" });
+
+        PublicDefinitions.AddRange(new string[]
+        {
+            "NOMINMAX",
+            "WIN32_LEAN_AND_MEAN"
+        });
 
         if (Target.Type == TargetType.Editor)
 		{
