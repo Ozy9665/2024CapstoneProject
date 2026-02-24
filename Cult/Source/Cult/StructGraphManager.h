@@ -248,6 +248,26 @@ public:
 		float Radius,
 		float StrainMagnitude);
 
+	// 스트레인 디버깅
+	void Debug_ApplyStrainOnce();
+
+	// 지진
+	// 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage1 Debug")
+	bool bStage1_InstantCollapse = true;
+
+	// 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage1 Debug")
+	FName Stage1_DestroyTag = "GC_WALL";
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage1 Debug")
+	TSubclassOf<UCameraShakeBase> Stage1_CameraShakeClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage1 Debug")
+	float Stage1_ShakeScale = 2.0f;
+	void PlayStage1CameraShake();
+	void DestroyActorsWithTag(FName Tag);
+
+
 protected:
 	virtual void BeginPlay() override;
 

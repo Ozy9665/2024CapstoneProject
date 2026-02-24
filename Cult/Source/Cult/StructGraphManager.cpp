@@ -7,6 +7,8 @@
 #include "GeometryCollection/GeometryCollectionComponent.h"
 #include "Field/FieldSystemObjects.h"      
 #include "Field/FieldSystemTypes.h"
+#include "GameFramework/PlayerController.h"
+#include "Camera/PlayerCameraManager.h"
 #include "Field/FieldSystemComponent.h"
 
 AStructGraphManager::AStructGraphManager()
@@ -18,6 +20,9 @@ void AStructGraphManager::BeginPlay()
 {
 	Super::BeginPlay();
 	UE_LOG(LogTemp, Warning, TEXT("[StructGraph] BeginPlay: %s"), *GetName());
+
+	FTimerHandle Tmp;
+	GetWorldTimerManager().SetTimer(Tmp, this, &AStructGraphManager::Debug_ApplyStrainOnce, 0.5f, false);
 }
 
 void AStructGraphManager::InitializeFromBP(
@@ -960,10 +965,18 @@ void AStructGraphManager::SetQuakeStage(EQuakeStage NewStage)
 void AStructGraphManager::TriggerStage1()
 {
 	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage1 Start"));
-	SeismicBase = Stage1_SeismicBase;     // 기존 변수 사용
-	SeismicOmega = Stage1_Omega;
 
-	StartEarthquake(); // 타이머 진동 시작
+	// 기존 Stage1 흔들림 로직
+	SeismicBase = Stage1_SeismicBase;
+	SeismicOmega = Stage1_Omega;
+	StartEarthquake(); // 타이머 흔들기
+
+	// 즉시붕괴
+	if (bStage1_InstantCollapse)
+	{
+		PlayStage1CameraShake();
+		DestroyActorsWithTag(Stage1_DestroyTag);
+	}
 }
 
 void AStructGraphManager::TriggerStage2()
@@ -1081,7 +1094,8 @@ void AStructGraphManager::ApplyStrainToGC(
 
 	URadialFalloff* Falloff = NewObject<URadialFalloff>(GCComp);
 	if (!Falloff) return;
-
+	GCComp->SetSimulatePhysics(true);
+	GCComp->WakeAllRigidBodies();
 	Falloff->SetRadialFalloff(
 		StrainMagnitude,         
 		0.0f,                    
@@ -1093,7 +1107,7 @@ void AStructGraphManager::ApplyStrainToGC(
 	);
 
 	UFieldSystemMetaDataIteration* Iter = NewObject<UFieldSystemMetaDataIteration>(GCComp);
-	if (Iter) Iter->Iterations = 1;
+	if (Iter) Iter->Iterations = 10;
 
 	GCComp->ApplyPhysicsField(
 		true,
@@ -1101,4 +1115,80 @@ void AStructGraphManager::ApplyStrainToGC(
 		Iter,
 		Falloff
 	);
+}
+
+void AStructGraphManager::Debug_ApplyStrainOnce()
+{
+	TArray<AActor*> Found;
+	UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName("GC_WALL"), Found);
+
+	UE_LOG(LogTemp, Warning, TEXT("[Debug] GC_WALL Found: %d"), Found.Num());
+	if (Found.Num() == 0) return;
+
+	// 첫 번째 벽 선택
+	AActor* WallActor = Found[0];
+	if (!IsValid(WallActor)) return;
+
+	UGeometryCollectionComponent* GCComp = WallActor->FindComponentByClass<UGeometryCollectionComponent>();
+	if (!IsValid(GCComp))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Debug] No GCComp on %s"), *WallActor->GetName());
+		return;
+	}
+
+	// HitPoint = 벽 바운드 중심
+	FVector Origin, Extent;
+	WallActor->GetActorBounds(true, Origin, Extent);
+
+	const float Radius = 2000.f;
+	const float Mag = 1000000.f;
+
+	UE_LOG(LogTemp, Warning, TEXT("[Debug] ApplyStrainOnce -> %s Radius=%.1f Mag=%.1f"),
+		*WallActor->GetName(), Radius, Mag);
+
+	ApplyStrainToGC(GCComp, Origin, Radius, Mag);
+
+	GCComp->SetSimulatePhysics(true);
+	UE_LOG(LogTemp, Warning, TEXT("[GCPhys] Sim=%d Mobility=%d Collision=%d"),
+		GCComp->IsSimulatingPhysics() ? 1 : 0,
+		(int32)GCComp->Mobility,
+		(int32)GCComp->GetCollisionEnabled());
+	GCComp->SetEnableGravity(true);
+	GCComp->WakeAllRigidBodies();
+
+	//  임펄스
+	GCComp->AddRadialImpulse(Origin, 2000.f, 2000000.f, ERadialImpulseFalloff::RIF_Constant, true);
+}
+
+
+
+
+// 즉붕
+void AStructGraphManager::PlayStage1CameraShake()
+{
+	if (!Stage1_CameraShakeClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Stage1] Stage1_CameraShakeClass is null. Set it in BP_StructGraphManager."));
+		return;
+	}
+
+	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+	if (!PC || !PC->PlayerCameraManager) return;
+
+	PC->PlayerCameraManager->StartCameraShake(Stage1_CameraShakeClass, Stage1_ShakeScale);
+}
+
+void AStructGraphManager::DestroyActorsWithTag(FName Tag)
+{
+	TArray<AActor*> Found;
+	UGameplayStatics::GetAllActorsWithTag(GetWorld(), Tag, Found);
+
+	UE_LOG(LogTemp, Warning, TEXT("[Stage1] DestroyActorsWithTag(%s) Found=%d"), *Tag.ToString(), Found.Num());
+
+	for (AActor* A : Found)
+	{
+		if (!IsValid(A)) continue;
+		if (A == this) continue;
+		A->Destroy();
+	}
 }
