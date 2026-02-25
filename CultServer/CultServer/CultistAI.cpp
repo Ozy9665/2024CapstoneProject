@@ -77,6 +77,10 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         ai.cultist_state.PositionZ
     };
 
+    std::cout << "[MOVE] cur=(" << cur.x << "," << cur.y
+        << ") target=(" << targetPos.x << "," << targetPos.y
+        << ") pathSize=" << ai.path.size() << "\n";
+
     if (Dist(cur, targetPos) <= CHASE_STOP_RANGE)
     {
         StopMovement(ai);
@@ -99,7 +103,6 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         std::vector<int> triPath;
         if (!TestNavMesh.FindTriPath(cur, targetPos, triPath))
         {
-            std::cout << "TestNavMesh.FindTriPath fail" << "\n";
             StopMovement(ai);
             ai.path.clear();
             return;
@@ -129,6 +132,13 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         return;
     }
 
+    if (ai.path.size() < 1)
+    {
+        std::cout << "[FATAL] path empty before next selection\n";
+        StopMovement(ai);
+        return;
+    }
+
     // 다음 목표 노드
     Vec3 next;
     if (ai.path.size() >= 2) {
@@ -149,16 +159,24 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     const float speed = 300.f; // 600cm/s
     if (len <= speed * deltaTime)
     {
-        // 현재 노드에 도착했다고 판단
-        // 이번 tick에서는 이동하지 않음
         ai.path.erase(ai.path.begin());
-        StopMovement(ai);
-        return;
+
+        if (ai.path.empty())
+        {
+            StopMovement(ai);
+            return;
+        }
+
+        next = ai.path[0];
+
+        dir.x = next.x - cur.x;
+        dir.y = next.y - cur.y;
+        len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+        std::cout << " if (len <= speed * deltaTime)" << std::endl;
     }
 
     if (len < 1e-3f)
     {
-        std::cout << "[AI MOVE] direction too small\n";
         StopMovement(ai);
         return;
     }
@@ -181,20 +199,10 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         );
 
     // state 회전 갱신
-    Vec3 lookDir{
-    targetPos.x - cur.x,
-    targetPos.y - cur.y,
-    0.f
-    };
-
-    float lookLen = std::sqrt(lookDir.x * lookDir.x + lookDir.y * lookDir.y);
-    if (lookLen > 1e-3f)
+    if (len > 1e-3f)
     {
-        lookDir.x /= lookLen;
-        lookDir.y /= lookLen;
-
         ai.cultist_state.RotationYaw =
-            std::atan2(lookDir.y, lookDir.x) * RAD_TO_DEG;
+            std::atan2(dir.y, dir.x) * RAD_TO_DEG;
     }
 }
 
@@ -740,15 +748,26 @@ static void ExecuteAIState(SESSION& ai, float dt)
             }
         }
 
-        if (!ai.has_runaway_target || ai.runaway_ticks > 60)
+        if (!ai.has_runaway_target)
         {
             ai.runaway_target = bestPos;
             ai.has_runaway_target = true;
             ai.runaway_ticks = 0;
             ai.path.clear();
         }
+        else
+        {
+            ai.runaway_ticks++;
 
-        ai.runaway_ticks++;
+            if (ai.runaway_ticks > 60 && 
+                Dist(ai.runaway_target, bestPos) > 400.f)
+            {
+                ai.runaway_target = bestPos;
+                ai.runaway_ticks = 0;
+                ai.path.clear();
+            }
+        }
+
         MoveAlongPath(ai, ai.runaway_target, dt);
         break;
     }
