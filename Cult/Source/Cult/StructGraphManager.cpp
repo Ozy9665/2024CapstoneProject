@@ -21,6 +21,8 @@ void AStructGraphManager::BeginPlay()
 	Super::BeginPlay();
 	UE_LOG(LogTemp, Warning, TEXT("[StructGraph] BeginPlay: %s"), *GetName());
 
+	ApplySettleDampingThenRestore();
+
 	FTimerHandle Tmp;
 	GetWorldTimerManager().SetTimer(Tmp, this, &AStructGraphManager::Debug_ApplyStrainOnce, 0.5f, false);
 }
@@ -966,6 +968,9 @@ void AStructGraphManager::TriggerStage1()
 {
 	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage1 Start"));
 
+	// 댐핑
+	ApplyDampingToTaggedGC(GCWallTag, Stage1LinearDamping, Stage1AngularDamping);
+
 	// 기존 Stage1 흔들림 로직
 	SeismicBase = Stage1_SeismicBase;
 	SeismicOmega = Stage1_Omega;
@@ -982,6 +987,10 @@ void AStructGraphManager::TriggerStage1()
 void AStructGraphManager::TriggerStage2()
 {
 	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage2 Start (Local strain pulses on GC walls)"));
+
+	// 댐핑
+	ApplyDampingToTaggedGC(GCWallTag, Stage2LinearDamping, Stage2AngularDamping);
+
 
 	// Stage1 흔들림 유지
 	SeismicBase = Stage1_SeismicBase;
@@ -1003,6 +1012,9 @@ void AStructGraphManager::TriggerStage2()
 
 void AStructGraphManager::TriggerStage3()
 {
+	// 댐핑
+	ApplyDampingToTaggedGC(GCWallTag, Stage3LinearDamping, Stage3AngularDamping);
+
 	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage3 Start (Chain collapse)"));
 	SeismicBase = Stage3_SeismicBase;
 	SeismicOmega = Stage3_Omega;
@@ -1190,5 +1202,35 @@ void AStructGraphManager::DestroyActorsWithTag(FName Tag)
 		if (!IsValid(A)) continue;
 		if (A == this) continue;
 		A->Destroy();
+	}
+}
+
+void AStructGraphManager::ApplySettleDampingThenRestore()
+{
+	// 시작 안정화
+	ApplyDampingToTaggedGC(GCWallTag, SettleLinearDamping, SettleAngularDamping);
+
+	// SettleDuration 후에 기본으로 되돌리기
+	GetWorldTimerManager().ClearTimer(SettleTimerHandle);
+	GetWorldTimerManager().SetTimer(SettleTimerHandle, [this]()
+		{
+			ApplyDampingToTaggedGC(GCWallTag, Stage1LinearDamping, Stage1AngularDamping);
+		}, SettleDuration, false);
+}
+
+void AStructGraphManager::ApplyDampingToTaggedGC(FName Tag, float Lin, float Ang)
+{
+	TArray<AActor*> Found;
+	UGameplayStatics::GetAllActorsWithTag(GetWorld(), Tag, Found);
+
+	for (AActor* A : Found)
+	{
+		if (!IsValid(A)) continue;
+
+		UGeometryCollectionComponent* GC = A->FindComponentByClass<UGeometryCollectionComponent>();
+		if (!IsValid(GC)) continue;
+
+		GC->SetLinearDamping(Lin);
+		GC->SetAngularDamping(Ang);
 	}
 }

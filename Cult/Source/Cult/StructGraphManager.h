@@ -268,6 +268,42 @@ public:
 	void DestroyActorsWithTag(FName Tag);
 
 
+	// ===== Damping Control =====
+
+	// ÃÊ±â Á¤Âø ±¸°£
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Damping")
+	float SettleDuration = 1.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Damping")
+	float SettleLinearDamping = 15.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Damping")
+	float SettleAngularDamping = 15.0f;
+
+	// Stageº° ´ïÇÎ
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Damping")
+	float Stage1LinearDamping = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Damping")
+	float Stage1AngularDamping = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Damping")
+	float Stage2LinearDamping = 0.6f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Damping")
+	float Stage2AngularDamping = 0.6f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Damping")
+	float Stage3LinearDamping = 0.2f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Damping")
+	float Stage3AngularDamping = 0.2f;
+
+	void ApplyDampingToTaggedGC(FName Tag, float Lin, float Ang);
+	void ApplySettleDampingThenRestore();
+
+	FTimerHandle SettleTimerHandle;
+
 protected:
 	virtual void BeginPlay() override;
 
