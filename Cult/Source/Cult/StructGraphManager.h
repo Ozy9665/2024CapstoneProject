@@ -254,7 +254,7 @@ public:
 	// ÁöÁø
 	// 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage1 Debug")
-	bool bStage1_InstantCollapse = true;
+	bool bStage1_InstantCollapse = false;
 
 	// 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage1 Debug")

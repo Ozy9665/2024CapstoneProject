@@ -1157,7 +1157,7 @@ void AStructGraphManager::Debug_ApplyStrainOnce()
 	GCComp->WakeAllRigidBodies();
 
 	//  ÀÓÆÞ½º
-	GCComp->AddRadialImpulse(Origin, 2000.f, 2000000.f, ERadialImpulseFalloff::RIF_Constant, true);
+	GCComp->AddImpulse(FVector(20000000.f, 0.f, 0.f), NAME_None, true);
 }
 
 
