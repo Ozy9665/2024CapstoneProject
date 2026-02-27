@@ -70,18 +70,13 @@ static void StopMovement(SESSION& ai)
 
 static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
 {
-
     Vec3 cur{
         ai.cultist_state.PositionX,
         ai.cultist_state.PositionY,
         ai.cultist_state.PositionZ
     };
 
-    std::cout << "[MOVE] cur=(" << cur.x << "," << cur.y
-        << ") target=(" << targetPos.x << "," << targetPos.y
-        << ") pathSize=" << ai.path.size() << "\n";
-
-    if (Dist(cur, targetPos) <= CHASE_STOP_RANGE)
+    if (Dist(cur, targetPos) <= ARRIVE_RANGE)
     {
         StopMovement(ai);
         return;
@@ -860,12 +855,6 @@ static void ExecuteAIState(SESSION& ai, float dt)
             break;
         }
 
-        Vec3 selfPos{
-            ai.cultist_state.PositionX,
-            ai.cultist_state.PositionY,
-            ai.cultist_state.PositionZ
-        };
-
         Altar& altar = g_altars[ai.room_id][ai.ritual_id];
         Vec3 altarPos{
             static_cast<float>(altar.loc.x),
@@ -873,13 +862,17 @@ static void ExecuteAIState(SESSION& ai, float dt)
             static_cast<float>(altar.loc.z)
         };
 
-        float dist = Dist(selfPos, altarPos);
-
         // 아직 멀면 이동
-        if (dist >= CHASE_STOP_RANGE)
+        MoveAlongPath(ai, altarPos, dt);
+        Vec3 selfPos{
+            ai.cultist_state.PositionX,
+            ai.cultist_state.PositionY,
+            ai.cultist_state.PositionZ
+        };
+        float dist = Dist(selfPos, altarPos);
+        if (!ai.path.empty())
         {
-            std::cout << " if (dist >= CHASE_STOP_RANGE)\n";
-            MoveAlongPath(ai, altarPos, dt);
+            std::cout << "if (!ai.path.empty()))\n";
             break;
         }
 

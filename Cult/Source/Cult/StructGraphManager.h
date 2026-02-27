@@ -211,7 +211,7 @@ public:
 
 	// Geometry Collection 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
-	FName GCWallTag = "GCWALL";
+	FName GCWallTag = "GC_WALL";
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2|Strain")
 	float Stage2_Str_Radius = 180.f;   // 120~300
@@ -220,7 +220,7 @@ public:
 	float Stage2_Str_Magnitude = 45000.f; 
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
-	float Stage2_PulseInterval = 0.2f; // 0.15~0.25
+	float Stage2_PulseInterval = 0.5f; // 0.15~0.25
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
 	float Stage2_Duration = 4.0f; // 3~6
@@ -236,6 +236,9 @@ public:
 
 	FTimerHandle Stage2Timer;
 	float Stage2Elapsed = 0.f;
+
+	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
+	float Stage2_KickStrength = 200000.f;
 
 	UFUNCTION()
 	void TriggerPulse2();
@@ -259,14 +262,67 @@ public:
 	// 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage1 Debug")
 	FName Stage1_DestroyTag = "GC_WALL";
+	// 카메라
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage1 Debug")
 	TSubclassOf<UCameraShakeBase> Stage1_CameraShakeClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Camera")
+	TSubclassOf<UCameraShakeBase> QuakeContinuousShakeClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Camera")
+	TSubclassOf<UCameraShakeBase> QuakeImpactShakeClass;
+
+	float LastStage2ShakeTime = -1000.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Camera")
+	float Stage1ShakeScale = 0.6f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Camera")
+	float Stage2ShakeScale = 1.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Camera")
+	float Stage3ShakeScale = 2.2f;
+
+	// 카메라 임팩트
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Camera")
+	TSubclassOf<UCameraShakeBase> QuakeStage3LongShakeClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Camera")
+	float Stage3LongScale = 1.6f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Camera")
+	float Stage3ImpactScale = 1.6f;
+
+	FTimerHandle ImpactDecayTimer;
+	float ImpactDecayScale = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Camera")
+	float ImpactStartScale = 2.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Camera")
+	float ImpactEndScale = 0.9f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Camera")
+	float ImpactDecayDuration = 1.2f; // 감쇠 총 시간
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Camera")
+	float ImpactDecayInterval = 0.15f; // 재호출 간격
+	
+	void PlayImpactDecaying();
+	void PlayShake(TSubclassOf<UCameraShakeBase> ShakeClass, float Scale);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage1 Debug")
 	float Stage1_ShakeScale = 2.0f;
 	void PlayStage1CameraShake();
 	void DestroyActorsWithTag(FName Tag);
 
+	// Stage3 카메라 지속 흔들림 타이머
+	FTimerHandle Stage3ShakeTimer;
+
+	// Stage3 흔들림 반복 간격
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Camera")
+	float Stage3ShakeInterval = 0.5f;
 
 	// ===== Damping Control =====
 
@@ -288,10 +344,10 @@ public:
 	float Stage1AngularDamping = 1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Damping")
-	float Stage2LinearDamping = 0.6f;
+	float Stage2LinearDamping = 5.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Damping")
-	float Stage2AngularDamping = 0.6f;
+	float Stage2AngularDamping = 25.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Damping")
 	float Stage3LinearDamping = 0.2f;
@@ -318,7 +374,7 @@ protected:
 	float Stage1_Omega = 6.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage2")
-	int32 Stage2_LocalDamageCount = 2; // 벽 1~2개 정도
+	int32 Stage2_LocalDamageCount = 1; // 벽 1~2개 정도
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage2")
 	float Stage2_LocalDamageStrength = 1.0f;
@@ -375,7 +431,7 @@ private:
 	float SeismicToVerticalScale = 0.35f; // 수평 요구량 -> 수직 등가 스케일
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Debug")
-	bool bDrawDebug = true;
+	bool bDrawDebug = false;
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Debug")
 	float DebugLineDuration = 0.f; // 0 - 한 프레임

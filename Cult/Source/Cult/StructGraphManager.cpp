@@ -21,10 +21,13 @@ void AStructGraphManager::BeginPlay()
 	Super::BeginPlay();
 	UE_LOG(LogTemp, Warning, TEXT("[StructGraph] BeginPlay: %s"), *GetName());
 
+
+	//FTimerHandle Tmp;
+	//GetWorldTimerManager().SetTimer(Tmp, this, &AStructGraphManager::Debug_ApplyStrainOnce, 0.5f, false);
+
 	ApplySettleDampingThenRestore();
 
-	FTimerHandle Tmp;
-	GetWorldTimerManager().SetTimer(Tmp, this, &AStructGraphManager::Debug_ApplyStrainOnce, 0.5f, false);
+	UE_LOG(LogTemp, Warning, TEXT("[Gravity] WorldGravityZ=%.1f"), GetWorld()->GetGravityZ());
 }
 
 void AStructGraphManager::InitializeFromBP(
@@ -938,6 +941,8 @@ void AStructGraphManager::StartEarthquake3Phase()
 
 void AStructGraphManager::StopEarthquake3Phase()
 {
+	GetWorldTimerManager().ClearTimer(Stage3ShakeTimer);
+	GetWorldTimerManager().ClearTimer(ImpactDecayTimer);
 	StopEarthquake();
 	QuakePhase = EQuakePhase::Idle;
 }
@@ -976,12 +981,7 @@ void AStructGraphManager::TriggerStage1()
 	SeismicOmega = Stage1_Omega;
 	StartEarthquake(); // 타이머 흔들기
 
-	// 즉시붕괴
-	if (bStage1_InstantCollapse)
-	{
-		PlayStage1CameraShake();
-		DestroyActorsWithTag(Stage1_DestroyTag);
-	}
+	PlayShake(QuakeContinuousShakeClass, Stage1ShakeScale);
 }
 
 void AStructGraphManager::TriggerStage2()
@@ -1008,10 +1008,22 @@ void AStructGraphManager::TriggerStage2()
 		Stage2_PulseInterval,
 		true
 	);
+
+	const float Now = GetWorld()->GetTimeSeconds();
+	if (Now - LastStage2ShakeTime >= 0.5f) // 0.5초마다 1회
+	{
+		PlayShake(QuakeContinuousShakeClass, Stage2ShakeScale);
+		LastStage2ShakeTime = Now;
+	}
 }
 
 void AStructGraphManager::TriggerStage3()
 {
+	// 2타이머 종료
+	GetWorldTimerManager().ClearTimer(Stage2Timer);
+
+	bDrawDebug = false;
+
 	// 댐핑
 	ApplyDampingToTaggedGC(GCWallTag, Stage3LinearDamping, Stage3AngularDamping);
 
@@ -1020,6 +1032,26 @@ void AStructGraphManager::TriggerStage3()
 	SeismicOmega = Stage3_Omega;
 
 	StartEarthquake();
+
+	// 카메라
+	PlayShake(QuakeStage3LongShakeClass, Stage3LongScale);
+	
+	// 기둥/ 벽
+	int32 Released = 0;
+	for (FStructGraphNode& N : Nodes)
+	{
+		if (Released >= 2) break; 
+		UPrimitiveComponent* PC = Cast<UPrimitiveComponent>(N.Comp.Get());
+		if (!IsValid(PC)) continue;
+		if (N.Type != EStructNodeType::Column && N.Type != EStructNodeType::Wall) continue;
+
+		PC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		PC->SetSimulatePhysics(true);
+		PC->SetEnableGravity(true);
+		PC->WakeAllRigidBodies();
+		Released++;
+	}
+	UE_LOG(LogTemp, Warning, TEXT("[Stage3] Forced release supports=%d"), Released);
 }
 
 // GC 찾기
@@ -1090,8 +1122,25 @@ void AStructGraphManager::TriggerPulse2()
 
 		ApplyStrainToGC(GCComp, HitPoint, Stage2_Str_Radius, Stage2_Str_Magnitude);
 
+		if (Stage2_ImpulseScale > 0.f)		// impulse Scale 조절
+		{
+			const FVector KickDir = FVector(FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f), 0.f).GetSafeNormal();
+
+			const float KickStrength = Stage2_KickStrength * Stage2_ImpulseScale;
+			const FVector KickLocation = Origin - FVector(0, 0, Extent.Z * 0.8f);
+
+			GCComp->AddImpulseAtLocation(KickDir * KickStrength, KickLocation, NAME_None);
+		}
+
 		// 연출용 이벤트 BP에서 처리
 		OnNodeYield(GCComp, 1.0f + Stage2_LocalDamageStrength);
+	}
+
+	const float Now = GetWorld()->GetTimeSeconds();
+	if (Now - LastStage2ShakeTime >= 0.5f)
+	{
+		PlayShake(QuakeContinuousShakeClass, Stage2ShakeScale);
+		LastStage2ShakeTime = Now;
 	}
 }
 
@@ -1233,4 +1282,39 @@ void AStructGraphManager::ApplyDampingToTaggedGC(FName Tag, float Lin, float Ang
 		GC->SetLinearDamping(Lin);
 		GC->SetAngularDamping(Ang);
 	}
+}
+
+void AStructGraphManager::PlayShake(TSubclassOf<UCameraShakeBase> ShakeClass, float Scale)
+{
+	if (!ShakeClass) return;
+	APlayerController* PC = UGameplayStatics::GetPlayerController(this, 0);
+	if (!PC || !PC->PlayerCameraManager) return;
+	PC->PlayerCameraManager->StartCameraShake(ShakeClass, Scale);
+}
+
+void AStructGraphManager::PlayImpactDecaying()
+{
+	if (!QuakeImpactShakeClass) return;
+
+	GetWorldTimerManager().ClearTimer(ImpactDecayTimer);
+
+	const float StartTime = GetWorld()->GetTimeSeconds();
+	ImpactDecayScale = ImpactStartScale;
+
+	GetWorldTimerManager().SetTimer(ImpactDecayTimer, [this, StartTime]()
+		{
+			const float Now = GetWorld()->GetTimeSeconds();
+			const float Alpha = FMath::Clamp((Now - StartTime) / FMath::Max(0.01f, ImpactDecayDuration), 0.f, 1.f);
+
+			// 감쇠
+			const float Scale = FMath::Lerp(ImpactStartScale, ImpactEndScale, Alpha);
+
+			PlayShake(QuakeImpactShakeClass, Scale);
+
+			if (Alpha >= 1.f)
+			{
+				GetWorldTimerManager().ClearTimer(ImpactDecayTimer);
+			}
+
+		}, ImpactDecayInterval, true);
 }

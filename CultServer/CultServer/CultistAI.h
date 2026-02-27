@@ -23,4 +23,5 @@ constexpr float sampleRadius{ 2000.f };
 constexpr float ALTAR_TRIGGER_RANGE{ 600.f };
 constexpr float ALTAR_TRIGGER_RANGE_SQ{ ALTAR_TRIGGER_RANGE * ALTAR_TRIGGER_RANGE };
 constexpr float CHASE_START_RANGE{ 1500.f };
-constexpr float CHASE_STOP_RANGE{ 200.f };
+constexpr float CHASE_STOP_RANGE{ 150.f };
+constexpr float ARRIVE_RANGE = 100.f;
