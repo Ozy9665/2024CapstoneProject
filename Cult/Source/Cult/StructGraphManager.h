@@ -249,7 +249,8 @@ public:
 		UGeometryCollectionComponent* GCComp,
 		const FVector& HitPoint,
 		float Radius,
-		float StrainMagnitude);
+		float StrainMagnitude,
+		int32 Iterations);
 
 	// 스트레인 디버깅
 	void Debug_ApplyStrainOnce();
@@ -258,6 +259,35 @@ public:
 	// 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage1 Debug")
 	bool bStage1_InstantCollapse = false;
+
+	// 지진 Stage3
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
+	float Stage3_EndDuration = 5.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
+	float Stage3_WaveInterval = 0.20f;   // 0.15~0.25
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
+	float Stage3_Wall_Radius = 240.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
+	float Stage3_Wall_Mag = 120000.f;    // 반복 누적
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
+	int32 Stage3_Wall_Iter = 2;          // 1~3 / 10 : 이 바로 붕괴
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
+	float Stage3_ReleaseTime = 3.6f;     // 연출후반에 지지대 릴리즈
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
+	int32 Stage3_ReleaseCount = 2;
+
+	FTimerHandle Stage3WaveTimer;
+	float Stage3WaveElapsed = 0.f;
+
+	UFUNCTION()
+	void Stage3_TickWave();
+
 
 	// 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage1 Debug")

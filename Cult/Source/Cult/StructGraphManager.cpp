@@ -1019,39 +1019,31 @@ void AStructGraphManager::TriggerStage2()
 
 void AStructGraphManager::TriggerStage3()
 {
-	// 2타이머 종료
 	GetWorldTimerManager().ClearTimer(Stage2Timer);
+	GetWorldTimerManager().ClearTimer(Stage3WaveTimer);
 
 	bDrawDebug = false;
 
-	// 댐핑
 	ApplyDampingToTaggedGC(GCWallTag, Stage3LinearDamping, Stage3AngularDamping);
 
-	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage3 Start (Chain collapse)"));
+	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage3 Start (Ending 5s)"));
 	SeismicBase = Stage3_SeismicBase;
 	SeismicOmega = Stage3_Omega;
 
 	StartEarthquake();
 
-	// 카메라
+	// 카메라(엔딩용 롱 쉐이크 1회)
 	PlayShake(QuakeStage3LongShakeClass, Stage3LongScale);
-	
-	// 기둥/ 벽
-	int32 Released = 0;
-	for (FStructGraphNode& N : Nodes)
-	{
-		if (Released >= 2) break; 
-		UPrimitiveComponent* PC = Cast<UPrimitiveComponent>(N.Comp.Get());
-		if (!IsValid(PC)) continue;
-		if (N.Type != EStructNodeType::Column && N.Type != EStructNodeType::Wall) continue;
 
-		PC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		PC->SetSimulatePhysics(true);
-		PC->SetEnableGravity(true);
-		PC->WakeAllRigidBodies();
-		Released++;
-	}
-	UE_LOG(LogTemp, Warning, TEXT("[Stage3] Forced release supports=%d"), Released);
+	// Stage3 파동 시작
+	Stage3WaveElapsed = 0.f;
+	GetWorldTimerManager().SetTimer(
+		Stage3WaveTimer,
+		this,
+		&AStructGraphManager::Stage3_TickWave,
+		Stage3_WaveInterval,
+		true
+	);
 }
 
 // GC 찾기
@@ -1149,26 +1141,30 @@ void AStructGraphManager::ApplyStrainToGC(
 	UGeometryCollectionComponent* GCComp,
 	const FVector& HitPoint,
 	float Radius,
-	float StrainMagnitude)
+	float StrainMagnitude,
+	int32 Iterations)
 {
 	if (!IsValid(GCComp)) return;
 
 	URadialFalloff* Falloff = NewObject<URadialFalloff>(GCComp);
 	if (!Falloff) return;
+
 	GCComp->SetSimulatePhysics(true);
+	GCComp->SetEnableGravity(true);
 	GCComp->WakeAllRigidBodies();
+
 	Falloff->SetRadialFalloff(
-		StrainMagnitude,         
-		0.0f,                    
-		1.0f,                    
-		0.0f,                    
-		Radius,                  
-		HitPoint,                
-		EFieldFalloffType::Field_FallOff_None // 우선 None
+		StrainMagnitude,
+		0.0f,
+		1.0f,
+		0.0f,
+		Radius,
+		HitPoint,
+		EFieldFalloffType::Field_FallOff_None
 	);
 
 	UFieldSystemMetaDataIteration* Iter = NewObject<UFieldSystemMetaDataIteration>(GCComp);
-	if (Iter) Iter->Iterations = 10;
+	if (Iter) Iter->Iterations = FMath::Clamp(Iterations, 1, 10);
 
 	GCComp->ApplyPhysicsField(
 		true,
@@ -1317,4 +1313,87 @@ void AStructGraphManager::PlayImpactDecaying()
 			}
 
 		}, ImpactDecayInterval, true);
+}
+
+void AStructGraphManager::Stage3_TickWave()
+{
+	Stage3WaveElapsed += Stage3_WaveInterval;
+
+	// 5초 끝나면 종료
+	if (Stage3WaveElapsed >= Stage3_EndDuration)
+	{
+		GetWorldTimerManager().ClearTimer(Stage3WaveTimer);
+		UE_LOG(LogTemp, Warning, TEXT("[Stage3] End"));
+		return;
+	}
+
+	// 1) 벽(GC_WALL) 누적 스트레인: 아래/중앙 위주로 “지진스럽게”
+	TArray<AActor*> WallsFound;
+	UGameplayStatics::GetAllActorsWithTag(GetWorld(), GCWallTag, WallsFound);
+	if (WallsFound.Num() > 0)
+	{
+		// 아래쪽 우선(지진은 하부에서 파괴가 시작되는 느낌이 자연스러움)
+		WallsFound.Sort([](const AActor& A, const AActor& B)
+			{
+				return A.GetActorLocation().Z < B.GetActorLocation().Z;
+			});
+
+		// 매 tick마다 1~2개만 살짝(과하면 튀는 느낌)
+		const int32 HitCount = FMath::Min(2, WallsFound.Num());
+
+		for (int32 i = 0; i < HitCount; ++i)
+		{
+			AActor* A = WallsFound[i];
+			if (!IsValid(A)) continue;
+
+			UGeometryCollectionComponent* GCComp = A->FindComponentByClass<UGeometryCollectionComponent>();
+			if (!IsValid(GCComp)) continue;
+
+			FVector Origin, Extent;
+			A->GetActorBounds(true, Origin, Extent);
+
+			// 하부쪽 포인트(바닥 근처)
+			const FVector HitPoint = Origin - FVector(0, 0, Extent.Z * 0.7f);
+
+			ApplyStrainToGC(GCComp, HitPoint, Stage3_Wall_Radius, Stage3_Wall_Mag, Stage3_Wall_Iter);
+		}
+	}
+
+	// 2) 후반부(3.6s)에서 “지지부 릴리즈” 한번만
+	static bool bReleased = false;
+	if (!bReleased && Stage3WaveElapsed >= Stage3_ReleaseTime)
+	{
+		bReleased = true;
+
+		// 하부 지지부 우선 릴리즈(Z 낮은 Column/Wall)
+		TArray<UPrimitiveComponent*> Candidates;
+		Candidates.Reserve(Nodes.Num());
+
+		for (FStructGraphNode& N : Nodes)
+		{
+			if (N.Type != EStructNodeType::Column && N.Type != EStructNodeType::Wall) continue;
+			UPrimitiveComponent* PC = Cast<UPrimitiveComponent>(N.Comp.Get());
+			if (!IsValid(PC)) continue;
+			Candidates.Add(PC);
+		}
+
+		Candidates.Sort([](const UPrimitiveComponent& A, const UPrimitiveComponent& B)
+			{
+				return A.GetComponentLocation().Z < B.GetComponentLocation().Z;
+			});
+
+		int32 Released = 0;
+		for (UPrimitiveComponent* PC : Candidates)
+		{
+			if (Released >= Stage3_ReleaseCount) break;
+
+			PC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			PC->SetSimulatePhysics(true);
+			PC->SetEnableGravity(true);
+			PC->WakeAllRigidBodies();
+			Released++;
+		}
+
+		UE_LOG(LogTemp, Warning, TEXT("[Stage3] Released supports=%d"), Released);
+	}
 }
