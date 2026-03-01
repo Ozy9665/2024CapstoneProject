@@ -1112,7 +1112,7 @@ void AStructGraphManager::TriggerPulse2()
 			FMath::FRandRange(-Extent.Z * 0.3f, Extent.Z * 0.3f)
 		);
 
-		ApplyStrainToGC(GCComp, HitPoint, Stage2_Str_Radius, Stage2_Str_Magnitude);
+		ApplyStrainToGC(GCComp, HitPoint, Stage2_Str_Radius, Stage2_Str_Magnitude, 2);
 
 		if (Stage2_ImpulseScale > 0.f)		// impulse Scale Á¶Àý
 		{
@@ -1203,7 +1203,7 @@ void AStructGraphManager::Debug_ApplyStrainOnce()
 	UE_LOG(LogTemp, Warning, TEXT("[Debug] ApplyStrainOnce -> %s Radius=%.1f Mag=%.1f"),
 		*WallActor->GetName(), Radius, Mag);
 
-	ApplyStrainToGC(GCComp, Origin, Radius, Mag);
+	ApplyStrainToGC(GCComp, Origin, Radius, Mag, 10);
 
 	GCComp->SetSimulatePhysics(true);
 	UE_LOG(LogTemp, Warning, TEXT("[GCPhys] Sim=%d Mobility=%d Collision=%d"),
