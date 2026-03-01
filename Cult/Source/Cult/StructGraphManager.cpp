@@ -1023,6 +1023,9 @@ void AStructGraphManager::TriggerStage3()
 	GetWorldTimerManager().ClearTimer(Stage3WaveTimer);
 
 	bDrawDebug = false;
+	bStage3Released = false;
+	Stage3WaveElapsed = 0.f;
+
 
 	ApplyDampingToTaggedGC(GCWallTag, Stage3LinearDamping, Stage3AngularDamping);
 
@@ -1149,8 +1152,8 @@ void AStructGraphManager::ApplyStrainToGC(
 	URadialFalloff* Falloff = NewObject<URadialFalloff>(GCComp);
 	if (!Falloff) return;
 
-	GCComp->SetSimulatePhysics(true);
-	GCComp->SetEnableGravity(true);
+	//GCComp->SetSimulatePhysics(true);
+	//GCComp->SetEnableGravity(true);
 	GCComp->WakeAllRigidBodies();
 
 	Falloff->SetRadialFalloff(
@@ -1360,10 +1363,9 @@ void AStructGraphManager::Stage3_TickWave()
 	}
 
 	// 2) 후반부(3.6s)에서 “지지부 릴리즈” 한번만
-	static bool bReleased = false;
-	if (!bReleased && Stage3WaveElapsed >= Stage3_ReleaseTime)
+	if (!bStage3Released && Stage3WaveElapsed >= Stage3_ReleaseTime)
 	{
-		bReleased = true;
+		bStage3Released = true;
 
 		// 하부 지지부 우선 릴리즈(Z 낮은 Column/Wall)
 		TArray<UPrimitiveComponent*> Candidates;

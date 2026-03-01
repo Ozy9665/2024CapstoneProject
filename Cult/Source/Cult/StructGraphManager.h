@@ -261,6 +261,8 @@ public:
 	bool bStage1_InstantCollapse = false;
 
 	// ÁöÁø Stage3
+	bool bStage3Released = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
 	float Stage3_EndDuration = 5.0f;
 
