@@ -4,6 +4,7 @@
 #include "map.h"
 
 void AddCutltistAi(int, uint8_t, int);
+void KillCultistAi(int ai_id);
 
 void CultistAIWorkerLoop();
 

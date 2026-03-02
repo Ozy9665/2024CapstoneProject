@@ -548,8 +548,23 @@ void CommandWorker()
 				std::cout << "[Command] Invalid room id: " << room_id << "\n";
 				continue;
 			}
-			int ai_id = client_id++;
-			AddCutltistAi(ai_id, static_cast<uint8_t>(ai_role), room_id);
+			if (ai_role == 100) {
+				int ai_id = client_id++;
+				AddCutltistAi(ai_id, static_cast<uint8_t>(ai_role), room_id);
+			}
+		}
+		else if (cmd == "kill")
+		{
+			int ai_id;
+
+			if (!(iss >> ai_id))
+			{
+				std::cout << "[Command] Usage: kill <ai_id>\n";
+				continue;
+			}
+
+			KillCultistAi(ai_id);
+			
 		}
 		else if (cmd == "exit")
 		{

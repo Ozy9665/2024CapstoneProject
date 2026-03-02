@@ -9,6 +9,8 @@
 #include <cmath>
 #include <concurrent_priority_queue.h>
 #include <random>
+#include <mutex>
+#include <queue>
 
 using namespace std;
 extern std::unordered_map<int, SESSION> g_users;
@@ -18,6 +20,9 @@ extern MAP NewmapLandmassMap;
 extern NAVMESH TestNavMesh;
 extern concurrency::concurrent_priority_queue<TIMER_EVENT> timer_queue;
 extern std::array<std::array<Altar, ALTAR_PER_ROOM>, MAX_ROOM> g_altars;
+extern std::mutex g_room_mtx;
+extern std::queue<RoomTask> g_room_q;
+extern std::condition_variable g_room_cv;
 
 void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
 {
@@ -50,6 +55,46 @@ void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
     {
         BroadcastCultistAIState(it->second, &pkt);
     }
+}
+
+void KillCultistAi(int ai_id)
+{
+    auto it = g_users.find(ai_id);
+    if (it == g_users.end())
+        return;
+
+    SESSION& ai = it->second;
+
+    if (ai.role != 100)
+        return;
+
+    IdOnlyPacket pkt;
+    pkt.header = DisconnectionHeader;
+    pkt.size = sizeof(IdOnlyPacket);
+    pkt.id = ai_id;
+    BroadcastCultistAIState(it->second, &pkt);
+    
+    {
+        std::lock_guard<std::mutex> lk(g_room_mtx);
+        g_room_q.push(RoomTask{
+            ai_id,
+            RM_DISCONNECT,
+            ai.role,
+            ai.room_id
+            });
+        g_room_cv.notify_one();
+    }
+
+    // AI 상태 초기화
+    ai.path.clear();
+
+    // AI 목록에서 제거
+    g_cultist_ai_ids.erase(ai_id);
+
+    // 유저 목록에서 제거
+    g_users.erase(ai_id);
+
+    std::cout << "[Command] AI removed. ID=" << ai_id << "\n";
 }
 
 static float Dist(const Vec3& a, const Vec3& b)
