@@ -10,6 +10,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Field/FieldSystemComponent.h"
+#include "Math/UnrealMathUtility.h"
 
 AStructGraphManager::AStructGraphManager()
 {
@@ -1181,6 +1182,12 @@ void AStructGraphManager::ApplyStrainToGC(
 		Iter,
 		Falloff
 	);
+
+	// 인터널테스트
+	GCComp->ApplyPhysicsField(true,
+		EGeometryCollectionPhysicsTypeEnum::Chaos_InternalClusterStrain,
+		Iter,
+		Falloff);
 }
 
 void AStructGraphManager::Debug_ApplyStrainOnce()
@@ -1361,8 +1368,16 @@ void AStructGraphManager::Stage3_TickWave()
 			FVector Origin, Extent;
 			A->GetActorBounds(true, Origin, Extent);
 
-			// 하부쪽 포인트(바닥 근처)
-			const FVector HitPoint = Origin - FVector(0, 0, Extent.Z * 0.7f);
+			// 하부쪽 3점분산
+			const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.7f);
+
+
+			static int32 WallPtIdx = 0;
+			const int32 Idx = WallPtIdx++ % 3;
+
+			FVector HitPoint = Base;
+			if (Idx == 0) HitPoint += FVector(-Extent.X * 0.35f, 0.f, 0.f);
+			if (Idx == 2) HitPoint += FVector(+Extent.X * 0.35f, 0.f, 0.f);
 
 			ApplyStrainToGC(GCComp, HitPoint, Stage3_Wall_Radius, Stage3_Wall_Mag, Stage3_Wall_Iter);
 		}
@@ -1372,6 +1387,74 @@ void AStructGraphManager::Stage3_TickWave()
 	if (!bStage3Released && Stage3WaveElapsed >= Stage3_ReleaseTime)
 	{
 		bStage3Released = true;
+
+		{
+			// 1) 약한 기둥 우선 찾기
+			AActor* Pick = nullptr;
+
+			TArray<AActor*> WeakCols;
+			UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName("GC_COLUMN_WEAK"), WeakCols);
+			
+			if (WeakCols.Num() > 1) {
+				WeakCols.Sort([](const AActor& A, const AActor& B)
+					{
+						return A.GetActorLocation().Z < B.GetActorLocation().Z;
+					});
+			}
+			
+			if (WeakCols.Num() > 0)
+			{
+				Pick = WeakCols[0];
+			}
+			else
+			{
+				TArray<AActor*> Cols;
+				UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName("GC_COLUMN"), Cols);
+
+				if (Cols.Num() > 1) {
+					Cols.Sort([](const AActor& A, const AActor& B)
+						{
+							return A.GetActorLocation().Z < B.GetActorLocation().Z;
+						});
+				}
+				
+				if (Cols.Num() > 0) Pick = Cols[0];
+			}
+
+			// 2) 선택된 기둥을 실제로 부러뜨리기
+			if (IsValid(Pick))
+			{
+				UGeometryCollectionComponent* ColGC = Pick->FindComponentByClass<UGeometryCollectionComponent>();
+				if (IsValid(ColGC))
+				{
+					FVector Origin, Extent;
+					Pick->GetActorBounds(true, Origin, Extent);
+
+					const float ColRadius = 90.f;      // 70~110
+					const float ColMag = 120000.f;  // 80k~200k
+					const int32 ColIter = 3;         // 2~4
+
+					// 바닥 근처에 3회 누적(한방 폭발 대신 지진스럽게)
+					for (int32 k = 0; k < 3; ++k)
+					{
+						FVector HitPoint = Origin - FVector(0, 0, Extent.Z * 0.7f);
+						HitPoint += FVector(
+							FMath::FRandRange(-15.f, 15.f),
+							FMath::FRandRange(-15.f, 15.f),
+							FMath::FRandRange(-10.f, 10.f)
+						);
+
+						ApplyStrainToGC(ColGC, HitPoint, ColRadius, ColMag, ColIter);
+					}
+
+					ColGC->SetSimulatePhysics(true);
+					ColGC->SetEnableGravity(true);
+					ColGC->WakeAllRigidBodies();
+
+					UE_LOG(LogTemp, Warning, TEXT("[Stage3] Broke Column: %s"), *Pick->GetName());
+				}
+			}
+		}
 
 		// 하부 지지부 우선 릴리즈(Z 낮은 Column/Wall)
 		TArray<UPrimitiveComponent*> Candidates;
