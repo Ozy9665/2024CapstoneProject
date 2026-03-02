@@ -1022,6 +1022,7 @@ void AStructGraphManager::TriggerStage3()
 	GetWorldTimerManager().ClearTimer(Stage2Timer);
 	GetWorldTimerManager().ClearTimer(Stage3WaveTimer);
 
+
 	bDrawDebug = false;
 	bStage3Released = false;
 	Stage3WaveElapsed = 0.f;
@@ -1033,13 +1034,18 @@ void AStructGraphManager::TriggerStage3()
 	SeismicBase = Stage3_SeismicBase;
 	SeismicOmega = Stage3_Omega;
 
+	// 지진 초기화 ( 1,2에서 돌고있으면 ) 
+	StopEarthquake();
 	StartEarthquake();
 
-	// 카메라(엔딩용 롱 쉐이크 1회)
+	// 카메라
 	PlayShake(QuakeStage3LongShakeClass, Stage3LongScale);
+
+	Stage3_TickWave();
 
 	// Stage3 파동 시작
 	Stage3WaveElapsed = 0.f;
+	Stage3_TickWave();
 	GetWorldTimerManager().SetTimer(
 		Stage3WaveTimer,
 		this,
