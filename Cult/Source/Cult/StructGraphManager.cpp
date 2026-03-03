@@ -989,6 +989,9 @@ void AStructGraphManager::TriggerStage2()
 {
 	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage2 Start (Local strain pulses on GC walls)"));
 
+	// 중력 피직스 On
+	EnablePhysicsForTaggedGC(GCWallTag, true, true);
+
 	// 댐핑
 	ApplyDampingToTaggedGC(GCWallTag, Stage2LinearDamping, Stage2AngularDamping);
 
@@ -1023,11 +1026,12 @@ void AStructGraphManager::TriggerStage3()
 	GetWorldTimerManager().ClearTimer(Stage2Timer);
 	GetWorldTimerManager().ClearTimer(Stage3WaveTimer);
 
-
 	bDrawDebug = false;
 	bStage3Released = false;
 	Stage3WaveElapsed = 0.f;
 
+	EnablePhysicsForTaggedGC(GCWallTag, true, true);
+	EnablePhysicsForTaggedGC(FName("GC_COLUMN"), true, true);
 
 	ApplyDampingToTaggedGC(GCWallTag, Stage3LinearDamping, Stage3AngularDamping);
 
@@ -1035,18 +1039,13 @@ void AStructGraphManager::TriggerStage3()
 	SeismicBase = Stage3_SeismicBase;
 	SeismicOmega = Stage3_Omega;
 
-	// 지진 초기화 ( 1,2에서 돌고있으면 ) 
 	StopEarthquake();
 	StartEarthquake();
 
-	// 카메라
 	PlayShake(QuakeStage3LongShakeClass, Stage3LongScale);
 
 	Stage3_TickWave();
 
-	// Stage3 파동 시작
-	Stage3WaveElapsed = 0.f;
-	Stage3_TickWave();
 	GetWorldTimerManager().SetTimer(
 		Stage3WaveTimer,
 		this,
@@ -1182,12 +1181,6 @@ void AStructGraphManager::ApplyStrainToGC(
 		Iter,
 		Falloff
 	);
-
-	// 인터널테스트
-	GCComp->ApplyPhysicsField(true,
-		EGeometryCollectionPhysicsTypeEnum::Chaos_InternalClusterStrain,
-		Iter,
-		Falloff);
 }
 
 void AStructGraphManager::Debug_ApplyStrainOnce()
@@ -1452,6 +1445,15 @@ void AStructGraphManager::Stage3_TickWave()
 					ColGC->WakeAllRigidBodies();
 
 					UE_LOG(LogTemp, Warning, TEXT("[Stage3] Broke Column: %s"), *Pick->GetName());
+					UE_LOG(LogTemp, Warning, TEXT("[ColPhys] %s Sim=%d Grav=%d Awake=%d Coll=%d LinD=%.2f AngD=%.2f"),
+						*Pick->GetName(),
+						ColGC->IsSimulatingPhysics() ? 1 : 0,
+						ColGC->IsGravityEnabled() ? 1 : 0,
+						ColGC->IsAnyRigidBodyAwake() ? 1 : 0,
+						(int32)ColGC->GetCollisionEnabled(),
+						ColGC->GetLinearDamping(),
+						ColGC->GetAngularDamping()
+					);
 				}
 			}
 		}
@@ -1487,4 +1489,28 @@ void AStructGraphManager::Stage3_TickWave()
 
 		UE_LOG(LogTemp, Warning, TEXT("[Stage3] Released supports=%d"), Released);
 	}
+}
+
+void AStructGraphManager::EnablePhysicsForTaggedGC(FName Tag, bool bEnableSim, bool bEnableGrav)
+{
+	TArray<AActor*> Found;
+	UGameplayStatics::GetAllActorsWithTag(GetWorld(), Tag, Found);
+
+	for (AActor* A : Found)
+	{
+		if (!IsValid(A)) continue;
+
+		UGeometryCollectionComponent* GC = A->FindComponentByClass<UGeometryCollectionComponent>();
+		if (!IsValid(GC)) continue;
+
+		GC->SetSimulatePhysics(bEnableSim);
+		GC->SetEnableGravity(bEnableGrav);
+		if (bEnableSim)
+		{
+			GC->WakeAllRigidBodies();
+		}
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[GC] EnablePhysics Tag=%s Count=%d Sim=%d Grav=%d"),
+		*Tag.ToString(), Found.Num(), bEnableSim ? 1 : 0, bEnableGrav ? 1 : 0);
 }

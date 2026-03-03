@@ -144,6 +144,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
 	void StabilizeStructureComponent(UPrimitiveComponent* PC);
 
+	void EnablePhysicsForTaggedGC(FName Tag, bool bEnableSim, bool bEnableGrav);
+
 	// 지진
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
 	void StartEarthquake();
@@ -273,10 +275,10 @@ public:
 	float Stage3_Wall_Radius = 240.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
-	float Stage3_Wall_Mag = 120000.f;    // 반복 누적
+	float Stage3_Wall_Mag = 200000.f;    // 반복 누적
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
-	int32 Stage3_Wall_Iter = 2;          // 1~3 / 10 : 이 바로 붕괴
+	int32 Stage3_Wall_Iter = 5;          // 1~3 / 10 : 이 바로 붕괴
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
 	float Stage3_ReleaseTime = 3.6f;     // 연출후반에 지지대 릴리즈
