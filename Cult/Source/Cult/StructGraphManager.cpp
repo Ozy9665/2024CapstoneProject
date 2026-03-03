@@ -106,7 +106,7 @@ void AStructGraphManager::StopEarthquake()
 void AStructGraphManager::ResetStructure()
 {
 	StopEarthquake();
-
+	UE_LOG(LogTemp, Warning, TEXT("[CALL] ResetStructure"));
 	for (FStructGraphNode& N : Nodes)
 	{
 		N.State = EStructDamageState::Intact;
@@ -586,6 +586,11 @@ void AStructGraphManager::DrawDebugGraph()
 
 void AStructGraphManager::TickEarthquake()
 {
+	if (QuakeStage == EQuakeStage::Stage3)
+	{
+		return;
+	}
+
 	Elapsed += 0.05f;
 
 	const float T1 = Phase1_Duration;
@@ -665,6 +670,9 @@ void AStructGraphManager::OnNodeFailed_Implementation(UPrimitiveComponent* Comp,
 void AStructGraphManager::StabilizeStructureComponent(UPrimitiveComponent* PC)
 {
 	if (!PC) return;
+
+	UE_LOG(LogTemp, Warning, TEXT("[CALL] StabilizeStructureComponent -> %s"), *GetNameSafe(PC ? PC->GetOwner() : nullptr));
+
 
 	PC->SetSimulatePhysics(false);
 	PC->SetEnableGravity(false);
@@ -968,47 +976,21 @@ void AStructGraphManager::TriggerStage2()
 
 void AStructGraphManager::TriggerStage3()
 {
-	Stage3_TargetSlabGC.Reset();
-	Stage3_TargetSlabPunchPoint = FVector::ZeroVector;
-
 	BuildGCCache();
 
+	// 타이머 정리
 	GetWorldTimerManager().ClearTimer(Stage2Timer);
-	GetWorldTimerManager().ClearTimer(Stage3WaveTimer);
+	GetWorldTimerManager().ClearTimer(Stage3SlabDelayHandle);
+	GetWorldTimerManager().ClearTimer(Stage3ContinuousHandle);
 
-	Stage2Stream.Initialize(Stage2Seed);
-
-	bDrawDebug = false;
-	bStage3Released = false;
-	Stage3WaveElapsed = 0.f;
-
-	//EnablePhysicsForTaggedGC(GCWallTag, true, true);
-	//EnablePhysicsForTaggedGC(FName("GC_COLUMN"), true, true);
-	//EnablePhysicsForTaggedGC(FName("GC_SLAB"), true, true);
-
-	EnablePhysicsForGCArray(GCWalls, true, true);
-	//EnablePhysicsForGCArray(GCSlabs, true, true);
-
-	ApplyDampingToTaggedGC(GCWallTag, Stage3LinearDamping, Stage3AngularDamping);
-
-	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage3 Start (Ending 5s)"));
-	SeismicBase = Stage3_SeismicBase;
-	SeismicOmega = Stage3_Omega;
-
+	// 그래프 기반 흔들림 루프는 Stage3에서 끈다(간섭 차단)
 	StopEarthquake();
-	StartEarthquake();
+
+	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage3 Start (Single-flow continuous)"));
 
 	PlayShake(QuakeStage3LongShakeClass, Stage3LongScale);
 
-	Stage3_TickWave();
-
-	GetWorldTimerManager().SetTimer(
-		Stage3WaveTimer,
-		this,
-		&AStructGraphManager::Stage3_TickWave,
-		Stage3_WaveInterval,
-		true
-	);
+	StartStage3Continuous();
 }
 
 UGeometryCollectionComponent* AStructGraphManager::FindNearestGC(const FVector& WorldPoint) const
@@ -1274,180 +1256,7 @@ void AStructGraphManager::PlayImpactDecaying()
 		}, ImpactDecayInterval, true);
 }
 
-void AStructGraphManager::Stage3_TickWave()
-{
-	Stage3WaveElapsed += Stage3_WaveInterval;
 
-	if (Stage3WaveElapsed >= Stage3_EndDuration)
-	{
-		GetWorldTimerManager().ClearTimer(Stage3WaveTimer);
-		UE_LOG(LogTemp, Warning, TEXT("[Stage3] End"));
-		return;
-	}
-
-	// prune dead pointers (prevents invalid access during late Stage3)
-	GCWalls.RemoveAll([](const TWeakObjectPtr<UGeometryCollectionComponent>& P) { return !P.IsValid(); });
-	GCColumns.RemoveAll([](const TWeakObjectPtr<UGeometryCollectionComponent>& P) { return !P.IsValid(); });
-	GCSlabs.RemoveAll([](const TWeakObjectPtr<UGeometryCollectionComponent>& P) { return !P.IsValid(); });
-
-	// 1) wall strain (light)
-	if (GCWalls.Num() > 0)
-	{
-		const int32 HitCount = FMath::Min(2, GCWalls.Num());
-
-		for (int32 i = 0; i < HitCount; ++i)
-		{
-			UGeometryCollectionComponent* GCComp = GCWalls[i].Get();
-			if (!IsValid(GCComp) || !GCComp->IsRegistered() || GCComp->IsBeingDestroyed()) continue;
-
-			AActor* A = GCComp->GetOwner();
-			if (!IsValid(A) || A->IsActorBeingDestroyed()) continue;
-
-			FVector Origin, Extent;
-			A->GetActorBounds(true, Origin, Extent);
-
-			const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.7f);
-
-			const int32 Idx = Stage3WallPtIdx++ % 3;
-
-			FVector HitPoint = Base;
-			if (Idx == 0) HitPoint += FVector(-Extent.X * 0.35f, 0.f, 0.f);
-			if (Idx == 2) HitPoint += FVector(+Extent.X * 0.35f, 0.f, 0.f);
-
-			ApplyStrainToGC(GCComp, HitPoint, Stage3_Wall_Radius, Stage3_Wall_Mag, Stage3_Wall_Iter);
-		}
-	}
-
-	// 2) release once
-	if (!bStage3Released && Stage3WaveElapsed >= Stage3_ReleaseTime)
-	{
-		bStage3Released = true;
-
-		EnablePhysicsForGCArray(GCColumns, true, true);
-
-
-
-		UGeometryCollectionComponent* ColGC = PickLowestColumnGC();
-		if (IsValid(ColGC) && ColGC->IsRegistered() && !ColGC->IsBeingDestroyed())
-		{
-			// check
-			UE_LOG(LogTemp, Warning, TEXT("[Stage3] ColGC Sim=%d Grav=%d Reg=%d Awake=%d"),
-				ColGC->IsSimulatingPhysics() ? 1 : 0,
-				ColGC->IsGravityEnabled() ? 1 : 0,
-				ColGC->IsRegistered() ? 1 : 0,
-				ColGC->IsAnyRigidBodyAwake() ? 1 : 0);
-
-			AActor* ColActor = ColGC->GetOwner();
-			EnablePhysicsForGCArray({ ColGC }, true, true);
-			if (IsValid(ColActor) && !ColActor->IsActorBeingDestroyed())
-			{
-				FVector Origin, Extent;
-				ColActor->GetActorBounds(true, Origin, Extent);
-
-				const float ColRadius = 90.f;
-				const float ColMag = 120000.f;
-				const int32 ColIter = 3;
-
-				for (int32 k = 0; k < 3; ++k)
-				{
-					FVector HitPoint = Origin - FVector(0, 0, Extent.Z * 0.7f);
-					HitPoint += FVector(
-						Stage2Stream.FRandRange(-15.f, 15.f),
-						Stage2Stream.FRandRange(-15.f, 15.f),
-						Stage2Stream.FRandRange(-10.f, 10.f)
-					);
-
-					ApplyStrainToGC(ColGC, HitPoint, ColRadius, ColMag, ColIter);
-				}
-
-				UE_LOG(LogTemp, Warning, TEXT("[Stage3] Broke Column: %s"), *ColActor->GetName());
-
-				// cache slab target once (prevents late-timer invalid search)
-				if (!Stage3_TargetSlabGC.IsValid())
-				{
-					UGeometryCollectionComponent* FoundSlab = FindNearestSlabGC(Origin);
-					if (IsValid(FoundSlab) && FoundSlab->IsRegistered() && !FoundSlab->IsBeingDestroyed())
-					{
-						Stage3_TargetSlabGC = FoundSlab;
-
-						Stage3_TargetSlabPunchPoint = Origin + FVector(0, 0, Extent.Z * 0.45f);
-						Stage3_TargetSlabPunchPoint += FVector(
-							Stage2Stream.FRandRange(-20.f, 20.f),
-							Stage2Stream.FRandRange(-20.f, 20.f),
-							Stage2Stream.FRandRange(-10.f, 10.f)
-						);
-
-						if (AActor* SA = FoundSlab->GetOwner())
-						{
-							UE_LOG(LogTemp, Warning, TEXT("[Stage3] Target Slab Selected: %s"), *SA->GetName());
-						}
-					}
-				}
-
-				UGeometryCollectionComponent* SlabGC = Stage3_TargetSlabGC.Get();
-				EnablePhysicsForGCArray({ SlabGC }, true, true);
-				if (IsValid(SlabGC) && SlabGC->IsRegistered() && !SlabGC->IsBeingDestroyed())
-				{
-					// check
-					UE_LOG(LogTemp, Warning, TEXT("[Stage3] SlabGC Sim=%d Grav=%d Reg=%d Awake=%d"),
-						SlabGC->IsSimulatingPhysics() ? 1 : 0,
-						SlabGC->IsGravityEnabled() ? 1 : 0,
-						SlabGC->IsRegistered() ? 1 : 0,
-						SlabGC->IsAnyRigidBodyAwake() ? 1 : 0);
-
-					const float PunchRadius = 120.f;
-					const float PunchMag = 90000.f;
-					const int32 PunchIter = 3;
-
-					for (int32 p = 0; p < 3; ++p)
-					{
-						if (!IsValid(SlabGC) || !SlabGC->IsRegistered() || SlabGC->IsBeingDestroyed())
-						{
-							break;
-						}
-
-						const FVector P = Stage3_TargetSlabPunchPoint + FVector(
-							Stage2Stream.FRandRange(-15.f, 15.f),
-							Stage2Stream.FRandRange(-15.f, 15.f),
-							Stage2Stream.FRandRange(-5.f, 5.f)
-						);
-
-						ApplyStrainToGC(SlabGC, P, PunchRadius, PunchMag, PunchIter);
-					}
-
-					if (AActor* SA = SlabGC->GetOwner())
-					{
-						UE_LOG(LogTemp, Warning, TEXT("[Stage3] Punch Slab: %s"), *SA->GetName());
-					}
-				}
-			}
-		}
-
-		// delayed slab physics ON (subset to avoid GPU spike)
-		TWeakObjectPtr<AStructGraphManager> WeakThis(this);
-
-		GetWorldTimerManager().SetTimer(Stage3SlabDelayHandle, FTimerDelegate::CreateLambda([WeakThis]()
-			{
-				if (!WeakThis.IsValid()) return;
-				if (!IsValid(WeakThis->GetWorld())) return;
-
-				WeakThis->GCSlabs.RemoveAll([](const TWeakObjectPtr<UGeometryCollectionComponent>& P) { return !P.IsValid(); });
-
-				const int32 MaxEnable = FMath::Min(12, WeakThis->GCSlabs.Num());
-
-				TArray<TWeakObjectPtr<UGeometryCollectionComponent>> Subset;
-				Subset.Reserve(MaxEnable);
-				for (int32 i = 0; i < MaxEnable; ++i)
-				{
-					Subset.Add(WeakThis->GCSlabs[i]);
-				}
-
-				WeakThis->EnablePhysicsForGCArray(Subset, true, true);
-				UE_LOG(LogTemp, Warning, TEXT("[Stage3] Slabs physics ON subset=%d/%d"), MaxEnable, WeakThis->GCSlabs.Num());
-
-			}), 0.5f, false);
-	}
-}
 
 // ===== Physics (tag) =====
 
@@ -1540,6 +1349,29 @@ void AStructGraphManager::BuildGCCache()
 	SortByZSafe(GCColumns);
 	SortByZSafe(GCWalls);
 	SortByZSafe(GCSlabs);
+
+	if (!bBoundBreakEvents)
+	{
+		bBoundBreakEvents = true;
+
+		auto BindBreak = [&](const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr)
+			{
+				for (const auto& W : Arr)
+				{
+					UGeometryCollectionComponent* GC = W.Get();
+					if (!IsValid(GC)) continue;
+
+					GC->SetNotifyBreaks(true);
+
+					GC->OnChaosBreakEvent.RemoveDynamic(this, &AStructGraphManager::OnGCBreak);
+					GC->OnChaosBreakEvent.AddDynamic(this, &AStructGraphManager::OnGCBreak);
+				}
+			};
+
+		BindBreak(GCWalls);
+		BindBreak(GCColumns);
+		BindBreak(GCSlabs);
+	}
 }
 
 void AStructGraphManager::ForEachValidGC(
@@ -1570,7 +1402,7 @@ UGeometryCollectionComponent* AStructGraphManager::PickRandomValidGC(
 	return nullptr;
 }
 
-// ===== EnablePhysicsForGCArray (GPU-safe) =====
+// ===== EnablePhysicsForGCArray =====
 
 void AStructGraphManager::EnablePhysicsForGCArray(
 	const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr,
@@ -1580,7 +1412,6 @@ void AStructGraphManager::EnablePhysicsForGCArray(
 		{
 			if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
 
-			// Mobility 강제 (Static이면 Chaos에서 이상 동작 가능)
 			if (GC->Mobility != EComponentMobility::Movable)
 			{
 				GC->SetMobility(EComponentMobility::Movable);
@@ -1590,10 +1421,9 @@ void AStructGraphManager::EnablePhysicsForGCArray(
 			GC->SetCollisionProfileName(TEXT("PhysicsActor"));
 			GC->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 
-			// 현재 상태 저장
 			const bool bWasSim = GC->IsSimulatingPhysics();
 
-			// 1) Sim이 꺼져있던 애를 "처음 켤 때만" Recreate (스냅백 방지 핵심)
+			// 1) 처음 Sim 켤 때: 1회 Recreate
 			if (!bWasSim && bEnableSim)
 			{
 				GC->SetSimulatePhysics(false);
@@ -1604,17 +1434,32 @@ void AStructGraphManager::EnablePhysicsForGCArray(
 			GC->SetSimulatePhysics(bEnableSim);
 			GC->SetEnableGravity(bEnableGrav);
 
-			// 3) BodyInstance 레벨로 중력/웨이크 강제
+			// 3) BodyInstance 레벨 강제
 			if (FBodyInstance* BI = GC->GetBodyInstance())
 			{
 				if (bEnableGrav) BI->SetEnableGravity(true);
-				if (bEnableSim)
+				if (bEnableSim)  BI->WakeInstance();
+			}
+			// 4) Sim/Grav 목표인데 적용이 안 됐으면 즉시 복구 (Stage3 전용 Set 없이)
+			if (bEnableSim && bEnableGrav)
+			{
+				const bool bNeedFix = (!GC->IsSimulatingPhysics()) || (!GC->IsGravityEnabled());
+				if (bNeedFix)
 				{
-					BI->WakeInstance();
+					GC->SetSimulatePhysics(false);
+					GC->RecreatePhysicsState();
+					GC->SetSimulatePhysics(true);
+					GC->SetEnableGravity(true);
+
+					if (FBodyInstance* BI2 = GC->GetBodyInstance())
+					{
+						BI2->SetEnableGravity(true);
+						BI2->WakeInstance();
+					}
 				}
 			}
 
-			// 4) Sleep 방지: 깨우기 + 약한 임펄스
+			// 5) wake + small impulse
 			if (bEnableSim)
 			{
 				GC->WakeAllRigidBodies();
@@ -1673,4 +1518,351 @@ UGeometryCollectionComponent* AStructGraphManager::FindNearestSlabGC(const FVect
 		}
 	}
 	return Best;
+}
+
+void AStructGraphManager::OnGCBreak(const FChaosBreakEvent& BreakEvent)
+{
+	UGeometryCollectionComponent* GC = Cast<UGeometryCollectionComponent>(BreakEvent.Component);
+	if (!IsValid(GC)) return;
+
+	// 깨지는 순간 생기는 조각들이 중력/수면 상태 꼬이는 문제 보정
+	GC->SetSimulatePhysics(true);
+	GC->SetEnableGravity(true);
+
+	if (FBodyInstance* BI = GC->GetBodyInstance())
+	{
+		BI->SetEnableGravity(true);
+		BI->WakeInstance();
+	}
+
+	GC->WakeAllRigidBodies();
+
+	// 다음 틱 1회 추가 보정 (깨짐 직후 proxy 갱신 타이밍 대응)
+	TWeakObjectPtr<UGeometryCollectionComponent> WeakGC(GC);
+	if (UWorld* W = GetWorld())
+	{
+		W->GetTimerManager().SetTimerForNextTick([WeakGC]()
+			{
+				UGeometryCollectionComponent* G = WeakGC.Get();
+				if (!IsValid(G)) return;
+
+				G->SetEnableGravity(true);
+				if (FBodyInstance* BI2 = G->GetBodyInstance())
+				{
+					BI2->SetEnableGravity(true);
+					BI2->WakeInstance();
+				}
+				G->WakeAllRigidBodies();
+			});
+	}
+}
+
+void AStructGraphManager::EnsureGCPhysicsReady_Stage3()
+{
+	EnablePhysicsForGCArray_NoRecreate(GCWalls, true, true);
+	EnablePhysicsForGCArray_NoRecreate(GCColumns, true, true);
+	EnablePhysicsForGCArray_NoRecreate(GCSlabs, true, false);
+
+	// 슬래브 홀드(댐핑) 크게: 갑자기 와르르 방지 + 처짐 시간 확보
+	ForEachValidGC(GCSlabs, [&](UGeometryCollectionComponent* GC)
+		{
+			GC->SetLinearDamping(Stage3_SlabHoldLinStart);
+			GC->SetAngularDamping(Stage3_SlabHoldAngStart);
+			GC->WakeAllRigidBodies();
+		});
+
+	// 벽/기둥 댐핑은 너무 크면 지진 느낌이 죽음
+	ForEachValidGC(GCWalls, [](UGeometryCollectionComponent* GC)
+		{
+			GC->SetLinearDamping(1.5f);
+			GC->SetAngularDamping(1.5f);
+			GC->WakeAllRigidBodies();
+		});
+
+	ForEachValidGC(GCColumns, [](UGeometryCollectionComponent* GC)
+		{
+			GC->SetLinearDamping(1.0f);
+			GC->SetAngularDamping(1.0f);
+			GC->WakeAllRigidBodies();
+		});
+
+	UE_LOG(LogTemp, Warning, TEXT("[Stage3 Ready] Walls=%d Cols=%d Slabs=%d"),
+		GCWalls.Num(), GCColumns.Num(), GCSlabs.Num());
+}
+void AStructGraphManager::ApplyContinuousShakeToGC(
+	const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr,
+	float ImpulseStrength)
+{
+	ForEachValidGC(Arr, [&](UGeometryCollectionComponent* GC)
+		{
+			if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
+
+			const float Sign = (Stage3Stream.FRand() < 0.5f) ? -1.f : 1.f;
+			const FVector Dir(Sign, 0.f, 0.f); // X축만
+
+			const FVector Imp = Dir * ImpulseStrength + FVector(0, 0, Stage3_ShakeUpImpulse);
+			GC->AddImpulse(Imp, NAME_None, true);
+			GC->WakeAllRigidBodies();
+		});
+}
+
+void AStructGraphManager::StartStage3Continuous()
+{
+	if (bStage3ContinuousRunning) return;
+	bStage3ContinuousRunning = true;
+
+	Stage3TickCounter = 0;
+	Stage3StartTimeSec = GetWorld()->GetTimeSeconds();
+	Stage3Stream.Initialize(Stage2Seed + 777);
+
+	bStage3GravityCommitted = false;
+
+	Stage3_WeakColumnGC.Reset();
+	Stage3_TargetSlabGC.Reset();
+	Stage3_TargetSlabPunchPoint = FVector::ZeroVector;
+
+	// 약점 대상 1회 고정
+	Stage3_WeakColumnGC = PickLowestColumnGC();
+	if (UGeometryCollectionComponent* Col = Stage3_WeakColumnGC.Get())
+	{
+		if (AActor* ColA = Col->GetOwner())
+		{
+			FVector Origin, Extent;
+			ColA->GetActorBounds(true, Origin, Extent);
+
+			Stage3_TargetSlabGC = FindNearestSlabGC(Origin);
+			Stage3_TargetSlabPunchPoint = Origin + FVector(0, 0, Extent.Z * 0.45f);
+		}
+	}
+
+	EnsureGCPhysicsReady_Stage3();
+
+	GetWorldTimerManager().ClearTimer(Stage3ContinuousHandle);
+	GetWorldTimerManager().SetTimer(
+		Stage3ContinuousHandle,
+		this,
+		&AStructGraphManager::Stage3_ContinuousTick,
+		Stage3_TickInterval,
+		true
+	);
+
+	UE_LOG(LogTemp, Warning, TEXT("[Stage3] Continuous Start"));
+}
+
+void AStructGraphManager::StopStage3Continuous()
+{
+	if (!bStage3ContinuousRunning) return;
+	bStage3ContinuousRunning = false;
+
+	GetWorldTimerManager().ClearTimer(Stage3ContinuousHandle);
+	UE_LOG(LogTemp, Warning, TEXT("[Stage3] Continuous End"));
+}
+
+void AStructGraphManager::Stage3_ContinuousTick()
+{
+	Stage3TickCounter++;
+
+	const float Now = GetWorld()->GetTimeSeconds();
+	const float T = Now - Stage3StartTimeSec;
+
+	if (T >= Stage3_TotalDuration)
+	{
+		StopStage3Continuous();
+		return;
+	}
+
+	// --------------------------------------------------------------------
+	// 0) 슬래브 "중력 램프업" (단일 흐름)
+	//    - 초반엔 Grav OFF지만, AddForce로 점점 아래로 눌러 처짐이 생김
+	//    - 램프 끝나면 딱 1번만 진짜 gravity ON
+	// --------------------------------------------------------------------
+	{
+		const float A = FMath::Clamp(T / FMath::Max(0.01f, Stage3_GravityRampEndTime), 0.f, 1.f);
+		const float G = FMath::Abs(GetWorld()->GetGravityZ()); // 보통 980
+
+		ForEachValidGC(GCSlabs, [&](UGeometryCollectionComponent* GC)
+			{
+				if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
+
+				const float M = GC->GetMass();
+				const FVector Force(0, 0, -G * M * A); // 0 -> 1배 중력
+				GC->AddForce(Force, NAME_None, true);
+				GC->WakeAllRigidBodies();
+			});
+
+		if (A >= 1.f && !bStage3GravityCommitted)
+		{
+			bStage3GravityCommitted = true;
+
+			// 절대 Recreate/Sim 토글 금지: 중력만 켠다
+			ForEachValidGC(GCSlabs, [](UGeometryCollectionComponent* GC)
+				{
+					if (!IsValid(GC)) return;
+					GC->SetEnableGravity(true);
+					GC->WakeAllRigidBodies();
+				});
+
+			UE_LOG(LogTemp, Warning, TEXT("[Stage3] Slab Gravity ON (no recreate)"));
+		}
+	}
+
+	// --------------------------------------------------------------------
+	// 1) 슬래브 홀드(댐핑) 점진 해제: "몇 초 버티다 무너짐" 만들기
+	// --------------------------------------------------------------------
+	{
+		const float Alpha = FMath::Clamp(T / FMath::Max(0.01f, Stage3_HoldEndTime), 0.f, 1.f);
+		const float Lin = FMath::Lerp(Stage3_SlabHoldLinStart, Stage3_SlabHoldLinEnd, Alpha);
+		const float Ang = FMath::Lerp(Stage3_SlabHoldAngStart, Stage3_SlabHoldAngEnd, Alpha);
+
+		ForEachValidGC(GCSlabs, [&](UGeometryCollectionComponent* GC)
+			{
+				if (!IsValid(GC)) return;
+				GC->SetLinearDamping(Lin);
+				GC->SetAngularDamping(Ang);
+			});
+	}
+
+	// --------------------------------------------------------------------
+	// 2) 연속 흔들림(지진 외력)
+	// --------------------------------------------------------------------
+	ApplyContinuousShakeToGC(GCWalls, Stage3_ShakeImpulse * 0.8f);
+	ApplyContinuousShakeToGC(GCColumns, Stage3_ShakeImpulse * 1.0f);
+	ApplyContinuousShakeToGC(GCSlabs, Stage3_ShakeImpulse * 0.6f);
+
+	// --------------------------------------------------------------------
+	// 3) strain은 듬성듬성: 0.05 틱이면 %12 => 0.6초마다 1회
+	//    (즉시 와르르 방지의 핵심 노브)
+	// --------------------------------------------------------------------
+	const bool bDoStrain = (Stage3TickCounter % 12) == 0;
+	if (!bDoStrain) return;
+
+	const bool bPhaseA = (T < 2.0f);                // 전단 준비
+	const bool bPhaseB = (T >= 2.0f && T < 4.0f);   // 펀치 누적
+	const bool bPhaseC = (T >= 4.0f);               // 마무리(과한 분해 금지)
+
+	// --------------------------------------------------------------------
+	// 4) 벽 하부 균열 유지 (대상 1개만, 아주 약하게)
+	// --------------------------------------------------------------------
+	{
+		const int32 HitCount = FMath::Min(1, GCWalls.Num());
+		for (int32 i = 0; i < HitCount; ++i)
+		{
+			UGeometryCollectionComponent* WallGC = GCWalls[i].Get();
+			if (!IsValid(WallGC)) continue;
+
+			AActor* A = WallGC->GetOwner();
+			if (!IsValid(A)) continue;
+
+			FVector Origin, Extent;
+			A->GetActorBounds(true, Origin, Extent);
+
+			const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.7f);
+			const FVector P = Base + FVector(
+				Stage3Stream.FRandRange(-Extent.X * 0.2f, Extent.X * 0.2f),
+				Stage3Stream.FRandRange(-Extent.Y * 0.2f, Extent.Y * 0.2f),
+				Stage3Stream.FRandRange(-10.f, 10.f)
+			);
+
+			ApplyStrainToGC(WallGC, P, Stage3_BaseStrainRadius, Stage3_BaseStrainMag, 1);
+		}
+	}
+
+	// --------------------------------------------------------------------
+	// 5) 약점 기둥 전단 누적(링 4방향, Offset 작게)
+	// --------------------------------------------------------------------
+	{
+		UGeometryCollectionComponent* ColGC = Stage3_WeakColumnGC.Get();
+		if (IsValid(ColGC))
+		{
+			AActor* ColA = ColGC->GetOwner();
+			if (IsValid(ColA))
+			{
+				FVector Origin, Extent;
+				ColA->GetActorBounds(true, Origin, Extent);
+
+				const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.7f);
+
+				static int32 ShearIdx = 0;
+				ShearIdx = (ShearIdx + 1) % 4;
+
+				FVector Offset;
+				switch (ShearIdx)
+				{
+				case 0: Offset = FVector(12.f, 0.f, 0.f); break;
+				case 1: Offset = FVector(-12.f, 0.f, 0.f); break;
+				case 2: Offset = FVector(0.f, 12.f, 0.f); break;
+				default:Offset = FVector(0.f, -12.f, 0.f); break;
+				}
+
+				const float Mag =
+					bPhaseA ? Stage3_WeakStrainMag :
+					bPhaseB ? Stage3_WeakStrainMag * 0.75f :
+					Stage3_WeakStrainMag * 0.55f;
+
+				ApplyStrainToGC(ColGC, Base + Offset, Stage3_WeakStrainRadius, Mag, 1);
+			}
+		}
+	}
+
+	// --------------------------------------------------------------------
+	// 6) 슬래브 펀치 누적: PhaseB에서만 (PhaseC에선 끄기)
+	// --------------------------------------------------------------------
+	if (bPhaseB)
+	{
+		UGeometryCollectionComponent* SlabGC = Stage3_TargetSlabGC.Get();
+		if (IsValid(SlabGC))
+		{
+			const FVector P = Stage3_TargetSlabPunchPoint + FVector(
+				Stage3Stream.FRandRange(-25.f, 25.f),
+				Stage3Stream.FRandRange(-25.f, 25.f),
+				Stage3Stream.FRandRange(-15.f, 15.f)
+			);
+
+			ApplyStrainToGC(SlabGC, P, Stage3_PunchRadius, Stage3_PunchMag, 1);
+		}
+	}
+
+	// --------------------------------------------------------------------
+	// 7) PhaseC: 2차 분해는 "아주 약하게 1회" (원하면 완전히 꺼도 됨)
+	// --------------------------------------------------------------------
+	if (bPhaseC)
+	{
+		const int32 Extra = FMath::Min(1, GCSlabs.Num());
+		for (int32 i = 0; i < Extra; ++i)
+		{
+			UGeometryCollectionComponent* G = GCSlabs[i].Get();
+			if (!IsValid(G)) continue;
+
+			const FVector Center = G->Bounds.Origin;
+			ApplyStrainToGC(G, Center + FVector(0, 0, -40.f), 160.f, 60.f, 1);
+		}
+	}
+}
+
+void AStructGraphManager::EnablePhysicsForGCArray_NoRecreate(
+	const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr,
+	bool bEnableSim, bool bEnableGrav)
+{
+	ForEachValidGC(Arr, [&](UGeometryCollectionComponent* GC)
+		{
+			if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
+
+			if (GC->Mobility != EComponentMobility::Movable)
+			{
+				GC->SetMobility(EComponentMobility::Movable);
+			}
+
+			GC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			GC->SetCollisionProfileName(TEXT("PhysicsActor"));
+			GC->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+
+			// ⚠️ 절대 RecreatePhysicsState() 하지 않는다
+			GC->SetSimulatePhysics(bEnableSim);
+			GC->SetEnableGravity(bEnableGrav);
+
+			if (bEnableSim)
+			{
+				GC->WakeAllRigidBodies();
+			}
+		});
 }

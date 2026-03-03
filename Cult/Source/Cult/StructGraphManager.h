@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Chaos/ChaosGameplayEventDispatcher.h"
 #include "GeometryCollection/GeometryCollectionComponent.h"
 #include "StructGraphManager.generated.h"
 
@@ -138,6 +139,8 @@ public:
 	UPROPERTY()
 	TArray<TWeakObjectPtr<UGeometryCollectionComponent>> GCSlabs;
 
+
+
 	UFUNCTION(BlueprintCallable, Category = "StructGraph|GC")
 	void BuildGCCache();   // 1회 수집
 
@@ -209,6 +212,56 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Quake")
 	void TriggerStage3();
+
+	FTimerHandle Stage3ContinuousHandle;
+
+	bool bStage3ContinuousRunning = false;
+	float Stage3StartTimeSec = 0.f;
+
+	int32 Stage3TickCounter = 0;
+
+	TWeakObjectPtr<UGeometryCollectionComponent> Stage3_WeakColumnGC;
+	TWeakObjectPtr<UGeometryCollectionComponent> Stage3_TargetSlabGC;
+	FVector Stage3_TargetSlabPunchPoint = FVector::ZeroVector;
+
+	FRandomStream Stage3Stream;
+
+	// ---- Tuning Params (C++ only for now; can be UPROPERTY later) ----
+	float Stage3_TotalDuration = 5.0f;
+	float Stage3_TickInterval = 0.05f;
+
+	float Stage3_ShakeImpulse = 10.f;
+	float Stage3_ShakeUpImpulse = 0.f;
+
+	float Stage3_BaseStrainRadius = 120.f;
+	float Stage3_BaseStrainMag = 40.f;
+
+	float Stage3_WeakStrainRadius = 90.f;
+	float Stage3_WeakStrainMag = 120.f;
+
+	float Stage3_PunchRadius = 140.f;
+	float Stage3_PunchMag = 90.f;
+
+	float Stage3_GravityRampEndTime = 3.5f;  // 2.5~5.0 (늘릴수록 천천히 처짐)
+	bool  bStage3GravityCommitted = false;   // 램프 끝나고 1회만 진짜 gravity ON
+
+	// "Hold" (slab stays responsive but doesn't instantly drop)
+	float Stage3_HoldEndTime = 4.5f;  // 2.5~4.5
+	float Stage3_SlabHoldLinStart = 18.0f;  // 6~12
+	float Stage3_SlabHoldAngStart = 14.0f;  // 4~10
+	float Stage3_SlabHoldLinEnd = 1.2f;  // 0.8~2.0
+	float Stage3_SlabHoldAngEnd = 1.0f;  // 0.6~2.0
+	void EnablePhysicsForGCArray_NoRecreate(
+		const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr,
+		bool bEnableSim, bool bEnableGrav);
+
+	// ---- Stage3 Continuous API ----
+	void StartStage3Continuous();
+	void StopStage3Continuous();
+	void Stage3_ContinuousTick();
+
+	void EnsureGCPhysicsReady_Stage3();
+	void ApplyContinuousShakeToGC(const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr, float ImpulseStrength);
 
 	// 초기 캘리브레이션
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Calib")
@@ -284,6 +337,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
 	float Stage2_KickStrength = 200000.f;
 
+
 	UFUNCTION()
 	void TriggerPulse2();
 
@@ -304,48 +358,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage1 Debug")
 	bool bStage1_InstantCollapse = false;
 
-	// 지진 Stage3
 
-	UPROPERTY()
-	TWeakObjectPtr<UGeometryCollectionComponent> Stage3_TargetSlabGC;
 
-	UPROPERTY()
-	FVector Stage3_TargetSlabPunchPoint = FVector::ZeroVector;
-
-	bool IsUsableGC(UGeometryCollectionComponent* GC) const;
-	void PruneInvalidGCCache();
-
-	bool bStage3Started = false;
-
-	bool bStage3Released = false;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
-	float Stage3_EndDuration = 5.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
-	float Stage3_WaveInterval = 0.20f;   // 0.15~0.25
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
-	float Stage3_Wall_Radius = 240.f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
-	float Stage3_Wall_Mag = 200000.f;    // 반복 누적
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
-	int32 Stage3_Wall_Iter = 5;          // 1~3 / 10 : 이 바로 붕괴
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
-	float Stage3_ReleaseTime = 3.6f;     // 연출후반에 지지대 릴리즈
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
-	int32 Stage3_ReleaseCount = 2;
-
-	FTimerHandle Stage3WaveTimer;
-	float Stage3WaveElapsed = 0.f;
+	////
 
 	UFUNCTION()
-	void Stage3_TickWave();
+	void OnGCBreak(const FChaosBreakEvent& BreakEvent);
 
+	// 중복 바인딩 방지용(선택)
+	bool bBoundBreakEvents = false;
 
 	// 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage1 Debug")
