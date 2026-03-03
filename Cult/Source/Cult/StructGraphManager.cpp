@@ -1,4 +1,4 @@
-#include "StructGraphManager.h"
+ï»¿#include "StructGraphManager.h"
 #include "Components/StaticMeshComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
@@ -55,17 +55,14 @@ void AStructGraphManager::InitializeFromBP(
 	BuildSupportGraph();
 	BuildDownGraph();
 
-	//ÃÊ±â Ä¶¸®ºê·¹ÀÌ¼Ç
 	CalibrateCapacitiesFromInitialState();
 
 
-	// 1È¸ °è»ê
 	SolveLoadsAndDamage();
 
 	CacheBaseCapacities();
 
 
-	// ÀÓ½Ã ÄÝ¸®Àü Á¶Àý ÀÏ°ýÀû¿ë
 	auto ApplyStabilize = [&](const TArray<TObjectPtr<UStaticMeshComponent>>& Arr)
 		{
 			for (UStaticMeshComponent* C : Arr)
@@ -110,7 +107,6 @@ void AStructGraphManager::ResetStructure()
 {
 	StopEarthquake();
 
-	// »óÅÂ ¸®¼Â
 	for (FStructGraphNode& N : Nodes)
 	{
 		N.State = EStructDamageState::Intact;
@@ -118,7 +114,6 @@ void AStructGraphManager::ResetStructure()
 
 		if (N.Comp)
 		{
-			// ¹°¸® ²ô°í ¿øÀ§Ä¡ º¹±Í
 			if (UPrimitiveComponent* PC = N.Comp)
 			{
 				PC->SetSimulatePhysics(false);
@@ -132,7 +127,6 @@ void AStructGraphManager::ResetStructure()
 		}
 	}
 
-	// ±×·¡ÇÁ ´Ù½Ã °è»ê
 	SolveLoadsAndDamage();
 }
 
@@ -144,7 +138,6 @@ int32 AStructGraphManager::AddNode(EStructNodeType Type, UPrimitiveComponent* Co
 	Node.Comp = Comp;
 	Node.FloorIndex = FloorIndex;
 
-	// MVP ±âº»°ª
 	if (Comp)
 	{
 		const FBox Box = GetCompBox(Comp);
@@ -155,7 +148,6 @@ int32 AStructGraphManager::AddNode(EStructNodeType Type, UPrimitiveComponent* Co
 			(Type == EStructNodeType::Column) ? 0.00010f : 0.00006f;
 		Node.SelfWeight = Volume * Density;
 
-		// ¿ë·®: ±âµÕ/º®  °­, ½½·¡ºê ¾à
 		const float Strength = (Type == EStructNodeType::Column) ? 3.0f :
 			(Type == EStructNodeType::Wall) ? 2.0f : 1.0f;
 		Node.Capacity = FMath::Max(1.f, Volume * Strength * 0.000001f);
@@ -179,7 +171,7 @@ void AStructGraphManager::BuildNodes()
 	AddArray(EStructNodeType::Slab, SlabL1, 1);
 	AddArray(EStructNodeType::Slab, SlabL2, 2);
 	AddArray(EStructNodeType::Slab, SlabL3, 3);
-	AddArray(EStructNodeType::Slab, SlabRoof, 99); 
+	AddArray(EStructNodeType::Slab, SlabRoof, 99);
 
 	AddArray(EStructNodeType::Column, Columns, -1);
 	AddArray(EStructNodeType::Wall, Walls, -1);
@@ -230,7 +222,7 @@ float AStructGraphManager::OverlapArea2D(const FBox& A, const FBox& B, float Exp
 // BuildSupportGraph
 void AStructGraphManager::BuildSupportGraph()
 {
-	// Id->Index ¸Ê
+	// Id->Index 
 	TMap<int32, int32> IdToIndex;
 	IdToIndex.Reserve(Nodes.Num());
 	for (int32 i = 0; i < Nodes.Num(); ++i)
@@ -238,7 +230,7 @@ void AStructGraphManager::BuildSupportGraph()
 		IdToIndex.Add(Nodes[i].Id, i);
 	}
 
-	// Supports ÃÊ±âÈ­
+	// Supports 
 	for (FStructGraphNode& N : Nodes)
 	{
 		if (N.Type == EStructNodeType::Slab)
@@ -248,7 +240,6 @@ void AStructGraphManager::BuildSupportGraph()
 		}
 	}
 
-	// ÈÄº¸ ÁöÁö´ë(±âµÕ/º®)
 	TArray<int32> SupporterIds;
 	SupporterIds.Reserve(Nodes.Num());
 	for (const FStructGraphNode& N : Nodes)
@@ -259,7 +250,6 @@ void AStructGraphManager::BuildSupportGraph()
 		}
 	}
 
-	// ½½·¡ºêº° ÁöÁö´ë Å½»ö
 	for (FStructGraphNode& Slab : Nodes)
 	{
 		if (Slab.Type != EStructNodeType::Slab || !Slab.Comp)
@@ -270,7 +260,6 @@ void AStructGraphManager::BuildSupportGraph()
 		const float SlabBottomZ = SlabBox.Min.Z;
 		const int32 SlabFloor = Slab.FloorIndex;
 
-		// ÈÄº¸ ÁöÁö´ë Å½»ö
 		for (int32 Sid : SupporterIds)
 		{
 			const int32* SupIdx = IdToIndex.Find(Sid);
@@ -279,17 +268,15 @@ void AStructGraphManager::BuildSupportGraph()
 			FStructGraphNode& Sup = Nodes[*SupIdx];
 			if (!Sup.Comp) continue;
 
-			
+
 			if (Sup.FloorIndex != -1)
 			{
-				// °°ÀºÃþ ¶Ç´Â ¹Ù·Î ¾Æ·¡Ãþ Á¤µµ¸¸ Çã¿ë
 				if (!(Sup.FloorIndex == SlabFloor || Sup.FloorIndex == SlabFloor - 1))
 					continue;
 			}
 
 			const FBox SupBox = GetCompBox(Sup.Comp);
 
-			// ½½·¡ºê ¹Ù´Ú Z°¡ ÁöÁö´ëÀÇ Z¹üÀ§ ¾È¿¡ µé¾î¿À¸é ÁöÁö ÈÄº¸·Î ÀÎÁ¤
 			const float Z = SlabBottomZ;
 			const bool bZHit =
 				(Z >= SupBox.Min.Z - SupportZTolerance) &&
@@ -298,11 +285,9 @@ void AStructGraphManager::BuildSupportGraph()
 			if (!bZHit)
 				continue;
 
-			// XY °ãÄ§
 			if (!Overlap2D(SlabBox, SupBox, SupportXYExpand))
 				continue;
 
-			// °¡ÁßÄ¡ °è»ê
 			const float Area = OverlapArea2D(SlabBox, SupBox, SupportXYExpand);
 			if (Area <= KINDA_SMALL_NUMBER)
 				continue;
@@ -336,7 +321,6 @@ void AStructGraphManager::BuildSupportGraph()
 			UE_LOG(LogTemp, Warning, TEXT("[Support] L1 Slab %d has 0 supports -> treat as GROUND-supported (MVP)"), Slab.Id);
 		}
 
-		// Á¤±ÔÈ­
 		float SumW = 0.f;
 		for (float W : Slab.SupportWeights) SumW += W;
 
@@ -355,7 +339,6 @@ void AStructGraphManager::BuildSupportGraph()
 // BuildDownGraph
 void AStructGraphManager::BuildDownGraph()
 {
-	// 1) ±âµÕ/º® Down ÃÊ±âÈ­
 	for (FStructGraphNode& N : Nodes)
 	{
 		if (N.Type == EStructNodeType::Column || N.Type == EStructNodeType::Wall)
@@ -364,7 +347,6 @@ void AStructGraphManager::BuildDownGraph()
 		}
 	}
 
-	// 2) ½½·¡ºê Id ¼öÁý
 	TArray<int32> SlabIds;
 	SlabIds.Reserve(Nodes.Num());
 	for (const FStructGraphNode& N : Nodes)
@@ -375,7 +357,6 @@ void AStructGraphManager::BuildDownGraph()
 		}
 	}
 
-	// 3) °¢ ±âµÕ/º®¿¡¼­ ¾Æ·¡Ãþ ½½·¡ºê Ã£±â
 	for (FStructGraphNode& Sup : Nodes)
 	{
 		if (!(Sup.Type == EStructNodeType::Column || Sup.Type == EStructNodeType::Wall))
@@ -396,11 +377,9 @@ void AStructGraphManager::BuildDownGraph()
 			const FBox SlabBox = GetCompBox(Slab.Comp);
 			const float SlabTopZ = GetTopZ(SlabBox);
 
-			// Z Á¶°Ç: ÁöÁö´ë ¹Ù´ÚÀÌ ½½·¡ºê »ó´Ü¿¡ ´ê´Â´Ù
 			if (FMath::Abs(SupBottomZ - SlabTopZ) > SupportZTolerance)
 				continue;
 
-			// XY °ãÄ§
 			if (!Overlap2D(SupBox, SlabBox, SupportXYExpand))
 				continue;
 
@@ -408,7 +387,6 @@ void AStructGraphManager::BuildDownGraph()
 			if (Area <= KINDA_SMALL_NUMBER)
 				continue;
 
-			// Å¸ÀÔ È¿À²
 			const float Wtype = (Sup.Type == EStructNodeType::Wall) ? WallTypeFactor : ColumnTypeFactor;
 
 			const float W = Area * Wtype;
@@ -417,7 +395,6 @@ void AStructGraphManager::BuildDownGraph()
 			SumW += W;
 		}
 
-		// Á¤±ÔÈ­
 		if (SumW > KINDA_SMALL_NUMBER)
 		{
 			for (float& W : Sup.DownWeights)
@@ -460,18 +437,15 @@ bool AStructGraphManager::IsConnectedToGround_BFS(int32 StartNodeId, TMap<int32,
 
 		const FStructGraphNode& Cur = Nodes[CurId];
 
-		// ½ÇÆÐ ³ëµå´Â °æ·Î¿¡¼­ Á¦¿Ü
 		if (Cur.State == EStructDamageState::Failed)
 			continue;
 
-		// Ground ¼º°ø ÆÇÁ¤ :  L1 ½½·¡ºê (MVP)
 		if (Cur.Type == EStructNodeType::Slab && Cur.FloorIndex == 1)
 		{
 			Cache.Add(StartNodeId, true);
 			return true;
 		}
 
-		// ±×·¡ÇÁ ÁøÇà:
 		// Slab -> Supports
 		if (Cur.Type == EStructNodeType::Slab)
 		{
@@ -514,7 +488,6 @@ bool AStructGraphManager::UpdateDamageStates(bool& bAnyNewFailures)
 
 		const float U = N.Utilization();
 
-		// ½½·¡ºê´Â  Yield¸¸ Çã¿ë 
 		if (N.Type == EStructNodeType::Slab)
 		{
 			if (U >= YieldStart)
@@ -532,13 +505,11 @@ bool AStructGraphManager::UpdateDamageStates(bool& bAnyNewFailures)
 			continue;
 		}
 
-		// Column/WallÀº Á¤»ó Fail/Yield ÆÇÁ¤
 		if (U >= FailStart)
 		{
 			N.State = EStructDamageState::Failed;
 			bAnyNewFailures = true;
 
-			// FailµÈ Á¶°¢¸¸ ¹°¸® È°¼º
 			if (UPrimitiveComponent* PC = N.Comp)
 			{
 				PC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
@@ -570,7 +541,7 @@ void AStructGraphManager::SolveLoadsAndDamage()
 {
 	for (int32 Iter = 0; Iter < MaxSolveIterations; ++Iter)
 	{
-		
+
 		const float Seismic = 0.f;
 
 		ComputeLoadsFromScratch(Seismic);
@@ -578,7 +549,7 @@ void AStructGraphManager::SolveLoadsAndDamage()
 		bool bNewFailures = false;
 		UpdateDamageStates(bNewFailures);
 
-		if (!bNewFailures) break; 
+		if (!bNewFailures) break;
 	}
 
 	if (bDrawDebug)
@@ -621,7 +592,6 @@ void AStructGraphManager::TickEarthquake()
 	const float T2 = Phase1_Duration + Phase2_Duration;
 	const float T3 = Phase1_Duration + Phase2_Duration + Phase3_Duration;
 
-	// ´Ü°è ÆÇÁ¤
 	if (Elapsed < T1) QuakePhase = EQuakePhase::Micro;
 	else if (Elapsed < T2) QuakePhase = EQuakePhase::Progress;
 	else if (Elapsed < T3) QuakePhase = EQuakePhase::Collapse;
@@ -631,26 +601,22 @@ void AStructGraphManager::TickEarthquake()
 		return;
 	}
 
-	// ´Ü°èº° ¿ä±¸·® ¼³Á¤
 	float LocalBase = 0.0f;
 	float LocalOmega = SeismicOmega;
 
 	switch (QuakePhase)
 	{
 	case EQuakePhase::Micro:
-		// ¾àÇÑ Èçµé¸² + ·¥ÇÁ¾÷
 		LocalBase = FMath::Lerp(0.05f, 0.20f, Elapsed / FMath::Max(0.01f, T1));
 		LocalOmega = SeismicOmega * 0.7f;
 		break;
 
 	case EQuakePhase::Progress:
-		// ¼Õ»ó/ÆÄÆí À¯µµ
 		LocalBase = 0.35f;
 		LocalOmega = SeismicOmega * 1.0f;
 		break;
 
 	case EQuakePhase::Collapse:
-		// Å« ÁøÆø + ¾à°£ ºü¸¥ ÁÖÆÄ¼ö
 		LocalBase = 0.55f;
 		LocalOmega = SeismicOmega * 1.2f;
 		break;
@@ -662,7 +628,6 @@ void AStructGraphManager::TickEarthquake()
 	const float Wave = FMath::Sin(Elapsed * LocalOmega);
 	const float SeismicFactor = LocalBase * Wave;
 
-	// ÇØ¼® + ¼Õ»ó
 	for (int32 Iter = 0; Iter < MaxSolveIterations; ++Iter)
 	{
 		ComputeLoadsFromScratch(SeismicFactor);
@@ -713,13 +678,11 @@ void AStructGraphManager::StabilizeStructureComponent(UPrimitiveComponent* PC)
 
 void AStructGraphManager::ComputeLoadsFromScratch(float SeismicFactor)
 {
-	// 0) ÃÊ±âÈ­
 	for (FStructGraphNode& N : Nodes)
 	{
 		N.CarriedLoad = 0.f;
 	}
 
-	// 1) ½½·¡ºê -> ÁöÁö´ë(±âµÕ/º®)·Î "½½·¡ºê ÀÚÁß" ºÐ¹è
 	TMap<int32, bool> GroundCache;
 
 	for (FStructGraphNode& Slab : Nodes)
@@ -728,10 +691,9 @@ void AStructGraphManager::ComputeLoadsFromScratch(float SeismicFactor)
 		if (!Slab.Comp) continue;
 		if (Slab.State == EStructDamageState::Failed) continue;
 
-		// L1 ½½·¡ºê´Â Ground·Î °£ÁÖ: ºÐ¹è »ý·«
 		if (Slab.FloorIndex == 1) continue;
 
-		const float SlabLoad = Slab.SelfWeight; //MVP: ÀÚÁß¸¸
+		const float SlabLoad = Slab.SelfWeight; 
 
 		float SumW = 0.f;
 		TArray<int32> ValidIdx;
@@ -747,7 +709,6 @@ void AStructGraphManager::ComputeLoadsFromScratch(float SeismicFactor)
 			const FStructGraphNode& Sup = Nodes[SupId];
 			if (Sup.State == EStructDamageState::Failed) continue;
 
-			// Ground ¿¬°áµÈ ÁöÁö´ë¸¸
 			if (!IsConnectedToGround_BFS(SupId, GroundCache)) continue;
 
 			ValidIdx.Add(i);
@@ -765,8 +726,6 @@ void AStructGraphManager::ComputeLoadsFromScratch(float SeismicFactor)
 		}
 	}
 
-	// 2) ÁöÁö´ë -> ¾Æ·¡ ½½·¡ºê·Î Àü´Þ (DownGraph)
-	//    ¿©±â¼­µµ "ÁöÁö´ë ÀÚÁß + À§¿¡¼­ ¹ÞÀº ÇÏÁß"¸¸ 1È¸ Àü´Þ
 	for (FStructGraphNode& Sup : Nodes)
 	{
 		if (!(Sup.Type == EStructNodeType::Column || Sup.Type == EStructNodeType::Wall)) continue;
@@ -776,7 +735,7 @@ void AStructGraphManager::ComputeLoadsFromScratch(float SeismicFactor)
 		const float Total = Sup.SelfWeight + Sup.CarriedLoad;
 
 		if (Sup.DownSlabs.Num() == 0)
-			continue; // ±âÃÊ·Î ³»·Á°£ °ÍÀ¸·Î °£ÁÖ
+			continue;
 
 		float SumW = 0.f;
 		for (float W : Sup.DownWeights) SumW += W;
@@ -792,11 +751,10 @@ void AStructGraphManager::ComputeLoadsFromScratch(float SeismicFactor)
 			if (Nodes[DownSlabId].State == EStructDamageState::Failed) continue;
 
 			const float W = Sup.DownWeights[i] / SumW;
-			Nodes[DownSlabId].CarriedLoad += Total * W; //¾Æ·¡ ½½·¡ºê¿¡ "ÁöÁö´ë ÇÏÁß" ´©Àû
+			Nodes[DownSlabId].CarriedLoad += Total * W;
 		}
 	}
 
-	// ÁöÁø ¿ä±¸·® ¹Ý¿µ
 	if (FMath::Abs(SeismicFactor) > KINDA_SMALL_NUMBER)
 	{
 		const float Seis = FMath::Abs(SeismicFactor);
@@ -809,13 +767,8 @@ void AStructGraphManager::ComputeLoadsFromScratch(float SeismicFactor)
 }
 
 
-// ÃÊ±â Ä¶¸®ºê·¹ÀÌ¼Ç
 void AStructGraphManager::CalibrateCapacitiesFromInitialState()
 {
-	// ÃÊ±â »óÅÂ¿¡¼­ 1È¸ ÇÏÁß °è»ê ÈÄ,
-	// Column/WallÀÇ Æò±Õ UtilizationÀ» TargetÀ¸·Î ¸ÂÃßµµ·Ï Capacity¸¦ ½ºÄÉÀÏ¸µ
-
-	// 1) ÇÑ¹ø °è»ê
 	ComputeLoadsFromScratch(0.f);
 
 	double SumU = 0.0;
@@ -873,17 +826,14 @@ void AStructGraphManager::ApplySeismicAndShearDemands(float SeismicFactor)
 
 		const int32 Floor = N.FloorIndex;
 
-		// 1) »óÃþ ÁõÆø
 		const float Amp = 1.f + SeismicFloorAmplify * FMath::Max(0, Floor - 1);
 
-		// 2) Àü´Ü ÁõÆø
 		float Soft = 1.f;
 		if (Floor == SoftStoryFloor)
 		{
 			Soft = SoftStoryBoost;
 		}
 
-		// 3) Àü´Ü ¿ä±¸·®À» µî°¡ ¼öÁ÷À¸·Î È¯»ê
 		const float DemandBase = (N.SelfWeight + N.CarriedLoad);
 		const float Added = DemandBase * Seis * ShearToVerticalScale * Amp * Soft;
 
@@ -900,18 +850,15 @@ void AStructGraphManager::AccumulateDamage(float DeltaTime)
 
 		const float U = N.Utilization();
 
-		// Yield ÀÌ»óºÎÅÍ ´©Àû ¼Õ»ó
 		if (U >= YieldStart)
 		{
 			float Rate = DamageRateYield;
 			if (U >= FailStart) Rate = DamageRateFailed;
 
-			// U°¡ Å¬¼ö·Ï Ãß°¡ ¼Õ»ó
 			const float UFactor = FMath::Clamp((U - YieldStart) / (FailStart - YieldStart + 1e-3f), 0.f, 2.f);
 
 			N.Damage = FMath::Clamp(N.Damage + Rate * (0.5f + UFactor) * DeltaTime, 0.f, 1.f);
 
-			// Damage¿¡ µû¶ó ¿ë·® °¨¼Ò (Á¡Áø ºØ±«)
 			const float Loss = CapacityLossAtFullDamage * N.Damage; // 0~CapacityLossAtFullDamage
 			N.Capacity = FMath::Max(0.01f, N.BaseCapacity * (1.f - Loss));
 		}
@@ -923,7 +870,6 @@ void AStructGraphManager::AccumulateDamage(float DeltaTime)
 }
 
 
-// ÁöÁø
 
 void AStructGraphManager::StartEarthquake3Phase()
 {
@@ -957,7 +903,6 @@ void AStructGraphManager::StopEarthquake3Phase()
 
 
 
-// ÁöÁø
 void AStructGraphManager::SetQuakeStage(EQuakeStage NewStage)
 {
 	QuakeStage = NewStage;
@@ -975,14 +920,11 @@ void AStructGraphManager::TriggerStage1()
 {
 	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage1 Start"));
 
-	// ´ïÇÎ
 	ApplyDampingToTaggedGC(GCWallTag, Stage1LinearDamping, Stage1AngularDamping);
 
-	// ±âÁ¸ Stage1 Èçµé¸² ·ÎÁ÷
 	SeismicBase = Stage1_SeismicBase;
 	SeismicOmega = Stage1_Omega;
-	StartEarthquake(); // Å¸ÀÌ¸Ó Èçµé±â
-
+	StartEarthquake(); 
 	PlayShake(QuakeContinuousShakeClass, Stage1ShakeScale);
 }
 
@@ -990,26 +932,21 @@ void AStructGraphManager::TriggerStage2()
 {
 	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage2 Start (Local strain pulses on GC walls)"));
 
-	// ÃÊ±âÈ­
 	Stage2Stream.Initialize(Stage2Seed);
 
 
-	// Áß·Â ÇÇÁ÷½º On
 	//EnablePhysicsForTaggedGC(GCWallTag, true, true);
 	EnablePhysicsForGCArray(GCWalls, true, true);
 	/*EnablePhysicsForGCArray(GCColumns, true, true);
 	EnablePhysicsForGCArray(GCSlabs, true, true);*/
 
-	// ´ïÇÎ
 	ApplyDampingToTaggedGC(GCWallTag, Stage2LinearDamping, Stage2AngularDamping);
 
 
-	// Stage1 Èçµé¸² À¯Áö
 	SeismicBase = Stage1_SeismicBase;
 	SeismicOmega = Stage1_Omega;
 	StartEarthquake();
 
-	// Stage2 ÆÞ½º Å¸ÀÌ¸Ó ½ÃÀÛ
 	Stage2Elapsed = 0.f;
 	GetWorldTimerManager().ClearTimer(Stage2Timer);
 
@@ -1022,7 +959,7 @@ void AStructGraphManager::TriggerStage2()
 	);
 
 	const float Now = GetWorld()->GetTimeSeconds();
-	if (Now - LastStage2ShakeTime >= 0.5f) // 0.5ÃÊ¸¶´Ù 1È¸
+	if (Now - LastStage2ShakeTime >= 0.5f) 
 	{
 		PlayShake(QuakeContinuousShakeClass, Stage2ShakeScale);
 		LastStage2ShakeTime = Now;
@@ -1031,6 +968,11 @@ void AStructGraphManager::TriggerStage2()
 
 void AStructGraphManager::TriggerStage3()
 {
+	Stage3_TargetSlabGC.Reset();
+	Stage3_TargetSlabPunchPoint = FVector::ZeroVector;
+
+	BuildGCCache();
+
 	GetWorldTimerManager().ClearTimer(Stage2Timer);
 	GetWorldTimerManager().ClearTimer(Stage3WaveTimer);
 
@@ -1045,7 +987,6 @@ void AStructGraphManager::TriggerStage3()
 	//EnablePhysicsForTaggedGC(FName("GC_SLAB"), true, true);
 
 	EnablePhysicsForGCArray(GCWalls, true, true);
-	EnablePhysicsForGCArray(GCColumns, true, true);
 	//EnablePhysicsForGCArray(GCSlabs, true, true);
 
 	ApplyDampingToTaggedGC(GCWallTag, Stage3LinearDamping, Stage3AngularDamping);
@@ -1070,7 +1011,6 @@ void AStructGraphManager::TriggerStage3()
 	);
 }
 
-// GC Ã£±â
 UGeometryCollectionComponent* AStructGraphManager::FindNearestGC(const FVector& WorldPoint) const
 {
 	UWorld* W = GetWorld();
@@ -1208,7 +1148,6 @@ void AStructGraphManager::Debug_ApplyStrainOnce()
 	UE_LOG(LogTemp, Warning, TEXT("[Debug] GC_WALL Found: %d"), Found.Num());
 	if (Found.Num() == 0) return;
 
-	// Ã¹ ¹øÂ° º® ¼±ÅÃ
 	AActor* WallActor = Found[0];
 	if (!IsValid(WallActor)) return;
 
@@ -1219,7 +1158,6 @@ void AStructGraphManager::Debug_ApplyStrainOnce()
 		return;
 	}
 
-	// HitPoint = º® ¹Ù¿îµå Áß½É
 	FVector Origin, Extent;
 	WallActor->GetActorBounds(true, Origin, Extent);
 
@@ -1239,14 +1177,12 @@ void AStructGraphManager::Debug_ApplyStrainOnce()
 	GCComp->SetEnableGravity(true);
 	GCComp->WakeAllRigidBodies();
 
-	//  ÀÓÆÞ½º
 	GCComp->AddImpulse(FVector(20000000.f, 0.f, 0.f), NAME_None, true);
 }
 
 
 
 
-// ÁïºØ
 void AStructGraphManager::PlayStage1CameraShake()
 {
 	if (!Stage1_CameraShakeClass)
@@ -1278,10 +1214,8 @@ void AStructGraphManager::DestroyActorsWithTag(FName Tag)
 
 void AStructGraphManager::ApplySettleDampingThenRestore()
 {
-	// ½ÃÀÛ ¾ÈÁ¤È­
 	ApplyDampingToTaggedGC(GCWallTag, SettleLinearDamping, SettleAngularDamping);
 
-	// SettleDuration ÈÄ¿¡ ±âº»À¸·Î µÇµ¹¸®±â
 	GetWorldTimerManager().ClearTimer(SettleTimerHandle);
 	GetWorldTimerManager().SetTimer(SettleTimerHandle, [this]()
 		{
@@ -1328,7 +1262,6 @@ void AStructGraphManager::PlayImpactDecaying()
 			const float Now = GetWorld()->GetTimeSeconds();
 			const float Alpha = FMath::Clamp((Now - StartTime) / FMath::Max(0.01f, ImpactDecayDuration), 0.f, 1.f);
 
-			// °¨¼è
 			const float Scale = FMath::Lerp(ImpactStartScale, ImpactEndScale, Alpha);
 
 			PlayShake(QuakeImpactShakeClass, Scale);
@@ -1343,10 +1276,8 @@ void AStructGraphManager::PlayImpactDecaying()
 
 void AStructGraphManager::Stage3_TickWave()
 {
-
 	Stage3WaveElapsed += Stage3_WaveInterval;
 
-	// 5ÃÊ ³¡³ª¸é Á¾·á
 	if (Stage3WaveElapsed >= Stage3_EndDuration)
 	{
 		GetWorldTimerManager().ClearTimer(Stage3WaveTimer);
@@ -1354,7 +1285,12 @@ void AStructGraphManager::Stage3_TickWave()
 		return;
 	}
 
-	// 1 º® ´©Àû ½ºÆ®·¹ÀÎ
+	// prune dead pointers (prevents invalid access during late Stage3)
+	GCWalls.RemoveAll([](const TWeakObjectPtr<UGeometryCollectionComponent>& P) { return !P.IsValid(); });
+	GCColumns.RemoveAll([](const TWeakObjectPtr<UGeometryCollectionComponent>& P) { return !P.IsValid(); });
+	GCSlabs.RemoveAll([](const TWeakObjectPtr<UGeometryCollectionComponent>& P) { return !P.IsValid(); });
+
+	// 1) wall strain (light)
 	if (GCWalls.Num() > 0)
 	{
 		const int32 HitCount = FMath::Min(2, GCWalls.Num());
@@ -1362,10 +1298,10 @@ void AStructGraphManager::Stage3_TickWave()
 		for (int32 i = 0; i < HitCount; ++i)
 		{
 			UGeometryCollectionComponent* GCComp = GCWalls[i].Get();
-			if (!IsValid(GCComp)) continue;
+			if (!IsValid(GCComp) || !GCComp->IsRegistered() || GCComp->IsBeingDestroyed()) continue;
 
 			AActor* A = GCComp->GetOwner();
-			if (!IsValid(A)) continue;
+			if (!IsValid(A) || A->IsActorBeingDestroyed()) continue;
 
 			FVector Origin, Extent;
 			A->GetActorBounds(true, Origin, Extent);
@@ -1381,83 +1317,140 @@ void AStructGraphManager::Stage3_TickWave()
 			ApplyStrainToGC(GCComp, HitPoint, Stage3_Wall_Radius, Stage3_Wall_Mag, Stage3_Wall_Iter);
 		}
 	}
-	 
-	
-	// 2) ÈÄ¹ÝºÎ¿¡¼­ ÁöÁöºÎ ¸±¸®Áî ÇÑ¹ø¸¸
+
+	// 2) release once
 	if (!bStage3Released && Stage3WaveElapsed >= Stage3_ReleaseTime)
 	{
 		bStage3Released = true;
 
-		// Àü´Ü
+		EnablePhysicsForGCArray(GCColumns, true, true);
+
+
+
 		UGeometryCollectionComponent* ColGC = PickLowestColumnGC();
-		if (IsValid(ColGC))
+		if (IsValid(ColGC) && ColGC->IsRegistered() && !ColGC->IsBeingDestroyed())
 		{
+			// check
+			UE_LOG(LogTemp, Warning, TEXT("[Stage3] ColGC Sim=%d Grav=%d Reg=%d Awake=%d"),
+				ColGC->IsSimulatingPhysics() ? 1 : 0,
+				ColGC->IsGravityEnabled() ? 1 : 0,
+				ColGC->IsRegistered() ? 1 : 0,
+				ColGC->IsAnyRigidBodyAwake() ? 1 : 0);
+
 			AActor* ColActor = ColGC->GetOwner();
-
-			FVector Origin, Extent;
-			ColActor->GetActorBounds(true, Origin, Extent);
-
-			const float ColRadius = 90.f;
-			const float ColMag = 120000.f;
-			const int32 ColIter = 3;
-
-			for (int32 k = 0; k < 3; ++k)
+			EnablePhysicsForGCArray({ ColGC }, true, true);
+			if (IsValid(ColActor) && !ColActor->IsActorBeingDestroyed())
 			{
-				FVector HitPoint = Origin - FVector(0, 0, Extent.Z * 0.7f);
-				HitPoint += FVector(
-					Stage2Stream.FRandRange(-15.f, 15.f), // Stage2Stream °¡´É(°áÁ¤¼º)
-					Stage2Stream.FRandRange(-15.f, 15.f),
-					Stage2Stream.FRandRange(-10.f, 10.f)
-				);
+				FVector Origin, Extent;
+				ColActor->GetActorBounds(true, Origin, Extent);
 
-				ApplyStrainToGC(ColGC, HitPoint, ColRadius, ColMag, ColIter);
-			}
+				const float ColRadius = 90.f;
+				const float ColMag = 120000.f;
+				const int32 ColIter = 3;
 
-			UE_LOG(LogTemp, Warning, TEXT("[Stage3] Broke Column: %s"), *ColActor->GetName());
-
-			UGeometryCollectionComponent* SlabGC = FindNearestSlabGC(Origin);
-			if (IsValid(SlabGC))
-			{
-				// Æ÷ÀÎÆ®: ±âµÕ »ó´ÜÂÊ
-				FVector PunchPoint = Origin + FVector(0, 0, Extent.Z * 0.45f);
-
-				// ·£´ý Èçµé¸²
-				PunchPoint += FVector(
-					Stage2Stream.FRandRange(-20.f, 20.f),
-					Stage2Stream.FRandRange(-20.f, 20.f),
-					Stage2Stream.FRandRange(-10.f, 10.f)
-				);
-
-				const float PunchRadius = 120.f;     // 90~180
-				const float PunchMag = 90000.f;   // 70k~140k
-				const int32 PunchIter = 3;         // 2~4
-
-				// 2~3È¸ ´©Àû
-				const int32 PunchCount = 3;
-				for (int32 p = 0; p < PunchCount; ++p)
+				for (int32 k = 0; k < 3; ++k)
 				{
-					FVector P = PunchPoint + FVector(
+					FVector HitPoint = Origin - FVector(0, 0, Extent.Z * 0.7f);
+					HitPoint += FVector(
 						Stage2Stream.FRandRange(-15.f, 15.f),
 						Stage2Stream.FRandRange(-15.f, 15.f),
-						Stage2Stream.FRandRange(-5.f, 5.f)
+						Stage2Stream.FRandRange(-10.f, 10.f)
 					);
 
-					ApplyStrainToGC(SlabGC, P, PunchRadius, PunchMag, PunchIter);
+					ApplyStrainToGC(ColGC, HitPoint, ColRadius, ColMag, ColIter);
 				}
 
-				UE_LOG(LogTemp, Warning, TEXT("[Stage3] Punch Slab: %s"), *SlabGC->GetOwner()->GetName());
+				UE_LOG(LogTemp, Warning, TEXT("[Stage3] Broke Column: %s"), *ColActor->GetName());
+
+				// cache slab target once (prevents late-timer invalid search)
+				if (!Stage3_TargetSlabGC.IsValid())
+				{
+					UGeometryCollectionComponent* FoundSlab = FindNearestSlabGC(Origin);
+					if (IsValid(FoundSlab) && FoundSlab->IsRegistered() && !FoundSlab->IsBeingDestroyed())
+					{
+						Stage3_TargetSlabGC = FoundSlab;
+
+						Stage3_TargetSlabPunchPoint = Origin + FVector(0, 0, Extent.Z * 0.45f);
+						Stage3_TargetSlabPunchPoint += FVector(
+							Stage2Stream.FRandRange(-20.f, 20.f),
+							Stage2Stream.FRandRange(-20.f, 20.f),
+							Stage2Stream.FRandRange(-10.f, 10.f)
+						);
+
+						if (AActor* SA = FoundSlab->GetOwner())
+						{
+							UE_LOG(LogTemp, Warning, TEXT("[Stage3] Target Slab Selected: %s"), *SA->GetName());
+						}
+					}
+				}
+
+				UGeometryCollectionComponent* SlabGC = Stage3_TargetSlabGC.Get();
+				EnablePhysicsForGCArray({ SlabGC }, true, true);
+				if (IsValid(SlabGC) && SlabGC->IsRegistered() && !SlabGC->IsBeingDestroyed())
+				{
+					// check
+					UE_LOG(LogTemp, Warning, TEXT("[Stage3] SlabGC Sim=%d Grav=%d Reg=%d Awake=%d"),
+						SlabGC->IsSimulatingPhysics() ? 1 : 0,
+						SlabGC->IsGravityEnabled() ? 1 : 0,
+						SlabGC->IsRegistered() ? 1 : 0,
+						SlabGC->IsAnyRigidBodyAwake() ? 1 : 0);
+
+					const float PunchRadius = 120.f;
+					const float PunchMag = 90000.f;
+					const int32 PunchIter = 3;
+
+					for (int32 p = 0; p < 3; ++p)
+					{
+						if (!IsValid(SlabGC) || !SlabGC->IsRegistered() || SlabGC->IsBeingDestroyed())
+						{
+							break;
+						}
+
+						const FVector P = Stage3_TargetSlabPunchPoint + FVector(
+							Stage2Stream.FRandRange(-15.f, 15.f),
+							Stage2Stream.FRandRange(-15.f, 15.f),
+							Stage2Stream.FRandRange(-5.f, 5.f)
+						);
+
+						ApplyStrainToGC(SlabGC, P, PunchRadius, PunchMag, PunchIter);
+					}
+
+					if (AActor* SA = SlabGC->GetOwner())
+					{
+						UE_LOG(LogTemp, Warning, TEXT("[Stage3] Punch Slab: %s"), *SA->GetName());
+					}
+				}
 			}
 		}
 
-		GetWorldTimerManager().SetTimer(Stage3SlabDelayHandle, [this]()
+		// delayed slab physics ON (subset to avoid GPU spike)
+		TWeakObjectPtr<AStructGraphManager> WeakThis(this);
+
+		GetWorldTimerManager().SetTimer(Stage3SlabDelayHandle, FTimerDelegate::CreateLambda([WeakThis]()
 			{
-				EnablePhysicsForGCArray(GCSlabs, true, true);
-				UE_LOG(LogTemp, Warning, TEXT("[Stage3] Slabs physics ON"));
-			}, 0.5f, false);
+				if (!WeakThis.IsValid()) return;
+				if (!IsValid(WeakThis->GetWorld())) return;
+
+				WeakThis->GCSlabs.RemoveAll([](const TWeakObjectPtr<UGeometryCollectionComponent>& P) { return !P.IsValid(); });
+
+				const int32 MaxEnable = FMath::Min(12, WeakThis->GCSlabs.Num());
+
+				TArray<TWeakObjectPtr<UGeometryCollectionComponent>> Subset;
+				Subset.Reserve(MaxEnable);
+				for (int32 i = 0; i < MaxEnable; ++i)
+				{
+					Subset.Add(WeakThis->GCSlabs[i]);
+				}
+
+				WeakThis->EnablePhysicsForGCArray(Subset, true, true);
+				UE_LOG(LogTemp, Warning, TEXT("[Stage3] Slabs physics ON subset=%d/%d"), MaxEnable, WeakThis->GCSlabs.Num());
+
+			}), 0.5f, false);
 	}
 }
 
-// ¹°¸®ÄÑ±â
+// ===== Physics (tag) =====
+
 void AStructGraphManager::EnablePhysicsForTaggedGC(FName Tag, bool bEnableSim, bool bEnableGrav)
 {
 	TArray<AActor*> Found;
@@ -1465,39 +1458,30 @@ void AStructGraphManager::EnablePhysicsForTaggedGC(FName Tag, bool bEnableSim, b
 
 	for (AActor* A : Found)
 	{
-		if (!IsValid(A)) continue;
+		if (!IsValid(A) || A->IsActorBeingDestroyed()) continue;
 
 		UGeometryCollectionComponent* GC = A->FindComponentByClass<UGeometryCollectionComponent>();
-		if (!IsValid(GC)) continue;
+		if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) continue;
 
-		// 1) ¸ÕÀú ÄÑ±â
 		GC->SetSimulatePhysics(bEnableSim);
 		GC->SetEnableGravity(bEnableGrav);
 
-		// 2) Àû¿ëÀÌ ¾È µÇ¸é PhysicsState Àç»ý¼º
 		if (bEnableGrav && !GC->IsGravityEnabled())
 		{
 			GC->SetSimulatePhysics(false);
-			GC->RecreatePhysicsState();   // Áß¿ä
+			GC->RecreatePhysicsState();
 			GC->SetSimulatePhysics(true);
 			GC->SetEnableGravity(true);
 		}
 
-		// 3) ±ú¿ì±â + ¾ÆÁÖ ¾àÇÑ ÀÓÆÞ½º(½½¸³ ¹æÁö)
 		if (bEnableSim)
 		{
 			GC->WakeAllRigidBodies();
-			GC->AddImpulse(FVector(0, 0, -2000.f), NAME_None, true);
-			GC->WakeAllRigidBodies();
 		}
-
-		UE_LOG(LogTemp, Warning, TEXT("[EnableGC] %s Tag=%s GravNow=%d SimNow=%d Awake=%d"),
-			*A->GetName(), *Tag.ToString(),
-			GC->IsGravityEnabled() ? 1 : 0,
-			GC->IsSimulatingPhysics() ? 1 : 0,
-			GC->IsAnyRigidBodyAwake() ? 1 : 0);
 	}
 }
+
+// ===== Cache =====
 
 void AStructGraphManager::ClearGCCache()
 {
@@ -1517,9 +1501,11 @@ void AStructGraphManager::BuildGCCache()
 
 			for (AActor* A : Found)
 			{
-				if (!IsValid(A)) continue;
+				if (!IsValid(A) || A->IsActorBeingDestroyed()) continue;
+
 				UGeometryCollectionComponent* GC = A->FindComponentByClass<UGeometryCollectionComponent>();
-				if (!IsValid(GC)) continue;
+				if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) continue;
+
 				Out.Add(GC);
 			}
 		};
@@ -1531,31 +1517,29 @@ void AStructGraphManager::BuildGCCache()
 	UE_LOG(LogTemp, Warning, TEXT("[GCCache] Walls=%d Cols=%d Slabs=%d"),
 		GCWalls.Num(), GCColumns.Num(), GCSlabs.Num());
 
-	GCColumns.Sort([](const TWeakObjectPtr<UGeometryCollectionComponent>& A,
-		const TWeakObjectPtr<UGeometryCollectionComponent>& B)
+	auto SafeZ = [&](const TWeakObjectPtr<UGeometryCollectionComponent>& P) -> float
 		{
-			const auto* GA = A.Get();
-			const auto* GB = B.Get();
-			if (!IsValid(GA) || !IsValid(GB)) return false;
-			return GA->GetOwner()->GetActorLocation().Z < GB->GetOwner()->GetActorLocation().Z;
-		});
+			UGeometryCollectionComponent* GC = P.Get();
+			if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return TNumericLimits<float>::Max();
 
-	GCWalls.Sort([](const TWeakObjectPtr<UGeometryCollectionComponent>& A,
-		const TWeakObjectPtr<UGeometryCollectionComponent>& B)
+			AActor* OA = GC->GetOwner();
+			if (IsValid(OA)) return OA->GetActorLocation().Z;
+
+			return GC->GetComponentLocation().Z;
+		};
+
+	auto SortByZSafe = [&](TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr)
 		{
-			const auto* GA = A.Get();
-			const auto* GB = B.Get();
-			if (!IsValid(GA) || !IsValid(GB)) return false;
-			return GA->GetOwner()->GetActorLocation().Z < GB->GetOwner()->GetActorLocation().Z;
-		});
-	GCSlabs.Sort([](const TWeakObjectPtr<UGeometryCollectionComponent>& A,
-		const TWeakObjectPtr<UGeometryCollectionComponent>& B)
-		{
-			const auto* GA = A.Get();
-			const auto* GB = B.Get();
-			if (!IsValid(GA) || !IsValid(GB)) return false;
-			return GA->GetOwner()->GetActorLocation().Z < GB->GetOwner()->GetActorLocation().Z;
-		});
+			Arr.Sort([&](const TWeakObjectPtr<UGeometryCollectionComponent>& A,
+				const TWeakObjectPtr<UGeometryCollectionComponent>& B)
+				{
+					return SafeZ(A) < SafeZ(B);
+				});
+		};
+
+	SortByZSafe(GCColumns);
+	SortByZSafe(GCWalls);
+	SortByZSafe(GCSlabs);
 }
 
 void AStructGraphManager::ForEachValidGC(
@@ -1581,10 +1565,12 @@ UGeometryCollectionComponent* AStructGraphManager::PickRandomValidGC(
 	{
 		const int32 Idx = Stream.RandRange(0, N - 1);
 		UGeometryCollectionComponent* GC = Arr[Idx].Get();
-		if (IsValid(GC)) return GC;
+		if (IsValid(GC) && GC->IsRegistered() && !GC->IsBeingDestroyed()) return GC;
 	}
 	return nullptr;
 }
+
+// ===== EnablePhysicsForGCArray (GPU-safe) =====
 
 void AStructGraphManager::EnablePhysicsForGCArray(
 	const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr,
@@ -1592,31 +1578,76 @@ void AStructGraphManager::EnablePhysicsForGCArray(
 {
 	ForEachValidGC(Arr, [&](UGeometryCollectionComponent* GC)
 		{
+			if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
+
+			// Mobility ê°•ì œ (Staticì´ë©´ Chaosì—ì„œ ì´ìƒ ë™ìž‘ ê°€ëŠ¥)
+			if (GC->Mobility != EComponentMobility::Movable)
+			{
+				GC->SetMobility(EComponentMobility::Movable);
+			}
+
 			GC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 			GC->SetCollisionProfileName(TEXT("PhysicsActor"));
 			GC->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 
-			GC->SetSimulatePhysics(false);
-			GC->RecreatePhysicsState();
+			// í˜„ìž¬ ìƒíƒœ ì €ìž¥
+			const bool bWasSim = GC->IsSimulatingPhysics();
 
+			// 1) Simì´ êº¼ì ¸ìžˆë˜ ì• ë¥¼ "ì²˜ìŒ ì¼¤ ë•Œë§Œ" Recreate (ìŠ¤ëƒ…ë°± ë°©ì§€ í•µì‹¬)
+			if (!bWasSim && bEnableSim)
+			{
+				GC->SetSimulatePhysics(false);
+				GC->RecreatePhysicsState();
+			}
+
+			// 2) ëª©í‘œ ìƒíƒœ ì ìš©
 			GC->SetSimulatePhysics(bEnableSim);
 			GC->SetEnableGravity(bEnableGrav);
 
+			// 3) BodyInstance ë ˆë²¨ë¡œ ì¤‘ë ¥/ì›¨ì´í¬ ê°•ì œ
+			if (FBodyInstance* BI = GC->GetBodyInstance())
+			{
+				if (bEnableGrav) BI->SetEnableGravity(true);
+				if (bEnableSim)
+				{
+					BI->WakeInstance();
+				}
+			}
+
+			// 4) Sleep ë°©ì§€: ê¹¨ìš°ê¸° + ì•½í•œ ìž„íŽ„ìŠ¤
 			if (bEnableSim)
 			{
 				GC->WakeAllRigidBodies();
+				if (bEnableGrav)
+				{
+					GC->AddImpulse(FVector(0, 0, -2000.f), NAME_None, true);
+				}
+				GC->WakeAllRigidBodies();
 			}
+
+			UE_LOG(LogTemp, Warning, TEXT("[EnableGCArray] %s Sim=%d Grav=%d Awake=%d WasSim=%d"),
+				*GetNameSafe(GC->GetOwner()),
+				GC->IsSimulatingPhysics() ? 1 : 0,
+				GC->IsGravityEnabled() ? 1 : 0,
+				GC->IsAnyRigidBodyAwake() ? 1 : 0,
+				bWasSim ? 1 : 0);
 		});
 }
+
+// ===== Pick / Find =====
 
 UGeometryCollectionComponent* AStructGraphManager::PickLowestColumnGC() const
 {
 	for (const auto& W : GCColumns)
 	{
 		UGeometryCollectionComponent* GC = W.Get();
-		if (IsValid(GC) && IsValid(GC->GetOwner()))
+		if (IsValid(GC) && GC->IsRegistered() && !GC->IsBeingDestroyed())
 		{
-			return GC; // BuildGCCache¿¡¼­ ZÁ¤·ÄÇßÀ¸´Ï Ã¹ À¯È¿°¡ ÃÖÀúÃþ
+			AActor* OA = GC->GetOwner();
+			if (IsValid(OA) && !OA->IsActorBeingDestroyed())
+			{
+				return GC;
+			}
 		}
 	}
 	return nullptr;
@@ -1630,11 +1661,11 @@ UGeometryCollectionComponent* AStructGraphManager::FindNearestSlabGC(const FVect
 	for (const auto& W : GCSlabs)
 	{
 		UGeometryCollectionComponent* Slab = W.Get();
-		if (!IsValid(Slab)) continue;
-		AActor* OwnerActor = Slab->GetOwner();    
-		if (!IsValid(OwnerActor)) continue;
+		if (!IsValid(Slab) || !Slab->IsRegistered() || Slab->IsBeingDestroyed()) continue;
 
-		const float D2 = FVector::DistSquared(Owner->GetActorLocation(), WorldPoint);
+		const FVector Center = Slab->Bounds.Origin;
+		const float D2 = FVector::DistSquared(Center, WorldPoint);
+
 		if (D2 < BestD2)
 		{
 			BestD2 = D2;

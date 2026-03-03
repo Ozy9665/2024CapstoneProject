@@ -305,6 +305,18 @@ public:
 	bool bStage1_InstantCollapse = false;
 
 	// ÁöÁø Stage3
+
+	UPROPERTY()
+	TWeakObjectPtr<UGeometryCollectionComponent> Stage3_TargetSlabGC;
+
+	UPROPERTY()
+	FVector Stage3_TargetSlabPunchPoint = FVector::ZeroVector;
+
+	bool IsUsableGC(UGeometryCollectionComponent* GC) const;
+	void PruneInvalidGCCache();
+
+	bool bStage3Started = false;
+
 	bool bStage3Released = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake|Stage3 End")
