@@ -128,6 +128,39 @@ class CULT_API AStructGraphManager : public AActor
 public:
 	AStructGraphManager();
 
+	// 캐시 - 태그 기반 수정
+	UPROPERTY()
+	TArray<TWeakObjectPtr<UGeometryCollectionComponent>> GCWalls;
+
+	UPROPERTY()
+	TArray<TWeakObjectPtr<UGeometryCollectionComponent>> GCColumns;
+
+	UPROPERTY()
+	TArray<TWeakObjectPtr<UGeometryCollectionComponent>> GCSlabs;
+
+	UFUNCTION(BlueprintCallable, Category = "StructGraph|GC")
+	void BuildGCCache();   // 1회 수집
+
+	UFUNCTION(BlueprintCallable, Category = "StructGraph|GC")
+	void ClearGCCache();
+
+	UGeometryCollectionComponent* PickRandomValidGC(
+		TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr,
+		FRandomStream& Stream) const;
+
+	void ForEachValidGC(
+		const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr,
+		TFunctionRef<void(UGeometryCollectionComponent*)> Fn) const;
+
+	void EnablePhysicsForGCArray(
+		const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr,
+		bool bEnableSim, bool bEnableGrav);
+
+	FRandomStream Stage2Stream;
+	int32 Stage2Seed = 1337; // 나중에 서버에서 받는 값으로 교체
+
+	// 기둥 파괴
+	UGeometryCollectionComponent* PickLowestColumnGC() const;
 
 	// 수집한 컴포넌트 배열 받고 그래프 구성 + 초기 계산
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
@@ -139,6 +172,8 @@ public:
 		const TArray<UStaticMeshComponent*>& InColumns,
 		const TArray<UStaticMeshComponent*>& InWalls
 	);
+
+	void SetGCStaticBlocking(FName Tag);
 
 	// 임시 콜리전 조절
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")

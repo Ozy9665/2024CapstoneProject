@@ -22,6 +22,7 @@ void AStructGraphManager::BeginPlay()
 	Super::BeginPlay();
 	UE_LOG(LogTemp, Warning, TEXT("[StructGraph] BeginPlay: %s"), *GetName());
 
+	BuildGCCache();
 
 	//FTimerHandle Tmp;
 	//GetWorldTimerManager().SetTimer(Tmp, this, &AStructGraphManager::Debug_ApplyStrainOnce, 0.5f, false);
@@ -989,8 +990,15 @@ void AStructGraphManager::TriggerStage2()
 {
 	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage2 Start (Local strain pulses on GC walls)"));
 
+	// 초기화
+	Stage2Stream.Initialize(Stage2Seed);
+
+
 	// 중력 피직스 On
-	EnablePhysicsForTaggedGC(GCWallTag, true, true);
+	//EnablePhysicsForTaggedGC(GCWallTag, true, true);
+	EnablePhysicsForGCArray(GCWalls, true, true);
+	/*EnablePhysicsForGCArray(GCColumns, true, true);
+	EnablePhysicsForGCArray(GCSlabs, true, true);*/
 
 	// 댐핑
 	ApplyDampingToTaggedGC(GCWallTag, Stage2LinearDamping, Stage2AngularDamping);
@@ -1030,9 +1038,13 @@ void AStructGraphManager::TriggerStage3()
 	bStage3Released = false;
 	Stage3WaveElapsed = 0.f;
 
-	EnablePhysicsForTaggedGC(GCWallTag, true, true);
-	EnablePhysicsForTaggedGC(FName("GC_COLUMN"), true, true);
-	EnablePhysicsForTaggedGC(FName("GC_SLAB"), true, true);
+	//EnablePhysicsForTaggedGC(GCWallTag, true, true);
+	//EnablePhysicsForTaggedGC(FName("GC_COLUMN"), true, true);
+	//EnablePhysicsForTaggedGC(FName("GC_SLAB"), true, true);
+
+	EnablePhysicsForGCArray(GCWalls, true, true);
+	EnablePhysicsForGCArray(GCColumns, true, true);
+	//EnablePhysicsForGCArray(GCSlabs, true, true);
 
 	ApplyDampingToTaggedGC(GCWallTag, Stage3LinearDamping, Stage3AngularDamping);
 
@@ -1096,37 +1108,40 @@ void AStructGraphManager::TriggerPulse2()
 		return;
 	}
 
-	// GC_WALL 찾기
-	TArray<AActor*> Found;
-	UGameplayStatics::GetAllActorsWithTag(GetWorld(), GCWallTag, Found);
-	if (Found.Num() == 0) return;
+	if (GCWalls.Num() == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Stage2Pulse] GCWalls cache is empty. Call BuildGCCache() in BeginPlay."));
+		return;
+	}
 
-	//  랜덤으로
-	const int32 PickCount = FMath::Min(Stage2_LocalDamageCount, Found.Num());
+	const int32 PickCount = FMath::Min(Stage2_LocalDamageCount, GCWalls.Num());
 
 	for (int32 i = 0; i < PickCount; ++i)
 	{
-		AActor* A = Found[FMath::RandRange(0, Found.Num() - 1)];
-		if (!IsValid(A)) continue;
-
-		UGeometryCollectionComponent* GCComp = A->FindComponentByClass<UGeometryCollectionComponent>();
+		UGeometryCollectionComponent* GCComp = PickRandomValidGC(GCWalls, Stage2Stream);
 		if (!IsValid(GCComp)) continue;
+
+		AActor* A = GCComp->GetOwner();
+		if (!IsValid(A)) continue;
 
 		FVector Origin, Extent;
 		A->GetActorBounds(true, Origin, Extent);
 
-		// HitPoint 랜덤
 		const FVector HitPoint = Origin + FVector(
-			FMath::FRandRange(-Extent.X * 0.5f, Extent.X * 0.5f),
-			FMath::FRandRange(-Extent.Y * 0.5f, Extent.Y * 0.5f),
-			FMath::FRandRange(-Extent.Z * 0.3f, Extent.Z * 0.3f)
+			Stage2Stream.FRandRange(-Extent.X * 0.5f, Extent.X * 0.5f),
+			Stage2Stream.FRandRange(-Extent.Y * 0.5f, Extent.Y * 0.5f),
+			Stage2Stream.FRandRange(-Extent.Z * 0.3f, Extent.Z * 0.3f)
 		);
 
 		ApplyStrainToGC(GCComp, HitPoint, Stage2_Str_Radius, Stage2_Str_Magnitude, 2);
 
-		if (Stage2_ImpulseScale > 0.f)		// impulse Scale 조절
+		if (Stage2_ImpulseScale > 0.f && Stage2_KickStrength > 0.f)
 		{
-			const FVector KickDir = FVector(FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f), 0.f).GetSafeNormal();
+			const FVector KickDir = FVector(
+				Stage2Stream.FRandRange(-1.f, 1.f),
+				Stage2Stream.FRandRange(-1.f, 1.f),
+				0.f
+			).GetSafeNormal();
 
 			const float KickStrength = Stage2_KickStrength * Stage2_ImpulseScale;
 			const FVector KickLocation = Origin - FVector(0, 0, Extent.Z * 0.8f);
@@ -1134,7 +1149,6 @@ void AStructGraphManager::TriggerPulse2()
 			GCComp->AddImpulseAtLocation(KickDir * KickStrength, KickLocation, NAME_None);
 		}
 
-		// 연출용 이벤트 BP에서 처리
 		OnNodeYield(GCComp, 1.0f + Stage2_LocalDamageStrength);
 	}
 
@@ -1377,118 +1391,45 @@ void AStructGraphManager::Stage3_TickWave()
 		}
 	}
 
-	// 2) 후반부(3.6s)에서 “지지부 릴리즈” 한번만
+	// 2) 후반부에서 지지부 릴리즈 한번만
 	if (!bStage3Released && Stage3WaveElapsed >= Stage3_ReleaseTime)
 	{
 		bStage3Released = true;
 
+		// 전단
+		UGeometryCollectionComponent* ColGC = PickLowestColumnGC();
+		if (IsValid(ColGC))
 		{
-			// 1) 약한 기둥 우선 찾기
-			AActor* Pick = nullptr;
+			AActor* ColActor = ColGC->GetOwner();
 
-			TArray<AActor*> WeakCols;
-			UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName("GC_COLUMN_WEAK"), WeakCols);
-			
-			if (WeakCols.Num() > 1) {
-				WeakCols.Sort([](const AActor& A, const AActor& B)
-					{
-						return A.GetActorLocation().Z < B.GetActorLocation().Z;
-					});
-			}
-			
-			if (WeakCols.Num() > 0)
+			FVector Origin, Extent;
+			ColActor->GetActorBounds(true, Origin, Extent);
+
+			const float ColRadius = 90.f;
+			const float ColMag = 120000.f;
+			const int32 ColIter = 3;
+
+			for (int32 k = 0; k < 3; ++k)
 			{
-				Pick = WeakCols[0];
-			}
-			else
-			{
-				TArray<AActor*> Cols;
-				UGameplayStatics::GetAllActorsWithTag(GetWorld(), FName("GC_COLUMN"), Cols);
+				FVector HitPoint = Origin - FVector(0, 0, Extent.Z * 0.7f);
+				HitPoint += FVector(
+					Stage2Stream.FRandRange(-15.f, 15.f), // Stage2Stream 가능(결정성)
+					Stage2Stream.FRandRange(-15.f, 15.f),
+					Stage2Stream.FRandRange(-10.f, 10.f)
+				);
 
-				if (Cols.Num() > 1) {
-					Cols.Sort([](const AActor& A, const AActor& B)
-						{
-							return A.GetActorLocation().Z < B.GetActorLocation().Z;
-						});
-				}
-				
-				if (Cols.Num() > 0) Pick = Cols[0];
+				ApplyStrainToGC(ColGC, HitPoint, ColRadius, ColMag, ColIter);
 			}
 
-			// 2) 선택된 기둥을 실제로 부러뜨리기
-			if (IsValid(Pick))
-			{
-				UGeometryCollectionComponent* ColGC = Pick->FindComponentByClass<UGeometryCollectionComponent>();
-				if (IsValid(ColGC))
-				{
-					FVector Origin, Extent;
-					Pick->GetActorBounds(true, Origin, Extent);
-
-					const float ColRadius = 90.f;      // 70~110
-					const float ColMag = 120000.f;  // 80k~200k
-					const int32 ColIter = 3;         // 2~4
-
-					// 바닥 근처에 3회 누적(한방 폭발 대신 지진스럽게)
-					for (int32 k = 0; k < 3; ++k)
-					{
-						FVector HitPoint = Origin - FVector(0, 0, Extent.Z * 0.7f);
-						HitPoint += FVector(
-							FMath::FRandRange(-15.f, 15.f),
-							FMath::FRandRange(-15.f, 15.f),
-							FMath::FRandRange(-10.f, 10.f)
-						);
-
-						ApplyStrainToGC(ColGC, HitPoint, ColRadius, ColMag, ColIter);
-					}
-
-					ColGC->SetSimulatePhysics(true);
-					ColGC->SetEnableGravity(true);
-					ColGC->WakeAllRigidBodies();
-
-					UE_LOG(LogTemp, Warning, TEXT("[Stage3] Broke Column: %s"), *Pick->GetName());
-					UE_LOG(LogTemp, Warning, TEXT("[ColPhys] %s Sim=%d Grav=%d Awake=%d Coll=%d LinD=%.2f AngD=%.2f"),
-						*Pick->GetName(),
-						ColGC->IsSimulatingPhysics() ? 1 : 0,
-						ColGC->IsGravityEnabled() ? 1 : 0,
-						ColGC->IsAnyRigidBodyAwake() ? 1 : 0,
-						(int32)ColGC->GetCollisionEnabled(),
-						ColGC->GetLinearDamping(),
-						ColGC->GetAngularDamping()
-					);
-				}
-			}
+			UE_LOG(LogTemp, Warning, TEXT("[Stage3] Broke Column: %s"), *ColActor->GetName());
 		}
 
-		// 하부 지지부 우선 릴리즈(Z 낮은 Column/Wall)
-		TArray<UPrimitiveComponent*> Candidates;
-		Candidates.Reserve(Nodes.Num());
-
-		for (FStructGraphNode& N : Nodes)
-		{
-			if (N.Type != EStructNodeType::Column && N.Type != EStructNodeType::Wall) continue;
-			UPrimitiveComponent* PC = Cast<UPrimitiveComponent>(N.Comp.Get());
-			if (!IsValid(PC)) continue;
-			Candidates.Add(PC);
-		}
-
-		Candidates.Sort([](const UPrimitiveComponent& A, const UPrimitiveComponent& B)
+		FTimerHandle SlabDelay;
+		GetWorldTimerManager().SetTimer(SlabDelay, [this]()
 			{
-				return A.GetComponentLocation().Z < B.GetComponentLocation().Z;
-			});
-
-		int32 Released = 0;
-		for (UPrimitiveComponent* PC : Candidates)
-		{
-			if (Released >= Stage3_ReleaseCount) break;
-
-			PC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-			PC->SetSimulatePhysics(true);
-			PC->SetEnableGravity(true);
-			PC->WakeAllRigidBodies();
-			Released++;
-		}
-
-		UE_LOG(LogTemp, Warning, TEXT("[Stage3] Released supports=%d"), Released);
+				EnablePhysicsForGCArray(GCSlabs, true, true);
+				UE_LOG(LogTemp, Warning, TEXT("[Stage3] Slabs physics ON"));
+			}, 0.5f, false);
 	}
 }
 
@@ -1532,4 +1473,119 @@ void AStructGraphManager::EnablePhysicsForTaggedGC(FName Tag, bool bEnableSim, b
 			GC->IsSimulatingPhysics() ? 1 : 0,
 			GC->IsAnyRigidBodyAwake() ? 1 : 0);
 	}
+}
+
+void AStructGraphManager::ClearGCCache()
+{
+	GCWalls.Reset();
+	GCColumns.Reset();
+	GCSlabs.Reset();
+}
+
+void AStructGraphManager::BuildGCCache()
+{
+	ClearGCCache();
+
+	auto GatherByTag = [&](FName Tag, TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Out)
+		{
+			TArray<AActor*> Found;
+			UGameplayStatics::GetAllActorsWithTag(GetWorld(), Tag, Found);
+
+			for (AActor* A : Found)
+			{
+				if (!IsValid(A)) continue;
+				UGeometryCollectionComponent* GC = A->FindComponentByClass<UGeometryCollectionComponent>();
+				if (!IsValid(GC)) continue;
+				Out.Add(GC);
+			}
+		};
+
+	GatherByTag(GCWallTag, GCWalls);
+	GatherByTag(FName("GC_COLUMN"), GCColumns);
+	GatherByTag(FName("GC_SLAB"), GCSlabs);
+
+	UE_LOG(LogTemp, Warning, TEXT("[GCCache] Walls=%d Cols=%d Slabs=%d"),
+		GCWalls.Num(), GCColumns.Num(), GCSlabs.Num());
+
+	GCColumns.Sort([](const TWeakObjectPtr<UGeometryCollectionComponent>& A,
+		const TWeakObjectPtr<UGeometryCollectionComponent>& B)
+		{
+			const auto* GA = A.Get();
+			const auto* GB = B.Get();
+			if (!IsValid(GA) || !IsValid(GB)) return false;
+			return GA->GetOwner()->GetActorLocation().Z < GB->GetOwner()->GetActorLocation().Z;
+		});
+
+	GCWalls.Sort([](const TWeakObjectPtr<UGeometryCollectionComponent>& A,
+		const TWeakObjectPtr<UGeometryCollectionComponent>& B)
+		{
+			const auto* GA = A.Get();
+			const auto* GB = B.Get();
+			if (!IsValid(GA) || !IsValid(GB)) return false;
+			return GA->GetOwner()->GetActorLocation().Z < GB->GetOwner()->GetActorLocation().Z;
+		});
+}
+
+void AStructGraphManager::ForEachValidGC(
+	const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr,
+	TFunctionRef<void(UGeometryCollectionComponent*)> Fn) const
+{
+	for (const TWeakObjectPtr<UGeometryCollectionComponent>& W : Arr)
+	{
+		UGeometryCollectionComponent* GC = W.Get();
+		if (!IsValid(GC)) continue;
+		Fn(GC);
+	}
+}
+
+UGeometryCollectionComponent* AStructGraphManager::PickRandomValidGC(
+	TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr,
+	FRandomStream& Stream) const
+{
+	const int32 N = Arr.Num();
+	if (N == 0) return nullptr;
+
+	for (int32 Try = 0; Try < 8; ++Try)
+	{
+		const int32 Idx = Stream.RandRange(0, N - 1);
+		UGeometryCollectionComponent* GC = Arr[Idx].Get();
+		if (IsValid(GC)) return GC;
+	}
+	return nullptr;
+}
+
+void AStructGraphManager::EnablePhysicsForGCArray(
+	const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr,
+	bool bEnableSim, bool bEnableGrav)
+{
+	ForEachValidGC(Arr, [&](UGeometryCollectionComponent* GC)
+		{
+			GC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			GC->SetCollisionProfileName(TEXT("PhysicsActor"));
+			GC->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+
+			GC->SetSimulatePhysics(false);
+			GC->RecreatePhysicsState();
+
+			GC->SetSimulatePhysics(bEnableSim);
+			GC->SetEnableGravity(bEnableGrav);
+
+			if (bEnableSim)
+			{
+				GC->WakeAllRigidBodies();
+			}
+		});
+}
+
+UGeometryCollectionComponent* AStructGraphManager::PickLowestColumnGC() const
+{
+	for (const auto& W : GCColumns)
+	{
+		UGeometryCollectionComponent* GC = W.Get();
+		if (IsValid(GC) && IsValid(GC->GetOwner()))
+		{
+			return GC; // BuildGCCache에서 Z정렬했으니 첫 유효가 최저층
+		}
+	}
+	return nullptr;
 }
