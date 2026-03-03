@@ -1032,6 +1032,7 @@ void AStructGraphManager::TriggerStage3()
 
 	EnablePhysicsForTaggedGC(GCWallTag, true, true);
 	EnablePhysicsForTaggedGC(FName("GC_COLUMN"), true, true);
+	EnablePhysicsForTaggedGC(FName("GC_SLAB"), true, true);
 
 	ApplyDampingToTaggedGC(GCWallTag, Stage3LinearDamping, Stage3AngularDamping);
 
