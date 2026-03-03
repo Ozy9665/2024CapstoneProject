@@ -1034,6 +1034,8 @@ void AStructGraphManager::TriggerStage3()
 	GetWorldTimerManager().ClearTimer(Stage2Timer);
 	GetWorldTimerManager().ClearTimer(Stage3WaveTimer);
 
+	Stage2Stream.Initialize(Stage2Seed);
+
 	bDrawDebug = false;
 	bStage3Released = false;
 	Stage3WaveElapsed = 0.f;
@@ -1341,6 +1343,7 @@ void AStructGraphManager::PlayImpactDecaying()
 
 void AStructGraphManager::Stage3_TickWave()
 {
+
 	Stage3WaveElapsed += Stage3_WaveInterval;
 
 	// 5초 끝나면 종료
@@ -1351,37 +1354,25 @@ void AStructGraphManager::Stage3_TickWave()
 		return;
 	}
 
-	// 1) 벽(GC_WALL) 누적 스트레인: 아래/중앙 위주로 “지진스럽게”
-	TArray<AActor*> WallsFound;
-	UGameplayStatics::GetAllActorsWithTag(GetWorld(), GCWallTag, WallsFound);
-	if (WallsFound.Num() > 0)
+	// 1 벽 누적 스트레인
+	if (GCWalls.Num() > 0)
 	{
-		// 아래쪽 우선(지진은 하부에서 파괴가 시작되는 느낌이 자연스러움)
-		WallsFound.Sort([](const AActor& A, const AActor& B)
-			{
-				return A.GetActorLocation().Z < B.GetActorLocation().Z;
-			});
-
-		// 매 tick마다 1~2개만 살짝(과하면 튀는 느낌)
-		const int32 HitCount = FMath::Min(2, WallsFound.Num());
+		const int32 HitCount = FMath::Min(2, GCWalls.Num());
 
 		for (int32 i = 0; i < HitCount; ++i)
 		{
-			AActor* A = WallsFound[i];
-			if (!IsValid(A)) continue;
-
-			UGeometryCollectionComponent* GCComp = A->FindComponentByClass<UGeometryCollectionComponent>();
+			UGeometryCollectionComponent* GCComp = GCWalls[i].Get();
 			if (!IsValid(GCComp)) continue;
+
+			AActor* A = GCComp->GetOwner();
+			if (!IsValid(A)) continue;
 
 			FVector Origin, Extent;
 			A->GetActorBounds(true, Origin, Extent);
 
-			// 하부쪽 3점분산
 			const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.7f);
 
-
-			static int32 WallPtIdx = 0;
-			const int32 Idx = WallPtIdx++ % 3;
+			const int32 Idx = Stage3WallPtIdx++ % 3;
 
 			FVector HitPoint = Base;
 			if (Idx == 0) HitPoint += FVector(-Extent.X * 0.35f, 0.f, 0.f);
@@ -1390,7 +1381,8 @@ void AStructGraphManager::Stage3_TickWave()
 			ApplyStrainToGC(GCComp, HitPoint, Stage3_Wall_Radius, Stage3_Wall_Mag, Stage3_Wall_Iter);
 		}
 	}
-
+	 
+	
 	// 2) 후반부에서 지지부 릴리즈 한번만
 	if (!bStage3Released && Stage3WaveElapsed >= Stage3_ReleaseTime)
 	{
@@ -1422,10 +1414,42 @@ void AStructGraphManager::Stage3_TickWave()
 			}
 
 			UE_LOG(LogTemp, Warning, TEXT("[Stage3] Broke Column: %s"), *ColActor->GetName());
+
+			UGeometryCollectionComponent* SlabGC = FindNearestSlabGC(Origin);
+			if (IsValid(SlabGC))
+			{
+				// 포인트: 기둥 상단쪽
+				FVector PunchPoint = Origin + FVector(0, 0, Extent.Z * 0.45f);
+
+				// 랜덤 흔들림
+				PunchPoint += FVector(
+					Stage2Stream.FRandRange(-20.f, 20.f),
+					Stage2Stream.FRandRange(-20.f, 20.f),
+					Stage2Stream.FRandRange(-10.f, 10.f)
+				);
+
+				const float PunchRadius = 120.f;     // 90~180
+				const float PunchMag = 90000.f;   // 70k~140k
+				const int32 PunchIter = 3;         // 2~4
+
+				// 2~3회 누적
+				const int32 PunchCount = 3;
+				for (int32 p = 0; p < PunchCount; ++p)
+				{
+					FVector P = PunchPoint + FVector(
+						Stage2Stream.FRandRange(-15.f, 15.f),
+						Stage2Stream.FRandRange(-15.f, 15.f),
+						Stage2Stream.FRandRange(-5.f, 5.f)
+					);
+
+					ApplyStrainToGC(SlabGC, P, PunchRadius, PunchMag, PunchIter);
+				}
+
+				UE_LOG(LogTemp, Warning, TEXT("[Stage3] Punch Slab: %s"), *SlabGC->GetOwner()->GetName());
+			}
 		}
 
-		FTimerHandle SlabDelay;
-		GetWorldTimerManager().SetTimer(SlabDelay, [this]()
+		GetWorldTimerManager().SetTimer(Stage3SlabDelayHandle, [this]()
 			{
 				EnablePhysicsForGCArray(GCSlabs, true, true);
 				UE_LOG(LogTemp, Warning, TEXT("[Stage3] Slabs physics ON"));
@@ -1524,6 +1548,14 @@ void AStructGraphManager::BuildGCCache()
 			if (!IsValid(GA) || !IsValid(GB)) return false;
 			return GA->GetOwner()->GetActorLocation().Z < GB->GetOwner()->GetActorLocation().Z;
 		});
+	GCSlabs.Sort([](const TWeakObjectPtr<UGeometryCollectionComponent>& A,
+		const TWeakObjectPtr<UGeometryCollectionComponent>& B)
+		{
+			const auto* GA = A.Get();
+			const auto* GB = B.Get();
+			if (!IsValid(GA) || !IsValid(GB)) return false;
+			return GA->GetOwner()->GetActorLocation().Z < GB->GetOwner()->GetActorLocation().Z;
+		});
 }
 
 void AStructGraphManager::ForEachValidGC(
@@ -1588,4 +1620,26 @@ UGeometryCollectionComponent* AStructGraphManager::PickLowestColumnGC() const
 		}
 	}
 	return nullptr;
+}
+
+UGeometryCollectionComponent* AStructGraphManager::FindNearestSlabGC(const FVector& WorldPoint) const
+{
+	UGeometryCollectionComponent* Best = nullptr;
+	float BestD2 = TNumericLimits<float>::Max();
+
+	for (const auto& W : GCSlabs)
+	{
+		UGeometryCollectionComponent* Slab = W.Get();
+		if (!IsValid(Slab)) continue;
+		AActor* OwnerActor = Slab->GetOwner();    
+		if (!IsValid(OwnerActor)) continue;
+
+		const float D2 = FVector::DistSquared(Owner->GetActorLocation(), WorldPoint);
+		if (D2 < BestD2)
+		{
+			BestD2 = D2;
+			Best = Slab;
+		}
+	}
+	return Best;
 }

@@ -162,6 +162,13 @@ public:
 	// 기둥 파괴
 	UGeometryCollectionComponent* PickLowestColumnGC() const;
 
+	FTimerHandle Stage3SlabDelayHandle;
+
+	// 슬래브 픽
+	UGeometryCollectionComponent* FindNearestSlabGC(const FVector& WorldPoint) const;
+
+	int32 Stage3WallPtIdx = 0;
+
 	// 수집한 컴포넌트 배열 받고 그래프 구성 + 초기 계산
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
 	void InitializeFromBP(
