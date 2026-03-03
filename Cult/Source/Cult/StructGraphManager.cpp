@@ -1491,6 +1491,7 @@ void AStructGraphManager::Stage3_TickWave()
 	}
 }
 
+// 물리켜기
 void AStructGraphManager::EnablePhysicsForTaggedGC(FName Tag, bool bEnableSim, bool bEnableGrav)
 {
 	TArray<AActor*> Found;
@@ -1503,14 +1504,31 @@ void AStructGraphManager::EnablePhysicsForTaggedGC(FName Tag, bool bEnableSim, b
 		UGeometryCollectionComponent* GC = A->FindComponentByClass<UGeometryCollectionComponent>();
 		if (!IsValid(GC)) continue;
 
+		// 1) 먼저 켜기
 		GC->SetSimulatePhysics(bEnableSim);
 		GC->SetEnableGravity(bEnableGrav);
+
+		// 2) 적용이 안 되면 PhysicsState 재생성
+		if (bEnableGrav && !GC->IsGravityEnabled())
+		{
+			GC->SetSimulatePhysics(false);
+			GC->RecreatePhysicsState();   // 중요
+			GC->SetSimulatePhysics(true);
+			GC->SetEnableGravity(true);
+		}
+
+		// 3) 깨우기 + 아주 약한 임펄스(슬립 방지)
 		if (bEnableSim)
 		{
 			GC->WakeAllRigidBodies();
+			GC->AddImpulse(FVector(0, 0, -2000.f), NAME_None, true);
+			GC->WakeAllRigidBodies();
 		}
-	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[GC] EnablePhysics Tag=%s Count=%d Sim=%d Grav=%d"),
-		*Tag.ToString(), Found.Num(), bEnableSim ? 1 : 0, bEnableGrav ? 1 : 0);
+		UE_LOG(LogTemp, Warning, TEXT("[EnableGC] %s Tag=%s GravNow=%d SimNow=%d Awake=%d"),
+			*A->GetName(), *Tag.ToString(),
+			GC->IsGravityEnabled() ? 1 : 0,
+			GC->IsSimulatingPhysics() ? 1 : 0,
+			GC->IsAnyRigidBodyAwake() ? 1 : 0);
+	}
 }
