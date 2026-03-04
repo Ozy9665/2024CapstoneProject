@@ -11,6 +11,7 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Field/FieldSystemComponent.h"
 #include "Math/UnrealMathUtility.h"
+#include "NiagaraFunctionLibrary.h"
 
 AStructGraphManager::AStructGraphManager()
 {
@@ -954,9 +955,9 @@ void AStructGraphManager::TriggerStage2()
 	ApplyDampingToTaggedGC(GCWallTag, Stage2LinearDamping, Stage2AngularDamping);
 
 
-	SeismicBase = Stage1_SeismicBase;
-	SeismicOmega = Stage1_Omega;
-	StartEarthquake();
+	//SeismicBase = Stage1_SeismicBase;
+	//SeismicOmega = Stage1_Omega;
+	//StartEarthquake();
 
 	Stage2Elapsed = 0.f;
 	GetWorldTimerManager().ClearTimer(Stage2Timer);
@@ -1684,7 +1685,19 @@ void AStructGraphManager::OnGCBreak(const FChaosBreakEvent& BreakEvent)
 	UGeometryCollectionComponent* GC = Cast<UGeometryCollectionComponent>(BreakEvent.Component);
 	if (!IsValid(GC)) return;
 
-	// 깨지는 순간 생기는 조각들이 중력/수면 상태 꼬이는 문제 보정
+	UWorld* World = GetWorld();
+	if (!IsValid(World)) return;
+
+	// ----------------------------
+	// 0) (선택) Stage3에서만 먼지/보정 적용
+	//    - Stage2에서도 스폴링 깨짐이 있으면 연기 남발 방지
+	// ----------------------------
+	// Stage3에서만 보정/연기 원하면 이 줄을 살려.
+	// if (QuakeStage != EQuakeStage::Stage3) return;
+
+	// ----------------------------
+	// 1) 깨짐 직후 물리/중력 꼬임 보정
+	// ----------------------------
 	GC->SetSimulatePhysics(true);
 	GC->SetEnableGravity(true);
 
@@ -1693,27 +1706,65 @@ void AStructGraphManager::OnGCBreak(const FChaosBreakEvent& BreakEvent)
 		BI->SetEnableGravity(true);
 		BI->WakeInstance();
 	}
-
 	GC->WakeAllRigidBodies();
 
-	// 다음 틱 1회 추가 보정 (깨짐 직후 proxy 갱신 타이밍 대응)
+	// 다음 틱 1회 추가 보정 (proxy 갱신 타이밍 대응)
 	TWeakObjectPtr<UGeometryCollectionComponent> WeakGC(GC);
-	if (UWorld* W = GetWorld())
-	{
-		W->GetTimerManager().SetTimerForNextTick([WeakGC]()
-			{
-				UGeometryCollectionComponent* G = WeakGC.Get();
-				if (!IsValid(G)) return;
+	World->GetTimerManager().SetTimerForNextTick([WeakGC]()
+		{
+			UGeometryCollectionComponent* G = WeakGC.Get();
+			if (!IsValid(G)) return;
 
-				G->SetEnableGravity(true);
-				if (FBodyInstance* BI2 = G->GetBodyInstance())
-				{
-					BI2->SetEnableGravity(true);
-					BI2->WakeInstance();
-				}
-				G->WakeAllRigidBodies();
-			});
+			G->SetEnableGravity(true);
+			if (FBodyInstance* BI2 = G->GetBodyInstance())
+			{
+				BI2->SetEnableGravity(true);
+				BI2->WakeInstance();
+			}
+			G->WakeAllRigidBodies();
+		});
+
+	// ----------------------------
+	// 2) Dust/Smoke Niagara spawn
+	// ----------------------------
+	if (!DustNiagara) return;
+
+	// BreakEvent.Component가 nullptr일 수 있으니 안전하게
+	UPrimitiveComponent* Comp = Cast<UPrimitiveComponent>(BreakEvent.Component.Get());
+	if (!IsValid(Comp)) return;
+
+	const float Now = World->GetTimeSeconds();
+
+	float& Last = DustLastTime.FindOrAdd(Comp);
+	if (Now - Last < DustCooldown)
+	{
+		return;
 	}
+	Last = Now;
+
+	// 너무 약한 깨짐(미세한 조각)에는 스폰 안 하도록 컷
+	const float Speed = BreakEvent.Velocity.Size();
+	if (Speed < 80.f) // 필요하면 50~200 사이 튜닝
+	{
+		return;
+	}
+
+	const FVector P = BreakEvent.Location;
+
+	// 스케일: 속도 기반 (너무 크면 안개처럼 덮임)
+	const float Strength = FMath::Clamp(Speed / 600.f, 0.6f, 2.0f);
+	const FVector ScaleVec = FVector(DustScale * Strength);
+
+	UNiagaraFunctionLibrary::SpawnSystemAtLocation(
+		World,
+		DustNiagara,                 // NS_h_Smoke 넣으면 됨
+		P,
+		FRotator::ZeroRotator,
+		ScaleVec,
+		true,
+		true,
+		ENCPoolMethod::AutoRelease
+	);
 }
 
 void AStructGraphManager::EnsureGCPhysicsReady_Stage3()
@@ -2061,3 +2112,4 @@ void AStructGraphManager::ApplySlabRampForce_BottomUp(float T)
 		SlabGC->WakeAllRigidBodies();
 	}
 }
+

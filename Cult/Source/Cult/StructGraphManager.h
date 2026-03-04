@@ -5,6 +5,7 @@
 #include "GameFramework/Actor.h"
 #include "Chaos/ChaosGameplayEventDispatcher.h"
 #include "GeometryCollection/GeometryCollectionComponent.h"
+#include "NiagaraSystem.h"
 #include "StructGraphManager.generated.h"
 
 UENUM(BlueprintType)
@@ -268,6 +269,18 @@ public:
 
 	void EnsureGCPhysicsReady_Stage3();
 	void ApplyContinuousShakeToGC(const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr, float ImpulseStrength);
+
+	// Houdini
+	UPROPERTY(EditAnywhere, Category = "VFX|Dust")
+	TObjectPtr<UNiagaraSystem> DustNiagara = nullptr;
+
+	UPROPERTY(EditAnywhere, Category = "VFX|Dust")
+	float DustScale = 1.0f;
+
+	UPROPERTY(EditAnywhere, Category = "VFX|Dust")
+	float DustCooldown = 0.08f;
+
+	TMap<TWeakObjectPtr<UPrimitiveComponent>, float> DustLastTime;
 
 	// 초기 캘리브레이션
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Calib")
