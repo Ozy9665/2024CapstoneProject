@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Field/FieldSystemTypes.h"
 #include "GameFramework/Actor.h"
 #include "Chaos/ChaosGameplayEventDispatcher.h"
 #include "GeometryCollection/GeometryCollectionComponent.h"
@@ -191,6 +192,11 @@ public:
 
 	void EnablePhysicsForTaggedGC(FName Tag, bool bEnableSim, bool bEnableGrav);
 
+	int32 Stage2_PulseCount = 0;
+	int32 Stage2_PulseMax = 10;          // 4초에 0.4 interval이면 약 10회
+	int32 Stage2_SpallBudget = 2;        // Stage2 동안 스폴링은 최대 2번만
+	int32 Stage2_ColumnShearIdx = 0;     // 기둥 전단 방향 순환용
+
 	// 지진
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
 	void StartEarthquake();
@@ -311,13 +317,13 @@ public:
 	FName GCWallTag = "GC_WALL";
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2|Strain")
-	float Stage2_Str_Radius = 180.f;   // 120~300
+	float Stage2_Str_Radius = 90.f;   // 120~300
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2|Strain")
 	float Stage2_Str_Magnitude = 4000.f; 
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
-	float Stage2_PulseInterval = 0.5f; // 0.15~0.25
+	float Stage2_PulseInterval = 0.35f; // 0.15~0.25
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
 	float Stage2_Duration = 4.0f; // 3~6
@@ -329,13 +335,13 @@ public:
 	float Stage2_DamageMax = 30000.f;
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
-	float Stage2_ImpulseScale = 0.6f;
+	float Stage2_ImpulseScale = 0.f;
 
 	FTimerHandle Stage2Timer;
 	float Stage2Elapsed = 0.f;
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
-	float Stage2_KickStrength = 200000.f;
+	float Stage2_KickStrength = 0.f;
 
 	float Stage3_SlabRampStartTime = 1.2f; 
 	float Stage3_SlabRampEndTime = 4.3f;   

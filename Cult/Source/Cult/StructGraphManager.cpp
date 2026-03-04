@@ -942,9 +942,12 @@ void AStructGraphManager::TriggerStage2()
 
 	Stage2Stream.Initialize(Stage2Seed);
 
+	Stage2_PulseCount = 0;
+	Stage2_SpallBudget = 2;
+	Stage2_ColumnShearIdx = 0;
 
 	//EnablePhysicsForTaggedGC(GCWallTag, true, true);
-	EnablePhysicsForGCArray(GCWalls, true, true);
+	//EnablePhysicsForGCArray(GCWalls, true, true);
 	/*EnablePhysicsForGCArray(GCColumns, true, true);
 	EnablePhysicsForGCArray(GCSlabs, true, true);*/
 
@@ -1025,6 +1028,7 @@ UGeometryCollectionComponent* AStructGraphManager::FindNearestGC(const FVector& 
 void AStructGraphManager::TriggerPulse2()
 {
 	Stage2Elapsed += Stage2_PulseInterval;
+
 	if (Stage2Elapsed >= Stage2_Duration)
 	{
 		GetWorldTimerManager().ClearTimer(Stage2Timer);
@@ -1032,50 +1036,156 @@ void AStructGraphManager::TriggerPulse2()
 		return;
 	}
 
-	if (GCWalls.Num() == 0)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[Stage2Pulse] GCWalls cache is empty. Call BuildGCCache() in BeginPlay."));
-		return;
-	}
+	Stage2_PulseCount++;
 
-	const int32 PickCount = FMath::Min(Stage2_LocalDamageCount, GCWalls.Num());
-
-	for (int32 i = 0; i < PickCount; ++i)
-	{
-		UGeometryCollectionComponent* GCComp = PickRandomValidGC(GCWalls, Stage2Stream);
-		if (!IsValid(GCComp)) continue;
-
-		AActor* A = GCComp->GetOwner();
-		if (!IsValid(A)) continue;
-
-		FVector Origin, Extent;
-		A->GetActorBounds(true, Origin, Extent);
-
-		const FVector HitPoint = Origin + FVector(
-			Stage2Stream.FRandRange(-Extent.X * 0.5f, Extent.X * 0.5f),
-			Stage2Stream.FRandRange(-Extent.Y * 0.5f, Extent.Y * 0.5f),
-			Stage2Stream.FRandRange(-Extent.Z * 0.3f, Extent.Z * 0.3f)
-		);
-
-		ApplyStrainToGC(GCComp, HitPoint, Stage2_Str_Radius, Stage2_Str_Magnitude, 1);
-
-		if (Stage2_ImpulseScale > 0.f && Stage2_KickStrength > 0.f)
+	// Stage2는 "금/스폴링 준비 단계" -> 물리 풀지 않기
+	// (Stage3에서만 Sim/Grav ON)
+	// ※ 혹시 다른 곳에서 Walls Sim을 켜는 코드가 있으면 그게 날아감의 원인임.
+	auto ForceStage2StageSimNoGrav = [](UGeometryCollectionComponent* GC)
 		{
-			const FVector KickDir = FVector(
-				Stage2Stream.FRandRange(-1.f, 1.f),
-				Stage2Stream.FRandRange(-1.f, 1.f),
-				0.f
-			).GetSafeNormal();
+			if (!IsValid(GC)) return;
 
-			const float KickStrength = 0.f;//Stage2_KickStrength * Stage2_ImpulseScale;
-			const FVector KickLocation = Origin - FVector(0, 0, Extent.Z * 0.8f);
+			GC->SetSimulatePhysics(true);   
+			GC->SetEnableGravity(false);    
 
-			GCComp->AddImpulseAtLocation(KickDir * KickStrength, KickLocation, NAME_None);
+			// ✅ 튐/와르르 방지용 댐핑(값은 취향인데, 일단 이 정도면 안정적)
+			GC->SetLinearDamping(8.0f);
+			GC->SetAngularDamping(25.0f);
+
+			GC->WakeAllRigidBodies();
+		};
+
+	// ----------------------------
+	// 1) WALL: crack (weak)
+	// ----------------------------
+	UGeometryCollectionComponent* WallGC = nullptr;
+	if (GCWalls.Num() > 0)
+	{
+		WallGC = PickRandomValidGC(GCWalls, Stage2Stream);
+		if (IsValid(WallGC) && WallGC->IsRegistered() && !WallGC->IsBeingDestroyed())
+		{
+			ForceStage2StageSimNoGrav(WallGC);
+
+			AActor* A = WallGC->GetOwner();
+			if (IsValid(A) && !A->IsActorBeingDestroyed())
+			{
+				FVector Origin, Extent;
+				A->GetActorBounds(true, Origin, Extent);
+
+				const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.75f);
+
+				const FVector CrackPoint = Base + FVector(
+					Stage2Stream.FRandRange(-Extent.X * 0.30f, Extent.X * 0.30f),
+					Stage2Stream.FRandRange(-Extent.Y * 0.15f, Extent.Y * 0.15f),
+					Stage2Stream.FRandRange(-8.f, 8.f)
+				);
+
+				const float CrackRadius = 120.f;
+				const float CrackMag = 900.f;     // ✅ 매우 약하게
+				ApplyStrainToGC(WallGC, CrackPoint, CrackRadius, CrackMag, 1);
+			}
 		}
-
-		OnNodeYield(GCComp, 1.0f + Stage2_LocalDamageStrength);
 	}
 
+	// ----------------------------
+	// 2) COLUMN: crack (weak, shear-like)
+	// ----------------------------
+	UGeometryCollectionComponent* ColGC = nullptr;
+	if (GCColumns.Num() > 0)
+	{
+		ColGC = PickRandomValidGC(GCColumns, Stage2Stream);
+		if (IsValid(ColGC) && ColGC->IsRegistered() && !ColGC->IsBeingDestroyed())
+		{
+			ForceStage2StageSimNoGrav(ColGC);
+
+			AActor* A = ColGC->GetOwner();
+			if (IsValid(A) && !A->IsActorBeingDestroyed())
+			{
+				FVector Origin, Extent;
+				A->GetActorBounds(true, Origin, Extent);
+
+				const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.75f);
+
+				// ✅ Planar 균등 분할 기둥이면, 하부를 4방향 돌려가며 치면 "전단 금" 느낌이 남
+				Stage2_ColumnShearIdx = (Stage2_ColumnShearIdx + 1) % 4;
+
+				FVector Offset = FVector::ZeroVector;
+				switch (Stage2_ColumnShearIdx)
+				{
+				case 0: Offset = FVector(18.f, 0.f, 0.f); break;
+				case 1: Offset = FVector(-18.f, 0.f, 0.f); break;
+				case 2: Offset = FVector(0.f, 18.f, 0.f); break;
+				default:Offset = FVector(0.f, -18.f, 0.f); break;
+				}
+
+				const FVector CrackPoint = Base + Offset + FVector(
+					Stage2Stream.FRandRange(-6.f, 6.f),
+					Stage2Stream.FRandRange(-6.f, 6.f),
+					Stage2Stream.FRandRange(-6.f, 6.f)
+				);
+
+				const float CrackRadius = 70.f;   // 기둥은 더 좁게
+				const float CrackMag = 1100.f;    // 벽보다 살짝만
+				ApplyStrainToGC(ColGC, CrackPoint, CrackRadius, CrackMag, 1);
+			}
+		}
+	}
+
+	// ----------------------------
+	// 3) SPALL: budgeted (only 1~2 times total)
+	// ----------------------------
+	// Stage2 끝날 때쯤(후반부)에만 한번씩 "한 조각" 떨어지게 유도
+	if (Stage2_SpallBudget > 0)
+	{
+		const float Alpha = Stage2Elapsed / FMath::Max(0.01f, Stage2_Duration);
+		const bool bLate = (Alpha > 0.65f);
+
+		// 랜덤하게 가끔만 실행 (너무 자주면 와르르)
+		const bool bDoSpall = bLate && (Stage2Stream.FRand() < 0.25f);
+
+		if (bDoSpall)
+		{
+			Stage2_SpallBudget--;
+
+			UGeometryCollectionComponent* Target = nullptr;
+
+			// 벽/기둥 중 하나 선택
+			if (IsValid(WallGC) && IsValid(ColGC))
+			{
+				Target = (Stage2Stream.FRand() < 0.6f) ? WallGC : ColGC;
+			}
+			else
+			{
+				Target = IsValid(WallGC) ? WallGC : ColGC;
+			}
+
+			if (IsValid(Target))
+			{
+				AActor* A = Target->GetOwner();
+				if (IsValid(A))
+				{
+					FVector Origin, Extent;
+					A->GetActorBounds(true, Origin, Extent);
+					const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.75f);
+
+					const FVector SpallPoint = Base + FVector(
+						Stage2Stream.FRandRange(-25.f, 25.f),
+						Stage2Stream.FRandRange(-25.f, 25.f),
+						Stage2Stream.FRandRange(-5.f, 5.f)
+					);
+
+					const float SpallRadius = 30.f;     // ✅ 매우 작게(한 조각)
+					const float SpallMag = 18000.f;     // ✅ 여기만 강하게(하지만 횟수 극소)
+					ApplyStrainToGC(Target, SpallPoint, SpallRadius, SpallMag, 1);
+
+					UE_LOG(LogTemp, Warning, TEXT("[Stage2] Spall (%d left) on %s"),
+						Stage2_SpallBudget, *GetNameSafe(A));
+				}
+			}
+		}
+	}
+
+	// 카메라 흔들림(연출만)
 	const float Now = GetWorld()->GetTimeSeconds();
 	if (Now - LastStage2ShakeTime >= 0.5f)
 	{
