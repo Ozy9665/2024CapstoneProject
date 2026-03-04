@@ -1057,7 +1057,7 @@ void AStructGraphManager::TriggerPulse2()
 			Stage2Stream.FRandRange(-Extent.Z * 0.3f, Extent.Z * 0.3f)
 		);
 
-		ApplyStrainToGC(GCComp, HitPoint, Stage2_Str_Radius, Stage2_Str_Magnitude, 2);
+		ApplyStrainToGC(GCComp, HitPoint, Stage2_Str_Radius, Stage2_Str_Magnitude, 1);
 
 		if (Stage2_ImpulseScale > 0.f && Stage2_KickStrength > 0.f)
 		{
@@ -1067,7 +1067,7 @@ void AStructGraphManager::TriggerPulse2()
 				0.f
 			).GetSafeNormal();
 
-			const float KickStrength = Stage2_KickStrength * Stage2_ImpulseScale;
+			const float KickStrength = 0.f;//Stage2_KickStrength * Stage2_ImpulseScale;
 			const FVector KickLocation = Origin - FVector(0, 0, Extent.Z * 0.8f);
 
 			GCComp->AddImpulseAtLocation(KickDir * KickStrength, KickLocation, NAME_None);
@@ -1483,19 +1483,68 @@ void AStructGraphManager::EnablePhysicsForGCArray(
 
 UGeometryCollectionComponent* AStructGraphManager::PickLowestColumnGC() const
 {
+	// 유효 컬럼 수집
+	TArray<UGeometryCollectionComponent*> ValidCols;
+	ValidCols.Reserve(GCColumns.Num());
+
 	for (const auto& W : GCColumns)
 	{
 		UGeometryCollectionComponent* GC = W.Get();
-		if (IsValid(GC) && GC->IsRegistered() && !GC->IsBeingDestroyed())
+		if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) continue;
+
+		AActor* OA = GC->GetOwner();
+		if (!IsValid(OA) || OA->IsActorBeingDestroyed()) continue;
+
+		ValidCols.Add(GC);
+	}
+
+	if (ValidCols.Num() == 0) return nullptr;
+
+	// "낮은 Z" 순으로 정렬
+	ValidCols.Sort([](const UGeometryCollectionComponent& A, const UGeometryCollectionComponent& B)
 		{
-			AActor* OA = GC->GetOwner();
-			if (IsValid(OA) && !OA->IsActorBeingDestroyed())
-			{
-				return GC;
-			}
+			const AActor* AO = A.GetOwner();
+			const AActor* BO = B.GetOwner();
+			const float AZ = AO ? AO->GetActorLocation().Z : A.GetComponentLocation().Z;
+			const float BZ = BO ? BO->GetActorLocation().Z : B.GetComponentLocation().Z;
+			return AZ < BZ;
+		});
+
+	// 최저층 후보 몇 개만 추림
+	const int32 CandCount = FMath::Clamp(Stage3_LowColumnCandidateCount, 1, ValidCols.Num());
+
+	// 건물 중심(컬럼 전체 평균) 계산
+	FVector Center(0, 0, 0);
+	for (UGeometryCollectionComponent* GC : ValidCols)
+	{
+		const AActor* OA = GC->GetOwner();
+		Center += (OA ? OA->GetActorLocation() : GC->GetComponentLocation());
+	}
+	Center /= float(ValidCols.Num());
+
+	// 후보 중 "중심에서 가장 먼" 기둥 선택 (외곽 우선)
+	UGeometryCollectionComponent* Best = nullptr;
+	float BestScore = -1.f;
+
+	for (int32 i = 0; i < CandCount; ++i)
+	{
+		UGeometryCollectionComponent* GC = ValidCols[i];
+		const AActor* OA = GC->GetOwner();
+		const FVector P = (OA ? OA->GetActorLocation() : GC->GetComponentLocation());
+
+		const float Dist2D = FVector::Dist2D(P, Center);
+
+		// 외곽 선호 강도
+		const float Score = FMath::Pow(Dist2D, FMath::Max(0.01f, Stage3_PerimeterPreferPower));
+
+		if (Score > BestScore)
+		{
+			BestScore = Score;
+			Best = GC;
 		}
 	}
-	return nullptr;
+
+	return Best ? Best : ValidCols[0];
 }
 
 UGeometryCollectionComponent* AStructGraphManager::FindNearestSlabGC(const FVector& WorldPoint) const
@@ -1625,6 +1674,14 @@ void AStructGraphManager::StartStage3Continuous()
 	Stage3_WeakColumnGC = PickLowestColumnGC();
 	if (UGeometryCollectionComponent* Col = Stage3_WeakColumnGC.Get())
 	{
+		if (AActor* A = Col->GetOwner())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[Stage3] WeakColumn Picked: %s Loc=%s"),
+				*A->GetName(), *A->GetActorLocation().ToString());
+		}
+	}
+	if (UGeometryCollectionComponent* Col = Stage3_WeakColumnGC.Get())
+	{
 		if (AActor* ColA = Col->GetOwner())
 		{
 			FVector Origin, Extent;
@@ -1665,6 +1722,7 @@ void AStructGraphManager::Stage3_ContinuousTick()
 	const float Now = GetWorld()->GetTimeSeconds();
 	const float T = Now - Stage3StartTimeSec;
 
+	// 종료
 	if (T >= Stage3_TotalDuration)
 	{
 		StopStage3Continuous();
@@ -1672,38 +1730,25 @@ void AStructGraphManager::Stage3_ContinuousTick()
 	}
 
 	// --------------------------------------------------------------------
-	// 0) 슬래브 "중력 램프업" (단일 흐름)
-	//    - 초반엔 Grav OFF지만, AddForce로 점점 아래로 눌러 처짐이 생김
-	//    - 램프 끝나면 딱 1번만 진짜 gravity ON
+	// 0) 슬래브 "하부부터" 처짐 유도 (중요!)
+	//    - 전체 슬래브에 동일 AddForce 금지
+	//    - GCSlabs(Z 오름차순) 기준으로 아래부터 ActiveCount만 AddForce
 	// --------------------------------------------------------------------
-	{
-		const float A = FMath::Clamp(T / FMath::Max(0.01f, Stage3_GravityRampEndTime), 0.f, 1.f);
-		const float G = FMath::Abs(GetWorld()->GetGravityZ()); // 보통 980
+	ApplySlabRampForce_BottomUp(T);
 
-		ForEachValidGC(GCSlabs, [&](UGeometryCollectionComponent* GC)
+	// 램프업이 끝나면 "진짜 중력"을 딱 1번만 ON (Recreate/Sim 토글 금지)
+	if (!bStage3GravityCommitted && T >= Stage3_SlabRampEndTime)
+	{
+		bStage3GravityCommitted = true;
+
+		ForEachValidGC(GCSlabs, [](UGeometryCollectionComponent* GC)
 			{
 				if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
-
-				const float M = GC->GetMass();
-				const FVector Force(0, 0, -G * M * A); // 0 -> 1배 중력
-				GC->AddForce(Force, NAME_None, true);
+				GC->SetEnableGravity(true);
 				GC->WakeAllRigidBodies();
 			});
 
-		if (A >= 1.f && !bStage3GravityCommitted)
-		{
-			bStage3GravityCommitted = true;
-
-			// 절대 Recreate/Sim 토글 금지: 중력만 켠다
-			ForEachValidGC(GCSlabs, [](UGeometryCollectionComponent* GC)
-				{
-					if (!IsValid(GC)) return;
-					GC->SetEnableGravity(true);
-					GC->WakeAllRigidBodies();
-				});
-
-			UE_LOG(LogTemp, Warning, TEXT("[Stage3] Slab Gravity ON (no recreate)"));
-		}
+		UE_LOG(LogTemp, Warning, TEXT("[Stage3] Slab Gravity ON (no recreate)"));
 	}
 
 	// --------------------------------------------------------------------
@@ -1716,7 +1761,7 @@ void AStructGraphManager::Stage3_ContinuousTick()
 
 		ForEachValidGC(GCSlabs, [&](UGeometryCollectionComponent* GC)
 			{
-				if (!IsValid(GC)) return;
+				if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
 				GC->SetLinearDamping(Lin);
 				GC->SetAngularDamping(Ang);
 			});
@@ -1727,11 +1772,13 @@ void AStructGraphManager::Stage3_ContinuousTick()
 	// --------------------------------------------------------------------
 	ApplyContinuousShakeToGC(GCWalls, Stage3_ShakeImpulse * 0.8f);
 	ApplyContinuousShakeToGC(GCColumns, Stage3_ShakeImpulse * 1.0f);
+
+	// 슬래브는 처짐이 핵심이라, 흔들림을 너무 주면 위에서부터 깨질 수 있음
+	// => 필요하면 0.6f -> 0.3f로 더 낮춰도 됨
 	ApplyContinuousShakeToGC(GCSlabs, Stage3_ShakeImpulse * 0.6f);
 
 	// --------------------------------------------------------------------
 	// 3) strain은 듬성듬성: 0.05 틱이면 %12 => 0.6초마다 1회
-	//    (즉시 와르르 방지의 핵심 노브)
 	// --------------------------------------------------------------------
 	const bool bDoStrain = (Stage3TickCounter % 12) == 0;
 	if (!bDoStrain) return;
@@ -1748,10 +1795,10 @@ void AStructGraphManager::Stage3_ContinuousTick()
 		for (int32 i = 0; i < HitCount; ++i)
 		{
 			UGeometryCollectionComponent* WallGC = GCWalls[i].Get();
-			if (!IsValid(WallGC)) continue;
+			if (!IsValid(WallGC) || !WallGC->IsRegistered() || WallGC->IsBeingDestroyed()) continue;
 
 			AActor* A = WallGC->GetOwner();
-			if (!IsValid(A)) continue;
+			if (!IsValid(A) || A->IsActorBeingDestroyed()) continue;
 
 			FVector Origin, Extent;
 			A->GetActorBounds(true, Origin, Extent);
@@ -1768,14 +1815,14 @@ void AStructGraphManager::Stage3_ContinuousTick()
 	}
 
 	// --------------------------------------------------------------------
-	// 5) 약점 기둥 전단 누적(링 4방향, Offset 작게)
+	// 5) 약점 기둥 전단 누적(링 4방향)
 	// --------------------------------------------------------------------
 	{
 		UGeometryCollectionComponent* ColGC = Stage3_WeakColumnGC.Get();
-		if (IsValid(ColGC))
+		if (IsValid(ColGC) && ColGC->IsRegistered() && !ColGC->IsBeingDestroyed())
 		{
 			AActor* ColA = ColGC->GetOwner();
-			if (IsValid(ColA))
+			if (IsValid(ColA) && !ColA->IsActorBeingDestroyed())
 			{
 				FVector Origin, Extent;
 				ColA->GetActorBounds(true, Origin, Extent);
@@ -1805,12 +1852,12 @@ void AStructGraphManager::Stage3_ContinuousTick()
 	}
 
 	// --------------------------------------------------------------------
-	// 6) 슬래브 펀치 누적: PhaseB에서만 (PhaseC에선 끄기)
+	// 6) 슬래브 펀치 누적: PhaseB에서만
 	// --------------------------------------------------------------------
 	if (bPhaseB)
 	{
 		UGeometryCollectionComponent* SlabGC = Stage3_TargetSlabGC.Get();
-		if (IsValid(SlabGC))
+		if (IsValid(SlabGC) && SlabGC->IsRegistered() && !SlabGC->IsBeingDestroyed())
 		{
 			const FVector P = Stage3_TargetSlabPunchPoint + FVector(
 				Stage3Stream.FRandRange(-25.f, 25.f),
@@ -1823,7 +1870,7 @@ void AStructGraphManager::Stage3_ContinuousTick()
 	}
 
 	// --------------------------------------------------------------------
-	// 7) PhaseC: 2차 분해는 "아주 약하게 1회" (원하면 완전히 꺼도 됨)
+	// 7) PhaseC: 2차 분해는 "아주 약하게 1회"
 	// --------------------------------------------------------------------
 	if (bPhaseC)
 	{
@@ -1831,7 +1878,7 @@ void AStructGraphManager::Stage3_ContinuousTick()
 		for (int32 i = 0; i < Extra; ++i)
 		{
 			UGeometryCollectionComponent* G = GCSlabs[i].Get();
-			if (!IsValid(G)) continue;
+			if (!IsValid(G) || !G->IsRegistered() || G->IsBeingDestroyed()) continue;
 
 			const FVector Center = G->Bounds.Origin;
 			ApplyStrainToGC(G, Center + FVector(0, 0, -40.f), 160.f, 60.f, 1);
@@ -1865,4 +1912,42 @@ void AStructGraphManager::EnablePhysicsForGCArray_NoRecreate(
 				GC->WakeAllRigidBodies();
 			}
 		});
+}
+
+static float Clamp01(float V) { return FMath::Clamp(V, 0.f, 1.f); }
+
+void AStructGraphManager::ApplySlabRampForce_BottomUp(float T)
+{
+	// GCSlabs는 BuildGCCache에서 Z 오름차순 정렬되어 있다고 가정 (낮은 슬래브가 앞쪽)
+	const int32 N = GCSlabs.Num();
+	if (N <= 0) return;
+
+	// 아직 시작 전이면 아무 것도 하지 않음
+	if (T < Stage3_SlabRampStartTime) return;
+
+	// 0~1: 램프업 진행률 (시간에 따라)
+	const float TimeAlpha = Clamp01((T - Stage3_SlabRampStartTime) / FMath::Max(0.01f, (Stage3_SlabRampEndTime - Stage3_SlabRampStartTime)));
+
+	// "몇 개 슬래브까지" 힘을 줄지: 아래에서 위로 확장
+	// 최소 1개는 항상 포함
+	const int32 ActiveCount = FMath::Clamp(1 + FMath::FloorToInt(TimeAlpha * float(N - 1)), 1, N);
+
+	// 아래쪽은 더 강하게, 위로 갈수록 약하게(초반에 위가 먼저 무너지지 않게)
+	for (int32 i = 0; i < ActiveCount; ++i)
+	{
+		UGeometryCollectionComponent* SlabGC = GCSlabs[i].Get();
+		if (!IsValid(SlabGC) || !SlabGC->IsRegistered() || SlabGC->IsBeingDestroyed()) continue;
+
+		// 0(가장 아래) -> 1(가장 위)로 갈수록 약하게
+		const float HeightAlpha = (N <= 1) ? 0.f : (float(i) / float(N - 1));
+
+		// 시간 램프업 + 높이 감쇠
+		const float ForceAlpha = TimeAlpha * (1.f - 0.65f * HeightAlpha);
+
+		// 아래 방향 힘(가짜 중력)
+		const FVector F = FVector(0, 0, -1.f) * (Stage3_SlabForceMax * ForceAlpha);
+
+		SlabGC->AddForce(F, NAME_None, true);
+		SlabGC->WakeAllRigidBodies();
+	}
 }

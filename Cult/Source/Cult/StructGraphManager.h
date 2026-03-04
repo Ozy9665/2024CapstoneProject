@@ -234,7 +234,7 @@ public:
 	float Stage3_ShakeUpImpulse = 0.f;
 
 	float Stage3_BaseStrainRadius = 120.f;
-	float Stage3_BaseStrainMag = 40.f;
+	float Stage3_BaseStrainMag = 4000.f;
 
 	float Stage3_WeakStrainRadius = 90.f;
 	float Stage3_WeakStrainMag = 120.f;
@@ -246,9 +246,9 @@ public:
 	bool  bStage3GravityCommitted = false;   // 램프 끝나고 1회만 진짜 gravity ON
 
 	// "Hold" (slab stays responsive but doesn't instantly drop)
-	float Stage3_HoldEndTime = 4.5f;  // 2.5~4.5
-	float Stage3_SlabHoldLinStart = 18.0f;  // 6~12
-	float Stage3_SlabHoldAngStart = 14.0f;  // 4~10
+	float Stage3_HoldEndTime = 3.5f;  // 2.5~4.5
+	float Stage3_SlabHoldLinStart = 15.0f;  // 6~12
+	float Stage3_SlabHoldAngStart = 12.0f;  // 4~10
 	float Stage3_SlabHoldLinEnd = 1.2f;  // 0.8~2.0
 	float Stage3_SlabHoldAngEnd = 1.0f;  // 0.6~2.0
 	void EnablePhysicsForGCArray_NoRecreate(
@@ -314,7 +314,7 @@ public:
 	float Stage2_Str_Radius = 180.f;   // 120~300
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2|Strain")
-	float Stage2_Str_Magnitude = 45000.f; 
+	float Stage2_Str_Magnitude = 4000.f; 
 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
 	float Stage2_PulseInterval = 0.5f; // 0.15~0.25
@@ -337,6 +337,15 @@ public:
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
 	float Stage2_KickStrength = 200000.f;
 
+	float Stage3_SlabRampStartTime = 1.2f; 
+	float Stage3_SlabRampEndTime = 4.3f;   
+	float Stage3_SlabForceMax = 900000.f; 
+
+	int32 Stage3_LowColumnCandidateCount = 6;   // 최저 Z 후보 몇 개 볼지 (4~10)
+	float Stage3_PerimeterPreferPower = 1.0f;  // 1.0 기본, 2.0이면 외곽 더 강하게 선호
+
+	UFUNCTION()
+	void ApplySlabRampForce_BottomUp(float T);
 
 	UFUNCTION()
 	void TriggerPulse2();
