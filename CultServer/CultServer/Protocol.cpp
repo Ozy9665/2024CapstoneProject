@@ -47,6 +47,10 @@ void SESSION::do_recv()
 
 SESSION::SESSION() {}
 
+SESSION::SESSION(int session_id, SOCKET sock)
+	: c_socket(sock), id(session_id), role(-1), room_id(-1), prev_remain(0),
+	heal_gauge(0), state(ST_FREE){ }
+
 SESSION::SESSION(int session_id, uint8_t ai_role, int room_id) 
 	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id), 
 	target_id{ -1 }, prev_remain{}, ai_state{ AIState::Patrol }, heal_gauge{},
@@ -80,7 +84,7 @@ void SESSION::do_send_packet(void* packet)
 	WSASend(c_socket, &packet_data->wsabuf, 1, 0, 0, &packet_data->over, 0);
 }
 
-void SESSION::setState(const char st) {
+void SESSION::setState(const S_STATE st) {
 	state = st;
 }
 
@@ -115,6 +119,3 @@ bool SESSION::isValidSocket() const
 	return c_socket != INVALID_SOCKET;
 }
 
-bool SESSION::isValidState() const {
-	return (state == ST_INGAME) || (state == ST_DISABLE);
-}

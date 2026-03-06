@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include <chrono>
 #include <vector>
+#include <mutex>
 #include "error.h"
 
 constexpr short SERVER_PORT = 7777;
@@ -70,14 +71,6 @@ constexpr char idExistHeader = 15;
 constexpr char signUpHeader = 16;
 constexpr char quitHeader = 29;
 
-constexpr char ST_FREE{ 0 };
-constexpr char ST_READY{ 1 };
-constexpr char ST_INGAME{ 2 };
-constexpr char ST_DISABLE{ 3 };
-// player가 ST_FREE로 입장
-// 방에 들어가서 ready버튼 누르면 ST_READY
-// 게임에 들어가면 ST_INGAME으로 바꾸면서 room도 is Ingame
-
 // map
 enum MAPTYPE { LANDMASS };
 
@@ -138,8 +131,8 @@ struct Ray {
 
 constexpr Vec3 NewmapLandmassOffset{ -4280.f, 13000.f, -3120.f };
 
-
-enum AIState { Patrol, Chase, Runaway, Ritual, Heal };
+enum S_STATE { ST_FREE, ST_ROOM, ST_INGAME, ST_DISABLE, ST_DIE };
+enum AIState { Patrol, Chase, Runaway, Ritual, Heal, Die, Free};
 
 // packet
 #pragma pack(push, 1)
@@ -454,8 +447,9 @@ public:
 	SOCKET			c_socket;
 	int				id;
 	uint8_t			role;
+	std::mutex _s_lock;
 	union {
-		char		state;
+		S_STATE		state;
 		AIState		ai_state;
 	};
 	int				prev_remain;
@@ -497,7 +491,7 @@ public:
 
 	void do_send_packet(void* packet);
 
-	void setState(const char st);
+	void setState(const S_STATE st);
 
 	char getState() const;
 
@@ -512,8 +506,6 @@ public:
 	SOCKET getSocket() const;
 
 	bool isValidSocket() const;
-
-	bool isValidState() const;
 };
 
 constexpr FCultistCharacterState CultistDummyState{ -1, -10219.0f, 2560.0f, -3009.0f, 0.f, 90.f, 0.f, 0.f, 0.f, 0.f, 100.f,

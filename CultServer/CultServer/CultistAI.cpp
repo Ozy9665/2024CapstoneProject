@@ -8,13 +8,14 @@
 #include <array>
 #include <cmath>
 #include <concurrent_priority_queue.h>
+#include <concurrent_unordered_set.h>
 #include <random>
 #include <mutex>
 #include <queue>
 
 using namespace std;
 extern std::unordered_map<int, SESSION> g_users;
-extern std::unordered_set<int> g_cultist_ai_ids;
+extern concurrency::concurrent_unordered_set<int> g_cultist_ai_ids;
 extern std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
 extern MAP NewmapLandmassMap;
 extern NAVMESH TestNavMesh;
@@ -23,11 +24,12 @@ extern std::array<std::array<Altar, ALTAR_PER_ROOM>, MAX_ROOM> g_altars;
 extern std::mutex g_room_mtx;
 extern std::queue<RoomTask> g_room_q;
 extern std::condition_variable g_room_cv;
+extern std::vector<int> free_ai_ids;
+extern std::mutex free_ai_mtx;
 
 void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
 {
-    SESSION ai(ai_id, ai_role, room_id);
-    g_users.emplace(ai_id, std::move(ai));
+    g_users.try_emplace(ai_id, ai_id, ai_role, room_id);
     g_cultist_ai_ids.insert(ai_id);
 
     auto& room = g_rooms[room_id];
@@ -85,12 +87,16 @@ void KillCultistAi(int ai_id)
         g_room_cv.notify_one();
     }
 
-    // AI 상태 초기화
-    ai.path.clear();
-
     // AI 목록에서 제거
-    g_cultist_ai_ids.erase(ai_id);
-
+    {
+        std::lock_guard<std::mutex> lk(ai._s_lock);
+        ai.path.clear();
+        ai.ai_state = AIState::Free;
+    }
+    {
+        std::lock_guard<std::mutex> lk(free_ai_mtx);
+        free_ai_ids.push_back(ai_id);
+    }
     // 유저 목록에서 제거
     g_users.erase(ai_id);
 
@@ -988,6 +994,9 @@ void CultistAIWorkerLoop()
 
             SESSION& ai = it->second;
             if (ai.role != 100)
+                continue;
+
+            if (ai.ai_state == AIState::Free)
                 continue;
 
             bool canMove = true;

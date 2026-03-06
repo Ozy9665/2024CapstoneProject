@@ -17,6 +17,8 @@
 #include <numeric>
 #include <chrono>
 #include <concurrent_priority_queue.h>
+#include <concurrent_unordered_set.h>
+#include <concurrent_unordered_map.h>
 #include <algorithm>
 #include "Protocol.h"
 #include "error.h"
@@ -35,14 +37,16 @@ HANDLE g_h_iocp = nullptr;
 
 std::atomic<int> client_id = 0;
 std::unordered_map<int, SESSION> g_users;
-std::unordered_set<int> g_cultist_ai_ids;
-std::unordered_set<int> g_police_ai_ids;
+concurrency::concurrent_unordered_set<int> g_cultist_ai_ids;
+concurrency::concurrent_unordered_set<int> g_police_ai_ids;
+std::vector<int> free_ai_ids;
+std::mutex free_ai_mtx;
 
 MAP NewmapLandmassMap;
 NAVMESH TestNavMesh;
 
 std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
-std::array<std::array<Altar, ALTAR_PER_ROOM>, MAX_ROOM> g_altars{};
+std::array<std::array<Altar, ALTAR_PER_ROOM>, MAX_ROOM> g_altars;
 
 void InitializeAltars(int room_num) {
 	if (room_num < 0 || room_num >= static_cast<int>(g_altars.size())) {
@@ -549,7 +553,21 @@ void CommandWorker()
 				continue;
 			}
 			if (ai_role == 100) {
-				int ai_id = client_id++;
+				int ai_id;
+
+				{
+					std::lock_guard<std::mutex> lk(free_ai_mtx);
+
+					if (!free_ai_ids.empty())
+					{
+						ai_id = free_ai_ids.back();
+						free_ai_ids.pop_back();
+					}
+					else
+					{
+						ai_id = client_id++;
+					}
+				}
 				AddCutltistAi(ai_id, static_cast<uint8_t>(ai_role), room_id);
 			}
 		}
@@ -1522,7 +1540,6 @@ void process_packet(int c_id, char* packet) {
 	{
 		// 1. player 상태를 ready로 변경
 		// 2. InRoomPacket으로 방 상태 업데이트를 방 전원에게 broadcast
-		g_users[c_id].setState(ST_READY);
 		break;
 	}
 	case gameStartHeader: 
@@ -1636,15 +1653,7 @@ void mainLoop(HANDLE h_iocp) {
 		case OP_ACCEPT:
 		{
 			int new_id = client_id++;
-			SESSION sess;
-			sess.id = new_id;
-			sess.prev_remain = 0;
-			sess.state = ST_FREE;
-			sess.c_socket = g_c_socket;
-			sess.role = -1;
-			sess.room_id = -1;
-			sess.heal_gauge = 0;
-			g_users.insert(std::make_pair(new_id, sess));	// 여기 emplace로 바꿀 순 없을까?
+			g_users.try_emplace(new_id, new_id, g_c_socket);
 			CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket), h_iocp, new_id, 0);
 			g_users[new_id].do_recv();
 
