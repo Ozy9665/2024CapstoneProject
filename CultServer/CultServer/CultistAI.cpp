@@ -52,11 +52,8 @@ void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
     pkt.id = ai_id;
     pkt.role = ai_role;
 
-    auto it = g_users.find(ai_id);
-    if (it != g_users.end())
-    {
-        BroadcastCultistAIState(it->second, &pkt);
-    }
+    auto [it, inserted] = g_users.try_emplace(ai_id, ai_id, ai_role, room_id);
+    BroadcastCultistAIState(it->second, &pkt);
 }
 
 void KillCultistAi(int ai_id)
@@ -664,6 +661,20 @@ static void ExecuteAIState(SESSION& ai, float dt)
         //    + 0.20 * 방향 점수
         //    + 0.15 * 가시성 점수
         //    + 0.35 * NavMesh 경로 점수
+        Vec3 selfPos{
+        ai.cultist_state.PositionX,
+        ai.cultist_state.PositionY,
+        ai.cultist_state.PositionZ
+        };
+
+        if (ai.has_runaway_target && ai.runaway_ticks < 30 &&
+            Dist(selfPos, ai.runaway_target) > ARRIVE_RANGE)
+        {
+            ai.runaway_ticks++;
+            MoveAlongPath(ai, ai.runaway_target, dt);
+            break;
+        }
+
         int police_id = ai.target_id;
         if (police_id < 0)
             return;
@@ -673,13 +684,6 @@ static void ExecuteAIState(SESSION& ai, float dt)
             return;
 
         SESSION& police = it->second;
-
-        Vec3 selfPos{
-        ai.cultist_state.PositionX,
-        ai.cultist_state.PositionY,
-        ai.cultist_state.PositionZ
-        };
-
         Vec3 policePos{
             police.police_state.PositionX,
             police.police_state.PositionY,
@@ -698,6 +702,9 @@ static void ExecuteAIState(SESSION& ai, float dt)
             std::cout << "if (selfTri < 0)" << std::endl;
             return;
         }
+
+        std::vector<RunawayCandidate> candidates;
+        candidates.reserve(sampleCount);
 
         for (int i = 0; i < sampleCount; ++i)
         {
@@ -768,29 +775,30 @@ static void ExecuteAIState(SESSION& ai, float dt)
                     score += 500.f * 0.15f; // 벽 뒤면 보너스
             }
 
-            // NavMesh 경로 점수
-            int candTri = tri;
-
-            if (TestNavMesh.triComponentId[selfTri] != TestNavMesh.triComponentId[candTri])
+            if (TestNavMesh.triComponentId[selfTri] != TestNavMesh.triComponentId[tri])
             {
-                continue;   // 연결 안 됨
+                continue;
             }
+            candidates.push_back({ candidate, score, tri });
+        }
 
+        std::sort(candidates.begin(), candidates.end());
+        const int pathTestCount = std::min(3, static_cast<int>(candidates.size()));
+
+        for (int i = 0; i < pathTestCount; ++i)
+        {
             std::vector<int> triPath;
-            if (TestNavMesh.FindTriPath(selfPos, candidate, triPath))
+            if (!TestNavMesh.FindTriPath(selfPos, candidates[i].pos, triPath))
+                continue;
+
+            // NavMesh 경로 점수
+            float pathScore = std::min(static_cast<float>(triPath.size()) / 50.f, 1.f);
+            float finalScore = candidates[i].score + pathScore * 1000.f * 0.35f;
+
+            if (finalScore > bestScore)
             {
-                float pathScore = std::min(static_cast<float>(triPath.size()) / 50.f, 1.f);
-                score += pathScore * 1000.f * 0.35f;
-            }
-            else
-            {
-                continue; // 도망 경로 자체가 없으면 후보 탈락
-            }
-            
-            if (score > bestScore)
-            {
-                bestScore = score;
-                bestPos = candidate;
+                bestScore = finalScore;
+                bestPos = candidates[i].pos;
             }
         }
 
@@ -804,8 +812,7 @@ static void ExecuteAIState(SESSION& ai, float dt)
         else
         {
             ai.runaway_ticks++;
-
-            if (ai.runaway_ticks > 60 && 
+            if (ai.runaway_ticks >= 30 && 
                 Dist(ai.runaway_target, bestPos) > 400.f)
             {
                 ai.runaway_target = bestPos;
