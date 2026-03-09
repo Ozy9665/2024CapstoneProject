@@ -88,10 +88,6 @@ void SESSION::setState(const S_STATE st) {
 	state = st;
 }
 
-char SESSION::getState() const {
-	return state;
-}
-
 void SESSION::setPoliceState(const FPoliceCharacterState& state) {
 	police_state = state;
 }
@@ -104,14 +100,6 @@ const FPoliceCharacterState& SESSION::getPoliceState() const
 void SESSION::setRole(const uint8_t r) {
 	if(role != r)
 		role = r;
-}
-
-uint8_t SESSION::getRole() const {
-	return role;
-}
-
-SOCKET SESSION::getSocket() const {
-	return c_socket;
 }
 
 bool SESSION::isValidSocket() const

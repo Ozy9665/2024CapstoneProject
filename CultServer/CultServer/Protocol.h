@@ -493,17 +493,11 @@ public:
 
 	void setState(const S_STATE st);
 
-	char getState() const;
-
 	void setPoliceState(const FPoliceCharacterState& );
 
 	const FPoliceCharacterState& getPoliceState() const;
 
 	void setRole(const uint8_t r);
-
-	uint8_t getRole() const;
-
-	SOCKET getSocket() const;
 
 	bool isValidSocket() const;
 };

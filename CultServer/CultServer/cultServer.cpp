@@ -36,7 +36,7 @@ EXP_OVER g_a_over;
 HANDLE g_h_iocp = nullptr;
 
 std::atomic<int> client_id = 0;
-std::unordered_map<int, SESSION> g_users;
+concurrency::concurrent_unordered_map<int, std::shared_ptr<SESSION>> g_users;
 concurrency::concurrent_unordered_set<int> g_cultist_ai_ids;
 concurrency::concurrent_unordered_set<int> g_police_ai_ids;
 std::vector<int> free_ai_ids;
@@ -180,9 +180,12 @@ void RoomWorkerLoop() {
 		{
 		case RM_REQ:
 		{
-			if (!g_users.count(task.c_id)) continue;
+			auto it = g_users.find(task.c_id);
+			if (it == g_users.end())
+				continue;
+
 			int role = task.role;
-			g_users[task.c_id].setRole(role);
+			it->second->setRole(role);
 
 			RoomsPakcet pkt{};
 			pkt.header = requestHeader;
@@ -206,26 +209,28 @@ void RoomWorkerLoop() {
 		}
 		case RM_ENTER:
 		{
-			if (!g_users.count(task.c_id)) continue;
+			auto it = g_users.find(task.c_id);
+			if (it == g_users.end())
+				continue;
 
-			auto& user = g_users[task.c_id];
+			auto user = it->second;
 			NoticePacket pkt{};
 			pkt.size = sizeof(NoticePacket);
 
 			int room_id = task.room_id;
-			if (user.room_id >= 0 && room_id < 0 || room_id >= MAX_ROOM) {
+			if (user->room_id >= 0 && room_id < 0 || room_id >= MAX_ROOM) {
 				pkt.header = leaveHeader;
 			}
 			else {
 				if (0 == task.role) {
 					pkt.header = (g_rooms[room_id].first.cultist >= MAX_CULTIST_PER_ROOM) ? leaveHeader : enterHeader;
 					if (pkt.header == enterHeader) 
-						user.room_id = room_id;
+						user->room_id = room_id;
 				}
 				else if (1 == task.role) {
 					pkt.header = (g_rooms[room_id].first.police >= MAX_POLICE_PER_ROOM) ? leaveHeader : enterHeader;
 					if (pkt.header == enterHeader) 
-						user.room_id = room_id;
+						user->room_id = room_id;
 				}
 				else {
 					pkt.header = leaveHeader;
@@ -240,11 +245,13 @@ void RoomWorkerLoop() {
 		}
 		case RM_GAMESTART:
 		{
-			if (!g_users.count(task.c_id)) continue;
+			auto it = g_users.find(task.c_id);
+			if (it == g_users.end())
+				continue;
+
 			int room_id = task.room_id;
 			if (room_id < 0 || room_id >= MAX_ROOM) continue;
-
-			auto& me = g_users[task.c_id];
+			auto me = it->second;
 
 			// 카운터, ingame, player_ids 갱신
 			if (1 == task.role) g_rooms[room_id].first.police++;
@@ -253,7 +260,7 @@ void RoomWorkerLoop() {
 				g_rooms[room_id].first.police >= MAX_POLICE_PER_ROOM) {
 				g_rooms[room_id].first.isIngame = true;
 			}
-			me.room_id = room_id;
+			me->room_id = room_id;
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
 				if (g_rooms[room_id].first.player_ids[i] == -1) {
 					g_rooms[room_id].first.player_ids[i] = task.c_id;
@@ -300,7 +307,7 @@ void RoomWorkerLoop() {
 					pkt.header = connectionHeader;
 					pkt.size = sizeof(IdRolePacket);
 					pkt.id = other;
-					pkt.role = g_users[other].getRole();
+					pkt.role = me->role;
 
 					EXP_OVER* eo = new EXP_OVER();
 					std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
@@ -312,8 +319,12 @@ void RoomWorkerLoop() {
 		}
 		case RM_RITUAL:
 		{
-			if (!g_users.count(task.c_id)) continue;
-			int room_id = g_users[task.c_id].room_id;
+			auto it = g_users.find(task.c_id);
+			if (it == g_users.end())
+				continue;
+
+			auto user = it->second;
+			int room_id = user->room_id;
 			if (room_id < 0 || room_id >= MAX_ROOM) continue;
 
 			RitualPacket pkt{};
@@ -333,7 +344,11 @@ void RoomWorkerLoop() {
 		}
 		case RM_QUIT:
 		{
-			if (!g_users.count(task.c_id)) continue;
+			auto it = g_users.find(task.c_id);
+			if (it == g_users.end())
+				continue;
+
+			auto user = it->second;
 			int room_id = task.room_id;
 			if (room_id < 0 || room_id >= MAX_ROOM) break;
 
@@ -350,7 +365,7 @@ void RoomWorkerLoop() {
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
 				if (g_rooms[room_id].first.player_ids[i] == task.c_id) {
 					g_rooms[room_id].first.player_ids[i] = -1;
-					g_users[task.c_id].room_id = -1;
+					user->room_id = -1;
 					break;
 				}
 			}
@@ -361,7 +376,8 @@ void RoomWorkerLoop() {
 			pkt.id = task.c_id;
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
 				int other = targets[i];
-				if (other == -1 || !g_users.count(other) || !g_users[other].isValidSocket()) {
+				auto oit = g_users.find(other);
+				if (other == -1 || oit == g_users.end() || !user->isValidSocket()) {
 					continue;
 				}
 				EXP_OVER* eo = new EXP_OVER();
@@ -373,11 +389,17 @@ void RoomWorkerLoop() {
 		}
 		case RM_DISCONNECT:
 		{
-			if (!g_users.count(task.c_id)) continue;
-			if (g_users[task.c_id].room_id >= MAX_ROOM) break;
+			auto it = g_users.find(task.c_id);
+			if (it == g_users.end())
+				continue;
+
+			auto user = it->second;
+			if (user->room_id >= MAX_ROOM) 
+				break;
 
 			int room_id = task.room_id;
-			if (room_id < 0 || room_id >= MAX_ROOM) break;
+			if (room_id < 0 || room_id >= MAX_ROOM) 
+				break;
 
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
 				if (g_rooms[room_id].first.player_ids[i] == task.c_id) {
