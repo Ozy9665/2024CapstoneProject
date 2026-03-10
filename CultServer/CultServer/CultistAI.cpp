@@ -9,12 +9,13 @@
 #include <cmath>
 #include <concurrent_priority_queue.h>
 #include <concurrent_unordered_set.h>
+#include <concurrent_unordered_map.h>
 #include <random>
 #include <mutex>
 #include <queue>
 
 using namespace std;
-extern std::unordered_map<int, SESSION> g_users;
+extern concurrency::concurrent_unordered_map<int, std::shared_ptr<SESSION>> g_users;
 extern concurrency::concurrent_unordered_set<int> g_cultist_ai_ids;
 extern std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
 extern MAP NewmapLandmassMap;
@@ -29,7 +30,8 @@ extern std::mutex free_ai_mtx;
 
 void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
 {
-    g_users.try_emplace(ai_id, ai_id, ai_role, room_id);
+    auto ai = std::make_shared<SESSION>(ai_id, ai_role, room_id);
+    g_users.insert({ ai_id, ai });
     g_cultist_ai_ids.insert(ai_id);
 
     auto& room = g_rooms[room_id];
@@ -52,8 +54,7 @@ void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
     pkt.id = ai_id;
     pkt.role = ai_role;
 
-    auto [it, inserted] = g_users.try_emplace(ai_id, ai_id, ai_role, room_id);
-    BroadcastCultistAIState(it->second, &pkt);
+    BroadcastCultistAIState(*ai, &pkt);
 }
 
 void KillCultistAi(int ai_id)
@@ -86,7 +87,7 @@ void KillCultistAi(int ai_id)
 
     // AI 목록에서 제거
     {
-        std::lock_guard<std::mutex> lk(ai._s_lock);
+        std::lock_guard<std::mutex> lk(ai.s_lock);
         ai.path.clear();
         ai.ai_state = AIState::Free;
     }

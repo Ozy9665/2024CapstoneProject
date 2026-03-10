@@ -447,7 +447,7 @@ public:
 	SOCKET			c_socket;
 	int				id;
 	uint8_t			role;
-	std::mutex _s_lock;
+	std::mutex		s_lock;
 	union {
 		S_STATE		state;
 		AIState		ai_state;

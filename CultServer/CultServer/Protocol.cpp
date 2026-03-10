@@ -49,7 +49,7 @@ SESSION::SESSION() {}
 
 SESSION::SESSION(int session_id, SOCKET sock)
 	: c_socket(sock), id(session_id), role(-1), room_id(-1), prev_remain(0),
-	heal_gauge(0), state(ST_FREE){ }
+	heal_gauge(0), state(ST_ROOM), target_id(-1){ }
 
 SESSION::SESSION(int session_id, uint8_t ai_role, int room_id) 
 	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id), 

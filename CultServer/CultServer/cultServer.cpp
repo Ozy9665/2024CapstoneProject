@@ -452,50 +452,55 @@ void HealTimerLoop() {
 				std::this_thread::sleep_until(ev.wakeup_time);
 			}
 
-			SESSION& actor = g_users[ev.c_id];
-			SESSION& target = g_users[ev.target_id];
+			auto it_actor = g_users.find(ev.c_id);
+			auto it_target = g_users.find(ev.target_id);
+			if (it_actor == g_users.end() || it_target == g_users.end())
+				continue;
+
+			auto actor = it_actor->second;
+			auto target = it_target->second;
 
 			switch (ev.event_id) {
 			case EV_HEAL:
 			{
-				if (!actor.cultist_state.ABP_DoHeal ||
-					!target.cultist_state.ABP_GetHeal) {
+				if (!actor->cultist_state.ABP_DoHeal ||
+					!target->cultist_state.ABP_GetHeal) {
 					continue;
 				}
 
-				target.heal_gauge += 1;
-				if (target.heal_gauge < 10) {
+				target->heal_gauge += 1;
+				if (target->heal_gauge < 10) {
 					ev.wakeup_time = std::chrono::system_clock::now() + 1s;
 					ev.event_id = EV_HEAL;
 					timer_queue.push(ev);
 				}
-				else if (target.heal_gauge >= 10) {
+				else if (target->heal_gauge >= 10) {
 					// 락 걸기
-					target.heal_gauge = 0;
-					if (target.cultist_state.CurrentHealth + 50 >= 100) {
-						target.cultist_state.CurrentHealth = 100;
+					target->heal_gauge = 0;
+					if (target->cultist_state.CurrentHealth + 50 >= 100) {
+						target->cultist_state.CurrentHealth = 100;
 					}
 					else {
-						target.cultist_state.CurrentHealth += 50.f;
+						target->cultist_state.CurrentHealth += 50.f;
 					}
 
-					actor.cultist_state.ABP_DoHeal = 0;
-					actor.heal_partner = -1;
-					target.cultist_state.ABP_GetHeal = 0;
-					target.heal_partner = -1;
+					actor->cultist_state.ABP_DoHeal = 0;
+					actor->heal_partner = -1;
+					target->cultist_state.ABP_GetHeal = 0;
+					target->heal_partner = -1;
 
 					BoolPacket packet;
 					packet.header = endHealHeader;
 					packet.result = true;
 					packet.size = sizeof(BoolPacket);
-					actor.do_send_packet(&packet);
-					target.do_send_packet(&packet);
+					actor->do_send_packet(&packet);
+					target->do_send_packet(&packet);
 				}
 				break;
 			}
 			case EV_STUN:
 			{
-				auto& st = g_users[ev.c_id].cultist_state;
+				auto& st = actor->cultist_state;
 
 				if (st.ABP_IsDead)
 					break;
@@ -620,18 +625,19 @@ void CommandWorker()
 
 void disconnect(int c_id)
 {
-	if (!g_users.count(c_id))
+	auto it = g_users.find(c_id);
+	if (it == g_users.end())
 		return;
 	std::cout << "socket disconnect " << c_id << std::endl;
 
-	auto& user = g_users[c_id];
-	if(user.role != -1 && user.room_id != -1)
+	auto& user = it->second;
+	if(user->role != -1 && user->room_id != -1)
 	{
 		RoomTask task;
 		task.c_id = c_id;
 		task.type = RM_DISCONNECT;
-		task.role = user.role;
-		task.room_id = user.room_id;
+		task.role = user->role;
+		task.room_id = user->room_id;
 
 		{
 			std::lock_guard<std::mutex> lk(g_room_mtx);
@@ -642,11 +648,14 @@ void disconnect(int c_id)
 
 	{
 		std::lock_guard<std::mutex> lk(g_logged_mtx);
-		if (!user.account_id.empty())
-			g_logged_in_ids.erase(user.account_id);
+		if (!user->account_id.empty())
+			g_logged_in_ids.erase(user->account_id);
 	}
-	closesocket(g_users[c_id].c_socket);
-	g_users.erase(c_id);
+	closesocket(g_users[c_id]->c_socket);
+	{
+		std::lock_guard<std::mutex> lk(user->s_lock);
+		user->state = ST_FREE;
+	}
 }
 
 float distanceSq(const SESSION& a, const SESSION& b) {
@@ -700,9 +709,10 @@ void broadcast_in_room(int sender_id, int room_id, const PacketT* packet, float 
 		if (other_id == -1 || other_id == sender_id)
 			continue;
 
-		if (!g_users.count(other_id) || !g_users[other_id].isValidSocket())
+		auto it = g_users.find(other_id);
+		if (it == g_users.end() || !it->second->isValidSocket())
 			continue;
-		g_users[other_id].do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
+		it->second->do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
 		/*
 		// 거리 체크
 		bool inRange = (view_range_sq < 0) || (distanceSq(g_users[sender_id], g_users[other_id]) <= view_range_sq);
@@ -846,8 +856,8 @@ std::optional<int> SphereTraceClosestCultist(int centerId, float radius) {
 		return std::nullopt;
 	}
 
-	const SESSION& me = myIt->second;
-	const int roomId = me.room_id;
+	const auto me = myIt->second;
+	const int roomId = me->room_id;
 	if (roomId < 0 || roomId >= MAX_ROOM) {
 		std::cout << "User " << centerId << " room id error " << "\n";
 		return std::nullopt;
@@ -869,16 +879,16 @@ std::optional<int> SphereTraceClosestCultist(int centerId, float radius) {
 		if (it == g_users.end()) 
 			continue;
 
-		const SESSION& target = it->second;
+		const auto target = it->second;
 
 		// 소켓/상태/역할 필터
-		if (!target.isValidSocket())   
+		if (!target->isValidSocket())   
 			continue;
-		if (target.role != 0)           // Cultist
+		if (target->role != 0)           // Cultist
 			continue;
 		// 치료 가능한 상태 확인
 
-		const float d2 = distanceSq(me, target);
+		const float d2 = distanceSq(*me, *target);
 		if (d2 <= r2 && d2 < nearestId) {
 			nearestId = d2;
 			bestId = other;
@@ -940,8 +950,12 @@ FVector rotation_to_forward(double pitchDeg, double yawDeg)
 
 void baton_sweep(int c_id, HitPacket* p)
 {
-	auto& attacker = g_users[c_id];
-	int room = attacker.room_id;
+	auto it = g_users.find(c_id);
+	if (it == g_users.end())
+		return;
+
+	auto attacker = it->second;
+	int room = attacker->room_id;
 	if (room < 0)
 		return;
 
@@ -969,22 +983,26 @@ void baton_sweep(int c_id, HitPacket* p)
 
 	for (int otherId : g_rooms[room].first.player_ids)
 	{
-		if (otherId == c_id || g_users[otherId].role == 1 || otherId == -1)
+		if (otherId == c_id || g_users[otherId]->role == 1 || otherId == -1)
 			continue;
 
-		auto& target = g_users[otherId];
-		if (target.role != 100 && !target.isValidSocket())
+		auto oit = g_users.find(otherId);
+		if (oit == g_users.end())
+			continue;
+
+		auto& target = oit->second;
+		if (target->role != 100 && !target->isValidSocket())
 			continue;
 
 		FVector targetPos{
-			target.cultist_state.PositionX,
-			target.cultist_state.PositionY,
-			target.cultist_state.PositionZ
+			target->cultist_state.PositionX,
+			target->cultist_state.PositionY,
+			target->cultist_state.PositionZ
 		};
 
 		if (line_sphere_intersect(start, end, targetPos, 50.0))
 		{
-			if (target.role == 100)
+			if (target->role == 100)
 			{
 				Vec3 attackerPos{
 					static_cast<float>(start.x),
@@ -992,7 +1010,7 @@ void baton_sweep(int c_id, HitPacket* p)
 					static_cast<float>(start.z)
 				};
 				std::cout << "ai attacked" << std::endl;
-				ApplyBatonHitToAI(target, attackerPos);
+				ApplyBatonHitToAI(*target, attackerPos);
 			}
 
 			std::cout << "line_sphere_intersect." << std::endl;
@@ -1011,9 +1029,13 @@ void baton_sweep(int c_id, HitPacket* p)
 }
 
 void line_trace(int c_id, HitPacket* p)	 {
-	auto& attacker = g_users[c_id];
-	int room = attacker.room_id;
-	if (room < 0) 
+	auto it = g_users.find(c_id);
+	if (it == g_users.end())
+		return;
+
+	auto attacker = it->second;
+	int room = attacker->room_id;
+	if (room < 0)
 		return;
 
 	FVector start{ p->TraceStart.x, p->TraceStart.y, p->TraceStart.z };
@@ -1040,17 +1062,21 @@ void line_trace(int c_id, HitPacket* p)	 {
 
 	for (int otherId : g_rooms[room].first.player_ids)
 	{
-		if (otherId == c_id || g_users[otherId].role == 1 || otherId == -1)
+		if (otherId == c_id || g_users[otherId]->role == 1 || otherId == -1)
 			continue;
 
-		auto& target = g_users[otherId];
-		if (target.role != 100 && !target.isValidSocket())
+		auto oit = g_users.find(otherId);
+		if (oit == g_users.end())
+			continue;
+
+		auto& target = oit->second;
+		if (target->role != 100 && !target->isValidSocket())
 			continue;
 
 		FVector targetPos{ 
-			target.cultist_state.PositionX, 
-			target.cultist_state.PositionY, 
-			target.cultist_state.PositionZ 
+			target->cultist_state.PositionX, 
+			target->cultist_state.PositionY,
+			target->cultist_state.PositionZ
 		};
 
 		if (line_sphere_intersect(start, end, targetPos, 60.0))
@@ -1081,9 +1107,13 @@ void process_packet(int c_id, char* packet) {
 		//if (!validate_cultist_state(p->state)) {
 		//	std::cout << "Suspicious cultist packet from c_id " << c_id << std::endl;
 		//}
-		g_users[c_id].cultist_state = p->state;
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
 
-		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
+		auto user = it->second;
+		user->cultist_state = p->state;
+		broadcast_in_room(c_id, user->room_id, p, VIEW_RANGE);
 		break;
 	}
 	case treeHeader: 
@@ -1093,9 +1123,13 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid TreePacket size\n";
 			break;
 		}
-		std::cout << "[TreeRecv] from=" << (int)c_id << " room=" << g_users[c_id].room_id << "\n";
 		
-		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		broadcast_in_room(c_id, user->room_id, p, VIEW_RANGE);
 		break;
 	}
 	case crowSpawnHeader:
@@ -1105,13 +1139,17 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid SkillCrowPacket size\n";
 			break;
 		}
-		std::cout << "[CrowSpawnRecv] from=" << p->crow.owner << " room=" << g_users[c_id].room_id << "\n";
-		g_users[c_id].crow = p->crow;
-		if (!g_users[c_id].crow.is_alive) {
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		user->crow = p->crow;
+		if (!user->crow.is_alive) {
 			break;
 		}
 
-		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
+		broadcast_in_room(c_id, user->room_id, p, VIEW_RANGE);
 		break;
 	}
 	case crowDataHeader:
@@ -1121,12 +1159,18 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid CrowPacket size\n";
 			break;
 		}
-		g_users[c_id].crow = p->crow;
-		if (!g_users[c_id].crow.is_alive) {
+
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		user->crow = p->crow;
+		if (!user->crow.is_alive) {
 			break;
 		}
 
-		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
+		broadcast_in_room(c_id, user->room_id, p, VIEW_RANGE);
 		break;
 	}
 	case crowDisableHeader:
@@ -1136,10 +1180,14 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid IdOnlyPacket size\n";
 			break;
 		}
-		std::cout << "[CrowDisableRecv] from=" << (int)p->id << " room=" << g_users[c_id].room_id << "\n";
-		g_users[c_id].crow.is_alive = false;
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
 
-		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
+		auto user = it->second; 
+		user->crow.is_alive = false;
+
+		broadcast_in_room(c_id, user->room_id, p, VIEW_RANGE);
 		break;
 	}
 	case policeHeader:
@@ -1152,9 +1200,14 @@ void process_packet(int c_id, char* packet) {
 		//if (!validate_police_state(p->state)) {
 		//	std::cout << "Suspicious police packet from c_id " << c_id << std::endl;
 		//}
-		g_users[c_id].police_state = p->state;
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
 
-		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
+		auto user = it->second;
+		user->police_state = p->state;
+
+		broadcast_in_room(c_id, user->room_id, p, VIEW_RANGE);
 		break;
 	}
 	case dogHeader:
@@ -1167,9 +1220,14 @@ void process_packet(int c_id, char* packet) {
 		//if (!validate_dog_state(c_id, p->dog)) {
 		//	std::cout << "Suspicious dog packet from c_id " << c_id << std::endl;
 		//}
-		g_users[c_id].dog = p->dog;
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
 
-		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
+		auto user = it->second;
+		user->dog = p->dog;
+
+		broadcast_in_room(c_id, user->room_id, p, VIEW_RANGE);
 		break;
 	}
 	case particleHeader:
@@ -1180,14 +1238,19 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		int room_id = g_users[c_id].room_id;
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		int room_id = user->room_id;
 		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
 		{
 			std::cout << "Invalid room ID: " << room_id << std::endl;
 			break;
 		}
 
-		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
+		broadcast_in_room(c_id, user->room_id, p, VIEW_RANGE);
 		break;
 	}
 	case hitHeader:
@@ -1224,6 +1287,10 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+		auto healer = it->second;
 		// 근처 치료 가능한 유저 탐색
 		auto targetOpt = SphereTraceClosestCultist(c_id, SPHERE_TRACE_RADIUS);
 		if (!targetOpt) {
@@ -1233,8 +1300,12 @@ void process_packet(int c_id, char* packet) {
 
 		const int targetId = *targetOpt;
 		std::cout << "[Heal] healer=" << c_id << " target=" << (int)targetId << "\n";
-		if (g_users[c_id].cultist_state.ABP_DoHeal ||
-			g_users[targetId].cultist_state.ABP_GetHeal)
+		auto tit = g_users.find(targetId);
+		if (tit == g_users.end())
+			break;
+		auto target = tit->second;
+
+		if (healer->cultist_state.ABP_DoHeal || target->cultist_state.ABP_GetHeal)
 		{
 			std::cout << "Heal already in progress\n";
 			break;
@@ -1260,8 +1331,8 @@ void process_packet(int c_id, char* packet) {
 		pkt.SpawnLoc = healerPos;
 		pkt.SpawnRot = moveRot;
 		pkt.isHealer = true;
-		g_users[c_id].heal_partner = targetId;
-		g_users[c_id].do_send_packet(&pkt);
+		healer->heal_partner = targetId;
+		healer->do_send_packet(&pkt);
 
 		double yaw = std::fmod(moveRot.yaw + 180.0, 360.0);
 		if (yaw < 0.0) { 
@@ -1276,8 +1347,8 @@ void process_packet(int c_id, char* packet) {
 		pkt.SpawnLoc = targetPos;
 		pkt.SpawnRot.yaw = yaw;
 		pkt.isHealer = false;
-		g_users[targetId].heal_partner = c_id;
-		g_users[targetId].do_send_packet(&pkt);
+		target->heal_partner = c_id;
+		target->do_send_packet(&pkt);
 
 		TIMER_EVENT ev;
 		ev.wakeup_time = std::chrono::system_clock::now() + 1s;
@@ -1294,15 +1365,25 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid NoticePacket size\n";
 			break;
 		}
-		int heal_partner{ g_users[c_id].heal_partner };
-		g_users[heal_partner].heal_partner = -1;
-		g_users[c_id].heal_partner = -1;
+
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+		auto healer = it->second;
+		int heal_partner{ healer->heal_partner };
+		auto hit = g_users.find(heal_partner);
+		if (hit == g_users.end())
+			break;
+		auto target = hit->second;
+
+		healer->heal_partner = -1;
+		target->heal_partner = -1;
 
 		BoolPacket packet;
 		packet.header = endHealHeader;
 		packet.result = false;
 		packet.size = sizeof(BoolPacket);
-		g_users[heal_partner].do_send_packet(&packet);
+		target->do_send_packet(&packet);
 		break;
 	}
 	case ritualStartHeader: 
@@ -1313,7 +1394,12 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		int room_id = g_users[c_id].room_id;
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		int room_id = user->room_id;
 		if (room_id < 0 || room_id >= MAX_ROOM) 
 			break;
 
@@ -1337,7 +1423,12 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		int room_id = g_users[c_id].room_id;
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		int room_id = user->room_id;
 		if (room_id < 0 || room_id >= MAX_ROOM) 
 			break;
 		uint8_t ritual_id = p->ritual_id;
@@ -1367,7 +1458,7 @@ void process_packet(int c_id, char* packet) {
 		gauge.size = sizeof(RitualGagePacket);
 		gauge.ritual_id = ritual_id;
 		gauge.gauge = altar.gauge;
-		g_users[c_id].do_send_packet(&gauge);
+		user->do_send_packet(&gauge);
 
 		// broadcast_in_room(c_id, room_id, &gauge);
 		std::cout << "[RitualData] altar=" << (int)ritual_id << " gauge=" << altar.gauge << "\n";
@@ -1381,7 +1472,12 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		int room_id = g_users[c_id].room_id;
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		int room_id = user->room_id;
 		if (room_id < 0 || room_id >= MAX_ROOM) 
 			break;
 
@@ -1403,7 +1499,7 @@ void process_packet(int c_id, char* packet) {
 				packet.size = sizeof(RitualNoticePacket);
 				packet.ritual_id = ritual_id;
 				packet.reason = 4;
-				g_users[c_id].do_send_packet(&packet);
+				user->do_send_packet(&packet);
 			}
 			altar.isActivated = false;
 			std::cout << "[RitualEnd] cultist=" << c_id << " altar=" << (int)ritual_id << " gauge: " << altar.gauge << "\n";
@@ -1423,7 +1519,7 @@ void process_packet(int c_id, char* packet) {
 				packet.size = sizeof(RitualNoticePacket);
 				packet.ritual_id = ritual_id;
 				packet.reason = 4;
-				g_users[c_id].do_send_packet(&packet);
+				user->do_send_packet(&packet);
 			}
 			else {
 				RitualNoticePacket packet;
@@ -1431,7 +1527,7 @@ void process_packet(int c_id, char* packet) {
 				packet.size = sizeof(RitualNoticePacket);
 				packet.ritual_id = ritual_id;
 				packet.reason = altar.gauge;
-				g_users[c_id].do_send_packet(&packet);
+				user->do_send_packet(&packet);
 			}
 			altar.isActivated = false;
 			std::cout << "[RitualEnd] cultist=" << c_id << " altar=" << (int)ritual_id << " gauge: " << altar.gauge << "\n";
@@ -1447,23 +1543,35 @@ void process_packet(int c_id, char* packet) {
 		}
 
 		p->id = c_id;
+		auto user = g_users.find(c_id);
+		if (user == g_users.end())
+			break;
 		std::cout << "Client[" << c_id << "] connected" << std::endl;
 		// 새로 접속한 유저(id)에게 본인 id 확정 send
-		g_users[c_id].do_send_packet(p);
+		user->second->do_send_packet(p);
 		break;
 	}
 	case DisconnectionHeader: 
 	{
+		auto user = g_users.find(c_id);
+		if (user == g_users.end())
+			break;
+
 		std::lock_guard<std::mutex> lk(g_room_mtx);
-		g_room_q.push(RoomTask{ c_id, RM_DISCONNECT, g_users[c_id].role, g_users[c_id].room_id });
+		g_room_q.push(RoomTask{ c_id, RM_DISCONNECT,user->second->role, user->second->room_id });
 		g_room_cv.notify_one();
 		break;
 	}
 	case disableHeader:
 	{
-		g_users[c_id].setState(ST_DISABLE);
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
 
-		int room_id = g_users[c_id].room_id;
+		auto user = it->second;
+		user->setState(ST_DISABLE);
+
+		int room_id = user->room_id;
 		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size())) {
 			std::cout << "Invalid room ID in disableHeader\n";
 			break;
@@ -1476,8 +1584,10 @@ void process_packet(int c_id, char* packet) {
 		{
 			int pid = r.player_ids[i];
 			if (pid == -1) continue;
-
-			if (g_users.count(pid) && g_users[pid].getRole() == 0 && g_users[pid].getState() != ST_DISABLE) {
+			auto pit = g_users.find(pid);
+			if (pit != g_users.end() &&
+				pit->second->role == 0 &&
+				pit->second->state != ST_DISABLE) {
 				allCultistsDisabled = false;
 				break;
 			}
@@ -1497,11 +1607,11 @@ void process_packet(int c_id, char* packet) {
 			{
 				int pid = r.player_ids[i];
 				if (pid == -1) continue;
-
-				if (g_users.count(pid) && g_users[pid].isValidSocket())
+				auto pit = g_users.find(pid);
+				if (pit != g_users.end() && pit->second->isValidSocket())
 				{
 					newPacket.id = pid;
-					g_users[pid].do_send_packet(&newPacket);
+					pit->second->do_send_packet(&newPacket);
 					ids_to_disconnect.push_back(pid);
 				}
 			}
@@ -1543,9 +1653,12 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 		int room_id = p->room_number;
+		auto user = g_users.find(c_id);
+		if (user == g_users.end())
+			break;
 		{
 			std::lock_guard<std::mutex> lk(g_room_mtx);
-			g_room_q.push(RoomTask{ c_id, RM_ENTER, g_users[c_id].role, room_id });
+			g_room_q.push(RoomTask{ c_id, RM_ENTER, user->second->role, room_id });
 		}
 		g_room_cv.notify_one();
 		break;
@@ -1572,9 +1685,12 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 		int room_id = p->room_number;
+		auto user = g_users.find(c_id);
+		if (user == g_users.end())
+			break;
 		{
 			std::lock_guard<std::mutex> lk(g_room_mtx);
-			g_room_q.push(RoomTask{ c_id, RM_GAMESTART, g_users[c_id].role, room_id});
+			g_room_q.push(RoomTask{ c_id, RM_GAMESTART,  user->second->role, room_id});
 		}
 		g_room_cv.notify_one();
 		break;
@@ -1635,8 +1751,11 @@ void process_packet(int c_id, char* packet) {
 	}
 	case quitHeader:
 	{
+		auto user = g_users.find(c_id);
+		if (user == g_users.end())
+			break;
 		std::lock_guard<std::mutex> lk(g_room_mtx);
-		g_room_q.push(RoomTask{ c_id, RM_QUIT, g_users[c_id].role, g_users[c_id].room_id });
+		g_room_q.push(RoomTask{ c_id, RM_QUIT, user->second->role,user->second->room_id });
 		g_room_cv.notify_one();
 		break;
 	}
@@ -1675,9 +1794,10 @@ void mainLoop(HANDLE h_iocp) {
 		case OP_ACCEPT:
 		{
 			int new_id = client_id++;
-			g_users.try_emplace(new_id, new_id, g_c_socket);
+			auto sess = std::make_shared<SESSION>(new_id, g_c_socket);
+			g_users.insert({ new_id, sess });
 			CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket), h_iocp, new_id, 0);
-			g_users[new_id].do_recv();
+			sess->do_recv();
 
 			SOCKADDR_IN* client_addr = (SOCKADDR_IN*)(g_a_over.send_buffer + sizeof(SOCKADDR_IN) + 16);
 			std::cout << "클라이언트 접속: IP = " << inet_ntoa(client_addr->sin_addr) << ", Port = " << ntohs(client_addr->sin_port) << std::endl;
@@ -1688,8 +1808,13 @@ void mainLoop(HANDLE h_iocp) {
 			AcceptEx(g_s_socket, g_c_socket, g_a_over.send_buffer, 0, addr_size + 16, addr_size + 16, 0, &g_a_over.over);
 			break;
 		}
-		case OP_RECV: {
-			int remain_data = num_bytes + g_users[key].prev_remain;
+		case OP_RECV: 
+		{
+			auto it = g_users.find((int)key);
+			if (it == g_users.end())
+				break;
+			auto user = it->second;
+			int remain_data = num_bytes + user->prev_remain;
 			char* p = eo->send_buffer;
 			while (remain_data > 0) {
 				int packet_size = p[1];
@@ -1700,11 +1825,11 @@ void mainLoop(HANDLE h_iocp) {
 				}
 				else break;
 			}
-			g_users[key].prev_remain = remain_data;
+			user->prev_remain = remain_data;
 			if (remain_data > 0) {
 				memcpy(eo->send_buffer, p, remain_data);
 			}
-			g_users[key].do_recv();
+			user->do_recv();
 			break;
 		}
 		case OP_SEND:
@@ -1717,12 +1842,17 @@ void mainLoop(HANDLE h_iocp) {
 			auto* pkt = reinterpret_cast<BoolPacket*>(eo->send_buffer);
 			int cid = static_cast<int>(key);
 
-			if (pkt->result && g_users.count(cid)) {
-				g_users[cid].account_id = eo->account_id;
-			}
+			auto it = g_users.find(cid);
+			if (it != g_users.end())
+			{
+				auto user = it->second;
 
-			if (g_users.count(cid) && g_users[cid].isValidSocket())
-				g_users[cid].do_send_packet(pkt);
+				if (pkt->result)
+					user->account_id = eo->account_id;
+
+				if (user->isValidSocket())
+					user->do_send_packet(pkt);
+			}
 
 			delete eo;
 			break;
@@ -1732,8 +1862,9 @@ void mainLoop(HANDLE h_iocp) {
 		{
 			// eo->send_buffer 안에 BoolPacket이 있음
 			// key는 c_id
-			if (g_users.count((int)key) && g_users[(int)key].isValidSocket()) {
-				g_users[(int)key].do_send_packet(eo->send_buffer);
+			auto it = g_users.find((int)key);
+			if (it != g_users.end() && it->second->isValidSocket()) {
+				it->second->do_send_packet(eo->send_buffer);
 			}
 			delete eo;
 			break;
@@ -1745,8 +1876,9 @@ void mainLoop(HANDLE h_iocp) {
 		case OP_ROOM_DISCONNECT:
 		{
 			int cid = static_cast<int>(key);
-			if (g_users.count(cid) && g_users[cid].isValidSocket())
-				g_users[cid].do_send_packet(eo->send_buffer);
+			auto it = g_users.find(cid);
+			if (it != g_users.end() && it->second->isValidSocket())
+				it->second->do_send_packet(eo->send_buffer);
 
 			delete eo;
 			break;
