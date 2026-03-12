@@ -25,8 +25,8 @@ extern std::array<std::array<Altar, ALTAR_PER_ROOM>, MAX_ROOM> g_altars;
 extern std::mutex g_room_mtx;
 extern std::queue<RoomTask> g_room_q;
 extern std::condition_variable g_room_cv;
-extern std::vector<int> free_ai_ids;
-extern std::mutex free_ai_mtx;
+extern std::vector<int> free_session_ids;
+extern std::mutex free_id_mtx;
 
 void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
 {
@@ -63,41 +63,38 @@ void KillCultistAi(int ai_id)
     if (it == g_users.end())
         return;
 
-    SESSION& ai = it->second;
+    auto ai = it->second;
 
-    if (ai.role != 100)
+    if (ai->role != 100)
         return;
 
     IdOnlyPacket pkt;
     pkt.header = DisconnectionHeader;
     pkt.size = sizeof(IdOnlyPacket);
     pkt.id = ai_id;
-    BroadcastCultistAIState(it->second, &pkt);
+    BroadcastCultistAIState(*ai, &pkt);
     
     {
         std::lock_guard<std::mutex> lk(g_room_mtx);
         g_room_q.push(RoomTask{
             ai_id,
             RM_DISCONNECT,
-            ai.role,
-            ai.room_id
+            ai->role,
+            ai->room_id
             });
         g_room_cv.notify_one();
     }
 
     // AI 목록에서 제거
+    ai->path.clear();
     {
-        std::lock_guard<std::mutex> lk(ai.s_lock);
-        ai.path.clear();
-        ai.ai_state = AIState::Free;
+        std::lock_guard<std::mutex> lk(ai->s_lock);
+        ai->ai_state = AIState::Free;
     }
     {
-        std::lock_guard<std::mutex> lk(free_ai_mtx);
-        free_ai_ids.push_back(ai_id);
+        std::lock_guard<std::mutex> lk(free_id_mtx);
+        free_session_ids.push_back(ai_id);
     }
-    // 유저 목록에서 제거
-    g_users.erase(ai_id);
-
     std::cout << "[Command] AI removed. ID=" << ai_id << "\n";
 }
 
@@ -268,12 +265,12 @@ static int FindAnyCultist(int room_id, int self_id)
         if (it == g_users.end())
             continue;
 
-        SESSION& target = it->second;
-        if (target.room_id != room_id)
+        auto target = it->second;
+        if (target->room_id != room_id)
             continue;
-        if (!target.isValidSocket())
+        if (!target->isValidSocket())
             continue;
-        if (target.role != 0)
+        if (target->role != 0)
             continue;
 
         return pid;
@@ -290,10 +287,12 @@ static int FindNearbyPolice(int room_id, int self_id)
     if (selfIt == g_users.end())
         return -1;
 
+    auto self = selfIt->second;
+
     Vec3 selfPos{
-        selfIt->second.cultist_state.PositionX,
-        selfIt->second.cultist_state.PositionY,
-        selfIt->second.cultist_state.PositionZ
+        self->cultist_state.PositionX,
+        self->cultist_state.PositionY,
+        self->cultist_state.PositionZ
     };
 
     const auto& room = g_rooms[room_id].first;
@@ -310,16 +309,16 @@ static int FindNearbyPolice(int room_id, int self_id)
         if (it == g_users.end())
             continue;
 
-        SESSION& target = it->second;
+        auto target = it->second;
 
-        if (target.role != 1)
+        if (target->role != 1)
             continue;
 
-        if (!target.isValidSocket())
+        if (!target->isValidSocket())
             continue;
 
-        float dx = target.police_state.PositionX - selfPos.x;
-        float dy = target.police_state.PositionY - selfPos.y;
+        float dx = target->police_state.PositionX - selfPos.x;
+        float dy = target->police_state.PositionY - selfPos.y;
         float dist_sq = dx * dx + dy * dy;
 
         if (dist_sq < best_dist_sq)
@@ -341,10 +340,12 @@ static int FindNearbyCultist(int room_id, int self_id)
     if (selfIt == g_users.end())
         return -1;
 
+    auto self = selfIt->second;
+
     Vec3 selfPos{
-        selfIt->second.cultist_state.PositionX,
-        selfIt->second.cultist_state.PositionY,
-        selfIt->second.cultist_state.PositionZ
+        self->cultist_state.PositionX,
+        self->cultist_state.PositionY,
+        self->cultist_state.PositionZ
     };
 
     const auto& room = g_rooms[room_id].first;
@@ -363,12 +364,12 @@ static int FindNearbyCultist(int room_id, int self_id)
         if (it == g_users.end())
             continue;
 
-        SESSION& target = it->second;
-        if (target.role != 0)
+        auto target = it->second;
+        if (target->role != 0)
             continue;
 
-        float dx = target.cultist_state.PositionX - selfPos.x;
-        float dy = target.cultist_state.PositionY - selfPos.y;
+        float dx = target->cultist_state.PositionX - selfPos.x;
+        float dy = target->cultist_state.PositionY - selfPos.y;
         float dist_sq = dx * dx + dy * dy;
 
         if (dist_sq < best_dist_sq)
@@ -433,7 +434,7 @@ static void UpdateAIState(SESSION& ai)
                 packet.header = endHealHeader;
                 packet.size = sizeof(NoticePacket);
 
-                it->second.do_send_packet(&packet);
+                it->second->do_send_packet(&packet);
             }
 
             // Heal 상태 해제
@@ -516,9 +517,9 @@ static void UpdateAIState(SESSION& ai)
                ai.cultist_state.PositionZ
             };
             Vec3 targetPos{
-                it->second.cultist_state.PositionX,
-                it->second.cultist_state.PositionY,
-                it->second.cultist_state.PositionZ
+                it->second->cultist_state.PositionX,
+                it->second->cultist_state.PositionY,
+                it->second->cultist_state.PositionZ
             };
 
             float dist = Dist(selfPos, targetPos);
@@ -620,10 +621,10 @@ static void ExecuteAIState(SESSION& ai, float dt)
             break;
         }
 
-        SESSION& target = it->second;
-        if (target.cultist_state.CurrentHealth <= 50.f &&
+        auto target = it->second;
+        if (target->cultist_state.CurrentHealth <= 50.f &&
             !ai.cultist_state.ABP_DoHeal &&
-            !target.cultist_state.ABP_GetHeal)
+            !target->cultist_state.ABP_GetHeal)
         {
             ai.heal_partner = target_id;
             ai.ai_state = AIState::Heal;
@@ -638,9 +639,9 @@ static void ExecuteAIState(SESSION& ai, float dt)
         };
 
         Vec3 targetPos{
-            target.cultist_state.PositionX,
-            target.cultist_state.PositionY,
-            target.cultist_state.PositionZ
+            target->cultist_state.PositionX,
+            target->cultist_state.PositionY,
+            target->cultist_state.PositionZ
         };
 
         float dist = Dist(selfPos, targetPos);
@@ -684,11 +685,11 @@ static void ExecuteAIState(SESSION& ai, float dt)
         if (it == g_users.end())
             return;
 
-        SESSION& police = it->second;
+        auto police = it->second;
         Vec3 policePos{
-            police.police_state.PositionX,
-            police.police_state.PositionY,
-            police.police_state.PositionZ
+            police->police_state.PositionX,
+            police->police_state.PositionY,
+            police->police_state.PositionZ
         };
 
         // 후보 생성 (원형 샘플)
@@ -841,7 +842,7 @@ static void ExecuteAIState(SESSION& ai, float dt)
             return;
         }
 
-        SESSION& target = it->second;
+        auto target = it->second;
 
         auto moveOpt = GetMovePoint(ai.id, target_id);
         if (!moveOpt)
@@ -888,8 +889,8 @@ static void ExecuteAIState(SESSION& ai, float dt)
         pkt.SpawnLoc = targetPos;
         pkt.SpawnRot.yaw = yaw;
         pkt.isHealer = false;
-        target.heal_partner = ai.id;
-        target.do_send_packet(&pkt);
+        target->heal_partner = ai.id;
+        target->do_send_packet(&pkt);
 
         // Heal 시작
         TIMER_EVENT ev;
@@ -1000,31 +1001,31 @@ void CultistAIWorkerLoop()
             if (it == g_users.end())
                 continue;
 
-            SESSION& ai = it->second;
-            if (ai.role != 100)
+           auto ai = it->second;
+            if (ai->role != 100)
                 continue;
 
-            if (ai.ai_state == AIState::Free)
+            if (ai->ai_state == AIState::Free)
                 continue;
 
             bool canMove = true;
-            auto& st = ai.cultist_state;
+            auto& st = ai->cultist_state;
             if (st.ABP_IsDead || st.ABP_IsStunned || st.ABP_IsHitByAnAttack)
             {
-                StopMovement(ai);
+                StopMovement(*ai);
                 canMove = false;
             }
         
             if (canMove)
             {
-                UpdateAIState(ai);
-                ExecuteAIState(ai, dt);
+                UpdateAIState(*ai);
+                ExecuteAIState(*ai, dt);
             }
             CultistPacket packet{};
             packet.header = cultistHeader;
             packet.size = sizeof(CultistPacket);
-            packet.state = ai.cultist_state;
-            BroadcastCultistAIState(ai, &packet);
+            packet.state = ai->cultist_state;
+            BroadcastCultistAIState(*ai, &packet);
         }
 
         nextTick += std::chrono::duration_cast<clock::duration>(
@@ -1057,12 +1058,12 @@ void BroadcastCultistAIState(const SESSION& ai, const PacketT* packet)
         if (it == g_users.end())
             continue;
 
-        SESSION& target = it->second;
+       auto target = it->second;
 
-        if (!target.isValidSocket())
+        if (!target->isValidSocket())
             continue;
 
-        target.do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
+        target->do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
     }
 }
 
@@ -1133,17 +1134,17 @@ std::optional<std::pair<FVector, FRotator>> GetMovePoint(int c_id, int targetId)
         return std::nullopt;
     }
 
-    const SESSION& healer = itHealer->second;
-    const SESSION& target = itTarget->second;
+    const auto healer = itHealer->second;
+    const auto target = itTarget->second;
 
     FVector mid{
-         static_cast<double>((healer.cultist_state.PositionX + target.cultist_state.PositionX) * 0.5),
-         static_cast<double>((healer.cultist_state.PositionY + target.cultist_state.PositionY) * 0.5),
-         static_cast<double>((healer.cultist_state.PositionZ + target.cultist_state.PositionZ) * 0.5)
+         static_cast<double>((healer->cultist_state.PositionX + target->cultist_state.PositionX) * 0.5),
+         static_cast<double>((healer->cultist_state.PositionY + target->cultist_state.PositionY) * 0.5),
+         static_cast<double>((healer->cultist_state.PositionZ + target->cultist_state.PositionZ) * 0.5)
     };
 
-    const double dx = static_cast<double>(target.cultist_state.PositionX - healer.cultist_state.PositionX);
-    const double dy = static_cast<double>(target.cultist_state.PositionY - healer.cultist_state.PositionY);
+    const double dx = static_cast<double>(target->cultist_state.PositionX - healer->cultist_state.PositionX);
+    const double dy = static_cast<double>(target->cultist_state.PositionY - healer->cultist_state.PositionY);
 
     double yawHealer = std::atan2(dy, dx) * 180.0 / PI;
     if (yawHealer < 0.0) {

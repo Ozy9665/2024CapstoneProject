@@ -20,6 +20,7 @@ constexpr int MAX_PLAYERS_PER_ROOM = 5;
 constexpr int MAX_CULTIST_PER_ROOM = 4;
 constexpr int MAX_POLICE_PER_ROOM = 1;
 constexpr int MAX_ID = INT_MAX;
+constexpr int MAX_USER = 10000;
 constexpr int ALTAR_PER_ROOM = 3;
 
 constexpr float VIEW_RANGE = 3000.0f;           // 시야 반경

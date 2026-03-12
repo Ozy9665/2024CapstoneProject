@@ -39,8 +39,9 @@ std::atomic<int> client_id = 0;
 concurrency::concurrent_unordered_map<int, std::shared_ptr<SESSION>> g_users;
 concurrency::concurrent_unordered_set<int> g_cultist_ai_ids;
 concurrency::concurrent_unordered_set<int> g_police_ai_ids;
-std::vector<int> free_ai_ids;
-std::mutex free_ai_mtx;
+std::vector<int> free_session_ids;
+std::mutex free_id_mtx;
+std::atomic<int> next_session_id{ 0 };
 
 MAP NewmapLandmassMap;
 NAVMESH TestNavMesh;
@@ -521,7 +522,58 @@ void HealTimerLoop() {
 	}
 }
 
-void disconnect(int);
+int get_new_session_id()
+{
+	std::lock_guard<std::mutex> lk(free_id_mtx);
+
+	if (!free_session_ids.empty())
+	{
+		int id = free_session_ids.back();
+		free_session_ids.pop_back();
+		return id;
+	}
+
+	return next_session_id++;
+}
+
+void disconnect(int c_id)
+{
+	auto it = g_users.find(c_id);
+	if (it == g_users.end())
+		return;
+	std::cout << "socket disconnect " << c_id << std::endl;
+
+	auto user = it->second;
+	if(user->role != -1 && user->room_id != -1)
+	{
+		RoomTask task;
+		task.c_id = c_id;
+		task.type = RM_DISCONNECT;
+		task.role = user->role;
+		task.room_id = user->room_id;
+
+		{
+			std::lock_guard<std::mutex> lk(g_room_mtx);
+			g_room_q.push(std::move(task));
+			g_room_cv.notify_one();
+		}
+	}
+
+	{
+		std::lock_guard<std::mutex> lk(g_logged_mtx);
+		if (!user->account_id.empty())
+			g_logged_in_ids.erase(user->account_id);
+	}
+	closesocket(g_users[c_id]->c_socket);
+	{
+		std::lock_guard<std::mutex> lk(user->s_lock);
+		user->state = ST_FREE;
+	}
+	{
+		std::lock_guard<std::mutex> lk(free_id_mtx);
+		free_session_ids.push_back(c_id);
+	}
+}
 
 void CommandWorker()
 {
@@ -580,21 +632,7 @@ void CommandWorker()
 				continue;
 			}
 			if (ai_role == 100) {
-				int ai_id;
-
-				{
-					std::lock_guard<std::mutex> lk(free_ai_mtx);
-
-					if (!free_ai_ids.empty())
-					{
-						ai_id = free_ai_ids.back();
-						free_ai_ids.pop_back();
-					}
-					else
-					{
-						ai_id = client_id++;
-					}
-				}
+				int ai_id = get_new_session_id();
 				AddCutltistAi(ai_id, static_cast<uint8_t>(ai_role), room_id);
 			}
 		}
@@ -620,41 +658,6 @@ void CommandWorker()
 		{
 			std::cout << "[Command] Unknown command: " << cmd << "\n";
 		}
-	}
-}
-
-void disconnect(int c_id)
-{
-	auto it = g_users.find(c_id);
-	if (it == g_users.end())
-		return;
-	std::cout << "socket disconnect " << c_id << std::endl;
-
-	auto& user = it->second;
-	if(user->role != -1 && user->room_id != -1)
-	{
-		RoomTask task;
-		task.c_id = c_id;
-		task.type = RM_DISCONNECT;
-		task.role = user->role;
-		task.room_id = user->room_id;
-
-		{
-			std::lock_guard<std::mutex> lk(g_room_mtx);
-			g_room_q.push(std::move(task));
-			g_room_cv.notify_one();
-		}
-	}
-
-	{
-		std::lock_guard<std::mutex> lk(g_logged_mtx);
-		if (!user->account_id.empty())
-			g_logged_in_ids.erase(user->account_id);
-	}
-	closesocket(g_users[c_id]->c_socket);
-	{
-		std::lock_guard<std::mutex> lk(user->s_lock);
-		user->state = ST_FREE;
 	}
 }
 
@@ -1793,9 +1796,17 @@ void mainLoop(HANDLE h_iocp) {
 		{
 		case OP_ACCEPT:
 		{
-			int new_id = client_id++;
+			int new_id = get_new_session_id();
 			auto sess = std::make_shared<SESSION>(new_id, g_c_socket);
-			g_users.insert({ new_id, sess });
+			auto it = g_users.find(new_id);
+			if (it != g_users.end())
+			{
+				it->second = sess;
+			}
+			else
+			{
+				g_users.insert({ new_id, sess });
+			}
 			CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket), h_iocp, new_id, 0);
 			sess->do_recv();
 
