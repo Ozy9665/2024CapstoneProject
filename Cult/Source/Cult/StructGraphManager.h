@@ -132,6 +132,29 @@ public:
 	AStructGraphManager();
 
 	// 캐시 - 태그 기반 수정
+	
+	USTRUCT(BlueprintType)
+	struct FStage3NetStart
+	{
+		GENERATED_BODY()
+
+		UPROPERTY(BlueprintReadWrite) int32 Seed = 1337;
+		UPROPERTY(BlueprintReadWrite) int32 WeakColumnNetID = -1;
+		UPROPERTY(BlueprintReadWrite) int32 TargetSlabNetID = -1;
+
+		UPROPERTY(BlueprintReadWrite) float TotalDuration = 6.0f;
+		UPROPERTY(BlueprintReadWrite) float ShakeImpulse = 10.0f;
+
+	};
+
+	UFUNCTION(BlueprintCallable, Category = "Quake|Server")
+	void Net_StartStage3(const FStage3NetStart& Info);
+
+private:
+	UGeometryCollectionComponent* FindGCByOwnerNetId(int32 NetId) const;
+public:
+
+
 	UPROPERTY()
 	TArray<TWeakObjectPtr<UGeometryCollectionComponent>> GCWalls;
 

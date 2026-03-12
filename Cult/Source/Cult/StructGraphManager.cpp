@@ -2113,3 +2113,84 @@ void AStructGraphManager::ApplySlabRampForce_BottomUp(float T)
 	}
 }
 
+UGeometryCollectionComponent* AStructGraphManager::FindGCByOwnerNetId(int32 NetId) const
+{
+	if (NetId < 0) return nullptr;
+
+	auto MatchIn = [&](const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr) -> UGeometryCollectionComponent*
+		{
+			for (const auto& W : Arr)
+			{
+				UGeometryCollectionComponent* GC = W.Get();
+				if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) continue;
+
+				AActor* OA = GC->GetOwner();
+				if (!IsValid(OA) || OA->IsActorBeingDestroyed()) continue;
+
+				// NetID
+				static const FName NetIdName(TEXT("NetId"));
+				if (FProperty* P = OA->GetClass()->FindPropertyByName(NetIdName))
+				{
+					if (FIntProperty* IntP = CastField<FIntProperty>(P))
+					{
+						const int32 Value = IntP->GetPropertyValue_InContainer(OA);
+						if (Value == NetId)
+						{
+							return GC;
+						}
+					}
+				}
+			}
+			return nullptr;
+		};
+
+	// 기둥/슬래브/벽
+	if (UGeometryCollectionComponent* R = MatchIn(GCColumns)) return R;
+	if (UGeometryCollectionComponent* R = MatchIn(GCSlabs)) return R;
+	if (UGeometryCollectionComponent* R = MatchIn(GCWalls)) return R;
+	return nullptr;
+}
+
+void AStructGraphManager::Net_StartStage3(const FStage3NetStart& Info)
+{
+	// 1) 캐시 갱신
+	BuildGCCache();
+
+	// 2) 기존 타이머/루프 정리 (Stage3 단일 흐름)
+	GetWorldTimerManager().ClearTimer(Stage2Timer);
+	GetWorldTimerManager().ClearTimer(Stage3SlabDelayHandle);
+	GetWorldTimerManager().ClearTimer(Stage3ContinuousHandle);
+
+	StopEarthquake(); // 그래프 기반 흔들림 루프 끄기
+
+	QuakeStage = EQuakeStage::Stage3;
+
+	// 3) 서버가 준 파라미터 적용(선택)
+	Stage3_TotalDuration = Info.TotalDuration;
+	Stage3_ShakeImpulse = Info.ShakeImpulse;
+
+	// 4) 랜덤 시드 고정
+	Stage3Stream.Initialize(Info.Seed);
+
+	// 5) 서버가 지정한 타겟 고정 (여기가 동기화 핵심)
+	Stage3_WeakColumnGC = FindGCByOwnerNetId(Info.WeakColumnNetId);
+	Stage3_TargetSlabGC = FindGCByOwnerNetId(Info.TargetSlabNetId);
+
+	// PunchPoint는 약점 기둥 기준으로 통일(이게 제일 안정적)
+	Stage3_TargetSlabPunchPoint = FVector::ZeroVector;
+	if (UGeometryCollectionComponent* Col = Stage3_WeakColumnGC.Get())
+	{
+		if (AActor* ColA = Col->GetOwner())
+		{
+			FVector Origin, Extent;
+			ColA->GetActorBounds(true, Origin, Extent);
+			Stage3_TargetSlabPunchPoint = Origin + FVector(0, 0, Extent.Z * 0.45f);
+		}
+	}
+
+	// 6) 연출
+	PlayShake(QuakeStage3LongShakeClass, Stage3LongScale);
+
+	// 7) Stage3 시작
+	StartStage3Continuous();
+}
