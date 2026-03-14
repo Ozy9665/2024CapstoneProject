@@ -22,6 +22,7 @@ constexpr int MAX_POLICE_PER_ROOM = 1;
 constexpr int MAX_ID = INT_MAX;
 constexpr int MAX_USER = 10000;
 constexpr int ALTAR_PER_ROOM = 3;
+constexpr uint8_t INVALID_ROLE = 0xFF;
 
 constexpr float VIEW_RANGE = 3000.0f;           // 시야 반경
 constexpr float VIEW_RANGE_SQ = VIEW_RANGE * VIEW_RANGE;
@@ -132,8 +133,8 @@ struct Ray {
 
 constexpr Vec3 NewmapLandmassOffset{ -4280.f, 13000.f, -3120.f };
 
-enum S_STATE { ST_FREE, ST_ROOM, ST_INGAME, ST_DISABLE, ST_DIE };
-enum AIState { Patrol, Chase, Runaway, Ritual, Heal, Die, Free};
+enum S_STATE { ST_FREE, ST_ROOM, ST_INGAME, ST_DISABLE };
+enum AIState { Free, Patrol, Chase, Runaway, Ritual, Heal, Die };
 
 // packet
 #pragma pack(push, 1)
@@ -501,6 +502,12 @@ public:
 	void setRole(const uint8_t r);
 
 	bool isValidSocket() const;
+
+	void setAIState(const AIState st);
+
+	bool isAI() const;
+
+	void resetForReuse();
 };
 
 constexpr FCultistCharacterState CultistDummyState{ -1, -10219.0f, 2560.0f, -3009.0f, 0.f, 90.f, 0.f, 0.f, 0.f, 0.f, 100.f,

@@ -91,6 +91,7 @@ void KillCultistAi(int ai_id)
         std::lock_guard<std::mutex> lk(ai->s_lock);
         ai->ai_state = AIState::Free;
     }
+    ai->resetForReuse();
     {
         std::lock_guard<std::mutex> lk(free_id_mtx);
         free_session_ids.push_back(ai_id);

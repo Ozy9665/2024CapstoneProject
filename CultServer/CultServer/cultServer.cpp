@@ -262,6 +262,7 @@ void RoomWorkerLoop() {
 				g_rooms[room_id].first.isIngame = true;
 			}
 			me->room_id = room_id;
+			me->setState(ST_INGAME);
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
 				if (g_rooms[room_id].first.player_ids[i] == -1) {
 					g_rooms[room_id].first.player_ids[i] = task.c_id;
@@ -367,6 +368,7 @@ void RoomWorkerLoop() {
 				if (g_rooms[room_id].first.player_ids[i] == task.c_id) {
 					g_rooms[room_id].first.player_ids[i] = -1;
 					user->room_id = -1;
+					user->setState(ST_ROOM);
 					break;
 				}
 			}
@@ -395,9 +397,6 @@ void RoomWorkerLoop() {
 				continue;
 
 			auto user = it->second;
-			if (user->room_id >= MAX_ROOM) 
-				break;
-
 			int room_id = task.room_id;
 			if (room_id < 0 || room_id >= MAX_ROOM) 
 				break;
@@ -414,6 +413,12 @@ void RoomWorkerLoop() {
 			}
 			else if (1 == task.role && g_rooms[room_id].first.police >= 1) {
 				g_rooms[room_id].first.police--;
+			}
+			user->room_id = -1;
+			user->resetForReuse();
+			{
+				std::lock_guard<std::mutex> lk(free_id_mtx);
+				free_session_ids.push_back(task.c_id);
 			}
 			continue;
 		}
@@ -544,7 +549,7 @@ void disconnect(int c_id)
 	std::cout << "socket disconnect " << c_id << std::endl;
 
 	auto user = it->second;
-	if(user->role != -1 && user->room_id != -1)
+	if(user->role != INVALID_ROLE && user->room_id >= 0 && user->room_id < MAX_ROOM)
 	{
 		RoomTask task;
 		task.c_id = c_id;
@@ -563,15 +568,6 @@ void disconnect(int c_id)
 		std::lock_guard<std::mutex> lk(g_logged_mtx);
 		if (!user->account_id.empty())
 			g_logged_in_ids.erase(user->account_id);
-	}
-	closesocket(g_users[c_id]->c_socket);
-	{
-		std::lock_guard<std::mutex> lk(user->s_lock);
-		user->state = ST_FREE;
-	}
-	{
-		std::lock_guard<std::mutex> lk(free_id_mtx);
-		free_session_ids.push_back(c_id);
 	}
 }
 

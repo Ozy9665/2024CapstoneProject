@@ -48,8 +48,13 @@ void SESSION::do_recv()
 SESSION::SESSION() {}
 
 SESSION::SESSION(int session_id, SOCKET sock)
-	: c_socket(sock), id(session_id), role(-1), room_id(-1), prev_remain(0),
-	heal_gauge(0), state(ST_ROOM), target_id(-1){ }
+	: c_socket(sock), id(session_id), role(INVALID_ROLE), room_id{ -1 }, prev_remain{},
+	heal_gauge{}, heal_partner{}, state{ S_STATE::ST_ROOM }, target_id{ -1 } 
+{
+	visible_ids.clear();
+	dog = {};
+	crow = {};
+}
 
 SESSION::SESSION(int session_id, uint8_t ai_role, int room_id) 
 	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id), 
@@ -58,6 +63,7 @@ SESSION::SESSION(int session_id, uint8_t ai_role, int room_id)
 	ritual_id{ -1 }, last_dist_to_target{ FLT_MAX }, stuck_ticks{},
 	runaway_target{}, has_runaway_target{ false }, runaway_ticks{}// AI Session
 {
+	visible_ids.clear();
 	if (ai_role == 100)   // Cultist AI
 	{
 		cultist_state = CultistDummyState;
@@ -85,6 +91,7 @@ void SESSION::do_send_packet(void* packet)
 }
 
 void SESSION::setState(const S_STATE st) {
+	std::lock_guard<std::mutex> lk(s_lock);
 	state = st;
 }
 
@@ -107,3 +114,50 @@ bool SESSION::isValidSocket() const
 	return c_socket != INVALID_SOCKET;
 }
 
+void SESSION::setAIState(const AIState st)
+{
+	std::lock_guard<std::mutex> lk(s_lock);
+	ai_state = st;
+}
+
+bool SESSION::isAI() const
+{
+	return role == 100 || role == 101;
+}
+
+void SESSION::resetForReuse()
+{
+	if (c_socket != INVALID_SOCKET) {
+		closesocket(c_socket);
+		c_socket = INVALID_SOCKET;
+	}
+
+	role = INVALID_ROLE;
+	prev_remain = 0;
+	room_id = -1;
+	account_id.clear();
+	visible_ids.clear();
+
+	heal_gauge = 0;
+	heal_partner = -1;
+
+	path.clear();
+	lastTargetPos = {};
+	lastSnapPos = {};
+	snapStreak = 0;
+	target_id = -1;
+	patrol_target = {};
+	has_patrol_target = false;
+	ritual_id = -1;
+	last_dist_to_target = 0.0f;
+	stuck_ticks = 0;
+	runaway_target = {};
+	has_runaway_target = false;
+	runaway_ticks = 0;
+
+	dog = {};
+	crow = {};
+
+	std::lock_guard<std::mutex> lk(s_lock);
+	state = ST_FREE;
+}
