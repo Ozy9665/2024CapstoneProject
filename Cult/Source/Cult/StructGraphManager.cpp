@@ -11,6 +11,7 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Field/FieldSystemComponent.h"
 #include "Math/UnrealMathUtility.h"
+#include "UObject/UnrealType.h"
 #include "NiagaraFunctionLibrary.h"
 
 AStructGraphManager::AStructGraphManager()
@@ -1773,7 +1774,7 @@ void AStructGraphManager::EnsureGCPhysicsReady_Stage3()
 	EnablePhysicsForGCArray_NoRecreate(GCColumns, true, true);
 	EnablePhysicsForGCArray_NoRecreate(GCSlabs, true, false);
 
-	// 슬래브 홀드(댐핑) 크게: 갑자기 와르르 방지 + 처짐 시간 확보
+	// 슬래브 댐핑 크게
 	ForEachValidGC(GCSlabs, [&](UGeometryCollectionComponent* GC)
 		{
 			GC->SetLinearDamping(Stage3_SlabHoldLinStart);
@@ -1781,7 +1782,6 @@ void AStructGraphManager::EnsureGCPhysicsReady_Stage3()
 			GC->WakeAllRigidBodies();
 		});
 
-	// 벽/기둥 댐핑은 너무 크면 지진 느낌이 죽음
 	ForEachValidGC(GCWalls, [](UGeometryCollectionComponent* GC)
 		{
 			GC->SetLinearDamping(1.5f);
@@ -1823,33 +1823,37 @@ void AStructGraphManager::StartStage3Continuous()
 
 	Stage3TickCounter = 0;
 	Stage3StartTimeSec = GetWorld()->GetTimeSeconds();
-	Stage3Stream.Initialize(Stage2Seed + 777);
+
+
+	if (Stage3Stream.GetInitialSeed() == 0)
+	{
+		Stage3Stream.Initialize(Stage2Seed + 777);
+	}
 
 	bStage3GravityCommitted = false;
 
-	Stage3_WeakColumnGC.Reset();
-	Stage3_TargetSlabGC.Reset();
-	Stage3_TargetSlabPunchPoint = FVector::ZeroVector;
-
-	// 약점 대상 1회 고정
-	Stage3_WeakColumnGC = PickLowestColumnGC();
-	if (UGeometryCollectionComponent* Col = Stage3_WeakColumnGC.Get())
+	if (!Stage3_WeakColumnGC.IsValid())
 	{
-		if (AActor* A = Col->GetOwner())
-		{
-			UE_LOG(LogTemp, Warning, TEXT("[Stage3] WeakColumn Picked: %s Loc=%s"),
-				*A->GetName(), *A->GetActorLocation().ToString());
-		}
+		Stage3_WeakColumnGC = PickLowestColumnGC();
 	}
-	if (UGeometryCollectionComponent* Col = Stage3_WeakColumnGC.Get())
+
+	if (Stage3_TargetSlabPunchPoint.IsNearlyZero() && Stage3_WeakColumnGC.IsValid())
 	{
-		if (AActor* ColA = Col->GetOwner())
+		if (AActor* ColA = Stage3_WeakColumnGC->GetOwner())
 		{
 			FVector Origin, Extent;
 			ColA->GetActorBounds(true, Origin, Extent);
-
-			Stage3_TargetSlabGC = FindNearestSlabGC(Origin);
 			Stage3_TargetSlabPunchPoint = Origin + FVector(0, 0, Extent.Z * 0.45f);
+		}
+	}
+
+	if (!Stage3_TargetSlabGC.IsValid() && Stage3_WeakColumnGC.IsValid())
+	{
+		if (AActor* ColA = Stage3_WeakColumnGC->GetOwner())
+		{
+			FVector Origin, Extent;
+			ColA->GetActorBounds(true, Origin, Extent);
+			Stage3_TargetSlabGC = FindNearestSlabGC(Origin);
 		}
 	}
 
@@ -1864,7 +1868,10 @@ void AStructGraphManager::StartStage3Continuous()
 		true
 	);
 
-	UE_LOG(LogTemp, Warning, TEXT("[Stage3] Continuous Start"));
+	UE_LOG(LogTemp, Warning, TEXT("[Stage3] Continuous Start (Weak=%s Slab=%s Seed=%d)"),
+		*GetNameSafe(Stage3_WeakColumnGC.Get() ? Stage3_WeakColumnGC->GetOwner() : nullptr),
+		*GetNameSafe(Stage3_TargetSlabGC.Get() ? Stage3_TargetSlabGC->GetOwner() : nullptr),
+		Stage3Stream.GetInitialSeed());
 }
 
 void AStructGraphManager::StopStage3Continuous()
@@ -2153,30 +2160,27 @@ UGeometryCollectionComponent* AStructGraphManager::FindGCByOwnerNetId(int32 NetI
 
 void AStructGraphManager::Net_StartStage3(const FStage3NetStart& Info)
 {
-	// 1) 캐시 갱신
+	
 	BuildGCCache();
 
-	// 2) 기존 타이머/루프 정리 (Stage3 단일 흐름)
+	// 기존 타이머/루프 정리 
 	GetWorldTimerManager().ClearTimer(Stage2Timer);
 	GetWorldTimerManager().ClearTimer(Stage3SlabDelayHandle);
 	GetWorldTimerManager().ClearTimer(Stage3ContinuousHandle);
 
-	StopEarthquake(); // 그래프 기반 흔들림 루프 끄기
+	StopEarthquake(); 
 
 	QuakeStage = EQuakeStage::Stage3;
 
-	// 3) 서버가 준 파라미터 적용(선택)
+	// 파라미터 적용
 	Stage3_TotalDuration = Info.TotalDuration;
 	Stage3_ShakeImpulse = Info.ShakeImpulse;
 
-	// 4) 랜덤 시드 고정
 	Stage3Stream.Initialize(Info.Seed);
 
-	// 5) 서버가 지정한 타겟 고정 (여기가 동기화 핵심)
 	Stage3_WeakColumnGC = FindGCByOwnerNetId(Info.WeakColumnNetID);
 	Stage3_TargetSlabGC = FindGCByOwnerNetId(Info.TargetSlabNetID);
 
-	// PunchPoint는 약점 기둥 기준으로 통일(이게 제일 안정적)
 	Stage3_TargetSlabPunchPoint = FVector::ZeroVector;
 	if (UGeometryCollectionComponent* Col = Stage3_WeakColumnGC.Get())
 	{
@@ -2188,9 +2192,9 @@ void AStructGraphManager::Net_StartStage3(const FStage3NetStart& Info)
 		}
 	}
 
-	// 6) 연출
+	// 쉐이크
 	PlayShake(QuakeStage3LongShakeClass, Stage3LongScale);
 
-	// 7) Stage3 시작
+	// Stage3 시작
 	StartStage3Continuous();
 }
