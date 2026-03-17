@@ -44,7 +44,10 @@ std::mutex free_id_mtx;
 std::atomic<int> next_session_id{ 0 };
 
 MAP NewmapLandmassMap;
-NAVMESH TestNavMesh;
+NAVMESH NewmapLandmassNavMesh;
+
+MAP Level3Map;
+NAVMESH Level3NavMesh;
 
 std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
 std::array<std::array<Altar, ALTAR_PER_ROOM>, MAX_ROOM> g_altars;
@@ -1897,7 +1900,7 @@ void mainLoop(HANDLE h_iocp) {
 int main()
 {
 	// navmesh
-	TestNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset);
+	NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset);
 	// map
 	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset))
 	{
@@ -1940,8 +1943,17 @@ int main()
 	//	std::cout << "DB 초기화 실패, 프로그램 종료\n";
 	//	return 0;
 	//}
+	g_rooms[0].first.room_id = 0;
+	g_rooms[0].first.police = 0;
+	g_rooms[0].first.cultist = 0;
+	g_rooms[0].first.isIngame = false;
+	for (int j = 0; j < MAX_PLAYERS_PER_ROOM; ++j) {
+		g_rooms[0].first.player_ids[j] = -1;
+	}
+	g_rooms[0].second = LEVEL3;
+	InitializeAltars(0);
 
-	for (int i = 0; i < 100; ++i) {
+	for (int i = 1; i < 100; ++i) {
 		g_rooms[i].first.room_id = i;
 		g_rooms[i].first.police = 0;
 		g_rooms[i].first.cultist = 0;

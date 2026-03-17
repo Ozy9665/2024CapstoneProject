@@ -2173,8 +2173,8 @@ void AStructGraphManager::Net_StartStage3(const FStage3NetStart& Info)
 	Stage3Stream.Initialize(Info.Seed);
 
 	// 5) 서버가 지정한 타겟 고정 (여기가 동기화 핵심)
-	Stage3_WeakColumnGC = FindGCByOwnerNetId(Info.WeakColumnNetId);
-	Stage3_TargetSlabGC = FindGCByOwnerNetId(Info.TargetSlabNetId);
+	Stage3_WeakColumnGC = FindGCByOwnerNetId(Info.WeakColumnNetID);
+	Stage3_TargetSlabGC = FindGCByOwnerNetId(Info.TargetSlabNetID);
 
 	// PunchPoint는 약점 기둥 기준으로 통일(이게 제일 안정적)
 	Stage3_TargetSlabPunchPoint = FVector::ZeroVector;
