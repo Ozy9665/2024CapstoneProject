@@ -378,6 +378,7 @@ struct RitualPacket {
 	uint8_t header;
 	uint16_t size;
 	FVector Loc[ALTAR_PER_ROOM];
+	MAPTYPE maptype;
 };	
 
 struct IdPacket {

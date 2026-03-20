@@ -335,11 +335,11 @@ void RoomWorkerLoop() {
 			RitualPacket pkt{};
 			pkt.header = ritualHeader;
 			pkt.size = sizeof(RitualPacket);
-
 			const auto& altars = g_altars[room_id];
 			for (int i = 0; i < ALTAR_PER_ROOM; ++i) {
 				pkt.Loc[i] = altars[i].loc;
 			}
+			pkt.maptype = g_rooms[room_id].second;
 
 			EXP_OVER* eo = new EXP_OVER();
 			std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));

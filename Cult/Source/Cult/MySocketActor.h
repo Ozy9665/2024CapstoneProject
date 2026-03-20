@@ -14,6 +14,8 @@ struct Froom {
 	UPROPERTY(BlueprintReadWrite) uint8 cultist;
 };
 
+enum MAPTYPE { LANDMASS, LEVEL3 };
+
 constexpr int MAX_PLAYERS_PER_ROOM = 5;
 constexpr int MAX_ROOM_LIST = 10;
 constexpr int ALTAR_PER_ROOM = 3;
@@ -241,6 +243,7 @@ struct RitualPacket
 	uint8_t header;
 	uint16_t size;
 	FNetVec Loc[ALTAR_PER_ROOM];
+	MAPTYPE maptype;
 };
 
 struct IdPacket {

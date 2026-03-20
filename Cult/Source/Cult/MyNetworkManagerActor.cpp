@@ -264,16 +264,35 @@ void AMyNetworkManagerActor::ProcessRitualData(const char* Buffer)
     {
         L[i] = AMySocketActor::ToUE(pkt->Loc[i]);
     }
+    MAPTYPE maptype = pkt->maptype;
 
-    AsyncTask(ENamedThreads::GameThread, [this, L]() {
+    AsyncTask(ENamedThreads::GameThread, [this, L, maptype]() {
         GI->RutialSpawnLocations.Empty();
         for (int i = 0; i < ALTAR_PER_ROOM; ++i)
         {
             GI->RutialSpawnLocations.Add(L[i]);
             UE_LOG(LogTemp, Warning, TEXT("RitualLocation[%d]: %s"), i, *L[i].ToString());
         }
-        UE_LOG(LogTemp, Warning, TEXT("OnGameStartConfirmed: Ritual Saved."));
-        OnGameStartConfirmed.Broadcast();
+
+        switch (maptype)
+        {
+        case LANDMASS:
+        {
+            UE_LOG(LogTemp, Warning, TEXT("LandMassStartConfirmed: Ritual Saved."));
+            LandMassStartConfirmed.Broadcast();
+            break;
+        }
+        case LEVEL3:
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Level3StartConfirmed: Ritual Saved."));
+            Level3StartConfirmed.Broadcast();
+            break;
+        }
+        default:
+            UE_LOG(LogTemp, Warning, TEXT("unknown maptype: %d."), maptype);
+            break;
+        }
+
     });
 }
 

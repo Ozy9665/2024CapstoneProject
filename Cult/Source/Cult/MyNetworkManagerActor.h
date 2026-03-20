@@ -48,7 +48,9 @@ public:
 	FOnRoomListUpdated OnRoomListUpdated;
 
 	UPROPERTY(BlueprintAssignable, Category = "Events")
-	FOnGameStartConfirmed OnGameStartConfirmed;
+	FOnGameStartConfirmed LandMassStartConfirmed;
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FOnGameStartConfirmed Level3StartConfirmed;
 
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnGameStartConfirmed OnGameStartUnConfirmed;
