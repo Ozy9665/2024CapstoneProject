@@ -1,10 +1,9 @@
 #define NOMINMAX
 
 #include "CultistAI.h"
+#include "map.h"
 #include <chrono>
 #include <thread>
-#include <unordered_map>
-#include <unordered_set>
 #include <array>
 #include <cmath>
 #include <concurrent_priority_queue.h>
@@ -31,8 +30,17 @@ extern std::mutex free_id_mtx;
 void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
 {
     auto ai = std::make_shared<SESSION>(ai_id, ai_role, room_id);
-    g_users.insert({ ai_id, ai });
-    g_cultist_ai_ids.insert(ai_id);
+    auto it = g_users.find(ai_id);
+    if (it != g_users.end())
+    {
+        it->second = ai;
+    }
+    else
+    {
+        g_users.insert({ ai_id, ai });
+    }
+
+    auto [it_ai, inserted] = g_cultist_ai_ids.insert(ai_id);
 
     auto& room = g_rooms[room_id];
     for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
@@ -267,6 +275,8 @@ static int FindAnyCultist(int room_id, int self_id)
             continue;
 
         auto target = it->second;
+        if (target->state == ST_FREE)
+            continue;
         if (target->room_id != room_id)
             continue;
         if (!target->isValidSocket())
@@ -367,6 +377,8 @@ static int FindNearbyCultist(int room_id, int self_id)
 
         auto target = it->second;
         if (target->role != 0)
+            continue;
+        if (target->state == ST_FREE)
             continue;
 
         float dx = target->cultist_state.PositionX - selfPos.x;
@@ -1052,7 +1064,7 @@ void BroadcastCultistAIState(const SESSION& ai, const PacketT* packet)
 
     for (int pid : room.player_ids)
     {
-        if (pid == INT_MAX || pid == ai.id)
+        if (pid == -1 || pid == ai.id)
             continue;
 
         auto it = g_users.find(pid);
@@ -1061,7 +1073,7 @@ void BroadcastCultistAIState(const SESSION& ai, const PacketT* packet)
 
        auto target = it->second;
 
-        if (!target->isValidSocket())
+       if (!target->isValidSocket() || target->state == ST_FREE)
             continue;
 
         target->do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));

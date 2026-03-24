@@ -1,14 +1,13 @@
 #pragma once
 
-#include <array>
-#include <thread>
-#include <cmath>
 #include "Protocol.h"
+#include "map.h"
 
-void InitializeAISession(const int);
-void StartAIWorker();
-void StopAIWorker();
-void UpdatePoliceAI();
-FVector CalculateDir();
-void BroadcastPoliceAIState();
-void AIWorkerLoop();
+void AddPoliceAi(int, uint8_t, int);
+void KillPoliceAi(int ai_id);
+
+void PoliceAIWorkerLoop();
+
+template <typename PacketT>
+void BroadcastPoliceAIState(const SESSION& ai, const PacketT* packet);
+

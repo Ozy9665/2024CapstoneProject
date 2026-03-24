@@ -1,160 +1,138 @@
+#define NOMINMAX
+
 #include "PoliceAI.h"
-#include <random>
-#include <atomic>
-#include <chrono>
+#include "map.h"
+#include <thread>
+#include <array>
+#include <cmath>
+#include <concurrent_priority_queue.h>
+#include <concurrent_unordered_set.h>
+#include <concurrent_unordered_map.h>
+#include <mutex>
+#include <queue>
 
-std::thread AIThread;
-std::atomic<bool> bRunning{ false };
+using namespace std;
+extern concurrency::concurrent_unordered_map<int, std::shared_ptr<SESSION>> g_users;
+extern concurrency::concurrent_unordered_set<int> g_police_ai_ids;
+extern std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
+extern MAP NewmapLandmassMap;
+extern NAVMESH NewmapLandmassNavMesh;
+extern concurrency::concurrent_priority_queue<TIMER_EVENT> timer_queue;
+extern std::array<std::array<Altar, ALTAR_PER_ROOM>, MAX_ROOM> g_altars;
+extern std::mutex g_room_mtx;
+extern std::queue<RoomTask> g_room_q;
+extern std::condition_variable g_room_cv;
+extern std::vector<int> free_session_ids;
+extern std::mutex free_id_mtx;
 
-std::array<FVector, 5> PatrolPoints	// 임시
+void AddPoliceAi(int ai_id, uint8_t ai_role, int room_id)
 {
-	FVector{ -900.f,1600.f, 2770.f},
-	FVector{ 2200.f, 1520.f, 2770.f},
-	FVector{ 2200.f, -2020.f, 2770.f},
-	FVector{ 470.f, -130.f, 2770.f},
-	FVector{ 1225.f, -1600.f, 2770.f}
-};
+    auto ai = std::make_shared<SESSION>(ai_id, ai_role, room_id);
+    auto it = g_users.find(ai_id);
+    if (it != g_users.end())
+    {
+        it->second = ai;
+    }
+    else
+    {
+        g_users.insert({ ai_id, ai });
+    }
 
-std::default_random_engine dre(std::random_device{}());
-std::uniform_int_distribution<int> PatrolUID(0, static_cast<int>(PatrolPoints.size()) - 1);
+    auto [it_ai, inserted] = g_police_ai_ids.insert(ai_id);
 
-int CurrentPatrolIndex = 0;
-int TargetID{ 0 };
-int my_ID;
+    auto& room = g_rooms[room_id];
+    for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
+    {
+        if (room.first.player_ids[i] == -1)
+        {
+            room.first.player_ids[i] = ai_id;
+            room.first.police += 1;
+            break;
+        }
+    }
 
-void InitializeAISession(const int ai_id)
-{
-	my_ID = ai_id;
-	g_users.try_emplace(ai_id, ai_id); // AI 세션 생성
-	for (auto& [id, session] : g_users)
-	{
-		if (id != ai_id && session.isValidSocket())
-		{
-			//session.do_send_connection(connectionHeader, ai_id, g_users[ai_id].getRole());
-		}
-	}
+    std::cout << "[Command] AI added. ID=" << ai_id
+        << " role=" << static_cast<int>(ai_role)
+        << " room=" << room_id << "\n";
+    IdRolePacket pkt{};
+    pkt.header = connectionHeader;
+    pkt.size = sizeof(IdRolePacket);
+    pkt.id = ai_id;
+    pkt.role = ai_role;
 
-	if (not bRunning) {
-		StartAIWorker();
-	}
+    BroadcastPoliceAIState(*ai, &pkt);
 }
 
-void StartAIWorker()
+void KillPoliceAi(int ai_id)
 {
-	std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-	bRunning = true;
-	AIThread = std::thread(AIWorkerLoop);	
+    auto it = g_users.find(ai_id);
+    if (it == g_users.end())
+        return;
+
+    auto ai = it->second;
+
+    if (ai->role != 101)
+        return;
+
+    IdOnlyPacket pkt;
+    pkt.header = DisconnectionHeader;
+    pkt.size = sizeof(IdOnlyPacket);
+    pkt.id = ai_id;
+    BroadcastPoliceAIState(*ai, &pkt);
+
+    {
+        std::lock_guard<std::mutex> lk(g_room_mtx);
+        g_room_q.push(RoomTask{
+            ai_id,
+            RM_DISCONNECT,
+            ai->role,
+            ai->room_id
+            });
+        g_room_cv.notify_one();
+    }
+
+    // AI 목록에서 제거
+    ai->path.clear();
+    {
+        std::lock_guard<std::mutex> lk(ai->s_lock);
+        ai->ai_state = AIState::Free;
+    }
+    ai->resetForReuse();
+    {
+        std::lock_guard<std::mutex> lk(free_id_mtx);
+        free_session_ids.push_back(ai_id);
+    }
+    std::cout << "[Command] AI removed. ID=" << ai_id << "\n";
 }
 
-void StopAIWorker()
+template <typename PacketT>
+void BroadcastPoliceAIState(const SESSION& ai, const PacketT* packet)
 {
-	bRunning = false;
-	if (AIThread.joinable())
-		AIThread.join();
-}
+    if (ai.role != 101) // Police AI만
+        return;
 
-void UpdatePoliceAI()
-{
-	// 순찰 모드: 0
-	if (TargetID == 0) {
-		// 시야에 cultist가 없으면.	(임시)
-		FVector direction = CalculateDir();
-			
-		float Speed = 30.0f;
-		AiState.PositionX += direction.x * Speed * 0.016f;
-		AiState.PositionY += direction.y * Speed * 0.016f;
+    int room_id = ai.room_id;
+    if (room_id < 0 || room_id >= MAX_ROOM)
+    {
+        return;
+    }
 
-		AiState.RotationYaw = std::atan2(direction.y, direction.x) * 180.0f / 파이;
+    auto& room = g_rooms[room_id].first;
 
-		AiState.VelocityX = direction.x * Speed;
-		AiState.VelocityY = direction.y * Speed;
-		AiState.VelocityZ = 0.f;
+    for (int pid : room.player_ids)
+    {
+        if (pid == -1 || pid == ai.id)
+            continue;
 
-		AiState.Speed = std::sqrt(
-			AiState.VelocityX * AiState.VelocityX +
-			AiState.VelocityY * AiState.VelocityY +
-			AiState.VelocityZ * AiState.VelocityZ
-		);
-	}
-	// TODO: 맵 충돌처리, 탐색, 추적, 상태 업데이트 로직
+        auto it = g_users.find(pid);
+        if (it == g_users.end())
+            continue;
 
-	// 저장 후 send
-	g_users[my_ID].setPoliceState(AiState);
-	BroadcastPoliceAIState();
-}
+        auto target = it->second;
 
-FVector CalculateDir() {
-	FVector direction{
-			PatrolPoints[CurrentPatrolIndex].x - AiState.PositionX,
-			PatrolPoints[CurrentPatrolIndex].y - AiState.PositionY,
-			PatrolPoints[CurrentPatrolIndex].z - AiState.PositionZ
-	};
+        if (!target->isValidSocket() || target->state == ST_FREE)
+            continue;
 
-	float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
-	if (distance < 5.0f)
-	{
-		int OldIndex = CurrentPatrolIndex;
-		for (int i = 0; i < 10; ++i)
-		{
-			int NewIndex = PatrolUID(dre);
-			if (NewIndex != OldIndex)
-			{
-				CurrentPatrolIndex = NewIndex;
-				std::cout << "[AI] Patrol Point Changed: " << CurrentPatrolIndex << "\n";
-				break;
-			}
-		}
-		direction = {
-			PatrolPoints[CurrentPatrolIndex].x - AiState.PositionX,
-			PatrolPoints[CurrentPatrolIndex].y - AiState.PositionY,
-			PatrolPoints[CurrentPatrolIndex].z - AiState.PositionZ
-		};
-	}
-	float len = std::sqrt(direction.x * direction.x + direction.y * direction.y);
-	if (len != 0)
-	{
-		direction.x /= len;
-		direction.y /= len;
-	}
-
-	return direction;
-}	  
-
-void BroadcastPoliceAIState()
-{
-	const FPoliceCharacterState& state = g_users[my_ID].getPoliceState();
-
-	for (auto& [id, session] : g_users)
-	{
-		if (id == my_ID) continue;
-
-		if (session.isValidSocket() && session.isValidState())
-		{
-			std::cout << "[AI Pos] id: " << state.PlayerID << "X: " << state.PositionX << "Y: " << state.PositionY << "\r";
-			//session.do_send_data(policeHeader, &state, sizeof(FPoliceCharacterState));
-		}
-	}
-}
-
-void AIWorkerLoop()
-{
-	const auto frameDuration = std::chrono::duration<float>(1.0f / 60.0f); // 목표 프레임: 1/60초
-	auto prev = std::chrono::high_resolution_clock::now();
-
-	while (bRunning)
-	{
-		auto frameStart = std::chrono::high_resolution_clock::now();
-		float DeltaTime = std::chrono::duration<float>(frameStart - prev).count();
-		prev = frameStart;
-
-		UpdatePoliceAI();
-
-		auto frameEnd = std::chrono::high_resolution_clock::now();
-		auto elapsed = frameEnd - frameStart;
-
-		if (elapsed < frameDuration)
-		{
-			std::this_thread::sleep_for(frameDuration - elapsed);
-		}
-	}
+        target->do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
+    }
 }

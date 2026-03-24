@@ -137,7 +137,7 @@
     <ClCompile Include="error.cpp" />
     <ClCompile Include="map.cpp" />
     <ClCompile Include="PoliceAI.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="Protocol.cpp" />
   </ItemGroup>

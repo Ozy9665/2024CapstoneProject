@@ -634,6 +634,10 @@ void CommandWorker()
 				int ai_id = get_new_session_id();
 				AddCutltistAi(ai_id, static_cast<uint8_t>(ai_role), room_id);
 			}
+			else if (ai_role == 101) {
+				int ai_id = get_new_session_id();
+				AddPoliceAi(ai_id, static_cast<uint8_t>(ai_role), room_id);
+			}
 		}
 		else if (cmd == "kill")
 		{

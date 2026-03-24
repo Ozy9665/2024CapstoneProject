@@ -523,3 +523,17 @@ constexpr FVector kPredefinedLocations[5] = {
 	{   1450.0f, -1925.0f, -3124.0f },
 	{  -5730.0f,  1330.0f, -3110.0f }
 };
+
+
+// ai
+constexpr float RAD_TO_DEG{ 180.f / PI };
+constexpr float fixed_dt{ 1.0f / 60.0f };
+constexpr float pushDist{ 120.f };
+constexpr float REPATH_DIST{ 200.f };
+constexpr int sampleCount{ 20 };
+constexpr float sampleRadius{ 2000.f };
+constexpr float ALTAR_TRIGGER_RANGE{ 600.f };
+constexpr float ALTAR_TRIGGER_RANGE_SQ{ ALTAR_TRIGGER_RANGE * ALTAR_TRIGGER_RANGE };
+constexpr float CHASE_START_RANGE{ 1500.f };
+constexpr float CHASE_STOP_RANGE{ 150.f };
+constexpr float ARRIVE_RANGE = 100.f;
