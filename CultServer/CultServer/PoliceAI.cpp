@@ -27,15 +27,15 @@ extern std::mutex free_id_mtx;
 
 void AddPoliceAi(int ai_id, uint8_t ai_role, int room_id)
 {
-    auto ai = std::make_shared<SESSION>(ai_id, ai_role, room_id);
+    auto session = std::make_shared<SESSION>(ai_id, ai_role, room_id);
     auto it = g_users.find(ai_id);
     if (it != g_users.end())
     {
-        it->second = ai;
+        it->second = session;
     }
     else
     {
-        g_users.insert({ ai_id, ai });
+        g_users.insert({ ai_id, session });
     }
 
     auto [it_ai, inserted] = g_police_ai_ids.insert(ai_id);
@@ -60,7 +60,7 @@ void AddPoliceAi(int ai_id, uint8_t ai_role, int room_id)
     pkt.id = ai_id;
     pkt.role = ai_role;
 
-    BroadcastPoliceAIState(*ai, &pkt);
+    BroadcastPoliceAIState(*session, &pkt);
 }
 
 void KillPoliceAi(int ai_id)
@@ -69,35 +69,35 @@ void KillPoliceAi(int ai_id)
     if (it == g_users.end())
         return;
 
-    auto ai = it->second;
+    auto session = it->second;
 
-    if (ai->role != 101)
+    if (session->role != 101)
         return;
 
     IdOnlyPacket pkt;
     pkt.header = DisconnectionHeader;
     pkt.size = sizeof(IdOnlyPacket);
     pkt.id = ai_id;
-    BroadcastPoliceAIState(*ai, &pkt);
+    BroadcastPoliceAIState(*session, &pkt);
 
     {
         std::lock_guard<std::mutex> lk(g_room_mtx);
         g_room_q.push(RoomTask{
             ai_id,
             RM_DISCONNECT,
-            ai->role,
-            ai->room_id
+            session->role,
+            session->room_id
             });
         g_room_cv.notify_one();
     }
 
     // AI 목록에서 제거
-    ai->path.clear();
+    session->ai->bb.path.clear();
     {
-        std::lock_guard<std::mutex> lk(ai->s_lock);
-        ai->ai_state = AIState::Free;
+        std::lock_guard<std::mutex> lk(session->s_lock);
+        session->ai->bb.ai_state = AIState::Free;
     }
-    ai->resetForReuse();
+    session->resetForReuse();
     {
         std::lock_guard<std::mutex> lk(free_id_mtx);
         free_session_ids.push_back(ai_id);
@@ -106,12 +106,12 @@ void KillPoliceAi(int ai_id)
 }
 
 template <typename PacketT>
-void BroadcastPoliceAIState(const SESSION& ai, const PacketT* packet)
+void BroadcastPoliceAIState(const SESSION& session, const PacketT* packet)
 {
-    if (ai.role != 101) // Police AI만
+    if (session.role != 101) // Police AI만
         return;
 
-    int room_id = ai.room_id;
+    int room_id = session.room_id;
     if (room_id < 0 || room_id >= MAX_ROOM)
     {
         return;
@@ -121,7 +121,7 @@ void BroadcastPoliceAIState(const SESSION& ai, const PacketT* packet)
 
     for (int pid : room.player_ids)
     {
-        if (pid == -1 || pid == ai.id)
+        if (pid == -1 || pid == session.id)
             continue;
 
         auto it = g_users.find(pid);

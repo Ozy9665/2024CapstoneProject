@@ -49,8 +49,9 @@ SESSION::SESSION() {}
 
 SESSION::SESSION(int session_id, SOCKET sock)
 	: c_socket(sock), id(session_id), role(INVALID_ROLE), room_id{ -1 }, prev_remain{},
-	heal_gauge{}, heal_partner{}, state{ S_STATE::ST_ROOM }, target_id{ -1 } 
+	heal_gauge{}, heal_partner{}, state{ S_STATE::ST_ROOM }
 {
+	ai = nullptr;
 	visible_ids.clear();
 	dog = {};
 	crow = {};
@@ -58,11 +59,9 @@ SESSION::SESSION(int session_id, SOCKET sock)
 
 SESSION::SESSION(int session_id, uint8_t ai_role, int room_id) 
 	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id), 
-	target_id{ -1 }, prev_remain{}, ai_state{ AIState::Patrol }, heal_gauge{},
-	lastTargetPos{}, lastSnapPos{}, snapStreak{}, patrol_target{}, has_patrol_target{ false },
-	ritual_id{ -1 }, last_dist_to_target{ FLT_MAX }, stuck_ticks{},
-	runaway_target{}, has_runaway_target{ false }, runaway_ticks{}// AI Session
+	prev_remain{},heal_gauge{}// AI Session
 {
+	ai = std::make_unique<AIController>(this);
 	visible_ids.clear();
 	if (ai_role == 100)   // Cultist AI
 	{
@@ -81,8 +80,6 @@ SESSION::SESSION(int session_id, uint8_t ai_role, int room_id)
 		std::cout << "[AI] 알 수 없는 role: " << ai_role << "\n";
 	}
 }
-
-SESSION::~SESSION(){ }
 
 void SESSION::do_send_packet(void* packet)
 {
@@ -117,7 +114,9 @@ bool SESSION::isValidSocket() const
 void SESSION::setAIState(const AIState st)
 {
 	std::lock_guard<std::mutex> lk(s_lock);
-	ai_state = st;
+	if (ai) {
+		ai->bb.ai_state = st;
+	}
 }
 
 bool SESSION::isAI() const
@@ -141,23 +140,13 @@ void SESSION::resetForReuse()
 	heal_gauge = 0;
 	heal_partner = -1;
 
-	path.clear();
-	lastTargetPos = {};
-	lastSnapPos = {};
-	snapStreak = 0;
-	target_id = -1;
-	patrol_target = {};
-	has_patrol_target = false;
-	ritual_id = -1;
-	last_dist_to_target = 0.0f;
-	stuck_ticks = 0;
-	runaway_target = {};
-	has_runaway_target = false;
-	runaway_ticks = 0;
-
 	dog = {};
 	crow = {};
 
 	std::lock_guard<std::mutex> lk(s_lock);
-	state = ST_FREE;
+	state = S_STATE::ST_FREE;
+
+	if (ai) {
+		ai.reset();
+	}
 }

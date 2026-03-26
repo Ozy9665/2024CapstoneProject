@@ -29,15 +29,15 @@ extern std::mutex free_id_mtx;
 
 void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
 {
-    auto ai = std::make_shared<SESSION>(ai_id, ai_role, room_id);
+    auto session = std::make_shared<SESSION>(ai_id, ai_role, room_id);
     auto it = g_users.find(ai_id);
     if (it != g_users.end())
     {
-        it->second = ai;
+        it->second = session;
     }
     else
     {
-        g_users.insert({ ai_id, ai });
+        g_users.insert({ ai_id, session });
     }
 
     auto [it_ai, inserted] = g_cultist_ai_ids.insert(ai_id);
@@ -62,7 +62,7 @@ void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
     pkt.id = ai_id;
     pkt.role = ai_role;
 
-    BroadcastCultistAIState(*ai, &pkt);
+    BroadcastCultistAIState(*session, &pkt);
 }
 
 void KillCultistAi(int ai_id)
@@ -71,35 +71,30 @@ void KillCultistAi(int ai_id)
     if (it == g_users.end())
         return;
 
-    auto ai = it->second;
+    auto session = it->second;
 
-    if (ai->role != 100)
+    if (session->role != 100)
         return;
 
     IdOnlyPacket pkt;
     pkt.header = DisconnectionHeader;
     pkt.size = sizeof(IdOnlyPacket);
     pkt.id = ai_id;
-    BroadcastCultistAIState(*ai, &pkt);
+    BroadcastCultistAIState(*session, &pkt);
     
     {
         std::lock_guard<std::mutex> lk(g_room_mtx);
         g_room_q.push(RoomTask{
             ai_id,
             RM_DISCONNECT,
-            ai->role,
-            ai->room_id
+            session->role,
+            session->room_id
             });
         g_room_cv.notify_one();
     }
 
     // AI 목록에서 제거
-    ai->path.clear();
-    {
-        std::lock_guard<std::mutex> lk(ai->s_lock);
-        ai->ai_state = AIState::Free;
-    }
-    ai->resetForReuse();
+    session->resetForReuse();
     {
         std::lock_guard<std::mutex> lk(free_id_mtx);
         free_session_ids.push_back(ai_id);
@@ -115,46 +110,49 @@ static float Dist(const Vec3& a, const Vec3& b)
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-static void StopMovement(SESSION& ai)
+static void StopMovement(SESSION& session)
 {
-    ai.cultist_state.VelocityX = 0.f;
-    ai.cultist_state.VelocityY = 0.f;
-    ai.cultist_state.VelocityZ = 0.f;
-    ai.cultist_state.Speed = 0.f;
+    session.cultist_state.VelocityX = 0.f;
+    session.cultist_state.VelocityY = 0.f;
+    session.cultist_state.VelocityZ = 0.f;
+    session.cultist_state.Speed = 0.f;
 }
 
-static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
+static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTime)
 {
+    if (!session.ai) 
+        return;
+
     Vec3 cur{
-        ai.cultist_state.PositionX,
-        ai.cultist_state.PositionY,
-        ai.cultist_state.PositionZ
+        session.cultist_state.PositionX,
+        session.cultist_state.PositionY,
+        session.cultist_state.PositionZ
     };
 
     if (Dist(cur, targetPos) <= ARRIVE_RANGE)
     {
-        StopMovement(ai);
+        StopMovement(session);
         return;
     }
 
-    float dx = targetPos.x - ai.lastTargetPos.x;
-    float dy = targetPos.y - ai.lastTargetPos.y;
+    float dx = targetPos.x - session.ai->bb.lastTargetPos.x;
+    float dy = targetPos.y - session.ai->bb.lastTargetPos.y;
     float dist2 = dx * dx + dy * dy;
 
     if (dist2 > REPATH_DIST * REPATH_DIST)
     {
         // 타겟이 충분히 이동, 경로 무효화
-        ai.lastTargetPos = targetPos;
-        ai.path.clear();
+        session.ai->bb.lastTargetPos = targetPos;
+        session.ai->bb.path.clear();
     }
 
-    if (ai.path.empty())
+    if (session.ai->bb.path.empty())
     {
         std::vector<int> triPath;
         if (!NewmapLandmassNavMesh.FindTriPath(cur, targetPos, triPath))
         {
-            StopMovement(ai);
-            ai.path.clear();
+            StopMovement(session);
+            session.ai->bb.path.clear();
             return;
         }
 
@@ -162,7 +160,7 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         NewmapLandmassNavMesh.BuildPortals(triPath, portals);
 
         if (portals.empty()) {
-            StopMovement(ai);
+            StopMovement(session);
             return;
         }
 
@@ -170,32 +168,32 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
         if (!NewmapLandmassNavMesh.SmoothPath(cur, targetPos, portals, smoothPath) ||
             smoothPath.size() < 2)
         {
-            StopMovement(ai);
+            StopMovement(session);
             return;
         }
-        ai.path = smoothPath;
+        session.ai->bb.path = smoothPath;
     }
 
-    if (ai.path.empty())
+    if (session.ai->bb.path.empty())
     {
-        StopMovement(ai);
+        StopMovement(session);
         return;
     }
 
-    if (ai.path.size() < 1)
+    if (session.ai->bb.path.size() < 1)
     {
         std::cout << "[FATAL] path empty before next selection\n";
-        StopMovement(ai);
+        StopMovement(session);
         return;
     }
 
     // 다음 목표 노드
     Vec3 next;
-    if (ai.path.size() >= 2) {
-        next = ai.path[1];
+    if (session.ai->bb.path.size() >= 2) {
+        next = session.ai->bb.path[1];
     }
     else {
-        next = ai.path[0];
+        next = session.ai->bb.path[0];
     }
 
     Vec3 dir{
@@ -209,15 +207,15 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     const float speed = 300.f; // 600cm/s
     if (len <= speed * deltaTime)
     {
-        ai.path.erase(ai.path.begin());
+        session.ai->bb.path.erase(session.ai->bb.path.begin());
 
-        if (ai.path.empty())
+        if (session.ai->bb.path.empty())
         {
-            StopMovement(ai);
+            StopMovement(session);
             return;
         }
 
-        next = ai.path[0];
+        next = session.ai->bb.path[0];
 
         dir.x = next.x - cur.x;
         dir.y = next.y - cur.y;
@@ -227,7 +225,7 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
 
     if (len < 1e-3f)
     {
-        StopMovement(ai);
+        StopMovement(session);
         return;
     }
 
@@ -236,22 +234,22 @@ static void MoveAlongPath(SESSION& ai, const Vec3& targetPos, float deltaTime)
     // dir.z /= len;
 
     // 위치 갱신
-    ai.cultist_state.PositionX += dir.x * speed * deltaTime;
-    ai.cultist_state.PositionY += dir.y * speed * deltaTime;
+    session.cultist_state.PositionX += dir.x * speed * deltaTime;
+    session.cultist_state.PositionY += dir.y * speed * deltaTime;
     // ai.cultist_state.PositionZ += dir.z * speed * deltaTime;
 
-    ai.cultist_state.VelocityX = dir.x * speed;
-    ai.cultist_state.VelocityY = dir.y * speed;
-    ai.cultist_state.VelocityZ = 0.f;
-    ai.cultist_state.Speed = std::sqrt(
-            ai.cultist_state.VelocityX * ai.cultist_state.VelocityX +
-            ai.cultist_state.VelocityY * ai.cultist_state.VelocityY
+    session.cultist_state.VelocityX = dir.x * speed;
+    session.cultist_state.VelocityY = dir.y * speed;
+    session.cultist_state.VelocityZ = 0.f;
+    session.cultist_state.Speed = std::sqrt(
+            session.cultist_state.VelocityX * session.cultist_state.VelocityX +
+            session.cultist_state.VelocityY * session.cultist_state.VelocityY
         );
 
     // state 회전 갱신
     if (len > 1e-3f)
     {
-        ai.cultist_state.RotationYaw =
+        session.cultist_state.RotationYaw =
             std::atan2(dir.y, dir.x) * RAD_TO_DEG;
     }
 }
@@ -395,16 +393,16 @@ static int FindNearbyCultist(int room_id, int self_id)
     return best_id;
 }
 
-static bool IsNearAltar(SESSION& ai)
+static bool IsNearAltar(SESSION& session)
 {
-    int room_id = ai.room_id;
+    int room_id = session.room_id;
     if (room_id < 0 || room_id >= MAX_ROOM)
         return false;
 
     Vec3 selfPos{
-        ai.cultist_state.PositionX,
-        ai.cultist_state.PositionY,
-        ai.cultist_state.PositionZ
+        session.cultist_state.PositionX,
+        session.cultist_state.PositionY,
+        session.cultist_state.PositionZ
     };
 
     for (int i = 0; i < ALTAR_PER_ROOM; ++i)
@@ -423,24 +421,24 @@ static bool IsNearAltar(SESSION& ai)
 
         if (dist2 <= ALTAR_TRIGGER_RANGE_SQ)
         {
-            ai.ritual_id = i;
+            session.ai->bb.ritual_id = i;
             return true;
         }
     }
 
-    ai.ritual_id = -1;
+    session.ai->bb.ritual_id = -1;
     return false;
 }
 
-static void UpdateAIState(SESSION& ai)
+static void UpdateAIState(SESSION& session)
 {
     // 경찰 발견 Runaway
-    int police_id = FindNearbyPolice(ai.room_id, ai.id);
+    int police_id = FindNearbyPolice(session.room_id, session.id);
     if (police_id >= 0)
     {
-        if (ai.ai_state == AIState::Heal && ai.heal_partner >= 0)
+        if (session.ai->bb.ai_state == AIState::Heal && session.heal_partner >= 0)
         {
-            auto it = g_users.find(ai.heal_partner);
+            auto it = g_users.find(session.heal_partner);
             if (it != g_users.end())
             {
                 NoticePacket packet;
@@ -451,83 +449,83 @@ static void UpdateAIState(SESSION& ai)
             }
 
             // Heal 상태 해제
-            ai.cultist_state.ABP_DoHeal = 0;
-            ai.cultist_state.ABP_GetHeal = 0;
-            ai.heal_partner = -1;
+            session.cultist_state.ABP_DoHeal = 0;
+            session.cultist_state.ABP_GetHeal = 0;
+            session.heal_partner = -1;
         }
-        else if (ai.ai_state == AIState::Ritual)
+        else if (session.ai->bb.ai_state == AIState::Ritual)
         {
-            Altar& altar = g_altars[ai.room_id][ai.ritual_id];
+            Altar& altar = g_altars[session.room_id][session.ai->bb.ritual_id];
             altar.isActivated = false;
-            ai.ritual_id = -1;
+            session.ai->bb.ritual_id = -1;
         }
-        ai.ai_state = AIState::Runaway;
-        ai.target_id = police_id;
-        ai.has_patrol_target = false;
-        ai.path.clear();
+        session.ai->bb.ai_state = AIState::Runaway;
+        session.ai->bb.target_id = police_id;
+        session.ai->bb.has_patrol_target = false;
+        session.ai->bb.path.clear();
         return;
     }
-    if (ai.ai_state == AIState::Runaway) {
-        ai.has_runaway_target = false;
-        ai.runaway_ticks = 0;
+    if (session.ai->bb.ai_state == AIState::Runaway) {
+        session.ai->bb.has_runaway_target = false;
+        session.ai->bb.runaway_ticks = 0;
     }
     // 치료 중
-    if (ai.ai_state == AIState::Heal)
+    if (session.ai->bb.ai_state == AIState::Heal)
     {
-        if (!ai.cultist_state.ABP_DoHeal &&
-            !ai.cultist_state.ABP_GetHeal)
+        if (!session.cultist_state.ABP_DoHeal &&
+            !session.cultist_state.ABP_GetHeal)
         {
-            ai.ai_state = AIState::Patrol;
-            ai.target_id = -1;
-            ai.path.clear();
+            session.ai->bb.ai_state = AIState::Patrol;
+            session.ai->bb.target_id = -1;
+            session.ai->bb.path.clear();
         }
-        StopMovement(ai);
+        StopMovement(session);
         return;
     }
     // 제단 진행 중
-    if (ai.ai_state == AIState::Ritual)
+    if (session.ai->bb.ai_state == AIState::Ritual)
     {
-        if (ai.ritual_id < 0)
+        if (session.ai->bb.ritual_id < 0)
         {
-            ai.ai_state = AIState::Patrol;
+            session.ai->bb.ai_state = AIState::Patrol;
             return;
         }
         return;
     }
 
     // 제단 발견 Ritual
-    if (IsNearAltar(ai))
+    if (IsNearAltar(session))
     {
-        ai.ai_state = AIState::Ritual;
-        ai.has_patrol_target = false;
-        ai.path.clear();
+        session.ai->bb.ai_state = AIState::Ritual;
+        session.ai->bb.has_patrol_target = false;
+        session.ai->bb.path.clear();
         return;
     }
 
     // 이미 Chase중
-    if (ai.ai_state == AIState::Chase && ai.target_id >= 0)
+    if (session.ai->bb.ai_state == AIState::Chase && session.ai->bb.target_id >= 0)
     {
-        auto it = g_users.find(ai.target_id);
+        auto it = g_users.find(session.ai->bb.target_id);
         if (it == g_users.end())
         {
-            ai.ai_state = AIState::Patrol;
-            ai.target_id = -1;
+            session.ai->bb.ai_state = AIState::Patrol;
+            session.ai->bb.target_id = -1;
             return;
         }
         return;
     }
 
     // 유저 발견 Chase
-    int cultist_id = FindNearbyCultist(ai.room_id, ai.id);
+    int cultist_id = FindNearbyCultist(session.room_id, session.id);
     if (cultist_id >= 0)
     {
         auto it = g_users.find(cultist_id);
         if (it != g_users.end())
         {
             Vec3 selfPos{
-               ai.cultist_state.PositionX,
-               ai.cultist_state.PositionY,
-               ai.cultist_state.PositionZ
+               session.cultist_state.PositionX,
+               session.cultist_state.PositionY,
+               session.cultist_state.PositionZ
             };
             Vec3 targetPos{
                 it->second->cultist_state.PositionX,
@@ -538,33 +536,33 @@ static void UpdateAIState(SESSION& ai)
             float dist = Dist(selfPos, targetPos);
             if (dist <= CHASE_START_RANGE)
             {
-                ai.ai_state = AIState::Chase;
-                ai.target_id = cultist_id;
-                ai.has_patrol_target = false;
-                ai.path.clear();
+                session.ai->bb.ai_state = AIState::Chase;
+                session.ai->bb.target_id = cultist_id;
+                session.ai->bb.has_patrol_target = false;
+                session.ai->bb.path.clear();
                 return;
             }
         }
     }
 
     // 기본 상태
-    ai.ai_state = AIState::Patrol;
+    session.ai->bb.ai_state = AIState::Patrol;
 }
 
-static void ExecuteAIState(SESSION& ai, float dt) 
+static void ExecuteAIState(SESSION& session, float dt) 
 {
-    switch (ai.ai_state)
+    switch (session.ai->bb.ai_state)
     {
     case AIState::Patrol:
     {
         Vec3 cur{
-            ai.cultist_state.PositionX,
-            ai.cultist_state.PositionY,
-            ai.cultist_state.PositionZ
+            session.cultist_state.PositionX,
+            session.cultist_state.PositionY,
+            session.cultist_state.PositionZ
         };
 
         // 목적지 없으면 새로 생성
-        if (!ai.has_patrol_target)
+        if (!session.ai->bb.has_patrol_target)
         {
             int curTri = NewmapLandmassNavMesh.FindContainingTriangle(cur);
             if (curTri < 0)
@@ -577,78 +575,78 @@ static void ExecuteAIState(SESSION& ai, float dt)
 
             Vec3 randomPoint = NewmapLandmassNavMesh.GetTriCenter(randomTri);
 
-            ai.patrol_target = randomPoint;
-            ai.has_patrol_target = true;
-            ai.stuck_ticks = 0;
-            ai.last_dist_to_target = FLT_MAX;
-            ai.path.clear();
+            session.ai->bb.patrol_target = randomPoint;
+            session.ai->bb.has_patrol_target = true;
+            session.ai->bb.stuck_ticks = 0;
+            session.ai->bb.last_dist_to_target = FLT_MAX;
+            session.ai->bb.path.clear();
         }
 
-        float dist = Dist(cur, ai.patrol_target);
+        float dist = Dist(cur, session.ai->bb.patrol_target);
 
         // 도착했으면 새 목적지 만들기
         if (dist < CHASE_STOP_RANGE)
         {
-            ai.has_patrol_target = false;
-            ai.path.clear();
+            session.ai->bb.has_patrol_target = false;
+            session.ai->bb.path.clear();
             return;
         }
 
-        if (dist > ai.last_dist_to_target - 5.f)
+        if (dist > session.ai->bb.last_dist_to_target - 5.f)
         {
-            ai.stuck_ticks++;
+            session.ai->bb.stuck_ticks++;
         }
         else
         {
-            ai.stuck_ticks = 0;
+            session.ai->bb.stuck_ticks = 0;
         }
 
-        ai.last_dist_to_target = dist;
+        session.ai->bb.last_dist_to_target = dist;
 
-        if (ai.stuck_ticks > 60)
+        if (session.ai->bb.stuck_ticks > 60)
         {
-            ai.has_patrol_target = false;
-            ai.path.clear();
+            session.ai->bb.has_patrol_target = false;
+            session.ai->bb.path.clear();
             return;
         }
 
-        MoveAlongPath(ai, ai.patrol_target, dt);
+        MoveAlongPath(session, session.ai->bb.patrol_target, dt);
         break;
     }
     case AIState::Chase:
     {
-        int target_id = ai.target_id;
+        int target_id = session.ai->bb.target_id;
         if (target_id < 0)
         {
-            ai.path.clear();
-            StopMovement(ai);
+            session.ai->bb.path.clear();
+            StopMovement(session);
             return;
         }
 
         auto it = g_users.find(target_id);
         if (it == g_users.end())
         {
-            ai.target_id = -1;
-            ai.ai_state = AIState::Patrol;
-            ai.path.clear();
+            session.ai->bb.target_id = -1;
+            session.ai->bb.ai_state = AIState::Patrol;
+            session.ai->bb.path.clear();
             break;
         }
 
         auto target = it->second;
         if (target->cultist_state.CurrentHealth <= 50.f &&
-            !ai.cultist_state.ABP_DoHeal &&
+            !session.cultist_state.ABP_DoHeal &&
             !target->cultist_state.ABP_GetHeal)
         {
-            ai.heal_partner = target_id;
-            ai.ai_state = AIState::Heal;
-            ai.path.clear();
+            session.heal_partner = target_id;
+            session.ai->bb.ai_state = AIState::Heal;
+            session.ai->bb.path.clear();
             return;
         }
 
         Vec3 selfPos{
-           ai.cultist_state.PositionX,
-           ai.cultist_state.PositionY,
-           ai.cultist_state.PositionZ
+           session.cultist_state.PositionX,
+           session.cultist_state.PositionY,
+           session.cultist_state.PositionZ
         };
 
         Vec3 targetPos{
@@ -660,13 +658,13 @@ static void ExecuteAIState(SESSION& ai, float dt)
         float dist = Dist(selfPos, targetPos);
         if (dist <= CHASE_STOP_RANGE)
         {
-            ai.path.clear();
-            ai.has_patrol_target = false;
-            StopMovement(ai);
+            session.ai->bb.path.clear();
+            session.ai->bb.has_patrol_target = false;
+            StopMovement(session);
             return;
         }
 
-        MoveAlongPath(ai, targetPos, dt);
+        MoveAlongPath(session, targetPos, dt);
         break;
     }
     case AIState::Runaway:
@@ -677,20 +675,20 @@ static void ExecuteAIState(SESSION& ai, float dt)
         //    + 0.15 * 가시성 점수
         //    + 0.35 * NavMesh 경로 점수
         Vec3 selfPos{
-        ai.cultist_state.PositionX,
-        ai.cultist_state.PositionY,
-        ai.cultist_state.PositionZ
+        session.cultist_state.PositionX,
+        session.cultist_state.PositionY,
+        session.cultist_state.PositionZ
         };
 
-        if (ai.has_runaway_target && ai.runaway_ticks < 30 &&
-            Dist(selfPos, ai.runaway_target) > ARRIVE_RANGE)
+        if (session.ai->bb.has_runaway_target && session.ai->bb.runaway_ticks < 30 &&
+            Dist(selfPos, session.ai->bb.runaway_target) > ARRIVE_RANGE)
         {
-            ai.runaway_ticks++;
-            MoveAlongPath(ai, ai.runaway_target, dt);
+            session.ai->bb.runaway_ticks++;
+            MoveAlongPath(session, session.ai->bb.runaway_target, dt);
             break;
         }
 
-        int police_id = ai.target_id;
+        int police_id = session.ai->bb.target_id;
         if (police_id < 0)
             return;
 
@@ -817,31 +815,31 @@ static void ExecuteAIState(SESSION& ai, float dt)
             }
         }
 
-        if (!ai.has_runaway_target)
+        if (!session.ai->bb.has_runaway_target)
         {
-            ai.runaway_target = bestPos;
-            ai.has_runaway_target = true;
-            ai.runaway_ticks = 0;
-            ai.path.clear();
+            session.ai->bb.runaway_target = bestPos;
+            session.ai->bb.has_runaway_target = true;
+            session.ai->bb.runaway_ticks = 0;
+            session.ai->bb.path.clear();
         }
         else
         {
-            ai.runaway_ticks++;
-            if (ai.runaway_ticks >= 30 && 
-                Dist(ai.runaway_target, bestPos) > 400.f)
+            session.ai->bb.runaway_ticks++;
+            if (session.ai->bb.runaway_ticks >= 30 &&
+                Dist(session.ai->bb.runaway_target, bestPos) > 400.f)
             {
-                ai.runaway_target = bestPos;
-                ai.runaway_ticks = 0;
-                ai.path.clear();
+                session.ai->bb.runaway_target = bestPos;
+                session.ai->bb.runaway_ticks = 0;
+                session.ai->bb.path.clear();
             }
         }
 
-        MoveAlongPath(ai, ai.runaway_target, dt);
+        MoveAlongPath(session, session.ai->bb.runaway_target, dt);
         break;
     }
     case AIState::Heal:
     {
-        int target_id = ai.heal_partner;
+        int target_id = session.heal_partner;
         if (target_id < 0)
             return;
 
@@ -849,24 +847,24 @@ static void ExecuteAIState(SESSION& ai, float dt)
         if (it == g_users.end())
             return;
 
-        if (ai.cultist_state.ABP_DoHeal || ai.cultist_state.ABP_GetHeal)
+        if (session.cultist_state.ABP_DoHeal || session.cultist_state.ABP_GetHeal)
         {
-            StopMovement(ai);
+            StopMovement(session);
             return;
         }
 
         auto target = it->second;
 
-        auto moveOpt = GetMovePoint(ai.id, target_id);
+        auto moveOpt = GetMovePoint(session.id, target_id);
         if (!moveOpt)
             return;
 
         auto [moveLoc, moveRot] = *moveOpt;
 
         Vec3 selfPos{
-        ai.cultist_state.PositionX,
-        ai.cultist_state.PositionY,
-        ai.cultist_state.PositionZ
+        session.cultist_state.PositionX,
+        session.cultist_state.PositionY,
+        session.cultist_state.PositionZ
         };
 
         Vec3 healMovePos{
@@ -879,7 +877,7 @@ static void ExecuteAIState(SESSION& ai, float dt)
 
         if (moveDist > 30.f)   // 충분히 가까워 지기 전까지 이동만
         {
-            MoveAlongPath(ai, healMovePos, dt);
+            MoveAlongPath(session, healMovePos, dt);
             return;
         }
 
@@ -902,33 +900,33 @@ static void ExecuteAIState(SESSION& ai, float dt)
         pkt.SpawnLoc = targetPos;
         pkt.SpawnRot.yaw = yaw;
         pkt.isHealer = false;
-        target->heal_partner = ai.id;
+        target->heal_partner = session.id;
         target->do_send_packet(&pkt);
 
         // Heal 시작
         TIMER_EVENT ev;
         ev.wakeup_time = std::chrono::system_clock::now() + 1s;
-        ev.c_id = ai.id;
+        ev.c_id = session.id;
         ev.target_id = target_id;
         ev.event_id = EV_HEAL;
         timer_queue.push(ev);
 
-        ai.cultist_state.ABP_DoHeal = 1;
-        ai.heal_partner = target_id;
-        ai.ai_state = AIState::Heal;
-        ai.path.clear();
+        session.cultist_state.ABP_DoHeal = 1;
+        session.heal_partner = target_id;
+        session.ai->bb.ai_state = AIState::Heal;
+        session.ai->bb.path.clear();
         return;
         break;
     }
     case AIState::Ritual:
     {
-        if (ai.ritual_id < 0)
+        if (session.ai->bb.ritual_id < 0)
         {
-            ai.ai_state = AIState::Patrol;
+            session.ai->bb.ai_state = AIState::Patrol;
             break;
         }
 
-        Altar& altar = g_altars[ai.room_id][ai.ritual_id];
+        Altar& altar = g_altars[session.room_id][session.ai->bb.ritual_id];
         Vec3 altarPos{
             static_cast<float>(altar.loc.x),
             static_cast<float>(altar.loc.y),
@@ -936,30 +934,30 @@ static void ExecuteAIState(SESSION& ai, float dt)
         };
 
         // 아직 멀면 이동
-        MoveAlongPath(ai, altarPos, dt);
+        MoveAlongPath(session, altarPos, dt);
         Vec3 selfPos{
-            ai.cultist_state.PositionX,
-            ai.cultist_state.PositionY,
-            ai.cultist_state.PositionZ
+            session.cultist_state.PositionX,
+            session.cultist_state.PositionY,
+            session.cultist_state.PositionZ
         };
         float dist = Dist(selfPos, altarPos);
-        if (!ai.path.empty())
+        if (!session.ai->bb.path.empty())
         {
             std::cout << "if (!ai.path.empty()))\n";
             break;
         }
 
-        ai.has_patrol_target = false;
-        StopMovement(ai);
-        ai.path.clear();
+        session.ai->bb.has_patrol_target = false;
+        StopMovement(session);
+        session.ai->bb.path.clear();
 
         // 도착, Ritual 시작
         if (!altar.isActivated)
         {
             altar.isActivated = true;
             altar.time = std::chrono::system_clock::now();
-            std::cout << "[AI RitualStart] ai=" << ai.id
-                << " altar=" << ai.ritual_id << "\n";
+            std::cout << "[AI RitualStart] ai=" << session.id
+                << " altar=" << session.ai->bb.ritual_id << "\n";
             break;
         }
         auto now = std::chrono::system_clock::now();
@@ -980,11 +978,11 @@ static void ExecuteAIState(SESSION& ai, float dt)
             altar.gauge = 100;
             altar.isActivated = false;
 
-            std::cout << "[AI Ritual Complete] ai=" << ai.id
-                << " altar=" << ai.ritual_id << "\n";
+            std::cout << "[AI Ritual Complete] ai=" << session.id
+                << " altar=" << session.ai->bb.ritual_id << "\n";
 
-            ai.ritual_id = -1;
-            ai.ai_state = AIState::Patrol;
+            session.ai->bb.ritual_id = -1;
+            session.ai->bb.ai_state = AIState::Patrol;
         }
         break;
     }
@@ -1014,31 +1012,31 @@ void CultistAIWorkerLoop()
             if (it == g_users.end())
                 continue;
 
-           auto ai = it->second;
-            if (ai->role != 100)
+           auto session = it->second;
+            if (session->role != 100)
                 continue;
 
-            if (ai->ai_state == AIState::Free)
+            if (session->ai->bb.ai_state == AIState::Free)
                 continue;
 
             bool canMove = true;
-            auto& st = ai->cultist_state;
+            auto& st = session->cultist_state;
             if (st.ABP_IsDead || st.ABP_IsStunned || st.ABP_IsHitByAnAttack)
             {
-                StopMovement(*ai);
+                StopMovement(*session);
                 canMove = false;
             }
         
             if (canMove)
             {
-                UpdateAIState(*ai);
-                ExecuteAIState(*ai, dt);
+                UpdateAIState(*session);
+                ExecuteAIState(*session, dt);
             }
             CultistPacket packet{};
             packet.header = cultistHeader;
             packet.size = sizeof(CultistPacket);
-            packet.state = ai->cultist_state;
-            BroadcastCultistAIState(*ai, &packet);
+            packet.state = session->cultist_state;
+            BroadcastCultistAIState(*session, &packet);
         }
 
         nextTick += std::chrono::duration_cast<clock::duration>(
@@ -1049,12 +1047,12 @@ void CultistAIWorkerLoop()
 }
 
 template <typename PacketT>
-void BroadcastCultistAIState(const SESSION& ai, const PacketT* packet)
+void BroadcastCultistAIState(const SESSION& session, const PacketT* packet)
 {
-    if (ai.role != 100) // Cultist AI만
+    if (session.role != 100) // Cultist AI만
         return;
 
-    int room_id = ai.room_id;
+    int room_id = session.room_id;
     if (room_id < 0 || room_id >= MAX_ROOM)
     {
         return;
@@ -1064,7 +1062,7 @@ void BroadcastCultistAIState(const SESSION& ai, const PacketT* packet)
 
     for (int pid : room.player_ids)
     {
-        if (pid == -1 || pid == ai.id)
+        if (pid == -1 || pid == session.id)
             continue;
 
         auto it = g_users.find(pid);
@@ -1080,9 +1078,9 @@ void BroadcastCultistAIState(const SESSION& ai, const PacketT* packet)
     }
 }
 
-void ApplyBatonHitToAI(SESSION& ai, const Vec3& attackerPos)
+void ApplyBatonHitToAI(SESSION& session, const Vec3& attackerPos)
 {
-    auto& st = ai.cultist_state;
+    auto& st = session.cultist_state;
     if (st.ABP_IsDead)
         return;
 
@@ -1091,12 +1089,12 @@ void ApplyBatonHitToAI(SESSION& ai, const Vec3& attackerPos)
     st.ABP_DoHeal = 0;
     st.ABP_GetHeal = 0;
 
-    ai.path.clear();
+    session.ai->bb.path.clear();
 
     Vec3 cur{
-        ai.cultist_state.PositionX,
-        ai.cultist_state.PositionY,
-        ai.cultist_state.PositionZ
+        session.cultist_state.PositionX,
+        session.cultist_state.PositionY,
+        session.cultist_state.PositionZ
     };
 
     Vec3 dir{
@@ -1112,10 +1110,10 @@ void ApplyBatonHitToAI(SESSION& ai, const Vec3& attackerPos)
     dir.x /= len;
     dir.y /= len;
 
-    ai.cultist_state.PositionX += dir.x * pushDist;
-    ai.cultist_state.PositionY += dir.y * pushDist;
-    StopMovement(ai);
-    ai.cultist_state.RotationYaw = std::atan2(dir.y, dir.x) * RAD_TO_DEG;
+    session.cultist_state.PositionX += dir.x * pushDist;
+    session.cultist_state.PositionY += dir.y * pushDist;
+    StopMovement(session);
+    session.cultist_state.RotationYaw = std::atan2(dir.y, dir.x) * RAD_TO_DEG;
 
     st.CurrentHealth -= 100.f;
     if (st.CurrentHealth <= 0.f)
@@ -1130,8 +1128,8 @@ void ApplyBatonHitToAI(SESSION& ai, const Vec3& attackerPos)
             st.ABP_TTStun = 1;
 
             TIMER_EVENT ev;
-            ev.c_id = ai.id;
-            ev.target_id = ai.id;
+            ev.c_id = session.id;
+            ev.target_id = session.id;
             ev.event_id = EV_STUN;
             ev.wakeup_time = std::chrono::system_clock::now() + 10s; // 스턴 시간
 

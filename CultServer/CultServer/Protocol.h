@@ -428,6 +428,41 @@ struct RitualGagePacket {
 	int gauge;
 };
 
+struct AIBlackboard {
+	AIState ai_state;
+
+	std::vector<Vec3> path;
+	Vec3 lastTargetPos;
+	Vec3 lastSnapPos;
+	int snapStreak;
+
+	int target_id;
+
+	Vec3 patrol_target;
+	bool has_patrol_target;
+
+	int ritual_id;
+	float last_dist_to_target;
+
+	int stuck_ticks;
+
+	Vec3 runaway_target;
+	bool has_runaway_target;
+	int runaway_ticks;
+};
+
+class SESSION;
+
+class AIController {
+public:
+	SESSION* owner;
+	AIBlackboard bb;
+
+	AIController(SESSION* o) : owner(o) {}
+
+	void Update(float dt);
+};
+
 #pragma pack(pop)
 
 class EXP_OVER {
@@ -451,10 +486,8 @@ public:
 	int				id;
 	uint8_t			role;
 	std::mutex		s_lock;
-	union {
-		S_STATE		state;
-		AIState		ai_state;
-	};
+	S_STATE		state;
+	
 	int				prev_remain;
 	int				room_id;
 	union {
@@ -469,28 +502,15 @@ public:
 		Dog		dog;
 		Crow	crow;
 	};
-	// ai
-	std::vector<Vec3>	path;
-	Vec3				lastTargetPos;
-	Vec3				lastSnapPos;
-	int					snapStreak;
-	int					target_id;
-	Vec3				patrol_target;
-	bool				has_patrol_target;
-	int					ritual_id;
-	float				last_dist_to_target;
-	int					stuck_ticks;
-	Vec3				runaway_target;
-	bool				has_runaway_target;
-	int					runaway_ticks;
-
 	void do_recv();
+
+	// ai
+	std::unique_ptr<AIController> ai;
 
 public:
 	SESSION();
 	SESSION(int, uint8_t, int);		// ai
 	SESSION(int , SOCKET );	// player
-	~SESSION();
 
 	void do_send_packet(void* packet);
 
