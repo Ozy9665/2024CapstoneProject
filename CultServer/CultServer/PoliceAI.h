@@ -10,4 +10,3 @@ void PoliceAIWorkerLoop();
 
 template <typename PacketT>
 void BroadcastPoliceAIState(const SESSION& ai, const PacketT* packet);
-

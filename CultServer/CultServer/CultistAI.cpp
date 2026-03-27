@@ -1016,6 +1016,9 @@ void CultistAIWorkerLoop()
             if (session->role != 100)
                 continue;
 
+            if (!session->ai)
+                continue;
+
             if (session->ai->bb.ai_state == AIState::Free)
                 continue;
 

@@ -105,6 +105,55 @@ void KillPoliceAi(int ai_id)
     std::cout << "[Command] AI removed. ID=" << ai_id << "\n";
 }
 
+void PoliceAIWorkerLoop()
+{
+    using clock = std::chrono::steady_clock;
+    auto nextTick = clock::now();
+
+    while (true)
+    {
+        auto now = clock::now();
+
+        std::chrono::duration<float> delta = now - nextTick + std::chrono::duration<float>(fixed_dt);
+        float dt = delta.count();
+
+        if (dt < 0.f) dt = 0.f;
+        if (dt > 0.05f) dt = 0.05f;
+
+        for (int ai_id : g_police_ai_ids)
+        {
+            auto it = g_users.find(ai_id);
+            if (it == g_users.end())
+                continue;
+
+            auto session = it->second;
+            if (session->role != 101)
+                continue;
+
+            if (!session->ai)
+                continue;
+
+            if (session->ai->bb.ai_state == AIState::Free)
+                continue;
+
+            auto& st = session->police_state;
+
+            session->ai->Update(dt);
+            
+            PolicePacket packet{};
+            packet.header = policeHeader;
+            packet.size = sizeof(PolicePacket);
+            packet.state = session->police_state;
+            BroadcastPoliceAIState(*session, &packet);
+        }
+
+        nextTick += std::chrono::duration_cast<clock::duration>(
+            std::chrono::duration<float>(fixed_dt));
+
+        std::this_thread::sleep_until(nextTick);
+    }
+}
+
 template <typename PacketT>
 void BroadcastPoliceAIState(const SESSION& session, const PacketT* packet)
 {
@@ -135,4 +184,20 @@ void BroadcastPoliceAIState(const SESSION& session, const PacketT* packet)
 
         target->do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
     }
+}
+
+void AIController::UpdateBlackboard(float dt) 
+{
+    // BB업데이트
+}
+
+void AIController::RunBehaviorTree(float dt) 
+{
+    // selector 연산 후 함수 실행
+}
+
+void AIController::Update(float dt)
+{
+    UpdateBlackboard(dt);
+    RunBehaviorTree(dt);
 }

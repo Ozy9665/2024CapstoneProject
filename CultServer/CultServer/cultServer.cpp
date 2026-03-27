@@ -1974,7 +1974,8 @@ int main()
 	std::thread room_thread{ RoomWorkerLoop };
 	std::thread timer_thread{ HealTimerLoop };
 	std::thread command_thread{ CommandWorker };
-	std::thread ai_thread{ CultistAIWorkerLoop };
+	std::thread cultist_ai_thread{ CultistAIWorkerLoop };
+	std::thread police_ai_thread{ PoliceAIWorkerLoop };
 	mainLoop(h_iocp);
 
 	g_db_cv.notify_all();
@@ -1983,9 +1984,9 @@ int main()
 	room_thread.join();
 	timer_thread.join();
 	command_thread.join();
-	ai_thread.join();
+	cultist_ai_thread.join();
+	police_ai_thread.join();
 
-	//StopAIWorker();
 	closesocket(g_s_socket);
 	WSACleanup();
 }

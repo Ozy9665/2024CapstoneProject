@@ -460,7 +460,11 @@ public:
 
 	AIController(SESSION* o) : owner(o) {}
 
-	void Update(float dt);
+	void Update(float);
+
+private:
+	void UpdateBlackboard(float);
+	void RunBehaviorTree(float);
 };
 
 #pragma pack(pop)
