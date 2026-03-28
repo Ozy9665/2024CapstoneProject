@@ -1168,3 +1168,8 @@ std::optional<std::pair<FVector, FRotator>> GetMovePoint(int c_id, int targetId)
 
     return std::make_pair(mid, rot);
 }
+
+void CultistAIController::Update(float dt)
+{
+
+}

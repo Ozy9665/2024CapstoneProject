@@ -976,7 +976,7 @@ void baton_sweep(int c_id, HitPacket* p)
 		static_cast<float>(forward.z)
 	};
 
-	double range = 200.0;
+	double range = BATON_RANGE;
 	float mapHitDist;
 	int mapTri;
 
@@ -1055,7 +1055,7 @@ void line_trace(int c_id, HitPacket* p)	 {
 		static_cast<float>(dir.z)
 	};
 
-	double range = (p->Weapon == EWeaponType::Taser) ? 1000.0 : 10000.0;
+	double range = (p->Weapon == EWeaponType::Taser) ? TASER_RANGE : PISTOL_RANGE;
 	float mapHitDist;
 	int mapTri;
 

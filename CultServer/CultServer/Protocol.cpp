@@ -1,5 +1,6 @@
 #include "Protocol.h"
-#include <thread>
+#include "PoliceAI.h"
+#include "CultistAI.h"
 
 FPoliceCharacterState AiState{ -1,
 	baseX, baseY, baseZ,
@@ -61,16 +62,17 @@ SESSION::SESSION(int session_id, uint8_t ai_role, int room_id)
 	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id), 
 	prev_remain{},heal_gauge{}// AI Session
 {
-	ai = std::make_unique<AIController>(this);
 	visible_ids.clear();
 	if (ai_role == 100)   // Cultist AI
 	{
+		ai = std::make_unique<CultistAIController>(this);
 		cultist_state = CultistDummyState;
 		cultist_state.PlayerID = session_id;
 		std::cout << "[AI] Cultist SESSION 持失 ID=" << id << "\n";
 	}
 	else if (ai_role == 101)  // Police AI
 	{
+		ai = std::make_unique<PoliceAIController>(this);
 		police_state = PoliceDummyState;
 		police_state.PlayerID = session_id;
 		std::cout << "[AI] Police SESSION 持失 ID=" << id << "\n";

@@ -428,7 +428,8 @@ struct RitualGagePacket {
 	int gauge;
 };
 
-struct AIBlackboard {
+struct CultistBlackboard 
+{
 	AIState ai_state;
 
 	std::vector<Vec3> path;
@@ -451,21 +452,39 @@ struct AIBlackboard {
 	int runaway_ticks;
 };
 
+struct PoliceBlackboard
+{
+	AIState ai_state;
+
+	std::vector<Vec3> path;
+	Vec3 lastTargetPos;
+	Vec3 lastSnapPos;
+	int snapStreak;
+
+	int target_id;
+
+	Vec3 patrol_target;
+	bool has_patrol_target;
+
+	int ritual_id;
+	float last_dist_to_target;
+
+	float aim_time;
+};
+
 class SESSION;
 
 class AIController {
 public:
 	SESSION* owner;
-	AIBlackboard bb;
+	CultistBlackboard bb;
 
 	AIController(SESSION* o) : owner(o) {}
 
-	void Update(float);
-
-private:
-	void UpdateBlackboard(float);
-	void RunBehaviorTree(float);
+	virtual void Update(float dt) = 0;
 };
+class CultistAIController;
+class PoliceAIController;
 
 #pragma pack(pop)
 
@@ -548,6 +567,9 @@ constexpr FVector kPredefinedLocations[5] = {
 	{  -5730.0f,  1330.0f, -3110.0f }
 };
 
+constexpr double BATON_RANGE{ 200.0 };
+constexpr double TASER_RANGE{ 1000.0 };
+constexpr double PISTOL_RANGE{ 5000.0 };
 
 // ai
 constexpr float RAD_TO_DEG{ 180.f / PI };
@@ -560,4 +582,4 @@ constexpr float ALTAR_TRIGGER_RANGE{ 600.f };
 constexpr float ALTAR_TRIGGER_RANGE_SQ{ ALTAR_TRIGGER_RANGE * ALTAR_TRIGGER_RANGE };
 constexpr float CHASE_START_RANGE{ 1500.f };
 constexpr float CHASE_STOP_RANGE{ 150.f };
-constexpr float ARRIVE_RANGE = 100.f;
+constexpr float ARRIVE_RANGE{ 100.f };

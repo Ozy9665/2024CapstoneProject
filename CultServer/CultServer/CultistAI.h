@@ -25,3 +25,12 @@ struct RunawayCandidate
         return score > other.score;
     }
 };
+
+class CultistAIController : public AIController {
+public:
+    CultistBlackboard bb;
+
+    CultistAIController(SESSION* o) : AIController(o) {}
+
+    void Update(float dt) override;
+};

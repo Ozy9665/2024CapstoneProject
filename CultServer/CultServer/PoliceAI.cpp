@@ -186,17 +186,206 @@ void BroadcastPoliceAIState(const SESSION& session, const PacketT* packet)
     }
 }
 
-void AIController::UpdateBlackboard(float dt) 
+// PoliceAIController
+PoliceAIController::PoliceAIController(SESSION* o)
+    : AIController(o)
+{
+    auto rootSelector = std::make_unique<Selector>();
+
+    // Baton
+    {
+        auto seq = std::make_unique<Sequence>();
+        seq->children.push_back(std::make_unique<CanBatonAttackNode>());
+        seq->children.push_back(std::make_unique<BatonAttackNode>());
+        rootSelector->children.push_back(std::move(seq));
+    }
+
+    // Shoot
+    {
+        auto seq = std::make_unique<Sequence>();
+        seq->children.push_back(std::make_unique<CanShootNode>());
+
+        auto weaponSelector = std::make_unique<Selector>();
+           
+        // Taser
+        {
+            auto taserSeq = std::make_unique<Sequence>();
+            taserSeq->children.push_back(std::make_unique<CanTaserNode>());
+            taserSeq->children.push_back(std::make_unique<TaserShootNode>());
+            weaponSelector->children.push_back(std::move(taserSeq));
+        }
+
+        // Pistol
+        {
+            auto pistolSeq = std::make_unique<Sequence>();
+            pistolSeq->children.push_back(std::make_unique<CanPistolNode>());
+            pistolSeq->children.push_back(std::make_unique<PistolShootNode>());
+            weaponSelector->children.push_back(std::move(pistolSeq));
+        }
+
+        seq->children.push_back(std::move(weaponSelector));
+
+        rootSelector->children.push_back(std::move(seq));
+    }
+
+    // Chase
+    {
+        auto seq = std::make_unique<Sequence>();
+        seq->children.push_back(std::make_unique<CanChaseNode>());
+        seq->children.push_back(std::make_unique<ChaseNode>());
+        rootSelector->children.push_back(std::move(seq));
+    }
+
+    // Patrol (fallback)
+    rootSelector->children.push_back(std::make_unique<PatrolNode>());
+
+    root = std::move(rootSelector);
+}
+
+bool Selector::Run(AIController& ai, float dt)
+{
+    for (auto& c : children)
+    {
+        if (c->Run(ai, dt))
+            return true;
+    }
+    return false;
+}
+
+bool Sequence::Run(AIController& ai, float dt)
+{
+    for (auto& c : children)
+    {
+        if (!c->Run(ai, dt))
+            return false;
+    }
+    return true;
+}
+
+// Condition
+bool CanBatonAttackNode::Run(AIController& ai, float)
+{
+    return static_cast<PoliceAIController&>(ai).CanBatonAttack();
+}
+
+bool CanShootNode::Run(AIController& ai, float)
+{
+    return static_cast<PoliceAIController&>(ai).CanShoot();
+}
+
+bool CanTaserNode::Run(AIController& ai, float)
+{
+    auto& ctrl = static_cast<PoliceAIController&>(ai);
+
+    return ctrl.bb.last_dist_to_target < TASER_RANGE;
+}
+
+bool CanPistolNode::Run(AIController& ai, float)
+{
+    auto& ctrl = static_cast<PoliceAIController&>(ai);
+
+    return ctrl.bb.last_dist_to_target < PISTOL_RANGE;
+}
+
+bool CanChaseNode::Run(AIController& ai, float)
+{
+    return static_cast<PoliceAIController&>(ai).CanChase();
+}
+
+// Action
+bool BatonAttackNode::Run(AIController& ai, float dt)
+{
+    static_cast<PoliceAIController&>(ai).BatonAttack(dt);
+    return true;
+}
+
+bool AimNode::Run(AIController& ai, float dt)
+{
+    auto& ctrl = static_cast<PoliceAIController&>(ai);
+
+    ctrl.bb.aim_time += dt;
+    ctrl.owner->police_state.bIsAiming = true;
+
+    if (ctrl.bb.aim_time < 1.0f)
+        return false;
+
+    return true;
+}
+
+bool TaserShootNode::Run(AIController& ai, float dt)
+{
+    auto& ctrl = static_cast<PoliceAIController&>(ai);
+
+    //if (!HasLineOfSight(ctrl.owner, ctrl.bb.target_id))
+    //    return false;
+
+    ctrl.TaserShoot(dt);
+
+    ctrl.bb.aim_time = 0.f;
+    ctrl.owner->police_state.bIsAiming = false;
+
+    return true;
+}
+
+bool PistolShootNode::Run(AIController& ai, float dt)
+{
+    auto& ctrl = static_cast<PoliceAIController&>(ai);
+
+    //if (!HasLineOfSight(ctrl.owner, ctrl.bb.target_id))
+    //    return false;
+
+    ctrl.PistolShoot(dt);
+
+    ctrl.bb.aim_time = 0.f;
+    ctrl.owner->police_state.bIsAiming = false;
+
+    return true;
+}
+
+bool ChaseNode::Run(AIController& ai, float dt)
+{
+    static_cast<PoliceAIController&>(ai).Chase(dt);
+    return true;
+}
+
+bool PatrolNode::Run(AIController& ai, float dt)
+{
+    static_cast<PoliceAIController&>(ai).Patrol(dt);
+    return true;
+}
+
+// BT
+void PoliceAIController::UpdateBlackboard(float dt)
 {
     // BB업데이트
 }
 
-void AIController::RunBehaviorTree(float dt) 
+void PoliceAIController::RunBehaviorTree(float dt)
 {
-    // selector 연산 후 함수 실행
+    if (root)
+        root->Run(*this, dt);
+    //if (CanBatonAttack())
+    //{
+    //    BatonAttack(dt);
+    //    return;
+    //}
+
+    //if (CanShoot())
+    //{
+    //    Shoot(dt);   // 내부에 aiming 포함
+    //    return;
+    //}
+
+    //if (CanChase())
+    //{
+    //    Chase(dt);
+    //    return;
+    //}
+
+    //Patrol(dt);
 }
 
-void AIController::Update(float dt)
+void PoliceAIController::Update(float dt)
 {
     UpdateBlackboard(dt);
     RunBehaviorTree(dt);
