@@ -466,10 +466,13 @@ struct PoliceBlackboard
 	Vec3 patrol_target;
 	bool has_patrol_target;
 
+	int stuck_ticks;
+
 	int ritual_id;
 	float last_dist_to_target;
 
 	float aim_time;
+	int aim_target;
 };
 
 class SESSION;
@@ -477,7 +480,6 @@ class SESSION;
 class AIController {
 public:
 	SESSION* owner;
-	CultistBlackboard bb;
 
 	AIController(SESSION* o) : owner(o) {}
 
@@ -528,7 +530,7 @@ public:
 	void do_recv();
 
 	// ai
-	std::unique_ptr<AIController> ai;
+	std::shared_ptr<AIController> ai;
 
 public:
 	SESSION();
@@ -583,3 +585,4 @@ constexpr float ALTAR_TRIGGER_RANGE_SQ{ ALTAR_TRIGGER_RANGE * ALTAR_TRIGGER_RANG
 constexpr float CHASE_START_RANGE{ 1500.f };
 constexpr float CHASE_STOP_RANGE{ 150.f };
 constexpr float ARRIVE_RANGE{ 100.f };
+constexpr float STUCK_RANGE{ 5.f };

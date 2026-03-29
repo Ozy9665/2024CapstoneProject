@@ -92,11 +92,6 @@ void KillPoliceAi(int ai_id)
     }
 
     // AI 목록에서 제거
-    session->ai->bb.path.clear();
-    {
-        std::lock_guard<std::mutex> lk(session->s_lock);
-        session->ai->bb.ai_state = AIState::Free;
-    }
     session->resetForReuse();
     {
         std::lock_guard<std::mutex> lk(free_id_mtx);
@@ -130,10 +125,15 @@ void PoliceAIWorkerLoop()
             if (session->role != 101)
                 continue;
 
-            if (!session->ai)
+            auto aiPtr = session->ai;
+            if (!aiPtr)
                 continue;
 
-            if (session->ai->bb.ai_state == AIState::Free)
+            auto* policeAI = dynamic_cast<PoliceAIController*>(aiPtr.get());
+            if (!policeAI)
+                continue;
+
+            if (policeAI->bb.ai_state == AIState::Free)
                 continue;
 
             auto& st = session->police_state;
@@ -186,6 +186,163 @@ void BroadcastPoliceAIState(const SESSION& session, const PacketT* packet)
     }
 }
 
+// Movements
+static float Dist(const Vec3& a, const Vec3& b)
+{
+    float dx = a.x - b.x;
+    float dy = a.y - b.y;
+    float dz = a.z - b.z;
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+static void StopMovement(SESSION& session)
+{
+    session.police_state.VelocityX = 0.f;
+    session.police_state.VelocityY = 0.f;
+    session.police_state.VelocityZ = 0.f;
+    session.police_state.Speed = 0.f;
+}
+
+static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTime)
+{
+    if (!session.ai)
+        return;
+
+    Vec3 cur{
+        session.cultist_state.PositionX,
+        session.cultist_state.PositionY,
+        session.cultist_state.PositionZ
+    };
+
+    if (Dist(cur, targetPos) <= ARRIVE_RANGE)
+    {
+        StopMovement(session);
+        return;
+    }
+
+    auto* policeAI = dynamic_cast<PoliceAIController*>(session.ai.get());
+    if (!policeAI)
+        return;
+
+    float dx = targetPos.x - policeAI->bb.lastTargetPos.x;
+    float dy = targetPos.y - policeAI->bb.lastTargetPos.y;
+    float dist2 = dx * dx + dy * dy;
+
+    if (dist2 > REPATH_DIST * REPATH_DIST)
+    {
+        // 타겟이 충분히 이동, 경로 무효화
+        policeAI->bb.lastTargetPos = targetPos;
+        policeAI->bb.path.clear();
+    }
+
+    if (policeAI->bb.path.empty())
+    {
+        std::vector<int> triPath;
+        if (!NewmapLandmassNavMesh.FindTriPath(cur, targetPos, triPath))
+        {
+            StopMovement(session);
+            policeAI->bb.path.clear();
+            return;
+        }
+
+        std::vector<std::pair<Vec3, Vec3>> portals;
+        NewmapLandmassNavMesh.BuildPortals(triPath, portals);
+
+        if (portals.empty()) {
+            StopMovement(session);
+            return;
+        }
+
+        std::vector<Vec3> smoothPath;
+        if (!NewmapLandmassNavMesh.SmoothPath(cur, targetPos, portals, smoothPath) ||
+            smoothPath.size() < 2)
+        {
+            StopMovement(session);
+            return;
+        }
+        policeAI->bb.path = smoothPath;
+    }
+
+    if (policeAI->bb.path.empty())
+    {
+        StopMovement(session);
+        return;
+    }
+
+    if (policeAI->bb.path.size() < 1)
+    {
+        std::cout << "[FATAL] path empty before next selection\n";
+        StopMovement(session);
+        return;
+    }
+
+    // 다음 목표 노드
+    Vec3 next;
+    if (policeAI->bb.path.size() >= 2) {
+        next = policeAI->bb.path[1];
+    }
+    else {
+        next = policeAI->bb.path[0];
+    }
+
+    Vec3 dir{
+        next.x - cur.x,
+        next.y - cur.y,
+        0.f
+        // next.z - cur.z
+    };
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+    // float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+    const float speed = 300.f; // 600cm/s
+    if (len <= speed * deltaTime)
+    {
+        policeAI->bb.path.erase(policeAI->bb.path.begin());
+
+        if (policeAI->bb.path.empty())
+        {
+            StopMovement(session);
+            return;
+        }
+
+        next = policeAI->bb.path[0];
+
+        dir.x = next.x - cur.x;
+        dir.y = next.y - cur.y;
+        len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+        std::cout << " if (len <= speed * deltaTime)" << std::endl;
+    }
+
+    if (len < 1e-3f)
+    {
+        StopMovement(session);
+        return;
+    }
+
+    dir.x /= len;
+    dir.y /= len;
+    // dir.z /= len;
+
+    // 위치 갱신
+    session.cultist_state.PositionX += dir.x * speed * deltaTime;
+    session.cultist_state.PositionY += dir.y * speed * deltaTime;
+    // ai.cultist_state.PositionZ += dir.z * speed * deltaTime;
+
+    session.cultist_state.VelocityX = dir.x * speed;
+    session.cultist_state.VelocityY = dir.y * speed;
+    session.cultist_state.VelocityZ = 0.f;
+    session.cultist_state.Speed = std::sqrt(
+        session.cultist_state.VelocityX * session.cultist_state.VelocityX +
+        session.cultist_state.VelocityY * session.cultist_state.VelocityY
+    );
+
+    // state 회전 갱신
+    if (len > 1e-3f)
+    {
+        session.cultist_state.RotationYaw =
+            std::atan2(dir.y, dir.x) * RAD_TO_DEG;
+    }
+}
+
 // PoliceAIController
 PoliceAIController::PoliceAIController(SESSION* o)
     : AIController(o)
@@ -204,7 +361,7 @@ PoliceAIController::PoliceAIController(SESSION* o)
     {
         auto seq = std::make_unique<Sequence>();
         seq->children.push_back(std::make_unique<CanShootNode>());
-
+        seq->children.push_back(std::make_unique<AimNode>());
         auto weaponSelector = std::make_unique<Selector>();
            
         // Taser
@@ -224,7 +381,6 @@ PoliceAIController::PoliceAIController(SESSION* o)
         }
 
         seq->children.push_back(std::move(weaponSelector));
-
         rootSelector->children.push_back(std::move(seq));
     }
 
@@ -262,7 +418,12 @@ bool Sequence::Run(AIController& ai, float dt)
     return true;
 }
 
-// Condition
+// Condition Node
+bool CanChaseNode::Run(AIController& ai, float)
+{
+    return static_cast<PoliceAIController&>(ai).CanChase();
+}
+
 bool CanBatonAttackNode::Run(AIController& ai, float)
 {
     return static_cast<PoliceAIController&>(ai).CanBatonAttack();
@@ -275,24 +436,28 @@ bool CanShootNode::Run(AIController& ai, float)
 
 bool CanTaserNode::Run(AIController& ai, float)
 {
-    auto& ctrl = static_cast<PoliceAIController&>(ai);
-
-    return ctrl.bb.last_dist_to_target < TASER_RANGE;
+    return static_cast<PoliceAIController&>(ai).CanTaser();
 }
 
 bool CanPistolNode::Run(AIController& ai, float)
 {
-    auto& ctrl = static_cast<PoliceAIController&>(ai);
-
-    return ctrl.bb.last_dist_to_target < PISTOL_RANGE;
+   return static_cast<PoliceAIController&>(ai).CanPistol();
 }
 
-bool CanChaseNode::Run(AIController& ai, float)
+
+// Action Node
+bool PatrolNode::Run(AIController& ai, float dt)
 {
-    return static_cast<PoliceAIController&>(ai).CanChase();
+    static_cast<PoliceAIController&>(ai).Patrol(dt);
+    return true;
 }
 
-// Action
+bool ChaseNode::Run(AIController& ai, float dt)
+{
+    static_cast<PoliceAIController&>(ai).Chase(dt);
+    return true;
+}
+
 bool BatonAttackNode::Run(AIController& ai, float dt)
 {
     static_cast<PoliceAIController&>(ai).BatonAttack(dt);
@@ -302,6 +467,20 @@ bool BatonAttackNode::Run(AIController& ai, float dt)
 bool AimNode::Run(AIController& ai, float dt)
 {
     auto& ctrl = static_cast<PoliceAIController&>(ai);
+
+    if (ctrl.bb.aim_target == -1)
+    {
+        ctrl.bb.aim_target = ctrl.bb.target_id;
+        ctrl.bb.aim_time = 0.f;
+    }
+
+    //if (!HasLineOfSight(ctrl.owner, ctrl.bb.aim_target))
+    //{
+    //    ctrl.bb.aim_target = -1;
+    //    ctrl.bb.aim_time = 0.f;
+    //    ctrl.owner->police_state.bIsAiming = false;
+    //    return false;
+    //}
 
     ctrl.bb.aim_time += dt;
     ctrl.owner->police_state.bIsAiming = true;
@@ -316,9 +495,6 @@ bool TaserShootNode::Run(AIController& ai, float dt)
 {
     auto& ctrl = static_cast<PoliceAIController&>(ai);
 
-    //if (!HasLineOfSight(ctrl.owner, ctrl.bb.target_id))
-    //    return false;
-
     ctrl.TaserShoot(dt);
 
     ctrl.bb.aim_time = 0.f;
@@ -331,9 +507,6 @@ bool PistolShootNode::Run(AIController& ai, float dt)
 {
     auto& ctrl = static_cast<PoliceAIController&>(ai);
 
-    //if (!HasLineOfSight(ctrl.owner, ctrl.bb.target_id))
-    //    return false;
-
     ctrl.PistolShoot(dt);
 
     ctrl.bb.aim_time = 0.f;
@@ -342,16 +515,159 @@ bool PistolShootNode::Run(AIController& ai, float dt)
     return true;
 }
 
-bool ChaseNode::Run(AIController& ai, float dt)
+
+// Condition
+bool PoliceAIController::CanChase()
 {
-    static_cast<PoliceAIController&>(ai).Chase(dt);
-    return true;
+    return bb.target_id != -1;
 }
 
-bool PatrolNode::Run(AIController& ai, float dt)
+bool PoliceAIController::CanBatonAttack()
 {
-    static_cast<PoliceAIController&>(ai).Patrol(dt);
-    return true;
+    return bb.target_id != -1 &&
+        bb.last_dist_to_target < BATON_RANGE;
+}
+
+bool PoliceAIController::CanShoot()
+{
+    if (bb.aim_target != -1)
+        return true;
+
+    // line trace 추가
+    return bb.last_dist_to_target < TASER_RANGE;
+}
+
+bool PoliceAIController::CanTaser()
+{
+    // line trace 추가
+    return bb.last_dist_to_target < TASER_RANGE;
+}
+
+bool PoliceAIController::CanPistol()
+{
+    // line trace 추가
+    return bb.last_dist_to_target < PISTOL_RANGE;
+}
+
+// Action
+void PoliceAIController::Patrol(float dt)
+{
+    Vec3 cur{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    // 목표 없으면 생성
+    if (!bb.has_patrol_target)
+    {
+        int curTri = NewmapLandmassNavMesh.FindContainingTriangle(cur);
+        if (curTri < 0)
+            return;
+
+        int randomTri = NewmapLandmassNavMesh.GetRandomTriangle(curTri, 10);
+        if (randomTri < 0)
+            return;
+
+        bb.patrol_target = NewmapLandmassNavMesh.GetTriCenter(randomTri);
+        bb.has_patrol_target = true;
+
+        bb.stuck_ticks = 0;
+        bb.last_dist_to_target = FLT_MAX;
+        bb.path.clear();
+    }
+
+    float dist = Dist(cur, bb.patrol_target);
+
+    // 도착
+    if (dist < CHASE_STOP_RANGE)
+    {
+        bb.has_patrol_target = false;
+        bb.path.clear();
+        return;
+    }
+
+    // stuck 체크
+    if (dist > bb.last_dist_to_target - STUCK_RANGE)
+    {
+        bb.stuck_ticks++;
+    }
+    else 
+    {
+        bb.stuck_ticks = 0;
+    }
+    bb.last_dist_to_target = dist;
+
+    if (bb.stuck_ticks > 60)
+    {
+        bb.has_patrol_target = false;
+        bb.path.clear();
+        return;
+    }
+
+    MoveAlongPath(*owner, bb.patrol_target, dt);
+}
+
+void PoliceAIController::Chase(float dt)
+{
+    if (bb.target_id < 0)
+    {
+        bb.path.clear();
+        StopMovement(*owner);
+        return;
+    }
+
+    auto it = g_users.find(bb.target_id);
+    if (it == g_users.end())
+    {
+        bb.target_id = -1;
+        bb.path.clear();
+        return;
+    }
+
+    auto target = it->second;
+
+    Vec3 selfPos{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    Vec3 targetPos{
+        target->cultist_state.PositionX,
+        target->cultist_state.PositionY,
+        target->cultist_state.PositionZ
+    };
+
+    float dist = Dist(selfPos, targetPos);
+
+    if (dist <= CHASE_STOP_RANGE)
+    {
+        bb.path.clear();
+        StopMovement(*owner);
+        return;
+    }
+
+    MoveAlongPath(*owner, targetPos, dt);
+}
+
+void PoliceAIController::BatonAttack(float dt)
+{
+    // 공격 함수 추가
+    owner->police_state.bIsAttacking = true;
+    StopMovement(*owner);
+}
+
+void PoliceAIController::TaserShoot(float dt)
+{
+    // 공격 함수 추가
+    owner->police_state.bIsShooting = true;
+}
+
+void PoliceAIController::PistolShoot(float dt)
+{
+    // 공격 함수 추가
+    owner->police_state.bIsShooting = true;
 }
 
 // BT
@@ -364,25 +680,6 @@ void PoliceAIController::RunBehaviorTree(float dt)
 {
     if (root)
         root->Run(*this, dt);
-    //if (CanBatonAttack())
-    //{
-    //    BatonAttack(dt);
-    //    return;
-    //}
-
-    //if (CanShoot())
-    //{
-    //    Shoot(dt);   // 내부에 aiming 포함
-    //    return;
-    //}
-
-    //if (CanChase())
-    //{
-    //    Chase(dt);
-    //    return;
-    //}
-
-    //Patrol(dt);
 }
 
 void PoliceAIController::Update(float dt)

@@ -109,7 +109,6 @@ public:
 
     // Action
     void BatonAttack(float dt);
-    void Shoot(float dt);
     void TaserShoot(float dt);
     void PistolShoot(float dt);
     void Chase(float dt);

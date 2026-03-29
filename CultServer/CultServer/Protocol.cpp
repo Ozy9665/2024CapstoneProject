@@ -115,9 +115,13 @@ bool SESSION::isValidSocket() const
 
 void SESSION::setAIState(const AIState st)
 {
-	std::lock_guard<std::mutex> lk(s_lock);
 	if (ai) {
-		ai->bb.ai_state = st;
+		auto* cultistAI = dynamic_cast<CultistAIController*>(ai.get());
+		if (!cultistAI)
+			return;
+
+		std::lock_guard<std::mutex> lk(s_lock);
+		cultistAI->bb.ai_state = st;
 	}
 }
 
