@@ -1,7 +1,6 @@
 #define NOMINMAX
 
 #include "PoliceAI.h"
-#include "map.h"
 #include <thread>
 #include <array>
 #include <cmath>
@@ -10,13 +9,13 @@
 #include <concurrent_unordered_map.h>
 #include <mutex>
 #include <queue>
+#include "map.h"
+#include "MapManager.h"
 
 using namespace std;
 extern concurrency::concurrent_unordered_map<int, std::shared_ptr<SESSION>> g_users;
 extern concurrency::concurrent_unordered_set<int> g_police_ai_ids;
 extern std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
-extern MAP NewmapLandmassMap;
-extern NAVMESH NewmapLandmassNavMesh;
 extern concurrency::concurrent_priority_queue<TIMER_EVENT> timer_queue;
 extern std::array<std::array<Altar, ALTAR_PER_ROOM>, MAX_ROOM> g_altars;
 extern std::mutex g_room_mtx;
@@ -237,8 +236,12 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
 
     if (policeAI->bb.path.empty())
     {
+        NAVMESH* nav = GetNavMesh(session.room_id);
+        if (!nav)
+            return;
+
         std::vector<int> triPath;
-        if (!NewmapLandmassNavMesh.FindTriPath(cur, targetPos, triPath))
+        if (!nav->FindTriPath(cur, targetPos, triPath))
         {
             StopMovement(session);
             policeAI->bb.path.clear();
@@ -246,7 +249,7 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
         }
 
         std::vector<std::pair<Vec3, Vec3>> portals;
-        NewmapLandmassNavMesh.BuildPortals(triPath, portals);
+        nav->BuildPortals(triPath, portals);
 
         if (portals.empty()) {
             StopMovement(session);
@@ -254,8 +257,7 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
         }
 
         std::vector<Vec3> smoothPath;
-        if (!NewmapLandmassNavMesh.SmoothPath(cur, targetPos, portals, smoothPath) ||
-            smoothPath.size() < 2)
+        if (!nav->SmoothPath(cur, targetPos, portals, smoothPath) || smoothPath.size() < 2)
         {
             StopMovement(session);
             return;
@@ -552,6 +554,10 @@ bool PoliceAIController::CanPistol()
 // Action
 void PoliceAIController::Patrol(float dt)
 {
+    NAVMESH* nav = GetNavMesh(owner->room_id);
+    if (!nav)
+        return;
+
     Vec3 cur{
         owner->police_state.PositionX,
         owner->police_state.PositionY,
@@ -561,15 +567,15 @@ void PoliceAIController::Patrol(float dt)
     // 목표 없으면 생성
     if (!bb.has_patrol_target)
     {
-        int curTri = NewmapLandmassNavMesh.FindContainingTriangle(cur);
+        int curTri = nav->FindContainingTriangle(cur);
         if (curTri < 0)
             return;
 
-        int randomTri = NewmapLandmassNavMesh.GetRandomTriangle(curTri, 10);
+        int randomTri = nav->GetRandomTriangle(curTri, 10);
         if (randomTri < 0)
             return;
 
-        bb.patrol_target = NewmapLandmassNavMesh.GetTriCenter(randomTri);
+        bb.patrol_target = nav->GetTriCenter(randomTri);
         bb.has_patrol_target = true;
 
         bb.stuck_ticks = 0;

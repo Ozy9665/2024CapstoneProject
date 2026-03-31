@@ -586,3 +586,4 @@ constexpr float CHASE_START_RANGE{ 1500.f };
 constexpr float CHASE_STOP_RANGE{ 150.f };
 constexpr float ARRIVE_RANGE{ 100.f };
 constexpr float STUCK_RANGE{ 5.f };
+

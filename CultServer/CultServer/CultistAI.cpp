@@ -1,7 +1,6 @@
 #define NOMINMAX
 
 #include "CultistAI.h"
-#include "map.h"
 #include <chrono>
 #include <thread>
 #include <array>
@@ -12,13 +11,13 @@
 #include <random>
 #include <mutex>
 #include <queue>
+#include "map.h"
+#include "MapManager.h"
 
 using namespace std;
 extern concurrency::concurrent_unordered_map<int, std::shared_ptr<SESSION>> g_users;
 extern concurrency::concurrent_unordered_set<int> g_cultist_ai_ids;
 extern std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
-extern MAP NewmapLandmassMap;
-extern NAVMESH NewmapLandmassNavMesh;
 extern concurrency::concurrent_priority_queue<TIMER_EVENT> timer_queue;
 extern std::array<std::array<Altar, ALTAR_PER_ROOM>, MAX_ROOM> g_altars;
 extern std::mutex g_room_mtx;
@@ -152,8 +151,12 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
 
     if (cultistAI->bb.path.empty())
     {
+        NAVMESH* nav = GetNavMesh(session.room_id);
+        if (!nav) 
+            return;
+
         std::vector<int> triPath;
-        if (!NewmapLandmassNavMesh.FindTriPath(cur, targetPos, triPath))
+        if (!nav->FindTriPath(cur, targetPos, triPath))
         {
             StopMovement(session);
             cultistAI->bb.path.clear();
@@ -161,7 +164,7 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
         }
 
         std::vector<std::pair<Vec3, Vec3>> portals;
-        NewmapLandmassNavMesh.BuildPortals(triPath, portals);
+        nav->BuildPortals(triPath, portals);
 
         if (portals.empty()) {
             StopMovement(session);
@@ -169,8 +172,7 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
         }
 
         std::vector<Vec3> smoothPath;
-        if (!NewmapLandmassNavMesh.SmoothPath(cur, targetPos, portals, smoothPath) ||
-            smoothPath.size() < 2)
+        if (!nav->SmoothPath(cur, targetPos, portals, smoothPath) || smoothPath.size() < 2)
         {
             StopMovement(session);
             return;
@@ -576,6 +578,10 @@ static void ExecuteAIState(SESSION& session, float dt)
     {
     case AIState::Patrol:
     {
+        NAVMESH* nav = GetNavMesh(session.room_id);
+        if (!nav) 
+            return;
+
         Vec3 cur{
             session.cultist_state.PositionX,
             session.cultist_state.PositionY,
@@ -585,16 +591,16 @@ static void ExecuteAIState(SESSION& session, float dt)
         // 목적지 없으면 새로 생성
         if (!cultistAI->bb.has_patrol_target)
         {
-            int curTri = NewmapLandmassNavMesh.FindContainingTriangle(cur);
+            int curTri = nav->FindContainingTriangle(cur);
             if (curTri < 0)
                 return;
 
             // 랜덤 이웃 삼각형 선택
-            int randomTri = NewmapLandmassNavMesh.GetRandomTriangle(curTri, 10);
+            int randomTri = nav->GetRandomTriangle(curTri, 10);
             if (randomTri < 0)
                 return;
 
-            Vec3 randomPoint = NewmapLandmassNavMesh.GetTriCenter(randomTri);
+            Vec3 randomPoint = nav->GetTriCenter(randomTri);
 
             cultistAI->bb.patrol_target = randomPoint;
             cultistAI->bb.has_patrol_target = true;
@@ -690,6 +696,12 @@ static void ExecuteAIState(SESSION& session, float dt)
     }
     case AIState::Runaway:
     {
+        MAP* map = GetMap(session.room_id);
+        if (!map)
+            return;
+        NAVMESH* nav = GetNavMesh(session.room_id);
+        if (!nav) 
+            return;
         // EQS Score =
         //    0.30 * 거리 점수
         //    + 0.20 * 방향 점수
@@ -731,7 +743,7 @@ static void ExecuteAIState(SESSION& session, float dt)
         static std::default_random_engine dre{ std::random_device()() };
         std::uniform_real_distribution<float> angleDist(0.f, 2.f * PI);
 
-        int selfTri = NewmapLandmassNavMesh.FindContainingTriangle(selfPos);
+        int selfTri = nav->FindContainingTriangle(selfPos);
         if (selfTri < 0) {
             std::cout << "if (selfTri < 0)" << std::endl;
             return;
@@ -750,7 +762,7 @@ static void ExecuteAIState(SESSION& session, float dt)
                 selfPos.z
             };
 
-            int tri = NewmapLandmassNavMesh.FindContainingTriangle(candidate);
+            int tri = nav->FindContainingTriangle(candidate);
             if (tri < 0)
                 continue;
 
@@ -805,11 +817,12 @@ static void ExecuteAIState(SESSION& session, float dt)
                 float hitDist;
                 int hitTri;
 
-                if (NewmapLandmassMap.LineTrace(ray, len, hitDist, hitTri))
+                if (map && map->LineTrace(ray, len, hitDist, hitTri)) {
                     score += 500.f * 0.15f; // 벽 뒤면 보너스
+                }
             }
 
-            if (NewmapLandmassNavMesh.triComponentId[selfTri] != NewmapLandmassNavMesh.triComponentId[tri])
+            if (nav->triComponentId[selfTri] != nav->triComponentId[tri])
             {
                 continue;
             }
@@ -822,7 +835,7 @@ static void ExecuteAIState(SESSION& session, float dt)
         for (int i = 0; i < pathTestCount; ++i)
         {
             std::vector<int> triPath;
-            if (!NewmapLandmassNavMesh.FindTriPath(selfPos, candidates[i].pos, triPath))
+            if (!nav->FindTriPath(selfPos, candidates[i].pos, triPath))
                 continue;
 
             // NavMesh 경로 점수

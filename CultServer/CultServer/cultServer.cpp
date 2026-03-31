@@ -26,6 +26,7 @@
 #include "CultistAI.h"
 #include "db.h"
 #include "map.h"
+#include "MapManager.h"
 
 #pragma comment(lib, "MSWSock.lib")
 #pragma comment (lib, "WS2_32.LIB")
@@ -980,7 +981,8 @@ void baton_sweep(int c_id, HitPacket* p)
 	float mapHitDist;
 	int mapTri;
 
-	if (NewmapLandmassMap.LineTrace(ray, static_cast<float>(range), mapHitDist, mapTri))
+	MAP* map = GetMap(room);
+	if (map && map->LineTrace(ray, static_cast<float>(range), mapHitDist, mapTri))
 	{
 		range = mapHitDist;
 	}
@@ -1059,7 +1061,8 @@ void line_trace(int c_id, HitPacket* p)	 {
 	float mapHitDist;
 	int mapTri;
 
-	if (NewmapLandmassMap.LineTrace(ray, static_cast<float>(range), mapHitDist, mapTri))
+	MAP* map = GetMap(room);
+	if (map && map->LineTrace(ray, static_cast<float>(range), mapHitDist, mapTri))
 	{
 		range = mapHitDist;
 	}
@@ -1903,13 +1906,14 @@ void mainLoop(HANDLE h_iocp) {
 
 int main()
 {
+	// map
+	NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset);
 	// navmesh
 	NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset);
-	// map
-	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset))
-	{
-		std::cout << "MAP load failed\n";
-		return 1;
+
+	// Level3Map.Load("", );
+	if (!Level3NavMesh.Load("Level_3 - 03.29Overall.obj", NewmapLandmassOffset)) {
+		std::cout << "Level_3 - 03.29Overall.obj load fail" << std::endl;
 	}
 
 	HANDLE h_iocp;
