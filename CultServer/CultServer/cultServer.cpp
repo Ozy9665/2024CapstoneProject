@@ -649,8 +649,15 @@ void CommandWorker()
 				std::cout << "[Command] Usage: kill <ai_id>\n";
 				continue;
 			}
-
-			KillCultistAi(ai_id);
+			if (g_users[ai_id]->role == 100) {
+				KillCultistAi(ai_id);
+			}
+			else if (g_users[ai_id]->role == 101) {
+				KillPoliceAi(ai_id);
+			}
+			else {
+				std::cout << "invalid ai_id: " << ai_id << " role: " << static_cast<int>(g_users[ai_id]->role) << std::endl;
+			}
 			
 		}
 		else if (cmd == "exit")

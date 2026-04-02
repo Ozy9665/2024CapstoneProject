@@ -345,6 +345,58 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
     }
 }
 
+static bool HasLineOfSight(SESSION* session, int target_id)
+{
+    auto it = g_users.find(target_id);
+    if (it == g_users.end())
+        return false;
+
+    auto target = it->second;
+
+    Vec3 start{
+        session->police_state.PositionX,
+        session->police_state.PositionY,
+        session->police_state.PositionZ
+    };
+
+    Vec3 end{
+        target->cultist_state.PositionX,
+        target->cultist_state.PositionY,
+        target->cultist_state.PositionZ
+    };
+
+    Vec3 dir{
+        end.x - start.x,
+        end.y - start.y,
+        end.z - start.z
+    };
+
+    float dist = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+    if (dist < 1e-3f)
+        return true;
+
+    dir.x /= dist;
+    dir.y /= dist;
+    dir.z /= dist;
+
+    Ray ray;
+    ray.start = start;
+    ray.dir = dir;
+
+    float hitDist;
+    int hitTri;
+
+    MAP* map = GetMap(session->room_id);
+
+    // 장애물에 먼저 맞으면 시야 차단
+    if (map && map->LineTrace(ray, dist, hitDist, hitTri))
+    {
+        return false;
+    }
+
+    return true;
+}
+
 // PoliceAIController
 PoliceAIController::PoliceAIController(SESSION* o)
     : AIController(o)
@@ -446,7 +498,6 @@ bool CanPistolNode::Run(AIController& ai, float)
    return static_cast<PoliceAIController&>(ai).CanPistol();
 }
 
-
 // Action Node
 bool PatrolNode::Run(AIController& ai, float dt)
 {
@@ -476,13 +527,13 @@ bool AimNode::Run(AIController& ai, float dt)
         ctrl.bb.aim_time = 0.f;
     }
 
-    //if (!HasLineOfSight(ctrl.owner, ctrl.bb.aim_target))
-    //{
-    //    ctrl.bb.aim_target = -1;
-    //    ctrl.bb.aim_time = 0.f;
-    //    ctrl.owner->police_state.bIsAiming = false;
-    //    return false;
-    //}
+    if (!HasLineOfSight(ctrl.owner, ctrl.bb.aim_target))
+    {
+        ctrl.bb.aim_target = -1;
+        ctrl.bb.aim_time = 0.f;
+        ctrl.owner->police_state.bIsAiming = false;
+        return false;
+    }
 
     ctrl.bb.aim_time += dt;
     ctrl.owner->police_state.bIsAiming = true;
@@ -517,7 +568,6 @@ bool PistolShootNode::Run(AIController& ai, float dt)
     return true;
 }
 
-
 // Condition
 bool PoliceAIController::CanChase()
 {
@@ -535,20 +585,20 @@ bool PoliceAIController::CanShoot()
     if (bb.aim_target != -1)
         return true;
 
-    // line trace 추가
-    return bb.last_dist_to_target < TASER_RANGE;
+    return bb.target_id != -1 &&
+        bb.last_dist_to_target < TASER_RANGE;
 }
 
 bool PoliceAIController::CanTaser()
 {
-    // line trace 추가
-    return bb.last_dist_to_target < TASER_RANGE;
+    return bb.target_id != -1 &&
+        bb.last_dist_to_target < TASER_RANGE;
 }
 
 bool PoliceAIController::CanPistol()
 {
-    // line trace 추가
-    return bb.last_dist_to_target < PISTOL_RANGE;
+    return bb.target_id != -1 &&
+        bb.last_dist_to_target < PISTOL_RANGE;
 }
 
 // Action
@@ -679,7 +729,51 @@ void PoliceAIController::PistolShoot(float dt)
 // BT
 void PoliceAIController::UpdateBlackboard(float dt)
 {
-    // BB업데이트
+    // target 유효성 체크
+    if (bb.target_id != -1)
+    {
+        auto it = g_users.find(bb.target_id);
+        if (it == g_users.end())
+        {
+            bb.target_id = -1;
+        }
+    }
+
+    // 거리 업데이트
+    if (bb.target_id != -1)
+    {
+        auto target = g_users[bb.target_id];
+
+        Vec3 self{
+            owner->police_state.PositionX,
+            owner->police_state.PositionY,
+            owner->police_state.PositionZ
+        };
+
+        Vec3 targetPos{
+            target->cultist_state.PositionX,
+            target->cultist_state.PositionY,
+            target->cultist_state.PositionZ
+        };
+
+        bb.last_dist_to_target = Dist(self, targetPos);
+    }
+    else
+    {
+        bb.last_dist_to_target = FLT_MAX;
+    }
+
+    // aim_target 유지 검증
+    if (bb.aim_target != -1)
+    {
+        auto it = g_users.find(bb.aim_target);
+        if (it == g_users.end())
+        {
+            bb.aim_target = -1;
+            bb.aim_time = 0.f;
+            owner->police_state.bIsAiming = false;
+        }
+    }
 }
 
 void PoliceAIController::RunBehaviorTree(float dt)
