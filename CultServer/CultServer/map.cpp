@@ -6,9 +6,10 @@
 #include <queue>
 #include <random>
 
-bool MAP::Load(const std::string& objPath, const Vec3& MapOffset)
+bool MAP::Load(const std::string& objPath, const Vec3& MapOffset, const Vec3& rot)
 {
     offset = MapOffset;
+    rotation = rot;
     vertices.clear();
     triangles.clear();
     tris.clear();
@@ -326,13 +327,63 @@ bool MAP::LineTrace(const Ray& worldRay, float maxDist, float& hitDist, int& hit
     return hitTriIndex >= 0;
 }
 
+Vec3 MAP::ApplyInverseRotation(const Vec3& v) const
+{
+    // degree → rad
+    float rx = -rotation.x * DEG_TO_RAD;
+    float ry = -rotation.y * DEG_TO_RAD;
+    float rz = -rotation.z * DEG_TO_RAD;
+
+    Vec3 r = v;
+
+    // X 회전
+    {
+        float c = cosf(rx);
+        float s = sinf(rx);
+        r = {
+            r.x,
+            r.y * c - r.z * s,
+            r.y * s + r.z * c
+        };
+    }
+
+    // Y 회전
+    {
+        float c = cosf(ry);
+        float s = sinf(ry);
+        r = {
+            r.x * c + r.z * s,
+            r.y,
+            -r.x * s + r.z * c
+        };
+    }
+
+    // Z 회전
+    {
+        float c = cosf(rz);
+        float s = sinf(rz);
+        r = {
+            r.x * c - r.y * s,
+            r.x * s + r.y * c,
+            r.z
+        };
+    }
+
+    return r;
+}
+
 Ray MAP::ToLocalRay(const Ray& worldRay) const
 {
     Ray local;
-    local.start.x = worldRay.start.x - offset.x;
-    local.start.y = worldRay.start.y - offset.y;
-    local.start.z = worldRay.start.z - offset.z;
-    local.dir = worldRay.dir;
+
+    Vec3 p{
+        worldRay.start.x - offset.x,
+        worldRay.start.y - offset.y,
+        worldRay.start.z - offset.z
+    };
+
+    local.start = ApplyInverseRotation(p);
+    local.dir = ApplyInverseRotation(worldRay.dir);
 
     return local;
 }

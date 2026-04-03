@@ -132,6 +132,9 @@ struct Ray {
 };
 
 constexpr Vec3 NewmapLandmassOffset{ -4280.f, 13000.f, -3120.f };
+constexpr Vec3 NewmapLandmassLotate{ 0.f, 0.f, 0.f };
+constexpr Vec3 Level3MapOffset{ 6840.f, 52540.f, 0.f };
+constexpr Vec3 Level3MapLotate{ 90.f, 0.f, 0.f };
 
 enum S_STATE { ST_FREE, ST_ROOM, ST_INGAME, ST_DISABLE };
 enum AIState { Free, Patrol, Chase, Runaway, Ritual, Heal, Die };
@@ -575,6 +578,7 @@ constexpr double PISTOL_RANGE{ 5000.0 };
 
 // ai
 constexpr float RAD_TO_DEG{ 180.f / PI };
+constexpr float DEG_TO_RAD{ PI / 180.f };
 constexpr float fixed_dt{ 1.0f / 60.0f };
 constexpr float pushDist{ 120.f };
 constexpr float REPATH_DIST{ 200.f };

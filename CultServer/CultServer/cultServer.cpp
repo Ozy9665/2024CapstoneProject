@@ -1914,13 +1914,32 @@ void mainLoop(HANDLE h_iocp) {
 int main()
 {
 	// map
-	NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset);
-	// navmesh
-	NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset);
+	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset, NewmapLandmassLotate)) {
+		std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ load fail" << std::endl;
+	}
+	else{
+		std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ loaded" << std::endl;
+	}
+	if (!Level3Map.Load("SM_Level3_MERGED_StaticMeshActor_281.OBJ", Level3MapOffset, Level3MapLotate)) {
+		std::cout << "SM_Level3_MERGED_StaticMeshActor_281.OBJ load fail" << std::endl;
+	}
+	else {
+		std::cout << "SM_Level3_MERGED_StaticMeshActor_281.OBJ loaded" << std::endl;
 
-	// Level3Map.Load("", );
-	if (!Level3NavMesh.Load("Level_3 - 03.29Overall.obj", NewmapLandmassOffset)) {
-		std::cout << "Level_3 - 03.29Overall.obj load fail" << std::endl;
+	}
+
+	// navmesh
+	if (!NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset)) {
+		std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj load fail" << std::endl;
+	}
+	else {
+		std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
+	}
+	if (!Level3NavMesh.Load("0329Level3MergeStair.obj", Level3MapOffset)) {
+		std::cout << "0329Level3MergeStair.obj load fail" << std::endl;
+	}
+	else {
+		std::cout << "0329Level3MergeStair.obj loaded" << std::endl;
 	}
 
 	HANDLE h_iocp;

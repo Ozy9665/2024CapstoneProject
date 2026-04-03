@@ -28,7 +28,7 @@ struct NodeCompare
 
 class MAP {
 public:
-    virtual bool Load(const std::string&, const Vec3&);
+    bool Load(const std::string&, const Vec3&, const Vec3& rot);
 
     bool LineTrace(
         const Ray& worldRay,
@@ -65,6 +65,7 @@ protected:
     float cellSize{ 100.f };
     float invCell{ 1.0f / cellSize };
     Vec3 offset;
+    Vec3 rotation;
 
     bool LoadOBJ(const std::string&,
         std::vector<MapVertex>&,
@@ -81,6 +82,7 @@ protected:
     void BuildTriangles();
     void BuildTriangleAABBs();
     void BuildSpatialGrid();
+    Vec3 ApplyInverseRotation(const Vec3&) const;
     Ray ToLocalRay(const Ray& worldRay) const;
     bool CanMove(const Vec3&, const Vec3&) const;
     int WorldToGridX(float x) const;
@@ -149,7 +151,7 @@ struct Triangle
 
 class NAVMESH : public MAP {
 public:
-    bool Load(const std::string&, const Vec3&) override;
+    bool Load(const std::string&, const Vec3&);
     bool FindTriPath(const Vec3&, const Vec3&, std::vector<int>&);
     Vec3 GetTriCenter(int) const;
     void BuildPortals(const std::vector<int>& triPath,
