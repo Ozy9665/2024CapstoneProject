@@ -76,7 +76,6 @@ public:
 	void UpdatePoliceState(ACharacter* Character, const FPoliceCharacterState&);
 	void UpdatePoliceAnimInstanceProperties(UAnimInstance*, const FPoliceCharacterState&);
 	void SpawnPoliceCharacter(const int);
-	void SpawnPoliceAICharacter(const unsigned char);
 	void ProcessParticleData(const char*);
 	void SpawnImpactEffect(const FImpactPacket&);
 	void HideCharacter(int, bool);

@@ -433,49 +433,48 @@ struct RitualGagePacket {
 
 struct CultistBlackboard 
 {
-	AIState ai_state;
+	AIState ai_state = AIState::Patrol;
 
-	std::vector<Vec3> path;
-	Vec3 lastTargetPos;
-	Vec3 lastSnapPos;
-	int snapStreak;
+	std::vector<Vec3> path{};
+	Vec3 lastTargetPos{};
+	Vec3 lastSnapPos{};
+	int snapStreak{};
 
-	int target_id;
+	int target_id = -1;
 
-	Vec3 patrol_target;
-	bool has_patrol_target;
+	Vec3 patrol_target{};
+	bool has_patrol_target = false;
 
-	int ritual_id;
-	float last_dist_to_target;
+	int ritual_id{};
+	float last_dist_to_target = FLT_MAX;
 
-	int stuck_ticks;
+	int stuck_ticks{};
 
-	Vec3 runaway_target;
-	bool has_runaway_target;
-	int runaway_ticks;
+	Vec3 runaway_target{};
+	bool has_runaway_target{};
+	int runaway_ticks{};
 };
 
 struct PoliceBlackboard
 {
-	AIState ai_state;
+	AIState ai_state = AIState::Patrol;
 
-	std::vector<Vec3> path;
-	Vec3 lastTargetPos;
-	Vec3 lastSnapPos;
-	int snapStreak;
+	std::vector<Vec3> path{};
+	Vec3 lastTargetPos{};
+	Vec3 lastSnapPos{};
+	int snapStreak{};
 
-	int target_id;
+	int target_id = -1;
 
-	Vec3 patrol_target;
-	bool has_patrol_target;
+	Vec3 patrol_target{};
+	bool has_patrol_target = false;
 
-	int stuck_ticks;
+	float last_dist_to_target = FLT_MAX;
 
-	int ritual_id;
-	float last_dist_to_target;
+	int stuck_ticks{};
 
-	float aim_time;
-	int aim_target;
+	float aim_time{};
+	int aim_target = -1;
 };
 
 class SESSION;
@@ -559,9 +558,11 @@ public:
 	void resetForReuse();
 };
 
+constexpr FVector LandmassSpawnLocation{ -10219.0f, 2560.0f, -3009.0f };
+
 constexpr FCultistCharacterState CultistDummyState{ -1, -10219.0f, 2560.0f, -3009.0f, 0.f, 90.f, 0.f, 0.f, 0.f, 0.f, 100.f,
 	false, false, false, false, false, false, false, false, false, false, false, false };
-constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,
+constexpr FPoliceCharacterState PoliceDummyState{ -1, -10219.0f, 2560.0f, -3009.0f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,
 	false, false, false, EWeaponType::Baton, false, EVaultingType::OneHandVault, false, false, false, false };
 
 constexpr FVector kPredefinedLocations[5] = {

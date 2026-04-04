@@ -326,10 +326,7 @@ static int FindNearbyPolice(int room_id, int self_id)
 
         auto target = it->second;
 
-        if (target->role != 1)
-            continue;
-
-        if (!target->isValidSocket())
+        if (target->role != 1 && target->role != 101)
             continue;
 
         float dx = target->police_state.PositionX - selfPos.x;
@@ -372,15 +369,13 @@ static int FindNearbyCultist(int room_id, int self_id)
     {
         if (pid == -1 || pid == self_id)
             continue;
-        if (g_cultist_ai_ids.count(pid))
-            continue;
 
         auto it = g_users.find(pid);
         if (it == g_users.end())
             continue;
 
         auto target = it->second;
-        if (target->role != 0)
+        if (target->role != 0 && target->role != 100)
             continue;
         if (target->state == ST_FREE)
             continue;

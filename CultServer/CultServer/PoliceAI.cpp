@@ -27,6 +27,7 @@ extern std::mutex free_id_mtx;
 void AddPoliceAi(int ai_id, uint8_t ai_role, int room_id)
 {
     auto session = std::make_shared<SESSION>(ai_id, ai_role, room_id);
+
     auto it = g_users.find(ai_id);
     if (it != g_users.end())
     {
@@ -208,9 +209,9 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
         return;
 
     Vec3 cur{
-        session.cultist_state.PositionX,
-        session.cultist_state.PositionY,
-        session.cultist_state.PositionZ
+    session.police_state.PositionX,
+    session.police_state.PositionY,
+    session.police_state.PositionZ
     };
 
     if (Dist(cur, targetPos) <= ARRIVE_RANGE)
@@ -726,9 +727,68 @@ void PoliceAIController::PistolShoot(float dt)
     owner->police_state.bIsShooting = true;
 }
 
+static int FindNearbyCultist(int room_id, int self_id)
+{
+    if (room_id < 0 || room_id >= MAX_ROOM)
+        return -1;
+
+    auto selfIt = g_users.find(self_id);
+    if (selfIt == g_users.end())
+        return -1;
+
+    auto self = selfIt->second;
+
+    Vec3 selfPos{
+    self->police_state.PositionX,
+    self->police_state.PositionY,
+    self->police_state.PositionZ
+    };
+
+    const auto& room = g_rooms[room_id].first;
+
+    int best_id = -1;
+    float best_dist_sq = VIEW_RANGE_SQ;
+
+    for (int pid : room.player_ids)
+    {
+        if (pid == -1 || pid == self_id)
+            continue;
+
+        auto it = g_users.find(pid);
+        if (it == g_users.end())
+            continue;
+
+        auto target = it->second;
+        if (target->role != 0 && target->role != 100)
+            continue;
+        if (target->state == ST_FREE)
+            continue;
+
+        float dx = target->cultist_state.PositionX - selfPos.x;
+        float dy = target->cultist_state.PositionY - selfPos.y;
+        float dist_sq = dx * dx + dy * dy;
+
+        if (dist_sq < best_dist_sq)
+        {
+            best_dist_sq = dist_sq;
+            best_id = pid;
+        }
+    }
+
+    return best_id;
+}
+
 // BT
 void PoliceAIController::UpdateBlackboard(float dt)
 {
+    if (bb.target_id == -1)
+    {
+        int found = FindNearbyCultist(owner->room_id, owner->id);
+        if (found != -1)
+        {
+            bb.target_id = found;
+        }
+    }
     // target 유효성 체크
     if (bb.target_id != -1)
     {
@@ -757,6 +817,11 @@ void PoliceAIController::UpdateBlackboard(float dt)
         };
 
         bb.last_dist_to_target = Dist(self, targetPos);
+
+        if (bb.last_dist_to_target > CHASE_START_RANGE)
+        {
+            bb.target_id = -1;
+        }
     }
     else
     {
