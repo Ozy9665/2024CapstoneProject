@@ -61,7 +61,7 @@ void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
     pkt.id = ai_id;
     pkt.role = ai_role;
 
-    BroadcastCultistAIState(*session, &pkt);
+    broadcast_in_room(*session, &pkt, VIEW_RANGE);
 }
 
 void KillCultistAi(int ai_id)
@@ -79,7 +79,7 @@ void KillCultistAi(int ai_id)
     pkt.header = DisconnectionHeader;
     pkt.size = sizeof(IdOnlyPacket);
     pkt.id = ai_id;
-    BroadcastCultistAIState(*session, &pkt);
+    broadcast_in_room(*session, &pkt, VIEW_RANGE);
     
     {
         std::lock_guard<std::mutex> lk(g_room_mtx);
@@ -326,7 +326,13 @@ static int FindNearbyPolice(int room_id, int self_id)
 
         auto target = it->second;
 
-        if (target->role != 1 && target->role != 101)
+        if (target->state == ST_FREE)
+            continue;
+
+        if (target->room_id != room_id)
+            continue;
+
+        if (target->role != 101 && !target->isValidSocket())
             continue;
 
         float dx = target->police_state.PositionX - selfPos.x;
@@ -375,9 +381,11 @@ static int FindNearbyCultist(int room_id, int self_id)
             continue;
 
         auto target = it->second;
-        if (target->role != 0 && target->role != 100)
+        if (target->role != 0)
             continue;
         if (target->state == ST_FREE)
+            continue;
+        if (!target->isValidSocket())
             continue;
 
         float dx = target->cultist_state.PositionX - selfPos.x;
@@ -1073,45 +1081,13 @@ void CultistAIWorkerLoop()
             packet.header = cultistHeader;
             packet.size = sizeof(CultistPacket);
             packet.state = session->cultist_state;
-            BroadcastCultistAIState(*session, &packet);
+            broadcast_in_room(*session, &packet, VIEW_RANGE);
         }
 
         nextTick += std::chrono::duration_cast<clock::duration>(
             std::chrono::duration<float>(fixed_dt));
 
         std::this_thread::sleep_until(nextTick);
-    }
-}
-
-template <typename PacketT>
-void BroadcastCultistAIState(const SESSION& session, const PacketT* packet)
-{
-    if (session.role != 100) // Cultist AI¸¸
-        return;
-
-    int room_id = session.room_id;
-    if (room_id < 0 || room_id >= MAX_ROOM)
-    {
-        return;
-    }
-
-    auto& room = g_rooms[room_id].first;
-
-    for (int pid : room.player_ids)
-    {
-        if (pid == -1 || pid == session.id)
-            continue;
-
-        auto it = g_users.find(pid);
-        if (it == g_users.end())
-            continue;
-
-       auto target = it->second;
-
-       if (!target->isValidSocket() || target->state == ST_FREE)
-            continue;
-
-        target->do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
     }
 }
 

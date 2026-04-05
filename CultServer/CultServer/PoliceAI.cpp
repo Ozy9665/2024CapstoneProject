@@ -11,6 +11,7 @@
 #include <queue>
 #include "map.h"
 #include "MapManager.h"
+#include "Combat.h"
 
 using namespace std;
 extern concurrency::concurrent_unordered_map<int, std::shared_ptr<SESSION>> g_users;
@@ -60,7 +61,7 @@ void AddPoliceAi(int ai_id, uint8_t ai_role, int room_id)
     pkt.id = ai_id;
     pkt.role = ai_role;
 
-    BroadcastPoliceAIState(*session, &pkt);
+    broadcast_in_room(*session, &pkt, VIEW_RANGE);
 }
 
 void KillPoliceAi(int ai_id)
@@ -78,7 +79,7 @@ void KillPoliceAi(int ai_id)
     pkt.header = DisconnectionHeader;
     pkt.size = sizeof(IdOnlyPacket);
     pkt.id = ai_id;
-    BroadcastPoliceAIState(*session, &pkt);
+    broadcast_in_room(*session, &pkt, VIEW_RANGE);
 
     {
         std::lock_guard<std::mutex> lk(g_room_mtx);
@@ -144,45 +145,13 @@ void PoliceAIWorkerLoop()
             packet.header = policeHeader;
             packet.size = sizeof(PolicePacket);
             packet.state = session->police_state;
-            BroadcastPoliceAIState(*session, &packet);
+            broadcast_in_room(*session, &packet, VIEW_RANGE);
         }
 
         nextTick += std::chrono::duration_cast<clock::duration>(
             std::chrono::duration<float>(fixed_dt));
 
         std::this_thread::sleep_until(nextTick);
-    }
-}
-
-template <typename PacketT>
-void BroadcastPoliceAIState(const SESSION& session, const PacketT* packet)
-{
-    if (session.role != 101) // Police AI만
-        return;
-
-    int room_id = session.room_id;
-    if (room_id < 0 || room_id >= MAX_ROOM)
-    {
-        return;
-    }
-
-    auto& room = g_rooms[room_id].first;
-
-    for (int pid : room.player_ids)
-    {
-        if (pid == -1 || pid == session.id)
-            continue;
-
-        auto it = g_users.find(pid);
-        if (it == g_users.end())
-            continue;
-
-        auto target = it->second;
-
-        if (!target->isValidSocket() || target->state == ST_FREE)
-            continue;
-
-        target->do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
     }
 }
 
@@ -326,22 +295,22 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
     // dir.z /= len;
 
     // 위치 갱신
-    session.cultist_state.PositionX += dir.x * speed * deltaTime;
-    session.cultist_state.PositionY += dir.y * speed * deltaTime;
-    // ai.cultist_state.PositionZ += dir.z * speed * deltaTime;
+    session.police_state.PositionX += dir.x * speed * deltaTime;
+    session.police_state.PositionY += dir.y * speed * deltaTime;
+    // ai.police_state.PositionZ += dir.z * speed * deltaTime;
 
-    session.cultist_state.VelocityX = dir.x * speed;
-    session.cultist_state.VelocityY = dir.y * speed;
-    session.cultist_state.VelocityZ = 0.f;
-    session.cultist_state.Speed = std::sqrt(
-        session.cultist_state.VelocityX * session.cultist_state.VelocityX +
-        session.cultist_state.VelocityY * session.cultist_state.VelocityY
+    session.police_state.VelocityX = dir.x * speed;
+    session.police_state.VelocityY = dir.y * speed;
+    session.police_state.VelocityZ = 0.f;
+    session.police_state.Speed = std::sqrt(
+        session.police_state.VelocityX * session.police_state.VelocityX +
+        session.police_state.VelocityY * session.police_state.VelocityY
     );
 
     // state 회전 갱신
     if (len > 1e-3f)
     {
-        session.cultist_state.RotationYaw =
+        session.police_state.RotationYaw =
             std::atan2(dir.y, dir.x) * RAD_TO_DEG;
     }
 }
@@ -353,6 +322,10 @@ static bool HasLineOfSight(SESSION* session, int target_id)
         return false;
 
     auto target = it->second;
+    if (target->state == ST_FREE || !target->isValidSocket()) 
+    {
+        return false;
+    }
 
     Vec3 start{
         session->police_state.PositionX,
@@ -538,6 +511,10 @@ bool AimNode::Run(AIController& ai, float dt)
 
     ctrl.bb.aim_time += dt;
     ctrl.owner->police_state.bIsAiming = true;
+    if (ctrl.CanTaser())
+        ctrl.owner->police_state.CurrentWeapon = EWeaponType::Taser;
+    else if (ctrl.CanPistol())
+        ctrl.owner->police_state.CurrentWeapon = EWeaponType::Pistol;
 
     if (ctrl.bb.aim_time < 1.0f)
         return false;
@@ -663,6 +640,7 @@ void PoliceAIController::Patrol(float dt)
     }
 
     MoveAlongPath(*owner, bb.patrol_target, dt);
+    std::cout << "Patrol\r";
 }
 
 void PoliceAIController::Chase(float dt)
@@ -683,6 +661,13 @@ void PoliceAIController::Chase(float dt)
     }
 
     auto target = it->second;
+    if (target->state == ST_FREE ||
+        (target->role != 100 && !target->isValidSocket()))
+    {
+        bb.target_id = -1;
+        bb.path.clear();
+        return;
+    }
 
     Vec3 selfPos{
         owner->police_state.PositionX,
@@ -706,25 +691,86 @@ void PoliceAIController::Chase(float dt)
     }
 
     MoveAlongPath(*owner, targetPos, dt);
+    std::cout << "Chase\r";
 }
 
 void PoliceAIController::BatonAttack(float dt)
 {
-    // 공격 함수 추가
+    std::cout << "BatonAttack\r";
+    owner->police_state.CurrentWeapon = EWeaponType::Baton;
     owner->police_state.bIsAttacking = true;
     StopMovement(*owner);
+
+    HitPacket p{};
+    p.TraceStart = {
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    float yawRad = owner->police_state.RotationYaw * DEG_TO_RAD;
+
+    p.TraceDir = {
+        std::cos(yawRad),
+        std::sin(yawRad),
+        0.f
+    };
+
+    baton_sweep(owner->id, &p);
 }
 
 void PoliceAIController::TaserShoot(float dt)
 {
     // 공격 함수 추가
+    std::cout << "TaserShoot\r";
+    owner->police_state.CurrentWeapon = EWeaponType::Taser;
     owner->police_state.bIsShooting = true;
+
+    HitPacket p{};
+    p.Weapon = EWeaponType::Taser;
+
+    p.TraceStart = {
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    float yawRad = owner->police_state.RotationYaw * DEG_TO_RAD;
+
+    p.TraceDir = {
+        std::cos(yawRad),
+        std::sin(yawRad),
+        0.f
+    };
+
+    line_trace(owner->id, &p);
 }
 
 void PoliceAIController::PistolShoot(float dt)
 {
     // 공격 함수 추가
+    std::cout << "PistolShoot\r";
+    owner->police_state.CurrentWeapon = EWeaponType::Pistol;
     owner->police_state.bIsShooting = true;
+
+    HitPacket p{};
+    p.Weapon = EWeaponType::Pistol;
+
+    p.TraceStart = {
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    float yawRad = owner->police_state.RotationYaw * DEG_TO_RAD;
+
+    p.TraceDir = {
+        std::cos(yawRad),
+        std::sin(yawRad),
+        0.f
+    };
+
+    line_trace(owner->id, &p);
 }
 
 static int FindNearbyCultist(int room_id, int self_id)
@@ -802,7 +848,21 @@ void PoliceAIController::UpdateBlackboard(float dt)
     // 거리 업데이트
     if (bb.target_id != -1)
     {
-        auto target = g_users[bb.target_id];
+        auto it = g_users.find(bb.target_id);
+        if (it == g_users.end())
+        {
+            bb.target_id = -1;
+            bb.last_dist_to_target = FLT_MAX;
+            return;
+        }
+        auto target = it->second;
+        if (target->state == ST_FREE || 
+            (target->role != 100 && !target->isValidSocket()))
+        {
+            bb.target_id = -1;
+            bb.last_dist_to_target = FLT_MAX;
+            return;
+        }
 
         Vec3 self{
             owner->police_state.PositionX,

@@ -3,13 +3,13 @@
 
 #include <iostream>
 #include <WS2tcpip.h>
-#include <unordered_map>
 #include <atomic>
 #include <array>
-#include <unordered_set>
 #include <chrono>
 #include <vector>
 #include <mutex>
+#include <unordered_set>
+#include <concurrent_unordered_map.h>
 #include "error.h"
 
 constexpr short SERVER_PORT = 7777;
@@ -557,6 +557,65 @@ public:
 
 	void resetForReuse();
 };
+
+extern std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
+extern concurrency::concurrent_unordered_map<int, std::shared_ptr<SESSION>> g_users;
+
+template <typename PacketT>
+void broadcast_in_room(const SESSION& sender, const PacketT* packet, float view_range = -1.0f) {
+	int room_id = sender.room_id;
+	if (room_id < 0 || room_id >= MAX_ROOM)
+		return;
+	const auto& room = g_rooms[room_id].first;
+
+	for (int pid : room.player_ids)
+	{
+		if (pid == -1 || pid == sender.id)
+			continue;
+
+		auto it = g_users.find(pid);
+		if (it == g_users.end())
+			continue;
+
+		auto& target = it->second;
+
+		if (!target->isValidSocket() || target->state == ST_FREE)
+			continue;
+
+		/*
+		float view_range_sq = (view_range > 0) ? view_range * view_range : -1.0f;	// -1이면 전원에게 전송
+		bool inRange = (view_range_sq < 0) ||
+			(distanceSq(sender, *target) <= view_range_sq);
+
+		if (inRange)
+		{
+			if (target->visible_ids.insert(sender_id).second)
+			{
+				IdOnlyPacket appear;
+				appear.header = appearHeader;
+				appear.size = sizeof(IdOnlyPacket);
+				appear.id = sender_id;
+				target->do_send_packet(&appear);
+			}
+
+			target->do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
+		}
+		else
+		{
+			if (target->visible_ids.erase(sender_id) > 0)
+			{
+				IdOnlyPacket disappear;
+				disappear.header = disappearHeader;
+				disappear.size = sizeof(IdOnlyPacket);
+				disappear.id = sender_id;
+				target->do_send_packet(&disappear);
+			}
+		}
+		*/
+
+		target->do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
+	}
+}
 
 constexpr FVector LandmassSpawnLocation{ -10219.0f, 2560.0f, -3009.0f };
 

@@ -131,6 +131,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Combat.cpp" />
     <ClCompile Include="CultistAI.cpp" />
     <ClCompile Include="cultServer.cpp" />
     <ClCompile Include="db.cpp" />
@@ -143,6 +144,7 @@
     <ClCompile Include="Protocol.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Combat.h" />
     <ClInclude Include="CultistAI.h" />
     <ClInclude Include="db.h" />
     <ClInclude Include="error.h" />
