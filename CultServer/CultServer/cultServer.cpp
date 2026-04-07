@@ -260,10 +260,14 @@ void RoomWorkerLoop() {
 			auto me = it->second;
 
 			// 카운터, ingame, player_ids 갱신
-			if (1 == task.role) g_rooms[room_id].first.police++;
-			else if (0 == task.role) g_rooms[room_id].first.cultist++;
+			if (1 == task.role) 
+				g_rooms[room_id].first.police++;
+			else if (0 == task.role)
+				g_rooms[room_id].first.cultist++;
+
 			if (g_rooms[room_id].first.cultist >= MAX_CULTIST_PER_ROOM &&
-				g_rooms[room_id].first.police >= MAX_POLICE_PER_ROOM) {
+				g_rooms[room_id].first.police >= MAX_POLICE_PER_ROOM) 
+			{
 				g_rooms[room_id].first.isIngame = true;
 			}
 			me->room_id = room_id;
@@ -292,8 +296,10 @@ void RoomWorkerLoop() {
 			// 서로 교환
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
 				int other = g_rooms[room_id].first.player_ids[i];
-				if (other == -1 || other == task.c_id) continue;
-				if (!g_users.count(other)) continue;
+				if (other == -1 || other == task.c_id) 
+					continue;
+				if (!g_users.count(other)) 
+					continue;
 
 				// 다른 유저에게 나
 				{
@@ -310,11 +316,17 @@ void RoomWorkerLoop() {
 				}
 				// 나에게 다른 유저
 				{
+					auto otherIt = g_users.find(other);
+					if (otherIt == g_users.end())
+						continue;
+
+					auto otherSession = otherIt->second;
+
 					IdRolePacket pkt{};
 					pkt.header = connectionHeader;
 					pkt.size = sizeof(IdRolePacket);
 					pkt.id = other;
-					pkt.role = me->role;
+					pkt.role = otherSession->role;
 
 					EXP_OVER* eo = new EXP_OVER();
 					std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
@@ -520,6 +532,16 @@ void HealTimerLoop() {
 				st.ABP_IsStunned = 0;
 				st.ABP_TTStun = 0;
 				st.CurrentHealth = 50.f;
+				actor->state = ST_INGAME;
+
+				auto aiPtr = actor->ai;
+				auto* cultistAI = dynamic_cast<CultistAIController*>(aiPtr.get());
+				if (cultistAI)
+				{
+					cultistAI->bb.ai_state = AIState::Runaway;
+					cultistAI->bb.path.clear();
+					cultistAI->bb.has_patrol_target = false;
+				}
 				break;
 			}
 			}
@@ -1331,7 +1353,7 @@ void process_packet(int c_id, char* packet) {
 			break;
 
 		auto user = it->second;
-		user->setState(ST_DISABLE);
+		user->setState(ST_DEAD);
 
 		int room_id = user->room_id;
 		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size())) {
@@ -1349,7 +1371,7 @@ void process_packet(int c_id, char* packet) {
 			auto pit = g_users.find(pid);
 			if (pit != g_users.end() &&
 				pit->second->role == 0 &&
-				pit->second->state != ST_DISABLE) {
+				pit->second->state != ST_DEAD) {
 				allCultistsDisabled = false;
 				break;
 			}

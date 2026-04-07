@@ -136,8 +136,8 @@ constexpr Vec3 NewmapLandmassLotate{ 0.f, 0.f, 0.f };
 constexpr Vec3 Level3MapOffset{ 6840.f, 52540.f, 0.f };
 constexpr Vec3 Level3MapLotate{ 90.f, 0.f, 0.f };
 
-enum S_STATE { ST_FREE, ST_ROOM, ST_INGAME, ST_DISABLE };
-enum AIState { Free, Patrol, Chase, Runaway, Ritual, Heal, Die };
+enum S_STATE { ST_FREE, ST_ROOM, ST_INGAME, ST_STUN, ST_DEAD };
+enum AIState { Free, Patrol, Chase, Runaway, Ritual, Heal, Stun, Die };
 
 // packet
 #pragma pack(push, 1)

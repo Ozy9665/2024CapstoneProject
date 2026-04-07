@@ -55,6 +55,7 @@ void baton_sweep(int c_id, HitPacket* p)
 
 	FVector start{ p->TraceStart.x, p->TraceStart.y, p->TraceStart.z };
 	FVector forward{ p->TraceDir.x, p->TraceDir.y, p->TraceDir.z };
+
 	Ray ray{
 		static_cast<float>(start.x),
 		static_cast<float>(start.y),
@@ -78,7 +79,7 @@ void baton_sweep(int c_id, HitPacket* p)
 
 	for (int otherId : g_rooms[room].first.player_ids)
 	{
-		if (otherId == c_id || g_users[otherId]->role == 1 || otherId == -1)
+		if (otherId == -1 || otherId == c_id)
 			continue;
 
 		auto oit = g_users.find(otherId);
@@ -86,6 +87,12 @@ void baton_sweep(int c_id, HitPacket* p)
 			continue;
 
 		auto& target = oit->second;
+		if (!target)
+			continue;
+
+		if (target->role == 1)
+			continue;
+
 		if (target->role != 100 && !target->isValidSocket())
 			continue;
 
@@ -104,11 +111,9 @@ void baton_sweep(int c_id, HitPacket* p)
 					static_cast<float>(start.y),
 					static_cast<float>(start.z)
 				};
-				std::cout << "ai attacked" << std::endl;
 				ApplyBatonHitToAI(*target, attackerPos);
 			}
 
-			std::cout << "line_sphere_intersect." << std::endl;
 			HitResultPacket result{
 				hitHeader,
 				sizeof(HitResultPacket),
@@ -123,7 +128,8 @@ void baton_sweep(int c_id, HitPacket* p)
 	}
 }
 
-void line_trace(int c_id, HitPacket* p) {
+void line_trace(int c_id, HitPacket* p)
+{
 	auto it = g_users.find(c_id);
 	if (it == g_users.end())
 		return;
@@ -135,6 +141,7 @@ void line_trace(int c_id, HitPacket* p) {
 
 	FVector start{ p->TraceStart.x, p->TraceStart.y, p->TraceStart.z };
 	FVector dir{ p->TraceDir.x,   p->TraceDir.y,   p->TraceDir.z };
+
 	Ray ray{
 		static_cast<float>(start.x),
 		static_cast<float>(start.y),
@@ -158,7 +165,7 @@ void line_trace(int c_id, HitPacket* p) {
 
 	for (int otherId : g_rooms[room].first.player_ids)
 	{
-		if (otherId == c_id || g_users[otherId]->role == 1 || otherId == -1)
+		if (otherId == -1 || otherId == c_id)
 			continue;
 
 		auto oit = g_users.find(otherId);
@@ -166,6 +173,12 @@ void line_trace(int c_id, HitPacket* p) {
 			continue;
 
 		auto& target = oit->second;
+		if (!target)
+			continue;
+
+		if (target->role == 1)
+			continue;
+
 		if (target->role != 100 && !target->isValidSocket())
 			continue;
 

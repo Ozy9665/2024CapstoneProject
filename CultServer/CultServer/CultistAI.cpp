@@ -1066,11 +1066,13 @@ void CultistAIWorkerLoop()
 
             bool canMove = true;
             auto& st = session->cultist_state;
-            if (st.ABP_IsDead || st.ABP_IsStunned || st.ABP_IsHitByAnAttack)
+            if (session->state == ST_STUN || session->state == ST_DEAD ||
+                st.ABP_IsDead || st.ABP_IsStunned || st.ABP_IsHitByAnAttack)
             {
                 StopMovement(*session);
                 canMove = false;
             }
+
         
             if (canMove)
             {
@@ -1108,6 +1110,10 @@ void ApplyBatonHitToAI(SESSION& session, const Vec3& attackerPos)
         return;
 
     cultistAI->bb.path.clear();
+    cultistAI->bb.target_id = -1;
+    cultistAI->bb.has_patrol_target = false;
+    cultistAI->bb.has_runaway_target = false;
+    cultistAI->bb.ritual_id = -1;
 
     Vec3 cur{
         session.cultist_state.PositionX,
@@ -1130,8 +1136,8 @@ void ApplyBatonHitToAI(SESSION& session, const Vec3& attackerPos)
 
     session.cultist_state.PositionX += dir.x * pushDist;
     session.cultist_state.PositionY += dir.y * pushDist;
-    StopMovement(session);
     session.cultist_state.RotationYaw = std::atan2(dir.y, dir.x) * RAD_TO_DEG;
+    StopMovement(session);
 
     st.CurrentHealth -= 100.f;
     if (st.CurrentHealth <= 0.f)
@@ -1139,11 +1145,15 @@ void ApplyBatonHitToAI(SESSION& session, const Vec3& attackerPos)
         if (st.ABP_IsStunned)
         {
             st.ABP_IsDead = 1;
+            session.state = ST_DEAD;
+            cultistAI->bb.ai_state = AIState::Die;
         }
         else
         {
             st.ABP_IsStunned = 1;
             st.ABP_TTStun = 1;
+            session.state = ST_STUN;
+            cultistAI->bb.ai_state = AIState::Stun;
 
             TIMER_EVENT ev;
             ev.c_id = session.id;

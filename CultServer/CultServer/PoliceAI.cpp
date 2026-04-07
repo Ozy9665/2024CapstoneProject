@@ -371,6 +371,23 @@ static bool HasLineOfSight(SESSION* session, int target_id)
     return true;
 }
 
+static bool IsCultistTargetAttackable(const SESSION& target)
+{
+    if (target.role != 0 && target.role != 100)
+        return false;
+
+    if (target.state == ST_FREE || target.state == ST_STUN || target.state == ST_DEAD)
+        return false;
+
+    if (target.cultist_state.ABP_IsDead || target.cultist_state.ABP_IsStunned)
+        return false;
+
+    if (target.role != 100 && !target.isValidSocket())
+        return false;
+
+    return true;
+}
+
 // PoliceAIController
 PoliceAIController::PoliceAIController(SESSION* o)
     : AIController(o)
@@ -554,6 +571,10 @@ bool PoliceAIController::CanChase()
 
 bool PoliceAIController::CanBatonAttack()
 {
+    auto it = g_users.find(bb.target_id);
+    if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
+        return false;
+
     return bb.target_id != -1 &&
         bb.last_dist_to_target < BATON_RANGE;
 }
@@ -561,7 +582,14 @@ bool PoliceAIController::CanBatonAttack()
 bool PoliceAIController::CanShoot()
 {
     if (bb.aim_target != -1)
-        return true;
+    {
+        auto it = g_users.find(bb.aim_target);
+        return it != g_users.end() && it->second && IsCultistTargetAttackable(*it->second);
+    }
+
+    auto it = g_users.find(bb.target_id);
+    if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
+        return false;
 
     return bb.target_id != -1 &&
         bb.last_dist_to_target < TASER_RANGE;
@@ -569,12 +597,20 @@ bool PoliceAIController::CanShoot()
 
 bool PoliceAIController::CanTaser()
 {
+    auto it = g_users.find(bb.target_id);
+    if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
+        return false;
+
     return bb.target_id != -1 &&
         bb.last_dist_to_target < TASER_RANGE;
 }
 
 bool PoliceAIController::CanPistol()
 {
+    auto it = g_users.find(bb.target_id);
+    if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
+        return false;
+
     return bb.target_id != -1 &&
         bb.last_dist_to_target < PISTOL_RANGE;
 }
@@ -724,6 +760,7 @@ void PoliceAIController::TaserShoot(float dt)
     // 공격 함수 추가
     std::cout << "TaserShoot\r";
     owner->police_state.CurrentWeapon = EWeaponType::Taser;
+    owner->police_state.bIsAiming = false;
     owner->police_state.bIsShooting = true;
 
     HitPacket p{};
@@ -751,6 +788,7 @@ void PoliceAIController::PistolShoot(float dt)
     // 공격 함수 추가
     std::cout << "PistolShoot\r";
     owner->police_state.CurrentWeapon = EWeaponType::Pistol;
+    owner->police_state.bIsAiming = false;
     owner->police_state.bIsShooting = true;
 
     HitPacket p{};
@@ -827,6 +865,9 @@ static int FindNearbyCultist(int room_id, int self_id)
 // BT
 void PoliceAIController::UpdateBlackboard(float dt)
 {
+    owner->police_state.bIsAttacking = false;
+    owner->police_state.bIsShooting = false;
+
     if (bb.target_id == -1)
     {
         int found = FindNearbyCultist(owner->room_id, owner->id);
@@ -856,11 +897,13 @@ void PoliceAIController::UpdateBlackboard(float dt)
             return;
         }
         auto target = it->second;
-        if (target->state == ST_FREE || 
-            (target->role != 100 && !target->isValidSocket()))
+        if (!target || !IsCultistTargetAttackable(*target))
         {
             bb.target_id = -1;
+            bb.aim_target = -1;
+            bb.aim_time = 0.f;
             bb.last_dist_to_target = FLT_MAX;
+            owner->police_state.bIsAiming = false;
             return;
         }
 
@@ -881,6 +924,9 @@ void PoliceAIController::UpdateBlackboard(float dt)
         if (bb.last_dist_to_target > CHASE_START_RANGE)
         {
             bb.target_id = -1;
+            bb.aim_target = -1;
+            bb.aim_time = 0.f;
+            owner->police_state.bIsAiming = false;
         }
     }
     else
@@ -892,7 +938,7 @@ void PoliceAIController::UpdateBlackboard(float dt)
     if (bb.aim_target != -1)
     {
         auto it = g_users.find(bb.aim_target);
-        if (it == g_users.end())
+        if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
         {
             bb.aim_target = -1;
             bb.aim_time = 0.f;
