@@ -4,12 +4,10 @@
 #include "map.h"
 
 void AddPoliceAi(int, uint8_t, int);
+
 void KillPoliceAi(int ai_id);
 
 void PoliceAIWorkerLoop();
-
-template <typename PacketT>
-void BroadcastPoliceAIState(const SESSION& ai, const PacketT* packet);
 
 // ai controller
 class BTNode {
@@ -92,6 +90,7 @@ class PoliceAIController : public AIController {
 public:
     PoliceBlackboard bb;
     std::unique_ptr<BTNode> root;
+    std::unique_ptr<DogAIController> dogAI;
 
     PoliceAIController(SESSION* o);
 
@@ -113,4 +112,25 @@ public:
     void PistolShoot(float dt);
     void Chase(float dt);
     void Patrol(float dt);
+};
+
+class DogAIController
+{
+public:
+    SESSION* owner;
+    bool bInitialized = false;
+
+    DogBlackboard db;
+    std::unique_ptr<BTNode> root;
+    std::vector<Vec3> path;
+    Vec3 lastTargetPos{};
+    float repath_timer{};
+
+    DogAIController(SESSION* o);
+    void Init();
+
+    void Update(float dt);
+
+    void UpdateBlackboard(float dt);
+    void RunBehaviorTree(float dt);
 };

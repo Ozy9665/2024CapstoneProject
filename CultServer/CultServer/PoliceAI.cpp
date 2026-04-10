@@ -146,6 +146,12 @@ void PoliceAIWorkerLoop()
             packet.size = sizeof(PolicePacket);
             packet.state = session->police_state;
             broadcast_in_room(*session, &packet, VIEW_RANGE);
+
+            DogPacket d{};
+            d.header = dogHeader;
+            d.size = sizeof(DogPacket);
+            d.dog = session->dog;
+            broadcast_in_room(*session, &d, VIEW_RANGE);
         }
 
         nextTick += std::chrono::duration_cast<clock::duration>(
@@ -439,8 +445,10 @@ PoliceAIController::PoliceAIController(SESSION* o)
 
     // Patrol (fallback)
     rootSelector->children.push_back(std::make_unique<PatrolNode>());
-
     root = std::move(rootSelector);
+
+    dogAI = std::make_unique<DogAIController>();
+    dogAI->Init();
 }
 
 bool Selector::Run(AIController& ai, float dt)
@@ -955,6 +963,165 @@ void PoliceAIController::RunBehaviorTree(float dt)
 
 void PoliceAIController::Update(float dt)
 {
+    UpdateBlackboard(dt);
+    RunBehaviorTree(dt);
+
+    if (dogAI)
+        dogAI->Update(dt);
+}
+
+// Dog
+DogAIController::DogAIController(SESSION* o)
+{
+    owner = o;
+
+    /*
+     Selector
+     戍式 Sequence (CanAttack)
+     弛    戌式 Attack
+     弛
+     戍式 Sequence (TooFarFromOwner)
+     弛    戌式 Follow
+     弛
+     戌式 Explore
+    */
+}
+
+void DogAIController::Init()
+{
+    if (!owner)
+        return;
+
+    owner->dog.loc.x = owner->police_state.PositionX + 500.f;
+    owner->dog.loc.y = owner->police_state.PositionY;
+    owner->dog.loc.z = owner->police_state.PositionZ;
+
+    owner->dog.owner = owner->id;
+}
+
+static void MoveAlongPathDog(DogAIController& dogAI, const Vec3& targetPos, float dt)
+{
+    SESSION* session = dogAI.owner;
+    if (!session)
+        return;
+
+    Vec3 cur{
+        session->dog.loc.x,
+        session->dog.loc.y,
+        session->dog.loc.z
+    };
+
+    if (Dist(cur, targetPos) <= ARRIVE_RANGE)
+    {
+        return;
+    }
+
+    dogAI.repath_timer += dt;
+
+    float dx = targetPos.x - dogAI.lastTargetPos.x;
+    float dy = targetPos.y - dogAI.lastTargetPos.y;
+    float dz = targetPos.z - dogAI.lastTargetPos.z;
+    float dist2 = dx * dx + dy * dy + dz * dz;
+
+    if (dist2 > REPATH_DIST * REPATH_DIST)
+    {
+        dogAI.lastTargetPos = targetPos;
+        dogAI.path.clear();
+    }
+
+    if (dogAI.path.empty() && dogAI.repath_timer > 0.3f)
+    {
+        NAVMESH* nav = GetNavMesh(session->room_id);
+        if (!nav)
+            return;
+
+        std::vector<int> triPath;
+        if (!nav->FindTriPath(cur, targetPos, triPath))
+        {
+            dogAI.path.clear();
+            return;
+        }
+
+        std::vector<std::pair<Vec3, Vec3>> portals;
+        nav->BuildPortals(triPath, portals);
+
+        if (portals.empty())
+            return;
+
+        std::vector<Vec3> smoothPath;
+        if (!nav->SmoothPath(cur, targetPos, portals, smoothPath) || smoothPath.size() < 2)
+            return;
+
+        dogAI.path = smoothPath;
+        dogAI.repath_timer = 0.f;
+    }
+
+    if (dogAI.path.empty())
+        return;
+
+    Vec3 next = (dogAI.path.size() >= 2) ? dogAI.path[1] : dogAI.path[0];
+
+    Vec3 dir{
+        next.x - cur.x,
+        next.y - cur.y,
+        next.z - cur.z
+    };
+
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+    const float speed = 350.f;
+
+    if (len <= speed * dt)
+    {
+        dogAI.path.erase(dogAI.path.begin());
+
+        if (dogAI.path.empty())
+            return;
+
+        next = dogAI.path[0];
+
+        dir.x = next.x - cur.x;
+        dir.y = next.y - cur.y;
+        dir.z = next.z - cur.z;
+        len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+    }
+
+    if (len < 1e-3f)
+        return;
+
+    dir.x /= len;
+    dir.y /= len;
+    dir.z /= len;
+
+    session->dog.loc.x += dir.x * speed * dt;
+    session->dog.loc.y += dir.y * speed * dt;
+    session->dog.loc.z += dir.z * speed * dt;
+
+    session->dog.rot.yaw = std::atan2(dir.y, dir.x) * RAD_TO_DEG;
+}
+
+void DogAIController::UpdateBlackboard(float dt)
+{
+
+}
+
+void DogAIController::RunBehaviorTree(float dt)
+{
+    Vec3 target{
+      owner->police_state.PositionX,
+      owner->police_state.PositionY,
+      owner->police_state.PositionZ
+    };
+
+    MoveAlongPathDog(*this, target, dt);
+}
+
+void DogAIController::Update(float dt)
+{
+    if (!owner)
+        return;
+    if (!bInitialized)
+        Init();
+
     UpdateBlackboard(dt);
     RunBehaviorTree(dt);
 }

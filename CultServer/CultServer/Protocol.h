@@ -477,6 +477,21 @@ struct PoliceBlackboard
 	int aim_target = -1;
 };
 
+struct DogBlackboard
+{
+	int target_id = -1;        // 현재 공격 대상
+	Vec3 targetPos{};            // 이동 목표
+
+	float dist_to_owner{};       // 경찰 거리
+	float dist_to_target{};      // 적 거리
+
+	std::vector<Vec3> path{};
+
+	float repath_timer{};
+
+	bool has_target = false;
+};
+
 class SESSION;
 
 class AIController {

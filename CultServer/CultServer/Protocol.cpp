@@ -154,5 +154,6 @@ void SESSION::resetForReuse()
 
 	if (ai) {
 		ai.reset();
+		dog = {};
 	}
 }
