@@ -39,6 +39,8 @@ struct Dog {
 	FNetRot rot;
 	// 개 상태
 
+	// 속도
+	float Speed;
 };
 
 struct Crow {

@@ -1812,7 +1812,10 @@ void AStructGraphManager::ApplyContinuousShakeToGC(
 
 			const FVector Imp = Dir * ImpulseStrength + FVector(0, 0, Stage3_ShakeUpImpulse);
 			GC->AddImpulse(Imp, NAME_None, true);
-			GC->WakeAllRigidBodies();
+			if (!GC->IsAnyRigidBodyAwake())
+			{
+				GC->WakeAllRigidBodies();
+			}
 		});
 }
 
