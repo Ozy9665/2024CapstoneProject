@@ -488,8 +488,6 @@ struct DogBlackboard
 	std::vector<Vec3> path{};
 
 	float repath_timer{};
-
-	bool has_target = false;
 };
 
 class SESSION;
@@ -665,4 +663,5 @@ constexpr float CHASE_START_RANGE{ 1500.f };
 constexpr float CHASE_STOP_RANGE{ 150.f };
 constexpr float ARRIVE_RANGE{ 100.f };
 constexpr float STUCK_RANGE{ 5.f };
-
+constexpr float FOLLOW_MAX_DIST{ 800.f };
+constexpr float DOG_CHASE_MAX_DIST{ 1500.f };

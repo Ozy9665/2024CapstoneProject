@@ -1392,10 +1392,24 @@ void process_packet(int c_id, char* packet) {
 				int pid = r.player_ids[i];
 				if (pid == -1) continue;
 				auto pit = g_users.find(pid);
-				if (pit != g_users.end() && pit->second->isValidSocket())
+				if (pit == g_users.end())
+					continue;
+
+				auto user = pit->second;
+				if (user->role == 100)
+				{
+					KillCultistAi(pid);
+					continue;
+				}
+				else if (user->role == 101)
+				{
+					KillPoliceAi(pid);
+					continue;
+				}
+				if (user->isValidSocket())
 				{
 					newPacket.id = pid;
-					pit->second->do_send_packet(&newPacket);
+					user->do_send_packet(&newPacket);
 					ids_to_disconnect.push_back(pid);
 				}
 			}

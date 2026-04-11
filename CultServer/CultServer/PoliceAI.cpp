@@ -447,7 +447,7 @@ PoliceAIController::PoliceAIController(SESSION* o)
     rootSelector->children.push_back(std::make_unique<PatrolNode>());
     root = std::move(rootSelector);
 
-    dogAI = std::make_unique<DogAIController>();
+    dogAI = std::make_unique<DogAIController>(o);
     dogAI->Init();
 }
 
@@ -972,19 +972,74 @@ void PoliceAIController::Update(float dt)
 
 // Dog
 DogAIController::DogAIController(SESSION* o)
+    : AIController{o}
 {
-    owner = o;
-
     /*
-     Selector
+    Selector
      ├─ Sequence (CanAttack)
      │    └─ Attack
+     │
+     ├─ Sequence (HasTargetId)
+     │    ├─ Selector
+     │    │    ├─ Sequence (TooFarFromOwner)
+     │    │    │    └─ Stop
+     │    │    └─ Chase
      │
      ├─ Sequence (TooFarFromOwner)
      │    └─ Follow
      │
      └─ Explore
     */
+    auto rootSelector = std::make_unique<Selector>();
+
+    // Attack
+    {
+        auto seq = std::make_unique<Sequence>();
+        seq->children.push_back(std::make_unique<CanAttackNode>());
+        seq->children.push_back(std::make_unique<DogAttackNode>());
+        rootSelector->children.push_back(std::move(seq));
+    }
+
+    // Chase
+    {
+        auto seq = std::make_unique<Sequence>();
+        seq->children.push_back(std::make_unique<HasTargetIdNode>());
+
+        auto sel = std::make_unique<Selector>();
+
+        // Stop
+        {
+            auto stopSeq = std::make_unique<Sequence>();
+            stopSeq->children.push_back(std::make_unique<TooFarFromOwnerNode>());
+            stopSeq->children.push_back(std::make_unique<DogStopNode>());
+
+            sel->children.push_back(std::move(stopSeq));
+        }
+
+        // Chase
+        {
+            sel->children.push_back(std::make_unique<DogChaseNode>());
+        }
+
+        seq->children.push_back(std::move(sel));
+
+        rootSelector->children.push_back(std::move(seq));
+    }
+
+    // Follow
+    {
+        auto seq = std::make_unique<Sequence>();
+        seq->children.push_back(std::make_unique<TooFarFromOwnerNode>());
+        seq->children.push_back(std::make_unique<DogFollowNode>());
+        rootSelector->children.push_back(std::move(seq));
+    }
+
+    // Explore
+    {
+        rootSelector->children.push_back(std::make_unique<DogExploreNode>());
+    }
+
+    root = std::move(rootSelector);
 }
 
 void DogAIController::Init()
@@ -997,6 +1052,8 @@ void DogAIController::Init()
     owner->dog.loc.z = owner->police_state.PositionZ;
 
     owner->dog.owner = owner->id;
+
+    bInitialized = true;
 }
 
 static void MoveAlongPathDog(DogAIController& dogAI, const Vec3& targetPos, float dt)
@@ -1006,9 +1063,9 @@ static void MoveAlongPathDog(DogAIController& dogAI, const Vec3& targetPos, floa
         return;
 
     Vec3 cur{
-        session->dog.loc.x,
-        session->dog.loc.y,
-        session->dog.loc.z
+        static_cast<float>(session->dog.loc.x),
+        static_cast<float>(session->dog.loc.y),
+        static_cast<float>(session->dog.loc.z)
     };
 
     if (Dist(cur, targetPos) <= ARRIVE_RANGE)
@@ -1068,7 +1125,7 @@ static void MoveAlongPathDog(DogAIController& dogAI, const Vec3& targetPos, floa
     };
 
     float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
-    const float speed = 350.f;
+    const float speed = 400.f;
 
     if (len <= speed * dt)
     {
@@ -1099,6 +1156,168 @@ static void MoveAlongPathDog(DogAIController& dogAI, const Vec3& targetPos, floa
     session->dog.rot.yaw = std::atan2(dir.y, dir.x) * RAD_TO_DEG;
 }
 
+// Condition Node
+bool CanAttackNode::Run(AIController& ai, float)
+{
+    return false; // 아직 공격 안함
+}
+
+bool HasTargetIdNode::Run(AIController& ai, float)
+{
+    return static_cast<DogAIController&>(ai).HasTargetId();
+}
+
+bool TooFarFromOwnerNode::Run(AIController& ai, float)
+{
+    return static_cast<DogAIController&>(ai).TooFarFromOwner();
+}
+
+// Action Node
+bool DogAttackNode::Run(AIController& ai, float)
+{
+    // 아직 구현 안함
+    return true;
+}
+
+bool DogChaseNode::Run(AIController& ai, float dt)
+{
+    static_cast<DogAIController&>(ai).Chase(dt);
+    return true;
+}
+
+bool DogStopNode::Run(AIController& ai, float dt)
+{
+    static_cast<DogAIController&>(ai).Stop(dt);
+    return true;
+}
+
+bool DogFollowNode::Run(AIController& ai, float dt)
+{
+    static_cast<DogAIController&>(ai).Follow(dt);
+    return true;
+}
+
+bool DogExploreNode::Run(AIController& ai, float dt)
+{
+    static_cast<DogAIController&>(ai).Explore(dt);
+    return true;
+}
+
+// Condition
+bool DogAIController::TooFarFromOwner()
+{
+    Vec3 dogPos{
+        owner->dog.loc.x,
+        owner->dog.loc.y,
+        owner->dog.loc.z
+    };
+
+    Vec3 policePos{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    float dist = Dist(dogPos, policePos);
+
+    return dist > FOLLOW_MAX_DIST;
+}
+
+bool DogAIController::HasTargetId()
+{
+    return db.target_id != -1;
+}
+
+// Action
+void DogAIController::Chase(float dt)
+{
+    if (db.target_id == -1)
+        return;
+
+    auto it = g_users.find(db.target_id);
+    if (it == g_users.end())
+    {
+        db.target_id = -1;
+        return;
+    }
+
+    auto target = it->second;
+
+    Vec3 targetPos{
+        target->cultist_state.PositionX,
+        target->cultist_state.PositionY,
+        target->cultist_state.PositionZ
+    };
+
+    MoveAlongPathDog(*this, targetPos, dt);
+}
+
+void DogAIController::Stop(float dt)
+{
+    if (db.target_id == -1)
+        return;
+
+    auto it = g_users.find(db.target_id);
+    if (it == g_users.end())
+        return;
+
+    auto target = it->second;
+
+    Vec3 dogPos{
+        owner->dog.loc.x,
+        owner->dog.loc.y,
+        owner->dog.loc.z
+    };
+
+    Vec3 targetPos{
+        target->cultist_state.PositionX,
+        target->cultist_state.PositionY,
+        target->cultist_state.PositionZ
+    };
+
+    Vec3 dir{
+        targetPos.x - dogPos.x,
+        targetPos.y - dogPos.y,
+        0.f
+    };
+
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+
+    if (len > 1e-3f)
+    {
+        owner->dog.rot.yaw = std::atan2(dir.y, dir.x) * RAD_TO_DEG;
+    }
+    // 이동 없음
+}
+
+void DogAIController::Follow(float dt)
+{
+    Vec3 policePos{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    MoveAlongPathDog(*this, policePos, dt);
+}
+
+void DogAIController::Explore(float dt)
+{
+    Vec3 policePos{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    Vec3 randomPos{
+        policePos.x + (rand() % 1601 - 800),
+        policePos.y + (rand() % 1601 - 800),
+        policePos.z
+    };
+
+    MoveAlongPathDog(*this, randomPos, dt);
+}
+
 void DogAIController::UpdateBlackboard(float dt)
 {
 
@@ -1106,13 +1325,8 @@ void DogAIController::UpdateBlackboard(float dt)
 
 void DogAIController::RunBehaviorTree(float dt)
 {
-    Vec3 target{
-      owner->police_state.PositionX,
-      owner->police_state.PositionY,
-      owner->police_state.PositionZ
-    };
-
-    MoveAlongPathDog(*this, target, dt);
+    if (root)
+        root->Run(*this, dt);
 }
 
 void DogAIController::Update(float dt)

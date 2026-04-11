@@ -28,6 +28,71 @@ public:
     bool Run(AIController& ai, float dt) override;
 };
 
+// Dog AI
+// Condition
+class CanAttackNode : public BTNode {
+    bool Run(AIController&, float) override; 
+};
+
+class TooFarFromOwnerNode : public BTNode { 
+    bool Run(AIController&, float) override; 
+};
+
+class HasTargetIdNode : public BTNode {
+    bool Run(AIController&, float) override;
+};
+
+// Action
+class DogAttackNode : public BTNode {
+    bool Run(AIController&, float) override; 
+};
+
+class DogChaseNode : public BTNode {
+    bool Run(AIController&, float) override;
+};
+
+class DogStopNode : public BTNode {
+    bool Run(AIController&, float) override;
+};
+
+class DogFollowNode : public BTNode { 
+    bool Run(AIController&, float) override; 
+};
+
+class DogExploreNode : public BTNode {
+    bool Run(AIController&, float) override; 
+};
+
+class DogAIController : public AIController
+{
+public:
+    bool bInitialized = false;
+
+    DogBlackboard db;
+    std::unique_ptr<BTNode> root;
+    std::vector<Vec3> path;
+    Vec3 lastTargetPos{};
+    float repath_timer{};
+
+    explicit DogAIController(SESSION* o);
+
+    void Init();
+    void Update(float);
+
+    void UpdateBlackboard(float);
+    void RunBehaviorTree(float);
+
+    bool TooFarFromOwner();
+    bool HasTargetId();
+
+    void Chase(float);
+    void Stop(float);
+    void Follow(float);
+    void Explore(float);
+};
+
+
+// Police AI
 // Condition
 class CanBatonAttackNode : public BTNode {
 public:
@@ -85,19 +150,18 @@ public:
     bool Run(AIController& ai, float dt) override;
 };
 
-// Police AI
 class PoliceAIController : public AIController {
 public:
     PoliceBlackboard bb;
     std::unique_ptr<BTNode> root;
     std::unique_ptr<DogAIController> dogAI;
 
-    PoliceAIController(SESSION* o);
+    explicit PoliceAIController(SESSION* o);
 
-    void Update(float dt) override;
+    void Update(float) override;
 
-    void UpdateBlackboard(float dt);
-    void RunBehaviorTree(float dt);
+    void UpdateBlackboard(float);
+    void RunBehaviorTree(float);
 
     // Condition
     bool CanBatonAttack();
@@ -107,30 +171,9 @@ public:
     bool CanChase();
 
     // Action
-    void BatonAttack(float dt);
-    void TaserShoot(float dt);
-    void PistolShoot(float dt);
-    void Chase(float dt);
-    void Patrol(float dt);
-};
-
-class DogAIController
-{
-public:
-    SESSION* owner;
-    bool bInitialized = false;
-
-    DogBlackboard db;
-    std::unique_ptr<BTNode> root;
-    std::vector<Vec3> path;
-    Vec3 lastTargetPos{};
-    float repath_timer{};
-
-    DogAIController(SESSION* o);
-    void Init();
-
-    void Update(float dt);
-
-    void UpdateBlackboard(float dt);
-    void RunBehaviorTree(float dt);
+    void BatonAttack(float);
+    void TaserShoot(float);
+    void PistolShoot(float);
+    void Chase(float);
+    void Patrol(float);
 };
