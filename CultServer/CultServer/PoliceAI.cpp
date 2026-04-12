@@ -201,7 +201,8 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
 
     float dx = targetPos.x - policeAI->bb.lastTargetPos.x;
     float dy = targetPos.y - policeAI->bb.lastTargetPos.y;
-    float dist2 = dx * dx + dy * dy;
+    float dz = targetPos.z - policeAI->bb.lastTargetPos.z;
+    float dist2 = dx * dx + dy * dy + dz * dz;
 
     if (dist2 > REPATH_DIST * REPATH_DIST)
     {
@@ -266,11 +267,9 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
     Vec3 dir{
         next.x - cur.x,
         next.y - cur.y,
-        0.f
-        // next.z - cur.z
+        next.z - cur.z
     };
-    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
-    // float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
     const float speed = 300.f; // 600cm/s
     if (len <= speed * deltaTime)
     {
@@ -286,7 +285,8 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
 
         dir.x = next.x - cur.x;
         dir.y = next.y - cur.y;
-        len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+        dir.z = next.z - cur.z;
+        len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
         std::cout << " if (len <= speed * deltaTime)" << std::endl;
     }
 
@@ -298,16 +298,16 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
 
     dir.x /= len;
     dir.y /= len;
-    // dir.z /= len;
+    dir.z /= len;
 
     // 위치 갱신
     session.police_state.PositionX += dir.x * speed * deltaTime;
     session.police_state.PositionY += dir.y * speed * deltaTime;
-    // ai.police_state.PositionZ += dir.z * speed * deltaTime;
+    session.police_state.PositionZ += dir.z * speed * deltaTime;
 
     session.police_state.VelocityX = dir.x * speed;
     session.police_state.VelocityY = dir.y * speed;
-    session.police_state.VelocityZ = 0.f;
+    session.police_state.VelocityZ = dir.z * speed;
     session.police_state.Speed = std::sqrt(
         session.police_state.VelocityX * session.police_state.VelocityX +
         session.police_state.VelocityY * session.police_state.VelocityY
@@ -992,14 +992,6 @@ DogAIController::DogAIController(SESSION* o)
     */
     auto rootSelector = std::make_unique<Selector>();
 
-    // Attack
-    {
-        auto seq = std::make_unique<Sequence>();
-        seq->children.push_back(std::make_unique<CanAttackNode>());
-        seq->children.push_back(std::make_unique<DogAttackNode>());
-        rootSelector->children.push_back(std::move(seq));
-    }
-
     // Chase
     {
         auto seq = std::make_unique<Sequence>();
@@ -1047,6 +1039,12 @@ void DogAIController::Init()
     if (!owner)
         return;
 
+    db.lastTargetPos = {
+        static_cast<float>(owner->dog.loc.x),
+        static_cast<float>(owner->dog.loc.y),
+        static_cast<float>(owner->dog.loc.z)
+    };
+    db.repath_timer = 0.f;
     owner->dog.loc.x = owner->police_state.PositionX + 500.f;
     owner->dog.loc.y = owner->police_state.PositionY;
     owner->dog.loc.z = owner->police_state.PositionZ;
@@ -1073,20 +1071,18 @@ static void MoveAlongPathDog(DogAIController& dogAI, const Vec3& targetPos, floa
         return;
     }
 
-    dogAI.repath_timer += dt;
-
-    float dx = targetPos.x - dogAI.lastTargetPos.x;
-    float dy = targetPos.y - dogAI.lastTargetPos.y;
-    float dz = targetPos.z - dogAI.lastTargetPos.z;
+    float dx = targetPos.x - dogAI.db.lastTargetPos.x;
+    float dy = targetPos.y - dogAI.db.lastTargetPos.y;
+    float dz = targetPos.z - dogAI.db.lastTargetPos.z;
     float dist2 = dx * dx + dy * dy + dz * dz;
 
     if (dist2 > REPATH_DIST * REPATH_DIST)
     {
-        dogAI.lastTargetPos = targetPos;
-        dogAI.path.clear();
+        dogAI.db.lastTargetPos = targetPos;
+        dogAI.db.path.clear();
     }
 
-    if (dogAI.path.empty() && dogAI.repath_timer > 0.3f)
+    if (dogAI.db.path.empty() && dogAI.db.repath_timer > 0.3f)
     {
         NAVMESH* nav = GetNavMesh(session->room_id);
         if (!nav)
@@ -1095,7 +1091,7 @@ static void MoveAlongPathDog(DogAIController& dogAI, const Vec3& targetPos, floa
         std::vector<int> triPath;
         if (!nav->FindTriPath(cur, targetPos, triPath))
         {
-            dogAI.path.clear();
+            dogAI.db.path.clear();
             return;
         }
 
@@ -1109,14 +1105,14 @@ static void MoveAlongPathDog(DogAIController& dogAI, const Vec3& targetPos, floa
         if (!nav->SmoothPath(cur, targetPos, portals, smoothPath) || smoothPath.size() < 2)
             return;
 
-        dogAI.path = smoothPath;
-        dogAI.repath_timer = 0.f;
+        dogAI.db.path = smoothPath;
+        dogAI.db.repath_timer = 0.f;
     }
 
-    if (dogAI.path.empty())
+    if (dogAI.db.path.empty())
         return;
 
-    Vec3 next = (dogAI.path.size() >= 2) ? dogAI.path[1] : dogAI.path[0];
+    Vec3 next = (dogAI.db.path.size() >= 2) ? dogAI.db.path[1] : dogAI.db.path[0];
 
     Vec3 dir{
         next.x - cur.x,
@@ -1129,12 +1125,12 @@ static void MoveAlongPathDog(DogAIController& dogAI, const Vec3& targetPos, floa
 
     if (len <= speed * dt)
     {
-        dogAI.path.erase(dogAI.path.begin());
+        dogAI.db.path.erase(dogAI.db.path.begin());
 
-        if (dogAI.path.empty())
+        if (dogAI.db.path.empty())
             return;
 
-        next = dogAI.path[0];
+        next = dogAI.db.path[0];
 
         dir.x = next.x - cur.x;
         dir.y = next.y - cur.y;
@@ -1157,11 +1153,6 @@ static void MoveAlongPathDog(DogAIController& dogAI, const Vec3& targetPos, floa
 }
 
 // Condition Node
-bool CanAttackNode::Run(AIController& ai, float)
-{
-    return false; // 아직 공격 안함
-}
-
 bool HasTargetIdNode::Run(AIController& ai, float)
 {
     return static_cast<DogAIController&>(ai).HasTargetId();
@@ -1173,12 +1164,6 @@ bool TooFarFromOwnerNode::Run(AIController& ai, float)
 }
 
 // Action Node
-bool DogAttackNode::Run(AIController& ai, float)
-{
-    // 아직 구현 안함
-    return true;
-}
-
 bool DogChaseNode::Run(AIController& ai, float dt)
 {
     static_cast<DogAIController&>(ai).Chase(dt);
@@ -1206,21 +1191,7 @@ bool DogExploreNode::Run(AIController& ai, float dt)
 // Condition
 bool DogAIController::TooFarFromOwner()
 {
-    Vec3 dogPos{
-        owner->dog.loc.x,
-        owner->dog.loc.y,
-        owner->dog.loc.z
-    };
-
-    Vec3 policePos{
-        owner->police_state.PositionX,
-        owner->police_state.PositionY,
-        owner->police_state.PositionZ
-    };
-
-    float dist = Dist(dogPos, policePos);
-
-    return dist > FOLLOW_MAX_DIST;
+    return db.dist_to_owner > FOLLOW_MAX_DIST;
 }
 
 bool DogAIController::HasTargetId()
@@ -1234,22 +1205,7 @@ void DogAIController::Chase(float dt)
     if (db.target_id == -1)
         return;
 
-    auto it = g_users.find(db.target_id);
-    if (it == g_users.end())
-    {
-        db.target_id = -1;
-        return;
-    }
-
-    auto target = it->second;
-
-    Vec3 targetPos{
-        target->cultist_state.PositionX,
-        target->cultist_state.PositionY,
-        target->cultist_state.PositionZ
-    };
-
-    MoveAlongPathDog(*this, targetPos, dt);
+    MoveAlongPathDog(*this, db.targetPos, dt);
 }
 
 void DogAIController::Stop(float dt)
@@ -1257,31 +1213,19 @@ void DogAIController::Stop(float dt)
     if (db.target_id == -1)
         return;
 
-    auto it = g_users.find(db.target_id);
-    if (it == g_users.end())
-        return;
-
-    auto target = it->second;
-
     Vec3 dogPos{
-        owner->dog.loc.x,
-        owner->dog.loc.y,
-        owner->dog.loc.z
-    };
-
-    Vec3 targetPos{
-        target->cultist_state.PositionX,
-        target->cultist_state.PositionY,
-        target->cultist_state.PositionZ
+        static_cast<float>(owner->dog.loc.x),
+        static_cast<float>(owner->dog.loc.y),
+        static_cast<float>(owner->dog.loc.z)
     };
 
     Vec3 dir{
-        targetPos.x - dogPos.x,
-        targetPos.y - dogPos.y,
-        0.f
+        db.targetPos.x - dogPos.x,
+        db.targetPos.y - dogPos.y,
+        db.targetPos.z - dogPos.z,
     };
 
-    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
 
     if (len > 1e-3f)
     {
@@ -1320,7 +1264,52 @@ void DogAIController::Explore(float dt)
 
 void DogAIController::UpdateBlackboard(float dt)
 {
+    Vec3 dogPos{
+        static_cast<float>(owner->dog.loc.x),
+        static_cast<float>(owner->dog.loc.y),
+        static_cast<float>(owner->dog.loc.z)
+    };
 
+    Vec3 policePos{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    // 경찰 거리
+    db.dist_to_owner = Dist(dogPos, policePos);
+
+    // target 유효성 체크
+    if (db.target_id != -1)
+    {
+        auto it = g_users.find(db.target_id);
+        if (it == g_users.end())
+        {
+            db.target_id = -1;
+        }
+        else
+        {
+            auto target = it->second;
+
+            Vec3 targetPos{
+                target->cultist_state.PositionX,
+                target->cultist_state.PositionY,
+                target->cultist_state.PositionZ
+            };
+
+            // target 위치 저장
+            db.targetPos = targetPos;
+            // target 거리
+            db.dist_to_target = Dist(dogPos, targetPos);
+        }
+    }
+    else
+    {
+        db.dist_to_target = FLT_MAX;
+    }
+
+    // repath 타이머
+    db.repath_timer += dt;
 }
 
 void DogAIController::RunBehaviorTree(float dt)

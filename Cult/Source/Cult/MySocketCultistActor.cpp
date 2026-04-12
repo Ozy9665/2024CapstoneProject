@@ -405,7 +405,6 @@ void AMySocketCultistActor::ProcessDogData(const char* Buffer)
     else {
         UE_LOG(LogTemp, Warning, TEXT("[DogData] !Police->PoliceDogInstance"));
     }
-
 }
 
 void AMySocketCultistActor::ProcessHitData(const char* Buffer)

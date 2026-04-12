@@ -70,7 +70,7 @@ void InitializeAltars(int room_num) {
 	}
 
 	for (int i = 0; i < ALTAR_PER_ROOM; ++i) {
-		g_altars[room_num][i].loc = kPredefinedLocations[order[i]];
+		g_altars[room_num][i].loc = LandMassAltarLocations[order[i]];
 		g_altars[room_num][i].isActivated = false;
 		g_altars[room_num][i].id = i;
 		g_altars[room_num][i].gauge = 0;

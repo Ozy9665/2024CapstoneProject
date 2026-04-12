@@ -30,9 +30,6 @@ public:
 
 // Dog AI
 // Condition
-class CanAttackNode : public BTNode {
-    bool Run(AIController&, float) override; 
-};
 
 class TooFarFromOwnerNode : public BTNode { 
     bool Run(AIController&, float) override; 
@@ -43,10 +40,6 @@ class HasTargetIdNode : public BTNode {
 };
 
 // Action
-class DogAttackNode : public BTNode {
-    bool Run(AIController&, float) override; 
-};
-
 class DogChaseNode : public BTNode {
     bool Run(AIController&, float) override;
 };
@@ -70,9 +63,6 @@ public:
 
     DogBlackboard db;
     std::unique_ptr<BTNode> root;
-    std::vector<Vec3> path;
-    Vec3 lastTargetPos{};
-    float repath_timer{};
 
     explicit DogAIController(SESSION* o);
 

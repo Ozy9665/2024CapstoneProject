@@ -63,10 +63,27 @@ SESSION::SESSION(int session_id, uint8_t ai_role, int room_id)
 	prev_remain{},heal_gauge{}// AI Session
 {
 	visible_ids.clear();
+	dog = {};
+	crow = {};
+
+	FVector spawn{};
+	if (room_id >= 0 && room_id < MAX_ROOM)
+	{
+		auto maptype = g_rooms[room_id].second;
+		if (maptype == LANDMASS)
+			spawn = LandmassSpawnLocation;
+		else if (maptype == LEVEL3)
+			spawn = Level3SpawnLocation;
+	}
+
 	if (ai_role == 100)   // Cultist AI
 	{
 		ai = std::make_unique<CultistAIController>(this);
 		cultist_state = CultistDummyState;
+		cultist_state.PositionX = static_cast<float>(spawn.x);
+		cultist_state.PositionY = static_cast<float>(spawn.y);
+		cultist_state.PositionZ = static_cast<float>(spawn.z);
+
 		cultist_state.PlayerID = session_id;
 		std::cout << "[AI] Cultist SESSION 持失 ID=" << id << "\n";
 	}
@@ -74,6 +91,10 @@ SESSION::SESSION(int session_id, uint8_t ai_role, int room_id)
 	{
 		ai = std::make_unique<PoliceAIController>(this);
 		police_state = PoliceDummyState;
+		police_state.PositionX = static_cast<float>(spawn.x);
+		police_state.PositionY = static_cast<float>(spawn.y);
+		police_state.PositionZ = static_cast<float>(spawn.z);
+
 		police_state.PlayerID = session_id;
 		std::cout << "[AI] Police SESSION 持失 ID=" << id << "\n";
 	}

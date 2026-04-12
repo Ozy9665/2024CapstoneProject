@@ -485,6 +485,7 @@ struct DogBlackboard
 	float dist_to_owner{};       // 경찰 거리
 	float dist_to_target{};      // 적 거리
 
+	Vec3 lastTargetPos{};
 	std::vector<Vec3> path{};
 
 	float repath_timer{};
@@ -631,13 +632,14 @@ void broadcast_in_room(const SESSION& sender, const PacketT* packet, float view_
 }
 
 constexpr FVector LandmassSpawnLocation{ -10219.0f, 2560.0f, -3009.0f };
+constexpr FVector Level3SpawnLocation{ 5253.f, 49447.f, 174.f };
 
-constexpr FCultistCharacterState CultistDummyState{ -1, -10219.0f, 2560.0f, -3009.0f, 0.f, 90.f, 0.f, 0.f, 0.f, 0.f, 100.f,
+constexpr FCultistCharacterState CultistDummyState{ -1, 0.f, 0.f, 0.f, 0.f, 90.f, 0.f, 0.f, 0.f, 0.f, 100.f,
 	false, false, false, false, false, false, false, false, false, false, false, false };
-constexpr FPoliceCharacterState PoliceDummyState{ -1, -10219.0f, 2560.0f, -3009.0f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,
+constexpr FPoliceCharacterState PoliceDummyState{ -1, 0.f, 0.f, 0.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,
 	false, false, false, EWeaponType::Baton, false, EVaultingType::OneHandVault, false, false, false, false };
 
-constexpr FVector kPredefinedLocations[5] = {
+constexpr FVector LandMassAltarLocations[5] = {
 	{ -10740.0f, 10460.0f, -3124.0f },
 	{ -11450.0f,  4640.0f, -3126.0f },
 	{   1530.0f,  6070.0f, -3124.0f },
