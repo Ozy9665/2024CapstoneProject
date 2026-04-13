@@ -89,13 +89,19 @@ SESSION::SESSION(int session_id, uint8_t ai_role, int room_id)
 	}
 	else if (ai_role == 101)  // Police AI
 	{
-		ai = std::make_unique<PoliceAIController>(this);
 		police_state = PoliceDummyState;
 		police_state.PositionX = static_cast<float>(spawn.x);
 		police_state.PositionY = static_cast<float>(spawn.y);
 		police_state.PositionZ = static_cast<float>(spawn.z);
-
 		police_state.PlayerID = session_id;
+
+		ai = std::make_unique<PoliceAIController>(this);
+		auto* policeAI = dynamic_cast<PoliceAIController*>(ai.get());
+		if (policeAI) {
+			policeAI->dogAI = std::make_unique<DogAIController>(this);
+			policeAI->dogAI->Init();
+		}
+
 		std::cout << "[AI] Police SESSION »ý¼º ID=" << id << "\n";
 	}
 	else

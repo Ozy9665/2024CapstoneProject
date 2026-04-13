@@ -446,9 +446,6 @@ PoliceAIController::PoliceAIController(SESSION* o)
     // Patrol (fallback)
     rootSelector->children.push_back(std::make_unique<PatrolNode>());
     root = std::move(rootSelector);
-
-    dogAI = std::make_unique<DogAIController>(o);
-    dogAI->Init();
 }
 
 bool Selector::Run(AIController& ai, float dt)
@@ -1039,17 +1036,18 @@ void DogAIController::Init()
     if (!owner)
         return;
 
+    owner->dog.loc.x = owner->police_state.PositionX + 500.f;
+    owner->dog.loc.y = owner->police_state.PositionY;
+    owner->dog.loc.z = owner->police_state.PositionZ;
+    owner->dog.owner = owner->id;
+
     db.lastTargetPos = {
         static_cast<float>(owner->dog.loc.x),
         static_cast<float>(owner->dog.loc.y),
         static_cast<float>(owner->dog.loc.z)
     };
     db.repath_timer = 0.f;
-    owner->dog.loc.x = owner->police_state.PositionX + 500.f;
-    owner->dog.loc.y = owner->police_state.PositionY;
-    owner->dog.loc.z = owner->police_state.PositionZ;
-
-    owner->dog.owner = owner->id;
+    db.path.clear();
 
     bInitialized = true;
 }
@@ -1247,19 +1245,22 @@ void DogAIController::Follow(float dt)
 
 void DogAIController::Explore(float dt)
 {
-    Vec3 policePos{
-        owner->police_state.PositionX,
-        owner->police_state.PositionY,
-        owner->police_state.PositionZ
-    };
+    if (db.path.empty())
+    {
+        Vec3 policePos{
+            owner->police_state.PositionX,
+            owner->police_state.PositionY,
+            owner->police_state.PositionZ
+        };
 
-    Vec3 randomPos{
-        policePos.x + (rand() % 1601 - 800),
-        policePos.y + (rand() % 1601 - 800),
-        policePos.z
-    };
+        db.targetPos = {
+            policePos.x + (rand() % 1601 - 800),
+            policePos.y + (rand() % 1601 - 800),
+            policePos.z
+        };
+    }
 
-    MoveAlongPathDog(*this, randomPos, dt);
+    MoveAlongPathDog(*this, db.targetPos, dt);
 }
 
 void DogAIController::UpdateBlackboard(float dt)

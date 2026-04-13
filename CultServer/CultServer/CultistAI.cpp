@@ -1,5 +1,4 @@
 #define NOMINMAX
-
 #include "CultistAI.h"
 #include <chrono>
 #include <thread>
