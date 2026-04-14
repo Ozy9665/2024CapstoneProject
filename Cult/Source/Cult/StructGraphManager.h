@@ -220,6 +220,22 @@ public:
 	int32 Stage2_SpallBudget = 2;        // Stage2 동안 스폴링은 최대 2번만
 	int32 Stage2_ColumnShearIdx = 0;     // 기둥 전단 방향 순환용
 
+	// 시뮬 조절
+	static void PrepAsWalkableKinematicGC(UGeometryCollectionComponent* GC)
+	{
+		if (!IsValid(GC)) return;
+
+		GC->SetSimulatePhysics(false);
+		GC->SetEnableGravity(false);
+
+		GC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		GC->SetCollisionProfileName(TEXT("BlockAll"));
+		GC->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+		GC->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+
+		GC->RecreatePhysicsState();
+	}
+
 	// 지진
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
 	void StartEarthquake();

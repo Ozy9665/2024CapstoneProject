@@ -25,6 +25,11 @@ void AStructGraphManager::BeginPlay()
 	UE_LOG(LogTemp, Warning, TEXT("[StructGraph] BeginPlay: %s"), *GetName());
 
 	BuildGCCache();
+	// 시뮬 조절
+	ForEachValidGC(GCSlabs, [](UGeometryCollectionComponent* GC)
+		{
+			PrepAsWalkableKinematicGC(GC);
+		});
 
 	//FTimerHandle Tmp;
 	//GetWorldTimerManager().SetTimer(Tmp, this, &AStructGraphManager::Debug_ApplyStrainOnce, 0.5f, false);
@@ -1811,7 +1816,7 @@ void AStructGraphManager::ApplyContinuousShakeToGC(
 			const FVector Dir(Sign, 0.f, 0.f); // X축만
 
 			const FVector Imp = Dir * ImpulseStrength + FVector(0, 0, Stage3_ShakeUpImpulse);
-			GC->AddImpulse(Imp, NAME_None, true);
+			GC->AddImpulse(Imp, NAME_None, false);
 			if (!GC->IsAnyRigidBodyAwake())
 			{
 				GC->WakeAllRigidBodies();
@@ -1900,11 +1905,7 @@ void AStructGraphManager::Stage3_ContinuousTick()
 		return;
 	}
 
-	// --------------------------------------------------------------------
-	// 0) 슬래브 "하부부터" 처짐 유도 (중요!)
-	//    - 전체 슬래브에 동일 AddForce 금지
-	//    - GCSlabs(Z 오름차순) 기준으로 아래부터 ActiveCount만 AddForce
-	// --------------------------------------------------------------------
+	// 0) 슬래브 하부부터
 	ApplySlabRampForce_BottomUp(T);
 
 	// 램프업이 끝나면 "진짜 중력"을 딱 1번만 ON (Recreate/Sim 토글 금지)
@@ -1915,16 +1916,27 @@ void AStructGraphManager::Stage3_ContinuousTick()
 		ForEachValidGC(GCSlabs, [](UGeometryCollectionComponent* GC)
 			{
 				if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
+
+				if (!GC->IsSimulatingPhysics())
+				{
+					GC->SetSimulatePhysics(true);
+				}
+
 				GC->SetEnableGravity(true);
+
+				if (FBodyInstance* BI = GC->GetBodyInstance())
+				{
+					BI->SetEnableGravity(true);
+					BI->WakeInstance();
+				}
+
 				GC->WakeAllRigidBodies();
 			});
 
 		UE_LOG(LogTemp, Warning, TEXT("[Stage3] Slab Gravity ON (no recreate)"));
 	}
 
-	// --------------------------------------------------------------------
-	// 1) 슬래브 홀드(댐핑) 점진 해제: "몇 초 버티다 무너짐" 만들기
-	// --------------------------------------------------------------------
+	// 1) 슬래브 홀드(댐핑) 점진 해제
 	{
 		const float Alpha = FMath::Clamp(T / FMath::Max(0.01f, Stage3_HoldEndTime), 0.f, 1.f);
 		const float Lin = FMath::Lerp(Stage3_SlabHoldLinStart, Stage3_SlabHoldLinEnd, Alpha);
@@ -1938,19 +1950,12 @@ void AStructGraphManager::Stage3_ContinuousTick()
 			});
 	}
 
-	// --------------------------------------------------------------------
 	// 2) 연속 흔들림(지진 외력)
-	// --------------------------------------------------------------------
 	ApplyContinuousShakeToGC(GCWalls, Stage3_ShakeImpulse * 0.8f);
 	ApplyContinuousShakeToGC(GCColumns, Stage3_ShakeImpulse * 1.0f);
-
-	// 슬래브는 처짐이 핵심이라, 흔들림을 너무 주면 위에서부터 깨질 수 있음
-	// => 필요하면 0.6f -> 0.3f로 더 낮춰도 됨
 	ApplyContinuousShakeToGC(GCSlabs, Stage3_ShakeImpulse * 0.6f);
 
-	// --------------------------------------------------------------------
 	// 3) strain은 듬성듬성: 0.05 틱이면 %12 => 0.6초마다 1회
-	// --------------------------------------------------------------------
 	const bool bDoStrain = (Stage3TickCounter % 12) == 0;
 	if (!bDoStrain) return;
 
@@ -1958,9 +1963,7 @@ void AStructGraphManager::Stage3_ContinuousTick()
 	const bool bPhaseB = (T >= 2.0f && T < 4.0f);   // 펀치 누적
 	const bool bPhaseC = (T >= 4.0f);               // 마무리(과한 분해 금지)
 
-	// --------------------------------------------------------------------
 	// 4) 벽 하부 균열 유지 (대상 1개만, 아주 약하게)
-	// --------------------------------------------------------------------
 	{
 		const int32 HitCount = FMath::Min(1, GCWalls.Num());
 		for (int32 i = 0; i < HitCount; ++i)
@@ -1985,9 +1988,7 @@ void AStructGraphManager::Stage3_ContinuousTick()
 		}
 	}
 
-	// --------------------------------------------------------------------
-	// 5) 약점 기둥 전단 누적(링 4방향)
-	// --------------------------------------------------------------------
+	// 5) 전단 누적
 	{
 		UGeometryCollectionComponent* ColGC = Stage3_WeakColumnGC.Get();
 		if (IsValid(ColGC) && ColGC->IsRegistered() && !ColGC->IsBeingDestroyed())
@@ -2022,9 +2023,7 @@ void AStructGraphManager::Stage3_ContinuousTick()
 		}
 	}
 
-	// --------------------------------------------------------------------
 	// 6) 슬래브 펀치 누적: PhaseB에서만
-	// --------------------------------------------------------------------
 	if (bPhaseB)
 	{
 		UGeometryCollectionComponent* SlabGC = Stage3_TargetSlabGC.Get();
@@ -2040,9 +2039,7 @@ void AStructGraphManager::Stage3_ContinuousTick()
 		}
 	}
 
-	// --------------------------------------------------------------------
 	// 7) PhaseC: 2차 분해는 "아주 약하게 1회"
-	// --------------------------------------------------------------------
 	if (bPhaseC)
 	{
 		const int32 Extra = FMath::Min(1, GCSlabs.Num());
