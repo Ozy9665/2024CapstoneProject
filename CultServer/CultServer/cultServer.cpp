@@ -432,10 +432,10 @@ void RoomWorkerLoop() {
 				}
 			}
 
-			if (0 == task.role && g_rooms[room_id].first.cultist >= 1) {
+			if ((0 == task.role || 100 == task.role) && g_rooms[room_id].first.cultist >= 1) {
 				g_rooms[room_id].first.cultist--;
 			}
-			else if (1 == task.role && g_rooms[room_id].first.police >= 1) {
+			else if ((1 == task.role || 101 == task.role) && g_rooms[room_id].first.police >= 1) {
 				g_rooms[room_id].first.police--;
 			}
 			user->room_id = -1;

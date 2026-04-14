@@ -181,10 +181,8 @@ struct Dog {
 	int owner;
 	FVector loc;
 	FRotator rot;
-	// 개 상태
-	bool is_barking;
-	// 속도
 	float Speed;
+	bool is_barking;
 };
 
 struct Crow {

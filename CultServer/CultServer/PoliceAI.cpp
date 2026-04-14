@@ -95,6 +95,42 @@ void KillPoliceAi(int ai_id)
     std::cout << "[Command] AI removed. ID=" << ai_id << "\n";
 }
 
+static void StopMovement(SESSION& session)
+{
+    session.police_state.VelocityX = 0.f;
+    session.police_state.VelocityY = 0.f;
+    session.police_state.VelocityZ = 0.f;
+    session.police_state.Speed = 0.f;
+}
+
+static void MoveToNearestTriangle(SESSION& session, const Vec3& cur)
+{
+    auto* policeAI = dynamic_cast<PoliceAIController*>(session.ai.get());
+    if (!policeAI)
+        return;
+
+    NAVMESH* nav = GetNavMesh(session.room_id);
+    if (nav)
+    {
+        int tri = nav->FindContainingTriangle(policeAI->bb.lastSnapPos);
+
+        if (tri >= 0)
+        {
+            Vec3 safe = nav->GetTriCenter(tri);
+
+            session.police_state.PositionX = safe.x;
+            session.police_state.PositionY = safe.y;
+            session.police_state.PositionZ = safe.z;
+        }
+        else
+        {
+            // fallback
+            session.police_state.PositionX = 0.f;
+            session.police_state.PositionY = 0.f;
+        }
+    }
+}
+
 void PoliceAIWorkerLoop()
 {
     using clock = std::chrono::steady_clock;
@@ -134,12 +170,17 @@ void PoliceAIWorkerLoop()
             auto& st = session->police_state;
 
             session->ai->Update(dt);
-            
+
             PolicePacket packet{};
             packet.header = policeHeader;
             packet.size = sizeof(PolicePacket);
             packet.state = session->police_state;
             broadcast_in_room(*session, &packet, VIEW_RANGE);
+            std::cout << "[SEND Police] ID=" << session->id
+                << " Pos=("
+                << session->police_state.PositionX << ", "
+                << session->police_state.PositionY << ", "
+                << session->police_state.PositionZ << ")\n";
 
             DogPacket d{};
             d.header = dogHeader;
@@ -182,14 +223,6 @@ static void SnapToNavMesh(SESSION& session)
     session.police_state.PositionZ = pos.z;
 }
 
-static void StopMovement(SESSION& session)
-{
-    session.police_state.VelocityX = 0.f;
-    session.police_state.VelocityY = 0.f;
-    session.police_state.VelocityZ = 0.f;
-    session.police_state.Speed = 0.f;
-}
-
 static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTime)
 {
     if (!session.ai)
@@ -200,6 +233,31 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
     session.police_state.PositionY,
     session.police_state.PositionZ
     };
+
+    if (!std::isfinite(cur.x) || !std::isfinite(cur.y))
+    {
+        std::cout << "[FIX] NaN detected -> reset path\n";
+
+        auto* policeAI = dynamic_cast<PoliceAIController*>(session.ai.get());
+        if (!policeAI)
+            return;
+
+        policeAI->bb.path.clear();
+        policeAI->bb.has_patrol_target = false;
+
+        session.police_state.PositionX = policeAI->bb.lastSnapPos.x;
+        session.police_state.PositionY = policeAI->bb.lastSnapPos.y;
+
+        Vec3 safe{
+            session.police_state.PositionX,
+            session.police_state.PositionY,
+            session.police_state.PositionZ
+        };
+
+        MoveToNearestTriangle(session, safe);
+
+        return;
+    }
 
     if (Dist(cur, targetPos) <= ARRIVE_RANGE)
     {
@@ -281,7 +339,9 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
         next.y - cur.y,
         0.f
     };
-    float len = std::sqrt(dir.x * dir.x + dir.y);
+
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+
     if (len <= POLICE_SPEED * deltaTime)
     {
         policeAI->bb.path.erase(policeAI->bb.path.begin());
@@ -298,10 +358,14 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
         dir.y = next.y - cur.y;
         dir.z = 0.f;
         len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
-        std::cout << " if (len <= speed * deltaTime)" << std::endl;
+        if (len < 1e-6f)
+        {
+            StopMovement(session);
+            return;
+        }
     }
 
-    if (len < 1e-3f)
+    if (len < 1e-6f)
     {
         StopMovement(session);
         return;
@@ -309,7 +373,7 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
 
     dir.x /= len;
     dir.y /= len;
-    dir.z /= len;
+    dir.z = 0.f;
 
     // 위치 갱신
     session.police_state.PositionX += dir.x * POLICE_SPEED * deltaTime;
@@ -658,7 +722,6 @@ void PoliceAIController::Patrol(float dt)
         bb.patrol_target = nav->GetTriCenter(randomTri);
         bb.has_patrol_target = true;
 
-        bb.stuck_ticks = 0;
         bb.last_dist_to_target = FLT_MAX;
         bb.path.clear();
     }
@@ -673,26 +736,7 @@ void PoliceAIController::Patrol(float dt)
         return;
     }
 
-    // stuck 체크
-    if (dist > bb.last_dist_to_target - STUCK_RANGE)
-    {
-        bb.stuck_ticks++;
-    }
-    else 
-    {
-        bb.stuck_ticks = 0;
-    }
-    bb.last_dist_to_target = dist;
-
-    if (bb.stuck_ticks > 60)
-    {
-        bb.has_patrol_target = false;
-        bb.path.clear();
-        return;
-    }
-
     MoveAlongPath(*owner, bb.patrol_target, dt);
-    std::cout << "Patrol\r";
 }
 
 void PoliceAIController::Chase(float dt)
@@ -743,12 +787,10 @@ void PoliceAIController::Chase(float dt)
     }
 
     MoveAlongPath(*owner, targetPos, dt);
-    std::cout << "Chase\r";
 }
 
 void PoliceAIController::BatonAttack(float dt)
 {
-    std::cout << "BatonAttack\r";
     owner->police_state.CurrentWeapon = EWeaponType::Baton;
     owner->police_state.bIsAttacking = true;
     StopMovement(*owner);
@@ -775,7 +817,6 @@ void PoliceAIController::BatonAttack(float dt)
 void PoliceAIController::TaserShoot(float dt)
 {
     // 공격 함수 추가
-    std::cout << "TaserShoot\r";
     owner->police_state.CurrentWeapon = EWeaponType::Taser;
     owner->police_state.bIsAiming = false;
     owner->police_state.bIsShooting = true;
@@ -804,7 +845,6 @@ void PoliceAIController::TaserShoot(float dt)
 void PoliceAIController::PistolShoot(float dt)
 {
     // 공격 함수 추가
-    std::cout << "PistolShoot\r";
     owner->police_state.CurrentWeapon = EWeaponType::Pistol;
     owner->police_state.bIsAiming = false;
     owner->police_state.bIsShooting = true;
@@ -984,6 +1024,38 @@ void PoliceAIController::UpdateBlackboard(float dt)
     {
         owner->police_state.bIsAttacking = false;
         owner->police_state.bIsShooting = false;
+    }
+
+    // stuck 판단
+    Vec3 cur{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    float moveDist = Dist(cur, bb.lastSnapPos);
+
+    if (moveDist < 1.0f)
+    {
+        bb.stuck_ticks++;
+    }
+    else
+    {
+        bb.stuck_ticks = 0;
+    }
+
+    bb.lastSnapPos = cur;
+
+    // stuck 발생 시 처리
+    if (bb.stuck_ticks > 30)
+    {
+        std::cout << "[FIX] stuck -> reset path\n";
+
+        bb.path.clear();
+        bb.has_patrol_target = false;
+        bb.target_id = -1;
+        MoveToNearestTriangle(*owner, cur);
+        bb.stuck_ticks = 0;
     }
 }
 
@@ -1301,7 +1373,17 @@ bool DogAIController::ShouldStopChase()
 
 bool DogAIController::HasTargetId()
 {
-    return db.target_id != -1;
+    if (db.target_id == -1)
+        return false;
+
+    auto it = g_users.find(db.target_id);
+    if (it == g_users.end() || !it->second)
+        return false;
+
+    if (!IsCultistTargetAttackable(*it->second))
+        return false;
+
+    return true;
 }
 
 // Action
@@ -1404,6 +1486,9 @@ void DogAIController::UpdateBlackboard(float dt)
         {
             db.target_id = -1;
             db.dist_to_target = FLT_MAX;
+
+            db.path.clear();
+            owner->dog.is_barking = false;
         }
         else
         {

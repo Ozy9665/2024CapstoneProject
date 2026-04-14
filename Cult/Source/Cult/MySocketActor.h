@@ -37,10 +37,8 @@ struct Dog {
 	int owner;
 	FNetVec loc;
 	FNetRot rot;
-	// 개 상태
-	bool is_barking;
-	// 속도
 	float Speed;
+	bool is_barking;
 };
 
 struct Crow {
