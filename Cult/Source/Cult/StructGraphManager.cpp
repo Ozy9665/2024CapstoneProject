@@ -1951,9 +1951,13 @@ void AStructGraphManager::Stage3_ContinuousTick()
 	}
 
 	// 2) 연속 흔들림(지진 외력)
-	ApplyContinuousShakeToGC(GCWalls, Stage3_ShakeImpulse * 0.8f);
-	ApplyContinuousShakeToGC(GCColumns, Stage3_ShakeImpulse * 1.0f);
-	ApplyContinuousShakeToGC(GCSlabs, Stage3_ShakeImpulse * 0.6f);
+
+	if (bStage3GravityCommitted)
+	{
+		ApplyContinuousShakeToGC(GCWalls, Stage3_ShakeImpulse * 0.8f);
+		ApplyContinuousShakeToGC(GCColumns, Stage3_ShakeImpulse * 1.0f);
+		ApplyContinuousShakeToGC(GCSlabs, Stage3_ShakeImpulse * 0.25f);
+	}
 
 	// 3) strain은 듬성듬성: 0.05 틱이면 %12 => 0.6초마다 1회
 	const bool bDoStrain = (Stage3TickCounter % 12) == 0;
