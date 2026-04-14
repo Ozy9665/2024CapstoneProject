@@ -38,7 +38,7 @@ struct Dog {
 	FNetVec loc;
 	FNetRot rot;
 	// 개 상태
-
+	bool is_barking;
 	// 속도
 	float Speed;
 };
