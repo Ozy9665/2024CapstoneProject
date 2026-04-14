@@ -170,6 +170,24 @@ static float Dist(const Vec3& a, const Vec3& b)
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+static void SnapToNavMesh(SESSION& session)
+{
+    NAVMESH* nav = GetNavMesh(session.room_id);
+    if (!nav)
+        return;
+
+    Vec3 pos{
+        session.police_state.PositionX,
+        session.police_state.PositionY,
+        session.police_state.PositionZ
+    };
+
+    if (!nav->SnapPositionToNavMesh(pos))
+        return;
+
+    session.police_state.PositionZ = pos.z;
+}
+
 static void StopMovement(SESSION& session)
 {
     session.police_state.VelocityX = 0.f;
@@ -267,9 +285,9 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
     Vec3 dir{
         next.x - cur.x,
         next.y - cur.y,
-        next.z - cur.z
+        0.f
     };
-    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+    float len = std::sqrt(dir.x * dir.x + dir.y);
     if (len <= POLICE_SPEED * deltaTime)
     {
         policeAI->bb.path.erase(policeAI->bb.path.begin());
@@ -284,7 +302,7 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
 
         dir.x = next.x - cur.x;
         dir.y = next.y - cur.y;
-        dir.z = next.z - cur.z;
+        dir.z = 0.f;
         len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
         std::cout << " if (len <= speed * deltaTime)" << std::endl;
     }
@@ -302,7 +320,7 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
     // 위치 갱신
     session.police_state.PositionX += dir.x * POLICE_SPEED * deltaTime;
     session.police_state.PositionY += dir.y * POLICE_SPEED * deltaTime;
-    session.police_state.PositionZ += dir.z * POLICE_SPEED * deltaTime;
+    SnapToNavMesh(session);
 
     session.police_state.VelocityX = dir.x * POLICE_SPEED;
     session.police_state.VelocityY = dir.y * POLICE_SPEED;
@@ -757,7 +775,7 @@ void PoliceAIController::BatonAttack(float dt)
     };
 
     baton_sweep(owner->id, &p);
-    BeginBehaviorLock(1.0f);
+    BeginBehaviorLock(ATTACK_COOL_DOWN);
 }
 
 void PoliceAIController::TaserShoot(float dt)
@@ -786,7 +804,7 @@ void PoliceAIController::TaserShoot(float dt)
     };
 
     line_trace(owner->id, &p);
-    BeginBehaviorLock(1.0f);
+    BeginBehaviorLock(ATTACK_COOL_DOWN);
 }
 
 void PoliceAIController::PistolShoot(float dt)
@@ -815,7 +833,7 @@ void PoliceAIController::PistolShoot(float dt)
     };
 
     line_trace(owner->id, &p);
-    BeginBehaviorLock(1.0f);
+    BeginBehaviorLock(ATTACK_COOL_DOWN);
 }
 
 static int FindNearbyCultist(int room_id, int self_id)
@@ -872,7 +890,22 @@ static int FindNearbyCultist(int room_id, int self_id)
 // BT
 void PoliceAIController::UpdateBlackboard(float dt)
 {
-    if (bb.target_id == -1)
+    if (dogAI && owner->dog.bIsChasing)
+    {
+        if (dogAI->db.target_id != -1)
+        {
+            bb.target_id = dogAI->db.target_id;
+        }
+    }
+    else
+    {
+        if (dogAI && bb.target_id == dogAI->db.target_id)
+        {
+            bb.target_id = -1;
+        }
+    }
+
+    if (bb.target_id == -1 && !owner->dog.bIsChasing)
     {
         int found = FindNearbyCultist(owner->room_id, owner->id);
         if (found != -1)
@@ -925,12 +958,15 @@ void PoliceAIController::UpdateBlackboard(float dt)
 
         bb.last_dist_to_target = Dist(self, targetPos);
 
-        if (bb.last_dist_to_target > CHASE_START_RANGE)
+        if (!owner->dog.bIsChasing)
         {
-            bb.target_id = -1;
-            bb.aim_target = -1;
-            bb.aim_time = 0.f;
-            owner->police_state.bIsAiming = false;
+            if (bb.last_dist_to_target > CHASE_START_RANGE)
+            {
+                bb.target_id = -1;
+                bb.aim_target = -1;
+                bb.aim_time = 0.f;
+                owner->police_state.bIsAiming = false;
+            }
         }
     }
     else

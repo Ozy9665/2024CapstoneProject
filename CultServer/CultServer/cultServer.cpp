@@ -200,7 +200,14 @@ void RoomWorkerLoop() {
 			int inserted = 0;
 			for (const auto& r : g_rooms)
 			{
-				if (inserted >= MAX_ROOM_LIST) break;
+				if (inserted >= MAX_ROOM_LIST) 
+					break;
+
+				if (role == 0 && r.first.cultist >= MAX_CULTIST_PER_ROOM)
+					continue;
+
+				if (role == 1 && r.first.police >= MAX_POLICE_PER_ROOM)
+					continue;
 
 				pkt.rooms[inserted].room_id = r.first.room_id;
 				pkt.rooms[inserted].police = r.first.police;
@@ -1702,13 +1709,13 @@ int main()
 	else{
 		std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ loaded" << std::endl;
 	}
-	if (!Level3Map.Load("SM_Level3_MERGED_StaticMeshActor_281.OBJ", Level3MapOffset, Level3MapLotate)) {
-		std::cout << "SM_Level3_MERGED_StaticMeshActor_281.OBJ load fail" << std::endl;
-	}
-	else {
-		std::cout << "SM_Level3_MERGED_StaticMeshActor_281.OBJ loaded" << std::endl;
+	//if (!Level3Map.Load("SM_Level3_MERGED_StaticMeshActor_281.OBJ", Level3MapOffset, Level3MapLotate)) {
+	//	std::cout << "SM_Level3_MERGED_StaticMeshActor_281.OBJ load fail" << std::endl;
+	//}
+	//else {
+	//	std::cout << "SM_Level3_MERGED_StaticMeshActor_281.OBJ loaded" << std::endl;
 
-	}
+	//}
 
 	// navmesh
 	if (!NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset)) {
@@ -1717,12 +1724,12 @@ int main()
 	else {
 		std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
 	}
-	if (!Level3NavMesh.Load("0329Level3MergeStair.obj", Level3MapOffset)) {
-		std::cout << "0329Level3MergeStair.obj load fail" << std::endl;
-	}
-	else {
-		std::cout << "0329Level3MergeStair.obj loaded" << std::endl;
-	}
+	//if (!Level3NavMesh.Load("0329Level3MergeStair.obj", Level3MapOffset)) {
+	//	std::cout << "0329Level3MergeStair.obj load fail" << std::endl;
+	//}
+	//else {
+	//	std::cout << "0329Level3MergeStair.obj loaded" << std::endl;
+	//}
 
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));

@@ -165,6 +165,7 @@ public:
         const Vec3& to, int triIdx, Vec3& out) const;
     const MapTri& GetTri(int) const;
     int GetRandomTriangle(int, int) const;
+    bool SnapPositionToNavMesh(Vec3& pos) const;
 
     std::vector<int> triComponentId;
 
@@ -185,6 +186,8 @@ private:
     void BuildAdjacency();
 
     void BuildTriCenters();
+
+    void BuildSpatialGridNav();
 
     void BuildComponents();
 

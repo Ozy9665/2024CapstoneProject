@@ -451,7 +451,7 @@ bool NAVMESH::Load(const std::string& objPath, const Vec3& MapOffset)
 
     BuildTriangles();
     BuildTriangleAABBs();
-    BuildSpatialGrid();
+    BuildSpatialGridNav();
     BuildComponents();
 
     return true;
@@ -640,6 +640,34 @@ void NAVMESH::BuildTriCenters()
     }
 }
 
+void NAVMESH::BuildSpatialGridNav()
+{
+    grid.clear();
+    grid.reserve(triAABBs.size());
+
+    const float baseX = worldAABB.minX;
+    const float baseY = worldAABB.minY;
+
+    for (int i = 0; i < (int)triAABBs.size(); ++i)
+    {
+        const AABB& a = triAABBs[i];
+
+        const int minX = (int)std::floor((a.minX - baseX) * invCell);
+        const int maxX = (int)std::floor((a.maxX - baseX) * invCell);
+        const int minY = (int)std::floor((a.minY - baseY) * invCell);
+        const int maxY = (int)std::floor((a.maxY - baseY) * invCell);
+
+        for (int x = minX; x <= maxX; ++x)
+        {
+            for (int y = minY; y <= maxY; ++y)
+            {
+                auto [it, inserted] = grid.try_emplace(CellKey{ x, y });
+                it->second.push_back(i);
+            }
+        }
+    }
+}
+
 void NAVMESH::BuildComponents()
 {
     triComponentId.assign(triNeighbors.size(), -1);
@@ -799,10 +827,10 @@ float NAVMESH::TriHeightAtXY(int triIdx, float x, float y) const
         w3 * t.c.z;
 }
 
-void NAVMESH::TryCellContain(int cx, int cz,
+void NAVMESH::TryCellContain(int cx, int cy,
     const Vec3& pos, int& bestTri, float& bestDz) const
 {
-    auto it = grid.find(CellKey{ cx, cz });
+    auto it = grid.find(CellKey{ cx, cy });
     if (it == grid.end()) return;
 
     for (int triIdx : it->second)
@@ -821,16 +849,16 @@ void NAVMESH::TryCellContain(int cx, int cz,
     }
 }
 
-int NAVMESH::TryCellSnapRing(int cx, int cz,
+int NAVMESH::TryCellSnapRing(int cx, int cy,
     const Vec3& pos, float& bestD2) const
 {
     int snap = -1;
 
     for (int dx = -1; dx <= 1; ++dx)
     {
-        for (int dz = -1; dz <= 1; ++dz)
+        for (int dy = -1; dy <= 1; ++dy)
         {
-            auto it = grid.find(CellKey{ cx + dx, cz + dz });
+            auto it = grid.find(CellKey{ cx + dx, cy + dy });
             if (it == grid.end())
                 continue;
 
@@ -852,17 +880,17 @@ int NAVMESH::TryCellSnapRing(int cx, int cz,
 int NAVMESH::FindContainingTriangle(const Vec3& pos) const
 {
     const int cx = (int)std::floor((pos.x - worldAABB.minX) * invCell);
-    const int cz = (int)std::floor((pos.z - worldAABB.minZ) * invCell);
+    const int cy = (int)std::floor((pos.y - worldAABB.minY) * invCell);
 
     int best = -1;
     float bestDz = FLT_MAX;
 
-    TryCellContain(cx, cz, pos, best, bestDz);
-    if (best >= 0) 
+    TryCellContain(cx, cy, pos, best, bestDz);
+    if (best >= 0)
         return best;
 
     float bestD2 = FLT_MAX;
-    int snap = TryCellSnapRing(cx, cz, pos, bestD2);
+    int snap = TryCellSnapRing(cx, cy, pos, bestD2);
 
     if (snap >= 0 && bestD2 <= snapMax2)
         return snap;
@@ -1165,4 +1193,18 @@ int NAVMESH::GetRandomTriangle(int startTri, int steps) const
     }
 
     return cur;
+}
+
+bool NAVMESH::SnapPositionToNavMesh(Vec3& pos) const
+{
+    Vec3 feetPos = pos;
+    feetPos.z -= POLICE_HALF_HEIGHT;
+
+    const int tri = FindContainingTriangle(feetPos);
+    if (tri < 0)
+        return false;
+
+    float groundZ = TriHeightAtXY(tri, pos.x, pos.y);
+    pos.z = groundZ + POLICE_HALF_HEIGHT;
+    return true;
 }

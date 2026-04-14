@@ -183,6 +183,8 @@ struct Dog {
 	FRotator rot;
 	// 개 상태
 	bool bIsChasing;
+	// 속도
+	float Speed;
 };
 
 struct Crow {
@@ -655,6 +657,7 @@ constexpr FVector LandMassAltarLocations[5] = {
 constexpr double BATON_RANGE{ 200.0 };
 constexpr double TASER_RANGE{ 1000.0 };
 constexpr double PISTOL_RANGE{ 5000.0 };
+constexpr float POLICE_HALF_HEIGHT{ 90.f };
 
 // ai
 constexpr float RAD_TO_DEG{ 180.f / PI };
@@ -675,3 +678,4 @@ constexpr float DOG_MAX_DIST{ 3000.f };
 constexpr float DOG_SPEED{ 500.f };
 constexpr float POLICE_SPEED{ 350.f };
 constexpr float CULTIST_SPEED{ 300.f };
+constexpr float ATTACK_COOL_DOWN{ 3.f };
