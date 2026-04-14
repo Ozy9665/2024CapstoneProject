@@ -209,8 +209,7 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
     };
     float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
     // float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
-    const float speed = 300.f; // 600cm/s
-    if (len <= speed * deltaTime)
+    if (len <= CULTIST_SPEED * deltaTime)
     {
         cultistAI->bb.path.erase(cultistAI->bb.path.begin());
 
@@ -239,12 +238,12 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
     // dir.z /= len;
 
     // 위치 갱신
-    session.cultist_state.PositionX += dir.x * speed * deltaTime;
-    session.cultist_state.PositionY += dir.y * speed * deltaTime;
-    // ai.cultist_state.PositionZ += dir.z * speed * deltaTime;
+    session.cultist_state.PositionX += dir.x * CULTIST_SPEED * deltaTime;
+    session.cultist_state.PositionY += dir.y * CULTIST_SPEED * deltaTime;
+    // ai.cultist_state.PositionZ += dir.z * CULTIST_SPEED * deltaTime;
 
-    session.cultist_state.VelocityX = dir.x * speed;
-    session.cultist_state.VelocityY = dir.y * speed;
+    session.cultist_state.VelocityX = dir.x * CULTIST_SPEED;
+    session.cultist_state.VelocityY = dir.y * CULTIST_SPEED;
     session.cultist_state.VelocityZ = 0.f;
     session.cultist_state.Speed = std::sqrt(
             session.cultist_state.VelocityX * session.cultist_state.VelocityX +

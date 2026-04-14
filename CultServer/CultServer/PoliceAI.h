@@ -31,11 +31,15 @@ public:
 // Dog AI
 // Condition
 
-class TooFarFromOwnerNode : public BTNode { 
-    bool Run(AIController&, float) override; 
+class HasTargetIdNode : public BTNode {
+    bool Run(AIController&, float) override;
 };
 
-class HasTargetIdNode : public BTNode {
+class NeedFollowOwnerNode : public BTNode {
+    bool Run(AIController&, float) override;
+};
+
+class ShouldStopChaseNode : public BTNode {
     bool Run(AIController&, float) override;
 };
 
@@ -72,8 +76,9 @@ public:
     void UpdateBlackboard(float);
     void RunBehaviorTree(float);
 
-    bool TooFarFromOwner();
     bool HasTargetId();
+    bool NeedFollowOwner();
+    bool ShouldStopChase();
 
     void Chase(float);
     void Stop(float);
@@ -166,4 +171,6 @@ public:
     void PistolShoot(float);
     void Chase(float);
     void Patrol(float);
+
+    void BeginBehaviorLock(float);
 };

@@ -270,8 +270,7 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
         next.z - cur.z
     };
     float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
-    const float speed = 300.f; // 600cm/s
-    if (len <= speed * deltaTime)
+    if (len <= POLICE_SPEED * deltaTime)
     {
         policeAI->bb.path.erase(policeAI->bb.path.begin());
 
@@ -301,13 +300,13 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
     dir.z /= len;
 
     // 위치 갱신
-    session.police_state.PositionX += dir.x * speed * deltaTime;
-    session.police_state.PositionY += dir.y * speed * deltaTime;
-    session.police_state.PositionZ += dir.z * speed * deltaTime;
+    session.police_state.PositionX += dir.x * POLICE_SPEED * deltaTime;
+    session.police_state.PositionY += dir.y * POLICE_SPEED * deltaTime;
+    session.police_state.PositionZ += dir.z * POLICE_SPEED * deltaTime;
 
-    session.police_state.VelocityX = dir.x * speed;
-    session.police_state.VelocityY = dir.y * speed;
-    session.police_state.VelocityZ = dir.z * speed;
+    session.police_state.VelocityX = dir.x * POLICE_SPEED;
+    session.police_state.VelocityY = dir.y * POLICE_SPEED;
+    session.police_state.VelocityZ = dir.z * POLICE_SPEED;
     session.police_state.Speed = std::sqrt(
         session.police_state.VelocityX * session.police_state.VelocityX +
         session.police_state.VelocityY * session.police_state.VelocityY
@@ -758,6 +757,7 @@ void PoliceAIController::BatonAttack(float dt)
     };
 
     baton_sweep(owner->id, &p);
+    BeginBehaviorLock(1.0f);
 }
 
 void PoliceAIController::TaserShoot(float dt)
@@ -786,6 +786,7 @@ void PoliceAIController::TaserShoot(float dt)
     };
 
     line_trace(owner->id, &p);
+    BeginBehaviorLock(1.0f);
 }
 
 void PoliceAIController::PistolShoot(float dt)
@@ -814,6 +815,7 @@ void PoliceAIController::PistolShoot(float dt)
     };
 
     line_trace(owner->id, &p);
+    BeginBehaviorLock(1.0f);
 }
 
 static int FindNearbyCultist(int room_id, int self_id)
@@ -870,9 +872,6 @@ static int FindNearbyCultist(int room_id, int self_id)
 // BT
 void PoliceAIController::UpdateBlackboard(float dt)
 {
-    owner->police_state.bIsAttacking = false;
-    owner->police_state.bIsShooting = false;
-
     if (bb.target_id == -1)
     {
         int found = FindNearbyCultist(owner->room_id, owner->id);
@@ -950,6 +949,12 @@ void PoliceAIController::UpdateBlackboard(float dt)
             owner->police_state.bIsAiming = false;
         }
     }
+
+    if (bb.attack_lock_time <= 0.f)
+    {
+        owner->police_state.bIsAttacking = false;
+        owner->police_state.bIsShooting = false;
+    }
 }
 
 void PoliceAIController::RunBehaviorTree(float dt)
@@ -960,6 +965,20 @@ void PoliceAIController::RunBehaviorTree(float dt)
 
 void PoliceAIController::Update(float dt)
 {
+    if (bb.attack_lock_time > 0.f)
+    {
+        bb.attack_lock_time -= dt;
+        if (bb.attack_lock_time < 0.f)
+            bb.attack_lock_time = 0.f;
+
+        StopMovement(*owner);
+
+        if (dogAI)
+            dogAI->Update(dt);
+
+        return;
+    }
+
     UpdateBlackboard(dt);
     RunBehaviorTree(dt);
 
@@ -967,9 +986,21 @@ void PoliceAIController::Update(float dt)
         dogAI->Update(dt);
 }
 
+void PoliceAIController::BeginBehaviorLock(float lockTime)
+{
+    bb.attack_lock_time = lockTime;
+
+    bb.path.clear();
+    bb.has_patrol_target = false;
+
+    bb.aim_target = -1;
+    bb.aim_time = 0.f;
+    StopMovement(*owner);
+}
+
 // Dog
 DogAIController::DogAIController(SESSION* o)
-    : AIController{o}
+    : AIController{ o }
 {
     /*
     Selector
@@ -978,11 +1009,11 @@ DogAIController::DogAIController(SESSION* o)
      │
      ├─ Sequence (HasTargetId)
      │    ├─ Selector
-     │    │    ├─ Sequence (TooFarFromOwner)
+     │    │    ├─ Sequence (ShouldStopChaseNode)
      │    │    │    └─ Stop
      │    │    └─ Chase
      │
-     ├─ Sequence (TooFarFromOwner)
+     ├─ Sequence (NeedFollowOwnerNode)
      │    └─ Follow
      │
      └─ Explore
@@ -999,9 +1030,8 @@ DogAIController::DogAIController(SESSION* o)
         // Stop
         {
             auto stopSeq = std::make_unique<Sequence>();
-            stopSeq->children.push_back(std::make_unique<TooFarFromOwnerNode>());
+            stopSeq->children.push_back(std::make_unique<ShouldStopChaseNode>());
             stopSeq->children.push_back(std::make_unique<DogStopNode>());
-
             sel->children.push_back(std::move(stopSeq));
         }
 
@@ -1011,14 +1041,13 @@ DogAIController::DogAIController(SESSION* o)
         }
 
         seq->children.push_back(std::move(sel));
-
         rootSelector->children.push_back(std::move(seq));
     }
 
     // Follow
     {
         auto seq = std::make_unique<Sequence>();
-        seq->children.push_back(std::make_unique<TooFarFromOwnerNode>());
+        seq->children.push_back(std::make_unique<NeedFollowOwnerNode>());
         seq->children.push_back(std::make_unique<DogFollowNode>());
         rootSelector->children.push_back(std::move(seq));
     }
@@ -1040,6 +1069,7 @@ void DogAIController::Init()
     owner->dog.loc.y = owner->police_state.PositionY;
     owner->dog.loc.z = owner->police_state.PositionZ;
     owner->dog.owner = owner->id;
+    owner->dog.bIsChasing = false;
 
     db.lastTargetPos = {
         static_cast<float>(owner->dog.loc.x),
@@ -1119,9 +1149,8 @@ static void MoveAlongPathDog(DogAIController& dogAI, const Vec3& targetPos, floa
     };
 
     float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
-    const float speed = 400.f;
 
-    if (len <= speed * dt)
+    if (len <= DOG_SPEED * dt)
     {
         dogAI.db.path.erase(dogAI.db.path.begin());
 
@@ -1143,11 +1172,49 @@ static void MoveAlongPathDog(DogAIController& dogAI, const Vec3& targetPos, floa
     dir.y /= len;
     dir.z /= len;
 
-    session->dog.loc.x += dir.x * speed * dt;
-    session->dog.loc.y += dir.y * speed * dt;
-    session->dog.loc.z += dir.z * speed * dt;
+    session->dog.loc.x += dir.x * DOG_SPEED * dt;
+    session->dog.loc.y += dir.y * DOG_SPEED * dt;
+    session->dog.loc.z += dir.z * DOG_SPEED * dt;
 
     session->dog.rot.yaw = std::atan2(dir.y, dir.x) * RAD_TO_DEG;
+}
+
+static int FindNearbyCultistForDog(int room_id, const Vec3& dogPos)
+{
+    if (room_id < 0 || room_id >= MAX_ROOM)
+        return -1;
+
+    const auto& room = g_rooms[room_id].first;
+
+    int best_id = -1;
+    float best_dist_sq = VIEW_RANGE_SQ;
+
+    for (int pid : room.player_ids)
+    {
+        if (pid == -1)
+            continue;
+
+        auto it = g_users.find(pid);
+        if (it == g_users.end() || !it->second)
+            continue;
+
+        auto target = it->second;
+        if (!IsCultistTargetAttackable(*target))
+            continue;
+
+        float dx = target->cultist_state.PositionX - dogPos.x;
+        float dy = target->cultist_state.PositionY - dogPos.y;
+        float dz = target->cultist_state.PositionZ - dogPos.z;
+        float dist_sq = dx * dx + dy * dy + dz * dz;
+
+        if (dist_sq < best_dist_sq)
+        {
+            best_dist_sq = dist_sq;
+            best_id = pid;
+        }
+    }
+
+    return best_id;
 }
 
 // Condition Node
@@ -1156,9 +1223,14 @@ bool HasTargetIdNode::Run(AIController& ai, float)
     return static_cast<DogAIController&>(ai).HasTargetId();
 }
 
-bool TooFarFromOwnerNode::Run(AIController& ai, float)
+bool NeedFollowOwnerNode::Run(AIController& ai, float)
 {
-    return static_cast<DogAIController&>(ai).TooFarFromOwner();
+    return static_cast<DogAIController&>(ai).NeedFollowOwner();
+}
+
+bool ShouldStopChaseNode::Run(AIController& ai, float)
+{
+    return static_cast<DogAIController&>(ai).ShouldStopChase();
 }
 
 // Action Node
@@ -1187,9 +1259,14 @@ bool DogExploreNode::Run(AIController& ai, float dt)
 }
 
 // Condition
-bool DogAIController::TooFarFromOwner()
+bool DogAIController::NeedFollowOwner()
 {
-    return db.dist_to_owner > FOLLOW_MAX_DIST;
+    return db.bNeedFollowOwner;
+}
+
+bool DogAIController::ShouldStopChase()
+{
+    return db.bStopChaseForOwnerDist;
 }
 
 bool DogAIController::HasTargetId()
@@ -1203,6 +1280,7 @@ void DogAIController::Chase(float dt)
     if (db.target_id == -1)
         return;
 
+    owner->dog.bIsChasing = true;
     MoveAlongPathDog(*this, db.targetPos, dt);
 }
 
@@ -1240,6 +1318,7 @@ void DogAIController::Follow(float dt)
         owner->police_state.PositionZ
     };
 
+    owner->dog.bIsChasing = false;
     MoveAlongPathDog(*this, policePos, dt);
 }
 
@@ -1260,6 +1339,7 @@ void DogAIController::Explore(float dt)
         };
     }
 
+    owner->dog.bIsChasing = false;
     MoveAlongPathDog(*this, db.targetPos, dt);
 }
 
@@ -1280,13 +1360,20 @@ void DogAIController::UpdateBlackboard(float dt)
     // 경찰 거리
     db.dist_to_owner = Dist(dogPos, policePos);
 
+    int found = FindNearbyCultistForDog(owner->room_id, dogPos);
+    if (found != -1)
+    {
+        db.target_id = found;
+    }
+
     // target 유효성 체크
     if (db.target_id != -1)
     {
         auto it = g_users.find(db.target_id);
-        if (it == g_users.end())
+        if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
         {
             db.target_id = -1;
+            db.dist_to_target = FLT_MAX;
         }
         else
         {
@@ -1307,6 +1394,32 @@ void DogAIController::UpdateBlackboard(float dt)
     else
     {
         db.dist_to_target = FLT_MAX;
+    }
+
+    // 타겟 없을 때 follow
+    if (db.target_id == -1)
+    {
+        if (db.dist_to_owner >= DOG_MAX_DIST)
+            db.bNeedFollowOwner = true;
+        else if (db.dist_to_owner <= FOLLOW_MAX_DIST)
+            db.bNeedFollowOwner = false;
+    }
+    else
+    {
+        db.bNeedFollowOwner = false;
+    }
+
+    // 타겟 있을 때 chase, stop
+    if (db.target_id != -1)
+    {
+        if (db.dist_to_owner >= DOG_MAX_DIST)
+            db.bStopChaseForOwnerDist = true;
+        else if (db.dist_to_owner <= FOLLOW_MAX_DIST)
+            db.bStopChaseForOwnerDist = false;
+    }
+    else
+    {
+        db.bStopChaseForOwnerDist = false;
     }
 
     // repath 타이머

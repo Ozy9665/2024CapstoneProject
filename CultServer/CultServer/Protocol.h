@@ -182,7 +182,7 @@ struct Dog {
 	FVector loc;
 	FRotator rot;
 	// °³ »óÅÂ
-	
+	bool bIsChasing;
 };
 
 struct Crow {
@@ -475,6 +475,8 @@ struct PoliceBlackboard
 
 	float aim_time{};
 	int aim_target = -1;
+
+	float attack_lock_time{};
 };
 
 struct DogBlackboard
@@ -489,6 +491,9 @@ struct DogBlackboard
 	std::vector<Vec3> path{};
 
 	float repath_timer{};
+
+	bool bNeedFollowOwner = false;
+	bool bStopChaseForOwnerDist = false;
 };
 
 class SESSION;
@@ -666,4 +671,7 @@ constexpr float CHASE_STOP_RANGE{ 150.f };
 constexpr float ARRIVE_RANGE{ 100.f };
 constexpr float STUCK_RANGE{ 5.f };
 constexpr float FOLLOW_MAX_DIST{ 800.f };
-constexpr float DOG_CHASE_MAX_DIST{ 1500.f };
+constexpr float DOG_MAX_DIST{ 3000.f };
+constexpr float DOG_SPEED{ 500.f };
+constexpr float POLICE_SPEED{ 350.f };
+constexpr float CULTIST_SPEED{ 300.f };
