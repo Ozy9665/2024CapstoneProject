@@ -91,12 +91,6 @@ void KillCultistAi(int ai_id)
         g_room_cv.notify_one();
     }
 
-    // AI 목록에서 제거
-    session->resetForReuse();
-    {
-        std::lock_guard<std::mutex> lk(free_id_mtx);
-        free_session_ids.push_back(ai_id);
-    }
     std::cout << "[Command] AI removed. ID=" << ai_id << "\n";
 }
 

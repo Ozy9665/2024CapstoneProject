@@ -182,7 +182,7 @@ struct Dog {
 	FVector loc;
 	FRotator rot;
 	// 개 상태
-	bool bIsChasing;
+	bool is_barking;
 	// 속도
 	float Speed;
 };

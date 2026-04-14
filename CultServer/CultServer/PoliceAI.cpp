@@ -92,12 +92,6 @@ void KillPoliceAi(int ai_id)
         g_room_cv.notify_one();
     }
 
-    // AI 목록에서 제거
-    session->resetForReuse();
-    {
-        std::lock_guard<std::mutex> lk(free_id_mtx);
-        free_session_ids.push_back(ai_id);
-    }
     std::cout << "[Command] AI removed. ID=" << ai_id << "\n";
 }
 
@@ -890,7 +884,7 @@ static int FindNearbyCultist(int room_id, int self_id)
 // BT
 void PoliceAIController::UpdateBlackboard(float dt)
 {
-    if (dogAI && owner->dog.bIsChasing)
+    if (dogAI && owner->dog.is_barking)
     {
         if (dogAI->db.target_id != -1)
         {
@@ -905,7 +899,7 @@ void PoliceAIController::UpdateBlackboard(float dt)
         }
     }
 
-    if (bb.target_id == -1 && !owner->dog.bIsChasing)
+    if (bb.target_id == -1 && !owner->dog.is_barking)
     {
         int found = FindNearbyCultist(owner->room_id, owner->id);
         if (found != -1)
@@ -958,7 +952,7 @@ void PoliceAIController::UpdateBlackboard(float dt)
 
         bb.last_dist_to_target = Dist(self, targetPos);
 
-        if (!owner->dog.bIsChasing)
+        if (!owner->dog.is_barking)
         {
             if (bb.last_dist_to_target > CHASE_START_RANGE)
             {
@@ -1105,7 +1099,7 @@ void DogAIController::Init()
     owner->dog.loc.y = owner->police_state.PositionY;
     owner->dog.loc.z = owner->police_state.PositionZ;
     owner->dog.owner = owner->id;
-    owner->dog.bIsChasing = false;
+    owner->dog.is_barking = false;
 
     db.lastTargetPos = {
         static_cast<float>(owner->dog.loc.x),
@@ -1316,7 +1310,7 @@ void DogAIController::Chase(float dt)
     if (db.target_id == -1)
         return;
 
-    owner->dog.bIsChasing = true;
+    owner->dog.is_barking = true;
     MoveAlongPathDog(*this, db.targetPos, dt);
 }
 
@@ -1354,7 +1348,7 @@ void DogAIController::Follow(float dt)
         owner->police_state.PositionZ
     };
 
-    owner->dog.bIsChasing = false;
+    owner->dog.is_barking = false;
     MoveAlongPathDog(*this, policePos, dt);
 }
 
@@ -1375,7 +1369,7 @@ void DogAIController::Explore(float dt)
         };
     }
 
-    owner->dog.bIsChasing = false;
+    owner->dog.is_barking = false;
     MoveAlongPathDog(*this, db.targetPos, dt);
 }
 

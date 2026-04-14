@@ -1799,10 +1799,19 @@ void AMySocketCultistActor::SafeDestroyCharacter(int PlayerID)
 {
     // 복사해서 쓰는 방식
     ACharacter* CharToDestroy = nullptr;
+    APoliceDog* DogToDestroy = nullptr;
 
     if (ACharacter* const* FoundPtr = SpawnedCultistCharacters.Find(PlayerID))
     {
         CharToDestroy = *FoundPtr;
+    }
+    else if (SpawnedPoliceCharacter.Key == PlayerID)
+    {
+        CharToDestroy = SpawnedPoliceCharacter.Value;
+        if (APoliceCharacter* PoliceChar = Cast<APoliceCharacter>(CharToDestroy))
+        {
+            DogToDestroy = PoliceChar->PoliceDogInstance;
+        }
     }
 
     if (!CharToDestroy || !IsValid(CharToDestroy) || !CharToDestroy->IsValidLowLevelFast())
@@ -1812,7 +1821,7 @@ void AMySocketCultistActor::SafeDestroyCharacter(int PlayerID)
     }
 
     // GameThread에서만 Destroy 하도록
-    AsyncTask(ENamedThreads::GameThread, [this, PlayerID, CharToDestroy]()
+    AsyncTask(ENamedThreads::GameThread, [this, PlayerID, CharToDestroy, DogToDestroy]()
         {
             if (!IsValid(CharToDestroy) || CharToDestroy->IsPendingKillPending())
             {
@@ -1823,8 +1832,21 @@ void AMySocketCultistActor::SafeDestroyCharacter(int PlayerID)
             UE_LOG(LogTemp, Log, TEXT("Destroying character safely on GameThread for ID=%d"), PlayerID);
 
             CharToDestroy->Destroy();
-            SpawnedCultistCharacters.Remove(PlayerID);
-            ReceivedCultistStates.Remove(PlayerID);
+            if (DogToDestroy && IsValid(DogToDestroy) && !DogToDestroy->IsPendingKillPending())
+            {
+                DogToDestroy->Destroy();
+            }
+
+            if (SpawnedCultistCharacters.Contains(PlayerID))
+            {
+                SpawnedCultistCharacters.Remove(PlayerID);
+                ReceivedCultistStates.Remove(PlayerID);
+            }
+            else if (SpawnedPoliceCharacter.Key == PlayerID)
+            {
+                SpawnedPoliceCharacter = TPair<int, ACharacter*>();
+                ReceivedPoliceState = TPair<int, FPoliceCharacterState>();
+            }
         });
 }
 
