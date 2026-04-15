@@ -1705,7 +1705,14 @@ void AStructGraphManager::OnGCBreak(const FChaosBreakEvent& BreakEvent)
 	// 1) 깨짐 직후 물리/중력 꼬임 보정
 	// ----------------------------
 	GC->SetSimulatePhysics(true);
-	GC->SetEnableGravity(true);
+	if (bStage3_UseManualGravity)
+	{
+		GC->SetEnableGravity(false);
+	}
+	else
+	{
+		GC->SetEnableGravity(true);
+	}
 
 	if (FBodyInstance* BI = GC->GetBodyInstance())
 	{
@@ -1775,8 +1782,10 @@ void AStructGraphManager::OnGCBreak(const FChaosBreakEvent& BreakEvent)
 
 void AStructGraphManager::EnsureGCPhysicsReady_Stage3()
 {
-	EnablePhysicsForGCArray_NoRecreate(GCWalls, true, true);
-	EnablePhysicsForGCArray_NoRecreate(GCColumns, true, true);
+	const bool bBuiltinGrav = !bStage3_UseManualGravity;
+	EnablePhysicsForGCArray_NoRecreate(GCWalls, true, bBuiltinGrav);
+	EnablePhysicsForGCArray_NoRecreate(GCColumns, true, bBuiltinGrav);
+
 	EnablePhysicsForGCArray_NoRecreate(GCSlabs, true, false);
 
 	// 슬래브 댐핑 크게
@@ -1827,6 +1836,8 @@ void AStructGraphManager::ApplyContinuousShakeToGC(
 void AStructGraphManager::StartStage3Continuous()
 {
 	if (bStage3ContinuousRunning) return;
+	Stage3_RecreatedOnce.Reset();
+
 	bStage3ContinuousRunning = true;
 
 	Stage3TickCounter = 0;
@@ -1888,12 +1899,25 @@ void AStructGraphManager::StopStage3Continuous()
 	bStage3ContinuousRunning = false;
 
 	GetWorldTimerManager().ClearTimer(Stage3ContinuousHandle);
+
+	if (bStage3_UseManualGravity)
+	{
+		StartStage3ManualGravity(Stage3_ManualGravityPostDuration);
+	}
+
 	UE_LOG(LogTemp, Warning, TEXT("[Stage3] Continuous End"));
 }
 
 void AStructGraphManager::Stage3_ContinuousTick()
 {
+
 	Stage3TickCounter++;
+
+	if (bStage3_UseManualGravity)
+	{
+		ApplyManualGravityToGCArray(GCWalls, Stage3_ManualGravityScale);
+		ApplyManualGravityToGCArray(GCColumns, Stage3_ManualGravityScale);
+	}
 
 	const float Now = GetWorld()->GetTimeSeconds();
 	const float T = Now - Stage3StartTimeSec;
@@ -1908,7 +1932,11 @@ void AStructGraphManager::Stage3_ContinuousTick()
 	// 0) 슬래브 하부부터
 	ApplySlabRampForce_BottomUp(T);
 
-	// 램프업이 끝나면 "진짜 중력"을 딱 1번만 ON (Recreate/Sim 토글 금지)
+	if (bStage3_UseManualGravity && T >= Stage3_SlabRampEndTime)
+	{
+		ApplyManualGravityToGCArray(GCSlabs, Stage3_ManualGravityScale);
+	}
+
 	if (!bStage3GravityCommitted && T >= Stage3_SlabRampEndTime)
 	{
 		bStage3GravityCommitted = true;
@@ -1916,24 +1944,11 @@ void AStructGraphManager::Stage3_ContinuousTick()
 		ForEachValidGC(GCSlabs, [](UGeometryCollectionComponent* GC)
 			{
 				if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
-
-				if (!GC->IsSimulatingPhysics())
-				{
-					GC->SetSimulatePhysics(true);
-				}
-
 				GC->SetEnableGravity(true);
-
-				if (FBodyInstance* BI = GC->GetBodyInstance())
-				{
-					BI->SetEnableGravity(true);
-					BI->WakeInstance();
-				}
-
 				GC->WakeAllRigidBodies();
 			});
 
-		UE_LOG(LogTemp, Warning, TEXT("[Stage3] Slab Gravity ON (no recreate)"));
+		UE_LOG(LogTemp, Warning, TEXT("[Stage3] Slab Gravity ON"));
 	}
 
 	// 1) 슬래브 홀드(댐핑) 점진 해제
@@ -1951,7 +1966,11 @@ void AStructGraphManager::Stage3_ContinuousTick()
 	}
 
 	// 2) 연속 흔들림(지진 외력)
-
+	if (bStage3_UseManualGravity)
+	{
+		ApplyManualGravityToGCArray(GCWalls, Stage3_ManualGravityScale);
+		ApplyManualGravityToGCArray(GCColumns, Stage3_ManualGravityScale);
+	}
 	if (bStage3GravityCommitted)
 	{
 		ApplyContinuousShakeToGC(GCWalls, Stage3_ShakeImpulse * 0.8f);
@@ -2202,3 +2221,92 @@ void AStructGraphManager::Net_StartStage3(const FStage3NetStart& Info)
 	// Stage3 시작
 	StartStage3Continuous();
 }
+void AStructGraphManager::EnsureChaosBodiesBuiltOnce(UGeometryCollectionComponent* GC)
+{
+	if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
+
+	const TWeakObjectPtr<UGeometryCollectionComponent> Key(GC);
+	if (Stage3_RecreatedOnce.Contains(Key)) return;
+	Stage3_RecreatedOnce.Add(Key);
+
+	GC->SetSimulatePhysics(false);
+	GC->SetEnableGravity(false);
+	GC->RecreatePhysicsState();
+
+	GC->SetSimulatePhysics(true);
+	GC->SetEnableGravity(false);
+
+	if (FBodyInstance* BI = GC->GetBodyInstance())
+	{
+		BI->SetEnableGravity(false);
+		BI->WakeInstance();
+	}
+
+	GC->WakeAllRigidBodies();
+}
+void AStructGraphManager::ApplyManualGravityToGCArray(
+	const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr,
+	float Scale)
+{
+	UWorld* W = GetWorld();
+	if (!IsValid(W)) return;
+
+	const float Gz = W->GetGravityZ() * Scale;
+	const FVector Accel(0.f, 0.f, Gz);
+
+	ForEachValidGC(Arr, [&](UGeometryCollectionComponent* GC)
+		{
+			if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
+
+			if (!GC->IsSimulatingPhysics())
+			{
+				GC->SetSimulatePhysics(true);
+			}
+
+			GC->SetEnableGravity(false);
+
+			GC->AddForce(Accel, NAME_None, true);
+			GC->WakeAllRigidBodies();
+		});
+}
+
+void AStructGraphManager::StartStage3ManualGravity(float Duration)
+{
+	if (!bStage3_UseManualGravity) return;
+
+	UWorld* W = GetWorld();
+	if (!IsValid(W)) return;
+
+	Stage3ManualGravityEndTime = W->GetTimeSeconds() + FMath::Max(0.1f, Duration);
+
+	GetWorldTimerManager().ClearTimer(Stage3ManualGravityHandle);
+	GetWorldTimerManager().SetTimer(
+		Stage3ManualGravityHandle,
+		this,
+		&AStructGraphManager::Stage3_ManualGravityTick,
+		Stage3_TickInterval,   
+		true
+	);
+}
+
+void AStructGraphManager::Stage3_ManualGravityTick()
+{
+	UWorld* W = GetWorld();
+	if (!IsValid(W))
+	{
+		GetWorldTimerManager().ClearTimer(Stage3ManualGravityHandle);
+		return;
+	}
+
+	const float Now = W->GetTimeSeconds();
+	if (Now >= Stage3ManualGravityEndTime)
+	{
+		GetWorldTimerManager().ClearTimer(Stage3ManualGravityHandle);
+		return;
+	}
+
+	ApplyManualGravityToGCArray(GCWalls, Stage3_ManualGravityScale);
+	ApplyManualGravityToGCArray(GCColumns, Stage3_ManualGravityScale);
+	ApplyManualGravityToGCArray(GCSlabs, Stage3_ManualGravityScale);
+}
+

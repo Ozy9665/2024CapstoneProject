@@ -225,8 +225,8 @@ public:
 	{
 		if (!IsValid(GC)) return;
 
-		GC->SetSimulatePhysics(false);
-		GC->SetEnableGravity(false);
+		//GC->SetSimulatePhysics(false);
+		//GC->SetEnableGravity(false);
 
 		GC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 		GC->SetCollisionProfileName(TEXT("BlockAll"));
@@ -235,6 +235,34 @@ public:
 
 		GC->RecreatePhysicsState();
 	}
+
+	UPROPERTY()
+	TSet<TWeakObjectPtr<UGeometryCollectionComponent>> Stage3_RecreatedOnce;
+
+	void EnsureChaosBodiesBuiltOnce(UGeometryCollectionComponent* GC);
+
+	// 중력
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|ManualGravity")
+	bool bStage3_UseManualGravity = true;   // 중력 꼬임 방지
+
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|ManualGravity")
+	float Stage3_ManualGravityScale = 1.0f; // 월드 중력(-980)과 동일
+
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|ManualGravity")
+	float Stage3_ManualGravityPostDuration = 6.0f; // 
+
+	FTimerHandle Stage3ManualGravityHandle;
+	float Stage3ManualGravityEndTime = 0.f;
+
+	void ApplyManualGravityToGCArray(const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr, float Scale);
+	void StartStage3ManualGravity(float Duration);
+	void Stage3_ManualGravityTick();
+
+	//UPROPERTY()
+	//TSet<TWeakObjectPtr<UGeometryCollectionComponent>> GravityFixRecreatedOnce;
+
+	//void ForceGravityFix_MultiFrame(UGeometryCollectionComponent* GC, int32 Frames = 6);
+	//void ForceGravityFixTick(TWeakObjectPtr<UGeometryCollectionComponent> WeakGC, int32 FramesLeft);
 
 	// 지진
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
@@ -400,6 +428,10 @@ public:
 
 	int32 Stage3_LowColumnCandidateCount = 6;   // 최저 Z 후보 몇 개 볼지 (4~10)
 	float Stage3_PerimeterPreferPower = 1.0f;  // 1.0 기본, 2.0이면 외곽 더 강하게 선호
+
+	// 중력
+
+	
 
 	UFUNCTION()
 	void ApplySlabRampForce_BottomUp(float T);
