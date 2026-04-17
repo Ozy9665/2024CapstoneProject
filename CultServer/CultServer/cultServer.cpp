@@ -392,7 +392,13 @@ void RoomWorkerLoop() {
 				if (g_rooms[room_id].first.player_ids[i] == task.c_id) {
 					g_rooms[room_id].first.player_ids[i] = -1;
 					user->room_id = -1;
-					user->setState(ST_ROOM);
+					user->resetForReuse();
+					{
+						std::lock_guard<std::mutex> lk(free_id_mtx);
+						free_session_ids.push_back(task.c_id);
+
+						std::cout << "reuse: " << task.c_id << std::endl;
+					}
 					break;
 				}
 			}
@@ -443,6 +449,8 @@ void RoomWorkerLoop() {
 			{
 				std::lock_guard<std::mutex> lk(free_id_mtx);
 				free_session_ids.push_back(task.c_id);
+
+				std::cout << "reuse: " << task.c_id << std::endl;
 			}
 			continue;
 		}

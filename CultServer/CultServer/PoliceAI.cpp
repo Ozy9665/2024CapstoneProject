@@ -693,7 +693,6 @@ bool PoliceAIController::CanPistol()
 // Action
 void PoliceAIController::Patrol(float dt)
 {
-    std::cout << "Patrol" << std::endl;
     NAVMESH* nav = GetNavMesh(owner->room_id);
     if (!nav)
         return;
@@ -954,7 +953,6 @@ void PoliceAIController::UpdateBlackboard(float dt)
     // 거리 업데이트
     if (bb.target_id != -1)
     {
-        std::cout << bb.target_id << std::endl;
         auto it = g_users.find(bb.target_id);
         if (it == g_users.end())
         {
