@@ -60,7 +60,7 @@ SESSION::SESSION(int session_id, SOCKET sock)
 
 SESSION::SESSION(int session_id, uint8_t ai_role, int room_id) 
 	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id), 
-	prev_remain{},heal_gauge{}// AI Session
+	prev_remain{}, heal_gauge{}, state{ S_STATE::ST_INGAME }// AI Session
 {
 	visible_ids.clear();
 	dog = {};

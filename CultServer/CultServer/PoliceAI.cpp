@@ -176,11 +176,6 @@ void PoliceAIWorkerLoop()
             packet.size = sizeof(PolicePacket);
             packet.state = session->police_state;
             broadcast_in_room(*session, &packet, VIEW_RANGE);
-            std::cout << "[SEND Police] ID=" << session->id
-                << " Pos=("
-                << session->police_state.PositionX << ", "
-                << session->police_state.PositionY << ", "
-                << session->police_state.PositionZ << ")\n";
 
             DogPacket d{};
             d.header = dogHeader;
@@ -403,7 +398,7 @@ static bool HasLineOfSight(SESSION* session, int target_id)
         return false;
 
     auto target = it->second;
-    if (target->state == ST_FREE || !target->isValidSocket()) 
+    if (target->state != ST_INGAME || !target->isValidSocket())
     {
         return false;
     }
@@ -457,7 +452,7 @@ static bool IsCultistTargetAttackable(const SESSION& target)
     if (target.role != 0 && target.role != 100)
         return false;
 
-    if (target.state == ST_FREE || target.state == ST_STUN || target.state == ST_DEAD)
+    if (target.state != ST_INGAME)
         return false;
 
     if (target.cultist_state.ABP_IsDead || target.cultist_state.ABP_IsStunned)
@@ -698,6 +693,7 @@ bool PoliceAIController::CanPistol()
 // Action
 void PoliceAIController::Patrol(float dt)
 {
+    std::cout << "Patrol" << std::endl;
     NAVMESH* nav = GetNavMesh(owner->room_id);
     if (!nav)
         return;
@@ -757,7 +753,7 @@ void PoliceAIController::Chase(float dt)
     }
 
     auto target = it->second;
-    if (target->state == ST_FREE ||
+    if (target->state != ST_INGAME ||
         (target->role != 100 && !target->isValidSocket()))
     {
         bb.target_id = -1;
@@ -898,13 +894,11 @@ static int FindNearbyCultist(int room_id, int self_id)
             continue;
 
         auto it = g_users.find(pid);
-        if (it == g_users.end())
+        if (it == g_users.end() || !it->second)
             continue;
 
         auto target = it->second;
-        if (target->role != 0 && target->role != 100)
-            continue;
-        if (target->state == ST_FREE)
+        if (!IsCultistTargetAttackable(*target))
             continue;
 
         float dx = target->cultist_state.PositionX - selfPos.x;
@@ -960,6 +954,7 @@ void PoliceAIController::UpdateBlackboard(float dt)
     // 거리 업데이트
     if (bb.target_id != -1)
     {
+        std::cout << bb.target_id << std::endl;
         auto it = g_users.find(bb.target_id);
         if (it == g_users.end())
         {
