@@ -1717,21 +1717,20 @@ int main()
 	else{
 		std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ loaded" << std::endl;
 	}
-	//if (!Level3Map.Load("SM_Level3_MERGED_StaticMeshActor_281.OBJ", Level3MapOffset, Level3MapLotate)) {
-	//	std::cout << "SM_Level3_MERGED_StaticMeshActor_281.OBJ load fail" << std::endl;
-	//}
-	//else {
-	//	std::cout << "SM_Level3_MERGED_StaticMeshActor_281.OBJ loaded" << std::endl;
-
-	//}
-
-	// navmesh
-	if (!NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset)) {
-		std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj load fail" << std::endl;
+	if (!Level3Map.Load("SM_Level3_MERGED_StaticMeshActor_281.OBJ", Level3MapOffset, Level3MapLotate)) {
+		std::cout << "SM_Level3_MERGED_StaticMeshActor_281.OBJ load fail" << std::endl;
 	}
 	else {
-		std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
+		std::cout << "SM_Level3_MERGED_StaticMeshActor_281.OBJ loaded" << std::endl;
 	}
+
+	// navmesh
+	//if (!NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset)) {
+	//	std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj load fail" << std::endl;
+	//}
+	//else {
+	//	std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
+	//}
 	//if (!Level3NavMesh.Load("0329Level3MergeStair.obj", Level3MapOffset)) {
 	//	std::cout << "0329Level3MergeStair.obj load fail" << std::endl;
 	//}

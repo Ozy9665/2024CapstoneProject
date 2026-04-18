@@ -87,15 +87,30 @@ bool MAP::LoadOBJAndComputeAABB(
     std::vector<MapTriangle>& outTriangles,
     AABB& outAABB)
 {
-    if (!LoadOBJ(path, outVertices, outTriangles))
+    std::vector<MapVertex> rawVertices;
+    std::vector<MapTriangle> rawTriangles;
+
+    if (!LoadOBJ(path, rawVertices, rawTriangles))
         return false;
 
-    // AABB 초기화
+    outVertices.clear();
+    outTriangles = rawTriangles;
+
     outAABB.minX = outAABB.minY = outAABB.minZ = FLT_MAX;
     outAABB.maxX = outAABB.maxY = outAABB.maxZ = -FLT_MAX;
 
-    for (const auto& v : outVertices)
+    for (const auto& rv : rawVertices)
     {
+        Vec3 raw{ rv.x, rv.y, rv.z };
+
+        Vec3 rotated = ApplyRotation(raw, rotation);
+
+        MapVertex v;
+        v.x = rotated.x + offset.x;
+        v.y = rotated.y + offset.y;
+        v.z = rotated.z + offset.z;
+
+        outVertices.push_back(v);
         outAABB.minX = std::min(outAABB.minX, v.x);
         outAABB.minY = std::min(outAABB.minY, v.y);
         outAABB.minZ = std::min(outAABB.minZ, v.z);
@@ -190,6 +205,37 @@ static bool RayAABB_XY(const Ray& r, const AABB& a, float maxDist)
         slab(r.start.y, r.dir.y, a.minY, a.maxY);
 }
 
+static bool RayAABB(const Ray& r, const AABB& a, float maxDist)
+{
+    float tmin = 0.0f;
+    float tmax = maxDist;
+
+    auto slab = [&](float o, float d, float minv, float maxv)
+        {
+            if (std::abs(d) < 1e-6f)
+            {
+                return (o >= minv && o <= maxv);
+            }
+
+            float inv = 1.0f / d;
+            float t1 = (minv - o) * inv;
+            float t2 = (maxv - o) * inv;
+
+            if (t1 > t2) std::swap(t1, t2);
+
+            tmin = std::max(tmin, t1);
+            tmax = std::min(tmax, t2);
+
+            return tmin <= tmax;
+        };
+
+    if (!slab(r.start.x, r.dir.x, a.minX, a.maxX)) return false;
+    if (!slab(r.start.y, r.dir.y, a.minY, a.maxY)) return false;
+    if (!slab(r.start.z, r.dir.z, a.minZ, a.maxZ)) return false;
+
+    return true;
+}
+
 static bool RayTri(const Ray& r, const MapTri& t, float maxDist, float& outT)
 {
     const float EPS = 1e-6f;
@@ -206,6 +252,7 @@ static bool RayTri(const Ray& r, const MapTri& t, float maxDist, float& outT)
     float pz = r.dir.x * e2y - r.dir.y * e2x;
 
     float det = e1x * px + e1y * py + e1z * pz;
+    std::cout << "[DET] " << det << "\n";
     if (std::abs(det) < EPS) return false;
 
     float inv = 1.0f / det;
@@ -231,8 +278,7 @@ static bool RayTri(const Ray& r, const MapTri& t, float maxDist, float& outT)
 
 bool MAP::LineTrace(const Ray& worldRay, float maxDist, float& hitDist, int& hitTriIndex) const
 {
-    const Ray ray = ToLocalRay(worldRay);
-
+    const Ray& ray = worldRay;
     hitDist = maxDist;
     hitTriIndex = -1;
 
@@ -288,14 +334,19 @@ bool MAP::LineTrace(const Ray& worldRay, float maxDist, float& hitDist, int& hit
         auto it = grid.find({ cx, cz });
         if (it != grid.end())
         {
+            std::cout << "[GRID HIT CELL] (" << cx << ", " << cz
+                << ") triCount=" << it->second.size() << "\n";
             for (int triIdx : it->second)
             {
-                if (!RayAABB_XY(ray, triAABBs[triIdx], hitDist))
+                if (!RayAABB(ray, triAABBs[triIdx], hitDist))
                     continue;
 
                 float tHit = 0.f;
                 if (RayTri(ray, tris[triIdx], hitDist, tHit))
                 {
+                    std::cout << "[TRI HIT] tri=" << triIdx
+                        << " dist=" << tHit << "\n";
+
                     hitDist = tHit;
                     hitTriIndex = triIdx;
                 }
@@ -305,6 +356,7 @@ bool MAP::LineTrace(const Ray& worldRay, float maxDist, float& hitDist, int& hit
                 std::min(tMaxX, tMaxZ) > hitDist)
                 break;
         }
+        std::cout << "[CELL start] (" << cx << ", " << cz << ")\n";
 
         if (cx == endCellX && cz == endCellZ)
             break;
@@ -327,65 +379,36 @@ bool MAP::LineTrace(const Ray& worldRay, float maxDist, float& hitDist, int& hit
     return hitTriIndex >= 0;
 }
 
-Vec3 MAP::ApplyInverseRotation(const Vec3& v) const
+Vec3 MAP::ApplyRotation(const Vec3& v, const Vec3& rot)
 {
-    // degree → rad
-    float rx = -rotation.x * DEG_TO_RAD;
-    float ry = -rotation.y * DEG_TO_RAD;
-    float rz = -rotation.z * DEG_TO_RAD;
+    float rx = rot.x * DEG_TO_RAD;
+    float ry = rot.y * DEG_TO_RAD;
+    float rz = rot.z * DEG_TO_RAD;
 
     Vec3 r = v;
 
-    // X 회전
+    // X
     {
         float c = cosf(rx);
         float s = sinf(rx);
-        r = {
-            r.x,
-            r.y * c - r.z * s,
-            r.y * s + r.z * c
-        };
+        r = { r.x, r.y * c - r.z * s, r.y * s + r.z * c };
     }
 
-    // Y 회전
+    // Y
     {
         float c = cosf(ry);
         float s = sinf(ry);
-        r = {
-            r.x * c + r.z * s,
-            r.y,
-            -r.x * s + r.z * c
-        };
+        r = { r.x * c + r.z * s, r.y, -r.x * s + r.z * c };
     }
 
-    // Z 회전
+    // Z
     {
         float c = cosf(rz);
         float s = sinf(rz);
-        r = {
-            r.x * c - r.y * s,
-            r.x * s + r.y * c,
-            r.z
-        };
+        r = { r.x * c - r.y * s, r.x * s + r.y * c, r.z };
     }
 
     return r;
-}
-
-Ray MAP::ToLocalRay(const Ray& worldRay) const
-{
-    Ray local;
-
-    Vec3 p{
-        worldRay.start.x - offset.x,
-        worldRay.start.y - offset.y,
-        worldRay.start.z - offset.z
-    };
-
-    local.start = ApplyInverseRotation(p);
-    local.dir = ApplyInverseRotation(worldRay.dir);
-
-    return local;
 }
 
 bool MAP::CanMove(const Vec3& from, const Vec3& to) const

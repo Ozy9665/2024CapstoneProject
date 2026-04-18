@@ -72,7 +72,14 @@ void baton_sweep(int c_id, HitPacket* p)
 	MAP* map = GetMap(room);
 	if (map && map->LineTrace(ray, static_cast<float>(range), mapHitDist, mapTri))
 	{
+		std::cout << "[MAP HIT] dist=" << mapHitDist
+			<< " tri=" << mapTri << "\n";
+
 		range = mapHitDist;
+	}
+	else
+	{
+		std::cout << "[MAP MISS]\n";
 	}
 
 	FVector end = start + forward * range;
@@ -158,7 +165,14 @@ void line_trace(int c_id, HitPacket* p)
 	MAP* map = GetMap(room);
 	if (map && map->LineTrace(ray, static_cast<float>(range), mapHitDist, mapTri))
 	{
+		std::cout << "[MAP HIT] dist=" << mapHitDist
+			<< " tri=" << mapTri << "\n";
+
 		range = mapHitDist;
+	}
+	else
+	{
+		std::cout << "[MAP MISS]\n";
 	}
 
 	FVector end = start + dir * range;

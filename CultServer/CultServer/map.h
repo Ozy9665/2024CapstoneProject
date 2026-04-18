@@ -82,8 +82,7 @@ protected:
     void BuildTriangles();
     void BuildTriangleAABBs();
     void BuildSpatialGrid();
-    Vec3 ApplyInverseRotation(const Vec3&) const;
-    Ray ToLocalRay(const Ray& worldRay) const;
+    Vec3 ApplyRotation(const Vec3&, const Vec3&);
     bool CanMove(const Vec3&, const Vec3&) const;
     int WorldToGridX(float x) const;
     int WorldToGridY(float y) const;
