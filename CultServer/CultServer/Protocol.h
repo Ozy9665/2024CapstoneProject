@@ -637,7 +637,7 @@ void broadcast_in_room(const SESSION& sender, const PacketT* packet, float view_
 }
 
 constexpr FVector LandmassSpawnLocation{ -10219.0f, 2560.0f, -3009.0f };
-constexpr FVector Level3SpawnLocation{ 5253.f, 49447.f, 174.f };
+constexpr FVector Level3SpawnLocation{ 5440.f, 51000.f, 90.f };
 
 constexpr FCultistCharacterState CultistDummyState{ -1, 0.f, 0.f, 0.f, 0.f, 90.f, 0.f, 0.f, 0.f, 0.f, 100.f,
 	false, false, false, false, false, false, false, false, false, false, false, false };

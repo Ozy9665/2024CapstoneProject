@@ -477,6 +477,8 @@ bool NAVMESH::Load(const std::string& objPath, const Vec3& MapOffset)
     BuildSpatialGridNav();
     BuildComponents();
 
+    DebugPrintSummary();
+    DebugPrintAdjacencySample();
     return true;
 }
 
@@ -909,14 +911,24 @@ int NAVMESH::FindContainingTriangle(const Vec3& pos) const
     float bestDz = FLT_MAX;
 
     TryCellContain(cx, cy, pos, best, bestDz);
+
     if (best >= 0)
+    {
+        std::cout << "[FindTri OK] tri=" << best << "\n";
         return best;
+    }
 
     float bestD2 = FLT_MAX;
     int snap = TryCellSnapRing(cx, cy, pos, bestD2);
 
     if (snap >= 0 && bestD2 <= snapMax2)
+    {
+        std::cout << "[FindTri SNAP] tri=" << snap << " d2=" << bestD2 << "\n";
         return snap;
+    }
+
+    std::cout << "[FindTri FAIL] pos=("
+        << pos.x << "," << pos.y << "," << pos.z << ")\n";
 
     return -1;
 }
@@ -1230,4 +1242,61 @@ bool NAVMESH::SnapPositionToNavMesh(Vec3& pos) const
     float groundZ = TriHeightAtXY(tri, pos.x, pos.y);
     pos.z = groundZ + POLICE_HALF_HEIGHT;
     return true;
+}
+
+void NAVMESH::DebugPrintSummary() const
+{
+    std::cout << "==== NAVMESH DEBUG ====\n";
+
+    std::cout << "Vertices: " << vertices.size() << "\n";
+    std::cout << "Triangles: " << triangles.size() << "\n";
+
+    std::cout << "[AABB]\n";
+    std::cout << "X: " << worldAABB.minX << " ~ " << worldAABB.maxX << "\n";
+    std::cout << "Y: " << worldAABB.minY << " ~ " << worldAABB.maxY << "\n";
+    std::cout << "Z: " << worldAABB.minZ << " ~ " << worldAABB.maxZ << "\n";
+
+    // triCenters 샘플
+    std::cout << "[TriCenters sample]\n";
+    for (int i = 0; i < std::min(5, (int)triCenters.size()); ++i)
+    {
+        const auto& c = triCenters[i];
+        std::cout << i << ": (" << c.x << ", " << c.y << ", " << c.z << ")\n";
+    }
+
+    // adjacency 체크
+    int isolated = 0;
+    for (int i = 0; i < (int)triNeighbors.size(); ++i)
+    {
+        int cnt = 0;
+        for (int nb : triNeighbors[i])
+            if (nb >= 0) cnt++;
+
+        if (cnt == 0)
+            isolated++;
+    }
+
+    std::cout << "Isolated triangles: " << isolated << "\n";
+
+    // component 개수
+    int maxComp = -1;
+    for (int c : triComponentId)
+        maxComp = std::max(maxComp, c);
+
+    std::cout << "Components: " << (maxComp + 1) << "\n";
+
+    std::cout << "========================\n";
+}
+
+void NAVMESH::DebugPrintAdjacencySample() const
+{
+    std::cout << "[Adjacency sample]\n";
+
+    for (int i = 0; i < std::min(10, (int)triNeighbors.size()); ++i)
+    {
+        std::cout << "Tri " << i << " -> ";
+        for (int nb : triNeighbors[i])
+            std::cout << nb << " ";
+        std::cout << "\n";
+    }
 }

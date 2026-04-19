@@ -199,6 +199,8 @@ private:
 
     int TryCellSnapRing(int, int, const Vec3&,
         float& bestD2) const;
+    void DebugPrintSummary() const;
+    void DebugPrintAdjacencySample() const;
 };
 
 constexpr float EPS = 0.001f; // 1mm
