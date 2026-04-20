@@ -150,7 +150,7 @@ struct Triangle
 
 class NAVMESH : public MAP {
 public:
-    bool Load(const std::string&, const Vec3&);
+    bool Load(const std::string&, const Vec3&, const Vec3&);
     bool FindTriPath(const Vec3&, const Vec3&, std::vector<int>&);
     Vec3 GetTriCenter(int) const;
     void BuildPortals(const std::vector<int>& triPath,
@@ -165,7 +165,6 @@ public:
     const MapTri& GetTri(int) const;
     int GetRandomTriangle(int, int) const;
     bool SnapPositionToNavMesh(Vec3& pos) const;
-
     std::vector<int> triComponentId;
 
 private:
@@ -178,6 +177,7 @@ private:
 
     void WeldVertices(std::vector<MapVertex>&, std::vector<MapTriangle>&);
 
+    Vec3 scale;
     std::vector<std::array<int, 3>> triNeighbors;
     std::vector<Vec3> triCenters;
     std::vector<Portal> portals;

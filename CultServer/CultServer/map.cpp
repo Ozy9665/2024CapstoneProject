@@ -456,9 +456,10 @@ Vec3 MAP::GridToWorld(int gx, int gy) const
 }
 
 // NevMesh
-bool NAVMESH::Load(const std::string& objPath, const Vec3& MapOffset)
+bool NAVMESH::Load(const std::string& objPath, const Vec3& MapOffset, const Vec3& NavScale)
 {
     offset = MapOffset;
+    scale = NavScale;
     vertices.clear();
     triangles.clear();
     tris.clear();
@@ -508,9 +509,9 @@ bool NAVMESH::LoadNavOBJ(const std::string& path,
             float ox, oy, oz;
             ss >> ox >> oy >> oz;
             MapVertex v{};
-            v.x = ox;
-            v.y = oy;
-            v.z = oz;
+            v.x = ox * scale.x;
+            v.y = oy * scale.y;
+            v.z = oz * scale.z;
             outVertices.push_back(v);
         }
         else if (type == "f")
@@ -914,7 +915,6 @@ int NAVMESH::FindContainingTriangle(const Vec3& pos) const
 
     if (best >= 0)
     {
-        std::cout << "[FindTri OK] tri=" << best << "\n";
         return best;
     }
 
@@ -923,12 +923,8 @@ int NAVMESH::FindContainingTriangle(const Vec3& pos) const
 
     if (snap >= 0 && bestD2 <= snapMax2)
     {
-        std::cout << "[FindTri SNAP] tri=" << snap << " d2=" << bestD2 << "\n";
         return snap;
     }
-
-    std::cout << "[FindTri FAIL] pos=("
-        << pos.x << "," << pos.y << "," << pos.z << ")\n";
 
     return -1;
 }
