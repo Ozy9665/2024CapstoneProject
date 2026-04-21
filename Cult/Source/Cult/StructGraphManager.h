@@ -391,6 +391,27 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Quake")
 	void StopEarthquake3Phase();
 
+	// Field
+	UPROPERTY(EditAnywhere, Category = "Stage3|GravityAssist")
+	bool bStage3_GravityAssist = true;
+
+	UPROPERTY(EditAnywhere, Category = "Stage3|GravityAssist", meta = (EditCondition = "bStage3_GravityAssist"))
+	float Stage3_GravityAssistScale = 1.0f;   
+	UPROPERTY(EditAnywhere, Category = "Stage3|GravityAssist", meta = (EditCondition = "bStage3_GravityAssist"))
+	float Stage3_GravityAssistDuration = 3.0f; 
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UUniformVector> Stage3_GravityField = nullptr;
+
+	TMap<TWeakObjectPtr<UGeometryCollectionComponent>, float> GravityAssistUntil;
+
+	UFUNCTION()
+	void AddGravityAssist(UGeometryCollectionComponent* GC, float Duration);
+	UFUNCTION()
+	void TickGravityAssist();
+	UFUNCTION()
+	void DumpGCCache(const FString& Why);
+
 	// Geometry Collection 
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
 	FName GCWallTag = "GC_WALL";

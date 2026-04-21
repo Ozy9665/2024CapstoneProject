@@ -25,6 +25,13 @@ void AStructGraphManager::BeginPlay()
 	UE_LOG(LogTemp, Warning, TEXT("[StructGraph] BeginPlay: %s"), *GetName());
 
 	BuildGCCache();
+
+	// Field
+	if (!Stage3_GravityField)
+	{
+		Stage3_GravityField = NewObject<UUniformVector>(this);
+	}
+
 	// 시뮬 조절
 	ForEachValidGC(GCSlabs, [](UGeometryCollectionComponent* GC)
 		{
@@ -987,7 +994,7 @@ void AStructGraphManager::TriggerStage2()
 void AStructGraphManager::TriggerStage3()
 {
 	BuildGCCache();
-
+	DumpGCCache(TEXT("BeforeStage3"));
 	// 타이머 정리
 	GetWorldTimerManager().ClearTimer(Stage2Timer);
 	GetWorldTimerManager().ClearTimer(Stage3SlabDelayHandle);
@@ -1467,28 +1474,25 @@ void AStructGraphManager::BuildGCCache()
 	SortByZSafe(GCWalls);
 	SortByZSafe(GCSlabs);
 
-	if (!bBoundBreakEvents)
-	{
-		bBoundBreakEvents = true;
-
-		auto BindBreak = [&](const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr)
+	auto BindBreak = [&](const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr)
+		{
+			for (const auto& W : Arr)
 			{
-				for (const auto& W : Arr)
-				{
-					UGeometryCollectionComponent* GC = W.Get();
-					if (!IsValid(GC)) continue;
+				UGeometryCollectionComponent* GC = W.Get();
+				if (!IsValid(GC)) continue;
 
-					GC->SetNotifyBreaks(true);
+				GC->SetNotifyBreaks(true);
 
-					GC->OnChaosBreakEvent.RemoveDynamic(this, &AStructGraphManager::OnGCBreak);
-					GC->OnChaosBreakEvent.AddDynamic(this, &AStructGraphManager::OnGCBreak);
-				}
-			};
+				GC->OnChaosBreakEvent.RemoveDynamic(this, &AStructGraphManager::OnGCBreak);
+				GC->OnChaosBreakEvent.AddDynamic(this, &AStructGraphManager::OnGCBreak);
+			}
+		};
 
-		BindBreak(GCWalls);
-		BindBreak(GCColumns);
-		BindBreak(GCSlabs);
-	}
+	BindBreak(GCWalls);
+	BindBreak(GCColumns);
+	BindBreak(GCSlabs);
+
+	bBoundBreakEvents = true;
 }
 
 void AStructGraphManager::ForEachValidGC(
@@ -1778,6 +1782,7 @@ void AStructGraphManager::OnGCBreak(const FChaosBreakEvent& BreakEvent)
 		true,
 		ENCPoolMethod::AutoRelease
 	);
+	AddGravityAssist(GC, Stage3_GravityAssistDuration);
 }
 
 void AStructGraphManager::EnsureGCPhysicsReady_Stage3()
@@ -1836,6 +1841,7 @@ void AStructGraphManager::ApplyContinuousShakeToGC(
 void AStructGraphManager::StartStage3Continuous()
 {
 	if (bStage3ContinuousRunning) return;
+
 	Stage3_RecreatedOnce.Reset();
 
 	bStage3ContinuousRunning = true;
@@ -1944,7 +1950,13 @@ void AStructGraphManager::Stage3_ContinuousTick()
 		ForEachValidGC(GCSlabs, [](UGeometryCollectionComponent* GC)
 			{
 				if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
+				GC->SetSimulatePhysics(true);
 				GC->SetEnableGravity(true);
+				if (FBodyInstance* BI = GC->GetBodyInstance())
+				{
+					BI->SetEnableGravity(true);
+					BI->WakeInstance();
+				}
 				GC->WakeAllRigidBodies();
 			});
 
@@ -1978,6 +1990,8 @@ void AStructGraphManager::Stage3_ContinuousTick()
 		ApplyContinuousShakeToGC(GCSlabs, Stage3_ShakeImpulse * 0.25f);
 	}
 
+	TickGravityAssist();
+
 	// 3) strain은 듬성듬성: 0.05 틱이면 %12 => 0.6초마다 1회
 	const bool bDoStrain = (Stage3TickCounter % 12) == 0;
 	if (!bDoStrain) return;
@@ -1985,6 +1999,8 @@ void AStructGraphManager::Stage3_ContinuousTick()
 	const bool bPhaseA = (T < 2.0f);                // 전단 준비
 	const bool bPhaseB = (T >= 2.0f && T < 4.0f);   // 펀치 누적
 	const bool bPhaseC = (T >= 4.0f);               // 마무리(과한 분해 금지)
+
+
 
 	// 4) 벽 하부 균열 유지 (대상 1개만, 아주 약하게)
 	{
@@ -2251,21 +2267,34 @@ void AStructGraphManager::ApplyManualGravityToGCArray(
 	UWorld* W = GetWorld();
 	if (!IsValid(W)) return;
 
-	const float Gz = W->GetGravityZ() * Scale;
-	const FVector Accel(0.f, 0.f, Gz);
+	const FVector Accel(0.f, 0.f, W->GetGravityZ() * Scale); // 추가 하강 가속
 
 	ForEachValidGC(Arr, [&](UGeometryCollectionComponent* GC)
 		{
 			if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
 
+			// Sim ON
 			if (!GC->IsSimulatingPhysics())
 			{
 				GC->SetSimulatePhysics(true);
+				/*if (!GC->IsSimulatingPhysics())
+				{
+					GC->RecreatePhysicsState();
+					GC->SetSimulatePhysics(true);
+				}*/
 			}
 
-			GC->SetEnableGravity(false);
+			// gravity true
+			GC->SetEnableGravity(true);
+
+			if (FBodyInstance* BI = GC->GetBodyInstance())
+			{
+				BI->SetEnableGravity(true);
+				BI->WakeInstance();
+			}
 
 			GC->AddForce(Accel, NAME_None, true);
+
 			GC->WakeAllRigidBodies();
 		});
 }
@@ -2302,6 +2331,11 @@ void AStructGraphManager::Stage3_ManualGravityTick()
 	if (Now >= Stage3ManualGravityEndTime)
 	{
 		GetWorldTimerManager().ClearTimer(Stage3ManualGravityHandle);
+
+		ForEachValidGC(GCWalls, [](UGeometryCollectionComponent* GC) { GC->SetEnableGravity(true); GC->WakeAllRigidBodies(); });
+		ForEachValidGC(GCColumns, [](UGeometryCollectionComponent* GC) { GC->SetEnableGravity(true); GC->WakeAllRigidBodies(); });
+		ForEachValidGC(GCSlabs, [](UGeometryCollectionComponent* GC) { GC->SetEnableGravity(true); GC->WakeAllRigidBodies(); });
+
 		return;
 	}
 
@@ -2310,3 +2344,91 @@ void AStructGraphManager::Stage3_ManualGravityTick()
 	ApplyManualGravityToGCArray(GCSlabs, Stage3_ManualGravityScale);
 }
 
+void AStructGraphManager::AddGravityAssist(UGeometryCollectionComponent* GC, float Duration)
+{
+	if (!bStage3_GravityAssist) return;
+	UWorld* W = GetWorld();
+	if (!IsValid(W) || !IsValid(GC)) return;
+
+	GravityAssistUntil.FindOrAdd(GC) = W->GetTimeSeconds() + FMath::Max(0.1f, Duration);
+}
+
+void AStructGraphManager::TickGravityAssist()
+{
+	if (!bStage3_GravityAssist) return;
+
+	UWorld* W = GetWorld();
+	if (!IsValid(W) || !Stage3_GravityField) return;
+
+	const float Now = W->GetTimeSeconds();
+
+	const float Mag = FMath::Abs(W->GetGravityZ()) * Stage3_GravityAssistScale;
+	Stage3_GravityField->Direction = FVector(0.f, 0.f, -1.f); 
+	Stage3_GravityField->Magnitude = Mag;
+
+	for (auto It = GravityAssistUntil.CreateIterator(); It; ++It)
+	{
+		UGeometryCollectionComponent* GC = It.Key().Get();
+		if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed() || Now > It.Value())
+		{
+			It.RemoveCurrent();
+			continue;
+		}
+
+		// Sim
+		if (!GC->IsSimulatingPhysics())
+		{
+			GC->SetSimulatePhysics(true);
+		}
+
+		GC->SetEnableGravity(true);
+		if (FBodyInstance* BI = GC->GetBodyInstance())
+		{
+			BI->SetEnableGravity(true);
+			BI->WakeInstance();
+		}
+
+		GC->ApplyPhysicsField(
+			true,
+			EGeometryCollectionPhysicsTypeEnum::Chaos_LinearForce,
+			nullptr,
+			Stage3_GravityField
+		);
+
+		GC->WakeAllRigidBodies();
+	}
+}
+
+void AStructGraphManager::DumpGCCache(const FString& Why)
+{
+	auto DumpArr = [&](const TCHAR* Label, const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("---- Dump %s (%s) Count=%d ----"), Label, *Why, Arr.Num());
+
+			for (int32 i = 0; i < Arr.Num(); ++i)
+			{
+				UGeometryCollectionComponent* GC = Arr[i].Get();
+				if (!IsValid(GC))
+				{
+					UE_LOG(LogTemp, Warning, TEXT("[%s][%d] GC=null"), Label, i);
+					continue;
+				}
+
+				AActor* OA = GC->GetOwner();
+				UE_LOG(LogTemp, Warning,
+					TEXT("[%s][%d] Owner=%s Sim=%d Grav=%d Awake=%d Reg=%d Loc=%s"),
+					Label, i,
+					*GetNameSafe(OA),
+					GC->IsSimulatingPhysics() ? 1 : 0,
+					GC->IsGravityEnabled() ? 1 : 0,
+					GC->IsAnyRigidBodyAwake() ? 1 : 0,
+					GC->IsRegistered() ? 1 : 0,
+					*GC->GetComponentLocation().ToString()
+				);
+			}
+		};
+
+	DumpArr(TEXT("WALL"), GCWalls);
+	DumpArr(TEXT("COL"), GCColumns);
+	DumpArr(TEXT("SLAB"), GCSlabs);
+}
