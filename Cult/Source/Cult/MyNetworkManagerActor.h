@@ -18,6 +18,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FIdIsExist);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FIdIsNotExist);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FSignUpSuccess);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FSignUpFailed);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FConnectSuccess);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FConnectFailed);
 
 UCLASS()
 class CULT_API AMyNetworkManagerActor : public AActor
@@ -46,7 +48,9 @@ public:
 	FOnRoomListUpdated OnRoomListUpdated;
 
 	UPROPERTY(BlueprintAssignable, Category = "Events")
-	FOnGameStartConfirmed OnGameStartConfirmed;
+	FOnGameStartConfirmed LandMassStartConfirmed;
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FOnGameStartConfirmed Level3StartConfirmed;
 
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnGameStartConfirmed OnGameStartUnConfirmed;
@@ -69,10 +73,18 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FSignUpFailed OnSignUpFailed;
 
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FConnectSuccess OnConnectSuccess;
+
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FConnectFailed OnConnectFailed;
+
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
 	bool CanConnectToServer(const FString& ServerIP, int32 ServerPort);
+
+	UFUNCTION(BlueprintCallable, Category = "Network")
 	void CheckServer();
 	void ReceiveData();
 

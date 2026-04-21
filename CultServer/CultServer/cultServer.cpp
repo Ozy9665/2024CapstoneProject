@@ -17,11 +17,17 @@
 #include <numeric>
 #include <chrono>
 #include <concurrent_priority_queue.h>
+#include <concurrent_unordered_set.h>
+#include <concurrent_unordered_map.h>
 #include <algorithm>
 #include "Protocol.h"
 #include "error.h"
 #include "PoliceAI.h"
+#include "CultistAI.h"
 #include "db.h"
+#include "map.h"
+#include "MapManager.h"
+#include "Combat.h"
 
 #pragma comment(lib, "MSWSock.lib")
 #pragma comment (lib, "WS2_32.LIB")
@@ -32,36 +38,46 @@ EXP_OVER g_a_over;
 HANDLE g_h_iocp = nullptr;
 
 std::atomic<int> client_id = 0;
-std::unordered_map<int, SESSION> g_users;
-std::array<room, MAX_ROOM> g_rooms;
+concurrency::concurrent_unordered_map<int, std::shared_ptr<SESSION>> g_users;
+concurrency::concurrent_unordered_set<int> g_cultist_ai_ids;
+concurrency::concurrent_unordered_set<int> g_police_ai_ids;
+std::vector<int> free_session_ids;
+std::mutex free_id_mtx;
+std::atomic<int> next_session_id{ 0 };
 
-// 제단 위치
-std::array<std::array<int, 5>, MAX_ROOM> altar_locs{};
+MAP NewmapLandmassMap;
+NAVMESH NewmapLandmassNavMesh;
 
-void InitializeAltarLoc(int room_num) {
-	if (room_num < 0 || room_num >= static_cast<int>(altar_locs.size())) {
+MAP Level3Map;
+NAVMESH Level3NavMesh;
+
+std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
+std::array<std::array<Altar, ALTAR_PER_ROOM>, MAX_ROOM> g_altars;
+
+void InitializeAltars(int room_num) {
+	if (room_num < 0 || room_num >= static_cast<int>(g_altars.size())) {
 		return;
 	}
 
-	for (int i = 0; i < 5; ++i) {
-		altar_locs[room_num][i] = i;
+	std::array<int, ALTAR_PER_ROOM> order;
+	for (int i = 0; i < ALTAR_PER_ROOM; ++i) {
+		order[i] = i;
 	}
 
-	for (int i = 0; i < 4; ++i) {
-		int j = i + rand() % (5 - i);
-		std::swap(altar_locs[room_num][i], altar_locs[room_num][j]);
+	for (int i = 0; i < ALTAR_PER_ROOM - 1; ++i) {
+		int j = i + rand() % (ALTAR_PER_ROOM - i);
+		std::swap(order[i], order[j]);
+	}
+
+	for (int i = 0; i < ALTAR_PER_ROOM; ++i) {
+		g_altars[room_num][i].loc = LandMassAltarLocations[order[i]];
+		g_altars[room_num][i].isActivated = false;
+		g_altars[room_num][i].id = i;
+		g_altars[room_num][i].gauge = 0;
 	}
 }
 
 // db event 큐
-enum DB_EVENT { EV_LOGIN, EV_EXIST, EV_SIGNUP };
-struct DBTask {
-	int c_id;
-	DB_EVENT event_id;
-	std::string id;
-	std::string pw;
-};
-
 std::mutex g_db_mtx;
 std::condition_variable g_db_cv;
 std::queue<DBTask> g_db_q;
@@ -151,14 +167,6 @@ void DBWorkerLoop() {
 }
 
 // room thread
-enum ROOM_EVENT { RM_REQ, RM_ENTER, RM_GAMESTART, RM_RITUAL, RM_DISCONNECT };
-struct RoomTask {
-	int c_id;
-	ROOM_EVENT type;
-	int role;
-	int room_id;
-};
-
 std::mutex g_room_mtx;
 std::condition_variable g_room_cv;
 std::queue<RoomTask> g_room_q;
@@ -178,26 +186,34 @@ void RoomWorkerLoop() {
 		{
 		case RM_REQ:
 		{
-			if (!g_users.count(task.c_id)) continue;
+			auto it = g_users.find(task.c_id);
+			if (it == g_users.end())
+				continue;
+
 			int role = task.role;
-			g_users[task.c_id].setRole(role);
+			it->second->setRole(role);
 
 			RoomsPakcet pkt{};
 			pkt.header = requestHeader;
 			pkt.size = sizeof(RoomsPakcet);
 
 			int inserted = 0;
-			for (const room& r : g_rooms) {
-				if (inserted >= 10) break;
-				if (!r.isIngame) {
-					if ((role == 1 && r.police < MAX_POLICE_PER_ROOM) ||
-						(role == 0 && r.cultist < MAX_CULTIST_PER_ROOM))
-					{
-						pkt.rooms[inserted++] = r;
-					}
-				}
-			}
+			for (const auto& r : g_rooms)
+			{
+				if (inserted >= MAX_ROOM_LIST) 
+					break;
 
+				if (role == 0 && r.first.cultist >= MAX_CULTIST_PER_ROOM)
+					continue;
+
+				if (role == 1 && r.first.police >= MAX_POLICE_PER_ROOM)
+					continue;
+
+				pkt.rooms[inserted].room_id = r.first.room_id;
+				pkt.rooms[inserted].police = r.first.police;
+				pkt.rooms[inserted].cultist = r.first.cultist;
+				++inserted;
+			}
 			EXP_OVER* eo = new EXP_OVER();
 			std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
 			eo->comp_type = OP_ROOM_REQ;
@@ -206,26 +222,28 @@ void RoomWorkerLoop() {
 		}
 		case RM_ENTER:
 		{
-			if (!g_users.count(task.c_id)) continue;
+			auto it = g_users.find(task.c_id);
+			if (it == g_users.end())
+				continue;
 
-			auto& user = g_users[task.c_id];
+			auto user = it->second;
 			NoticePacket pkt{};
 			pkt.size = sizeof(NoticePacket);
 
 			int room_id = task.room_id;
-			if (user.room_id >= 0 && room_id < 0 || room_id >= MAX_ROOM) {
+			if (user->room_id >= 0 && room_id < 0 || room_id >= MAX_ROOM) {
 				pkt.header = leaveHeader;
 			}
 			else {
 				if (0 == task.role) {
-					pkt.header = (g_rooms[room_id].cultist >= MAX_CULTIST_PER_ROOM) ? leaveHeader : enterHeader;
+					pkt.header = (g_rooms[room_id].first.cultist >= MAX_CULTIST_PER_ROOM) ? leaveHeader : enterHeader;
 					if (pkt.header == enterHeader) 
-						user.room_id = room_id;
+						user->room_id = room_id;
 				}
 				else if (1 == task.role) {
-					pkt.header = (g_rooms[room_id].police >= MAX_POLICE_PER_ROOM) ? leaveHeader : enterHeader;
+					pkt.header = (g_rooms[room_id].first.police >= MAX_POLICE_PER_ROOM) ? leaveHeader : enterHeader;
 					if (pkt.header == enterHeader) 
-						user.room_id = room_id;
+						user->room_id = room_id;
 				}
 				else {
 					pkt.header = leaveHeader;
@@ -240,23 +258,30 @@ void RoomWorkerLoop() {
 		}
 		case RM_GAMESTART:
 		{
-			if (!g_users.count(task.c_id)) continue;
+			auto it = g_users.find(task.c_id);
+			if (it == g_users.end())
+				continue;
+
 			int room_id = task.room_id;
 			if (room_id < 0 || room_id >= MAX_ROOM) continue;
-
-			auto& me = g_users[task.c_id];
+			auto me = it->second;
 
 			// 카운터, ingame, player_ids 갱신
-			if (1 == task.role) g_rooms[room_id].police++;
-			else if (0 == task.role) g_rooms[room_id].cultist++;
-			if (g_rooms[room_id].cultist >= MAX_CULTIST_PER_ROOM &&
-				g_rooms[room_id].police >= MAX_POLICE_PER_ROOM) {
-				g_rooms[room_id].isIngame = true;
+			if (1 == task.role) 
+				g_rooms[room_id].first.police++;
+			else if (0 == task.role)
+				g_rooms[room_id].first.cultist++;
+
+			if (g_rooms[room_id].first.cultist >= MAX_CULTIST_PER_ROOM &&
+				g_rooms[room_id].first.police >= MAX_POLICE_PER_ROOM) 
+			{
+				g_rooms[room_id].first.isIngame = true;
 			}
-			me.room_id = room_id;
+			me->room_id = room_id;
+			me->setState(ST_INGAME);
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				if (g_rooms[room_id].player_ids[i] == UINT8_MAX) {
-					g_rooms[room_id].player_ids[i] = static_cast<uint8_t>(task.c_id);
+				if (g_rooms[room_id].first.player_ids[i] == -1) {
+					g_rooms[room_id].first.player_ids[i] = task.c_id;
 					break;
 				}
 			}
@@ -266,8 +291,8 @@ void RoomWorkerLoop() {
 				IdRolePacket pkt{};
 				pkt.header = connectionHeader;
 				pkt.size = sizeof(IdRolePacket);
-				pkt.id = static_cast<uint8_t>(task.c_id);
-				pkt.role = static_cast<uint8_t>(task.role);
+				pkt.id = task.c_id;
+				pkt.role = task.role;
 
 				EXP_OVER* eo = new EXP_OVER();
 				std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
@@ -277,17 +302,19 @@ void RoomWorkerLoop() {
 
 			// 서로 교환
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				uint8_t other = g_rooms[room_id].player_ids[i];
-				if (other == UINT8_MAX || other == task.c_id) continue;
-				if (!g_users.count(other)) continue;
+				int other = g_rooms[room_id].first.player_ids[i];
+				if (other == -1 || other == task.c_id) 
+					continue;
+				if (!g_users.count(other)) 
+					continue;
 
 				// 다른 유저에게 나
 				{
 					IdRolePacket pkt{};
 					pkt.header = connectionHeader;
 					pkt.size = sizeof(IdRolePacket);
-					pkt.id = static_cast<uint8_t>(task.c_id);
-					pkt.role = static_cast<uint8_t>(task.role);
+					pkt.id = task.c_id;
+					pkt.role = task.role;
 
 					EXP_OVER* eo = new EXP_OVER();
 					std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
@@ -296,11 +323,17 @@ void RoomWorkerLoop() {
 				}
 				// 나에게 다른 유저
 				{
+					auto otherIt = g_users.find(other);
+					if (otherIt == g_users.end())
+						continue;
+
+					auto otherSession = otherIt->second;
+
 					IdRolePacket pkt{};
 					pkt.header = connectionHeader;
 					pkt.size = sizeof(IdRolePacket);
 					pkt.id = other;
-					pkt.role = static_cast<uint8_t>(g_users[other].getRole());
+					pkt.role = otherSession->role;
 
 					EXP_OVER* eo = new EXP_OVER();
 					std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
@@ -312,18 +345,22 @@ void RoomWorkerLoop() {
 		}
 		case RM_RITUAL:
 		{
-			if (!g_users.count(task.c_id)) continue;
-			int room_id = g_users[task.c_id].room_id;
+			auto it = g_users.find(task.c_id);
+			if (it == g_users.end())
+				continue;
+
+			auto user = it->second;
+			int room_id = user->room_id;
 			if (room_id < 0 || room_id >= MAX_ROOM) continue;
 
 			RitualPacket pkt{};
 			pkt.header = ritualHeader;
 			pkt.size = sizeof(RitualPacket);
-
-			const auto& arr = altar_locs[room_id];
-			pkt.Loc1 = kPredefinedLocations[arr[0]];
-			pkt.Loc2 = kPredefinedLocations[arr[1]];
-			pkt.Loc3 = kPredefinedLocations[arr[2]];
+			const auto& altars = g_altars[room_id];
+			for (int i = 0; i < ALTAR_PER_ROOM; ++i) {
+				pkt.Loc[i] = altars[i].loc;
+			}
+			pkt.maptype = g_rooms[room_id].second;
 
 			EXP_OVER* eo = new EXP_OVER();
 			std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
@@ -331,22 +368,37 @@ void RoomWorkerLoop() {
 			PostQueuedCompletionStatus(g_h_iocp, pkt.size, static_cast<ULONG_PTR>(task.c_id), &eo->over);
 			continue;
 		}
-		case RM_DISCONNECT:
+		case RM_QUIT:
 		{
-			if (!g_users.count(task.c_id)) continue;
+			auto it = g_users.find(task.c_id);
+			if (it == g_users.end())
+				continue;
+
+			auto user = it->second;
 			int room_id = task.room_id;
 			if (room_id < 0 || room_id >= MAX_ROOM) break;
 
-			if (0 == task.role && g_rooms[room_id].cultist >= 0) {
-				g_rooms[room_id].cultist--;
+			if (0 == task.role && g_rooms[room_id].first.cultist >= 1) {
+				g_rooms[room_id].first.cultist--;
 			}
-			else if (1 == task.role && g_rooms[room_id].police >= 0) {
-				g_rooms[room_id].police--;
+			else if (1 == task.role && g_rooms[room_id].first.police >= 1) {
+				g_rooms[room_id].first.police--;
 			}
 
+			int targets[MAX_PLAYERS_PER_ROOM];
+			std::memcpy(targets, g_rooms[room_id].first.player_ids, sizeof(targets));
+
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				if (g_rooms[room_id].player_ids[i] == static_cast<uint8_t>(task.c_id)) {
-					g_rooms[room_id].player_ids[i] = UINT8_MAX;
+				if (g_rooms[room_id].first.player_ids[i] == task.c_id) {
+					g_rooms[room_id].first.player_ids[i] = -1;
+					user->room_id = -1;
+					user->resetForReuse();
+					{
+						std::lock_guard<std::mutex> lk(free_id_mtx);
+						free_session_ids.push_back(task.c_id);
+
+						std::cout << "reuse: " << task.c_id << std::endl;
+					}
 					break;
 				}
 			}
@@ -354,16 +406,51 @@ void RoomWorkerLoop() {
 			IdOnlyPacket pkt;
 			pkt.header = DisconnectionHeader;
 			pkt.size = sizeof(IdOnlyPacket);
-			pkt.id = static_cast<uint8_t>(task.c_id);
+			pkt.id = task.c_id;
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				uint8_t other = g_rooms[room_id].player_ids[i];
-				if (other == UINT8_MAX || !g_users.count(other) || !g_users[other].isValidSocket()) {
+				int other = targets[i];
+				auto oit = g_users.find(other);
+				if (other == -1 || oit == g_users.end() || !user->isValidSocket()) {
 					continue;
 				}
 				EXP_OVER* eo = new EXP_OVER();
 				std::memcpy(eo->send_buffer, &pkt, sizeof(pkt));
 				eo->comp_type = OP_ROOM_DISCONNECT;
 				PostQueuedCompletionStatus(g_h_iocp, pkt.size, static_cast<ULONG_PTR>(other), &eo->over);
+			}
+			continue;
+		}
+		case RM_DISCONNECT:
+		{
+			auto it = g_users.find(task.c_id);
+			if (it == g_users.end())
+				continue;
+
+			auto user = it->second;
+			int room_id = task.room_id;
+			if (room_id < 0 || room_id >= MAX_ROOM) 
+				break;
+
+			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
+				if (g_rooms[room_id].first.player_ids[i] == task.c_id) {
+					g_rooms[room_id].first.player_ids[i] = -1;
+					break;
+				}
+			}
+
+			if ((0 == task.role || 100 == task.role) && g_rooms[room_id].first.cultist >= 1) {
+				g_rooms[room_id].first.cultist--;
+			}
+			else if ((1 == task.role || 101 == task.role) && g_rooms[room_id].first.police >= 1) {
+				g_rooms[room_id].first.police--;
+			}
+			user->room_id = -1;
+			user->resetForReuse();
+			{
+				std::lock_guard<std::mutex> lk(free_id_mtx);
+				free_session_ids.push_back(task.c_id);
+
+				std::cout << "reuse: " << task.c_id << std::endl;
 			}
 			continue;
 		}
@@ -392,18 +479,6 @@ void RoomWorkerLoop() {
 	*/
  
 // heal timer queue
-enum EVENT_TYPE { EV_HEAL };
-struct TIMER_EVENT {
-	int c_id;
-	int target_id;
-	std::chrono::system_clock::time_point wakeup_time;
-	EVENT_TYPE event_id;
-
-	constexpr bool operator < (const TIMER_EVENT& Left) const
-	{
-		return (wakeup_time > Left.wakeup_time);
-	}
-};
 concurrency::concurrent_priority_queue<TIMER_EVENT> timer_queue;
 
 void HealTimerLoop() {
@@ -411,35 +486,79 @@ void HealTimerLoop() {
 		TIMER_EVENT ev;
 		auto current_time = std::chrono::system_clock::now();
 		if (true == timer_queue.try_pop(ev)) {
-			if (!g_users[ev.c_id].cultist_state.ABP_DoHeal ||
-				!g_users[ev.target_id].cultist_state.ABP_GetHeal) {
-				continue;
-			}
 			if (ev.wakeup_time > current_time) {
 				std::this_thread::sleep_until(ev.wakeup_time);
 			}
+
+			auto it_actor = g_users.find(ev.c_id);
+			auto it_target = g_users.find(ev.target_id);
+			if (it_actor == g_users.end() || it_target == g_users.end())
+				continue;
+
+			auto actor = it_actor->second;
+			auto target = it_target->second;
+
 			switch (ev.event_id) {
 			case EV_HEAL:
-				g_users[ev.c_id].heal_gage += 1;
-				if (g_users[ev.c_id].heal_gage < 10) {
+			{
+				if (!actor->cultist_state.ABP_DoHeal ||
+					!target->cultist_state.ABP_GetHeal) {
+					continue;
+				}
+
+				target->heal_gauge += 1;
+				if (target->heal_gauge < 10) {
 					ev.wakeup_time = std::chrono::system_clock::now() + 1s;
 					ev.event_id = EV_HEAL;
 					timer_queue.push(ev);
 				}
-				else if (g_users[ev.c_id].heal_gage >= 10) {
+				else if (target->heal_gauge >= 10) {
 					// 락 걸기
-					if (g_users[ev.c_id].cultist_state.CurrentHealth + 10 > 100)
-						g_users[ev.c_id].cultist_state.CurrentHealth = 100;
-					else
-						g_users[ev.c_id].cultist_state.CurrentHealth += 10;
-					g_users[ev.c_id].heal_gage = 0;
-					NoticePacket packet;
+					target->heal_gauge = 0;
+					if (target->cultist_state.CurrentHealth + 50 >= 100) {
+						target->cultist_state.CurrentHealth = 100;
+					}
+					else {
+						target->cultist_state.CurrentHealth += 50.f;
+					}
+
+					actor->cultist_state.ABP_DoHeal = 0;
+					actor->heal_partner = -1;
+					target->cultist_state.ABP_GetHeal = 0;
+					target->heal_partner = -1;
+
+					BoolPacket packet;
 					packet.header = endHealHeader;
-					packet.size = sizeof(NoticePacket);
-					g_users[ev.c_id].do_send_packet(&packet);
-					g_users[ev.target_id].do_send_packet(&packet);
+					packet.result = true;
+					packet.size = sizeof(BoolPacket);
+					actor->do_send_packet(&packet);
+					target->do_send_packet(&packet);
 				}
 				break;
+			}
+			case EV_STUN:
+			{
+				auto& st = actor->cultist_state;
+
+				if (st.ABP_IsDead)
+					break;
+
+				// 스턴 해제
+				st.ABP_IsStunned = 0;
+				st.ABP_TTStun = 0;
+				st.CurrentHealth = 50.f;
+				actor->state = ST_INGAME;
+
+				auto aiPtr = actor->ai;
+				auto* cultistAI = dynamic_cast<CultistAIController*>(aiPtr.get());
+				if (cultistAI)
+				{
+					cultistAI->bb.ai_state = AIState::Runaway;
+					cultistAI->bb.path.clear();
+					cultistAI->bb.has_patrol_target = false;
+				}
+				break;
+			}
 			}
 		}
 		else
@@ -450,7 +569,50 @@ void HealTimerLoop() {
 	}
 }
 
-void disconnect(int);
+int get_new_session_id()
+{
+	std::lock_guard<std::mutex> lk(free_id_mtx);
+
+	if (!free_session_ids.empty())
+	{
+		int id = free_session_ids.back();
+		free_session_ids.pop_back();
+		return id;
+	}
+
+	return next_session_id++;
+}
+
+void disconnect(int c_id)
+{
+	auto it = g_users.find(c_id);
+	if (it == g_users.end())
+		return;
+	std::cout << "socket disconnect " << c_id << std::endl;
+
+	auto user = it->second;
+	if(user->role != INVALID_ROLE && user->room_id >= 0 && user->room_id < MAX_ROOM)
+	{
+		RoomTask task;
+		task.c_id = c_id;
+		task.type = RM_DISCONNECT;
+		task.role = user->role;
+		task.room_id = user->room_id;
+
+		{
+			std::lock_guard<std::mutex> lk(g_room_mtx);
+			g_room_q.push(std::move(task));
+			g_room_cv.notify_one();
+		}
+	}
+
+	{
+		std::lock_guard<std::mutex> lk(g_logged_mtx);
+		if (!user->account_id.empty())
+			g_logged_in_ids.erase(user->account_id);
+	}
+}
+
 void CommandWorker()
 {
 	while (true)
@@ -461,7 +623,7 @@ void CommandWorker()
 		if (line.empty())
 			continue;
 
-		std::istringstream iss(line);
+		std::istringstream iss(line);	
 		std::string cmd;
 		iss >> cmd;
 
@@ -485,10 +647,56 @@ void CommandWorker()
 				std::cout << "[Command] Usage: disconnect <id>\n";
 			}
 		}
-		if (cmd == "add_ai")
+		else if (cmd == "add_ai")
 		{
-			int ai_id = client_id++;
-			std::cout << "[Command] New AI added. ID: " << ai_id << "\n";
+			int ai_role;
+			int room_id;
+
+			if (!(iss >> ai_role >> room_id))
+			{
+				std::cout << "[Command] Usage: add_ai <role> <room_id>\n";
+				continue;
+			}
+
+			if (ai_role != 100 && ai_role != 101)
+			{
+				std::cout << "[Command] Invalid ai role: " << ai_role << "\n";
+				continue;
+			}
+
+			if (room_id < 0 || room_id >= MAX_ROOM)
+			{
+				std::cout << "[Command] Invalid room id: " << room_id << "\n";
+				continue;
+			}
+			if (ai_role == 100) {
+				int ai_id = get_new_session_id();
+				AddCutltistAi(ai_id, static_cast<uint8_t>(ai_role), room_id);
+			}
+			else if (ai_role == 101) {
+				int ai_id = get_new_session_id();
+				AddPoliceAi(ai_id, static_cast<uint8_t>(ai_role), room_id);
+			}
+		}
+		else if (cmd == "kill")
+		{
+			int ai_id;
+
+			if (!(iss >> ai_id))
+			{
+				std::cout << "[Command] Usage: kill <ai_id>\n";
+				continue;
+			}
+			if (g_users[ai_id]->role == 100) {
+				KillCultistAi(ai_id);
+			}
+			else if (g_users[ai_id]->role == 101) {
+				KillPoliceAi(ai_id);
+			}
+			else {
+				std::cout << "invalid ai_id: " << ai_id << " role: " << static_cast<int>(g_users[ai_id]->role) << std::endl;
+			}
+			
 		}
 		else if (cmd == "exit")
 		{
@@ -500,37 +708,6 @@ void CommandWorker()
 			std::cout << "[Command] Unknown command: " << cmd << "\n";
 		}
 	}
-}
-
-void disconnect(int c_id)
-{
-	if (!g_users.count(c_id))
-		return;
-	std::cout << "socket disconnect " << c_id << std::endl;
-
-	auto& user = g_users[c_id];
-	if(user.role != -1 && user.room_id != -1)
-	{
-		RoomTask task;
-		task.c_id = c_id;
-		task.type = RM_DISCONNECT;
-		task.role = user.role;
-		task.room_id = user.room_id;
-
-		{
-			std::lock_guard<std::mutex> lk(g_room_mtx);
-			g_room_q.push(std::move(task));
-			g_room_cv.notify_one();
-		}
-	}
-
-	{
-		std::lock_guard<std::mutex> lk(g_logged_mtx);
-		if (!user.account_id.empty())
-			g_logged_in_ids.erase(user.account_id);
-	}
-	closesocket(g_users[c_id].c_socket);
-	g_users.erase(c_id);
 }
 
 float distanceSq(const SESSION& a, const SESSION& b) {
@@ -566,55 +743,6 @@ float distanceSq(const SESSION& a, const SESSION& b) {
 	float dz = az - bz;
 
 	return dx * dx + dy * dy + dz * dz; // 3D 거리 제곱
-}
-
-template <typename PacketT>
-void broadcast_in_room(int sender_id, int room_id, const PacketT* packet, float view_range = -1.0f) {
-	if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size())) {
-		std::cout << "Invalid room ID: " << room_id << std::endl;
-		return;
-	}
-
-	const room& r = g_rooms[room_id];
-
-	float view_range_sq = (view_range > 0) ? view_range * view_range : -1.0f;	// -1이면 전원에게 전송
-	
-	for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-		uint8_t other_id = r.player_ids[i];
-		if (other_id == UINT8_MAX || other_id == sender_id)
-			continue;
-
-		if (!g_users.count(other_id) || !g_users[other_id].isValidSocket())
-			continue;
-
-		// 거리 체크
-		bool inRange = (view_range_sq < 0) || (distanceSq(g_users[sender_id], g_users[other_id]) <= view_range_sq);
-		// 시야 안에 들어온 경우
-		if (inRange) {
-			// 원래 안 보였는데 새로 보이게 됨 -> appear 이벤트 전송
-			if (g_users[other_id].visible_ids.insert(sender_id).second) {
-				IdOnlyPacket appear;
-				appear.header = appearHeader;
-				appear.size = sizeof(IdOnlyPacket);
-				appear.id = static_cast<uint8_t>(sender_id);
-				g_users[other_id].do_send_packet(&appear);
-			}
-
-			// 상태 패킷 전송
-			g_users[other_id].do_send_packet(reinterpret_cast<void*>(const_cast<PacketT*>(packet)));
-		}
-		// 시야 밖으로 나간 경우
-		else {
-			// 원래 보이던 애가 사라짐 -> disappear 이벤트 전송
-			if (g_users[other_id].visible_ids.erase(sender_id) > 0) {
-				IdOnlyPacket disappear;
-				disappear.header = disappearHeader;
-				disappear.size = sizeof(IdOnlyPacket);
-				disappear.id = static_cast<uint8_t>(sender_id);
-				g_users[other_id].do_send_packet(&disappear);
-			}
-		}
-	}
 }
 
 bool validate_cultist_state(FCultistCharacterState& state)
@@ -696,6 +824,28 @@ bool validate_police_state(FPoliceCharacterState& state)
 	return ok;
 }
 
+bool validate_dog_state(int c_id, Dog dog)
+{
+	bool ok = true;
+	// 주인 체크
+	if (dog.owner != c_id) {
+		std::cout << "[AntiCheat] owner: " << dog.owner << "'is not same in packet: ("
+			<< dog.owner << ")\n";
+		ok = false;
+	}
+	// 맵 범위 체크
+	if (dog.loc.x < -MAP_BOUND_X || dog.loc.x > MAP_BOUND_X ||
+		dog.loc.y < -MAP_BOUND_Y || dog.loc.y > MAP_BOUND_Y ||
+		dog.loc.z < MAP_MIN_Z)
+	{
+		std::cout << "[AntiCheat] owner: " << dog.owner << "'s dog out of map bounds : ("
+			<< dog.loc.x << ", " << dog.loc.y << ", " << dog.loc.z << ")\n";
+		ok = false;
+	}
+
+	return ok;
+}
+
 std::optional<int> SphereTraceClosestCultist(int centerId, float radius) {
 	auto myIt = g_users.find(centerId);
 	if (myIt == g_users.end()) {
@@ -703,13 +853,13 @@ std::optional<int> SphereTraceClosestCultist(int centerId, float radius) {
 		return std::nullopt;
 	}
 
-	const SESSION& me = myIt->second;
-	const int roomId = me.room_id;
+	const auto me = myIt->second;
+	const int roomId = me->room_id;
 	if (roomId < 0 || roomId >= MAX_ROOM) {
 		std::cout << "User " << centerId << " room id error " << "\n";
 		return std::nullopt;
 	}
-	const room& rm = g_rooms[roomId];
+	const Room& rm = g_rooms[roomId].first;
 
 	const float r2 = radius * radius;
 	float nearestId = std::numeric_limits<float>::max();
@@ -719,57 +869,29 @@ std::optional<int> SphereTraceClosestCultist(int centerId, float radius) {
 	for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
 	{
 		int other = rm.player_ids[i];
-		if (other == UINT8_MAX || other == centerId) 
+		if (other == -1 || other == centerId)
 			continue;
 
 		auto it = g_users.find(other);
 		if (it == g_users.end()) 
 			continue;
 
-		const SESSION& target = it->second;
+		const auto target = it->second;
 
 		// 소켓/상태/역할 필터
-		if (!target.isValidSocket())   
+		if (!target->isValidSocket())   
 			continue;
-		if (target.role != 0)           // Cultist
+		if (target->role != 0)           // Cultist
 			continue;
 		// 치료 가능한 상태 확인
 
-		const float d2 = distanceSq(me, target);
+		const float d2 = distanceSq(*me, *target);
 		if (d2 <= r2 && d2 < nearestId) {
 			nearestId = d2;
 			bestId = other;
 		}
 	}
 	return bestId;
-}
-
-std::optional<std::pair<FVector, FRotator>> GetMovePoint(int c_id, int targetId) {
-	auto itHealer = g_users.find(c_id);
-	auto itTarget = g_users.find(targetId);
-	if (itHealer == g_users.end() || itTarget == g_users.end()) {
-		return std::nullopt;
-	}
-
-	const SESSION& healer = itHealer->second;
-	const SESSION& target = itTarget->second;
-
-	FVector mid{
-		 static_cast<double>((healer.cultist_state.PositionX + target.cultist_state.PositionX) * 0.5),
-		 static_cast<double>((healer.cultist_state.PositionY + target.cultist_state.PositionY) * 0.5),
-		 static_cast<double>((healer.cultist_state.PositionZ + target.cultist_state.PositionZ) * 0.5)
-	};
-
-	const double dx = static_cast<double>(target.cultist_state.PositionX - healer.cultist_state.PositionX);
-	const double dy = static_cast<double>(target.cultist_state.PositionY - healer.cultist_state.PositionY);
-
-	double yawHealer = std::atan2(dy, dx) * 180.0 / PI;
-	if (yawHealer < 0.0) {
-		yawHealer += 360.0;
-	}
-	FRotator rot{ 0.0, yawHealer, 0.0 };
-
-	return std::make_pair(mid, rot);
 }
 
 void process_packet(int c_id, char* packet) {
@@ -781,45 +903,90 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid CultistPacket size\n";
 			break;
 		}
-		if (!validate_cultist_state(p->state)) {
-			std::cout << "Suspicious cultist packet from c_id " << c_id << std::endl;
-		}
-		g_users[c_id].cultist_state = p->state;
+		//if (!validate_cultist_state(p->state)) {
+		//	std::cout << "Suspicious cultist packet from c_id " << c_id << std::endl;
+		//}
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
 
-		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
+		auto user = it->second;
+		user->cultist_state = p->state;
+		broadcast_in_room(*user, p, VIEW_RANGE);
 		break;
 	}
-	case skillHeader: 
+	case treeHeader: 
 	{
-		auto* p = reinterpret_cast<SkillPacket*>(packet);
-		if (p->size != sizeof(SkillPacket)) {
-			std::cout << "Invalid SkillPacket size\n";
+		auto* p = reinterpret_cast<TreePacket*>(packet);
+		if (p->size != sizeof(TreePacket)) {
+			std::cout << "Invalid TreePacket size\n";
 			break;
 		}
-		std::cout << "[SkillRecv] from=" << (int)c_id << " room=" << g_users[c_id].room_id
-			<< " skill=" << (int)p->skill << " size=" << (int)p->size << "\n";
+		
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
 
-		p->casterId = static_cast<uint8_t>(c_id);
+		auto user = it->second;
+		broadcast_in_room(*user, p, VIEW_RANGE);
+		break;
+	}
+	case crowSpawnHeader:
+	{
+		auto* p = reinterpret_cast<CrowPacket*>(packet);
+		if (p->size != sizeof(CrowPacket)) {
+			std::cout << "Invalid SkillCrowPacket size\n";
+			break;
+		}
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
 
-		int room_id = g_users[c_id].room_id;
-		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
-		{
-			std::cout << "Invalid room ID: " << room_id << std::endl;
+		auto user = it->second;
+		user->crow = p->crow;
+		if (!user->crow.is_alive) {
 			break;
 		}
 
-		const room& r = g_rooms[room_id];
-		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
-		{
-			uint8_t other_id = r.player_ids[i];
-			if (other_id == UINT8_MAX || other_id == c_id)
-				continue;
-
-			if (g_users.count(other_id) && g_users[other_id].isValidSocket())
-			{
-				g_users[other_id].do_send_packet(p);
-			}
+		broadcast_in_room(*user, p, VIEW_RANGE);
+		break;
+	}
+	case crowDataHeader:
+	{
+		auto* p = reinterpret_cast<CrowPacket*>(packet);
+		if (p->size != sizeof(CrowPacket)) {
+			std::cout << "Invalid CrowPacket size\n";
+			break;
 		}
+
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		user->crow = p->crow;
+		if (!user->crow.is_alive) {
+			break;
+		}
+
+		broadcast_in_room(*user, p, VIEW_RANGE);
+		break;
+	}
+	case crowDisableHeader:
+	{
+		auto* p = reinterpret_cast<IdOnlyPacket*>(packet);
+		if (p->size != sizeof(IdOnlyPacket)) {
+			std::cout << "Invalid IdOnlyPacket size\n";
+			break;
+		}
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second; 
+		user->crow.is_alive = false;
+
+		broadcast_in_room(*user, p, VIEW_RANGE);
 		break;
 	}
 	case policeHeader:
@@ -829,12 +996,37 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid PolicePacket size\n";
 			break;
 		}
-		if (!validate_police_state(p->state)) {
-			std::cout << "Suspicious police packet from c_id " << c_id << std::endl;
-		}
-		g_users[c_id].police_state = p->state;
+		//if (!validate_police_state(p->state)) {
+		//	std::cout << "Suspicious police packet from c_id " << c_id << std::endl;
+		//}
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
 
-		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
+		auto user = it->second;
+		user->police_state = p->state;
+
+		broadcast_in_room(*user, p, VIEW_RANGE);
+		break;
+	}
+	case dogHeader:
+	{
+		auto* p = reinterpret_cast<DogPacket*>(packet);
+		if (p->size != sizeof(DogPacket)) {
+			std::cout << "Invalid DogPacket size\n";
+			break;
+		}
+		//if (!validate_dog_state(c_id, p->dog)) {
+		//	std::cout << "Suspicious dog packet from c_id " << c_id << std::endl;
+		//}
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		user->dog = p->dog;
+
+		broadcast_in_room(*user, p, VIEW_RANGE);
 		break;
 	}
 	case particleHeader:
@@ -845,14 +1037,19 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		int room_id = g_users[c_id].room_id;
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		int room_id = user->room_id;
 		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
 		{
 			std::cout << "Invalid room ID: " << room_id << std::endl;
 			break;
 		}
 
-		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
+		broadcast_in_room(*user, p, VIEW_RANGE);
 		break;
 	}
 	case hitHeader:
@@ -863,7 +1060,22 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
-		broadcast_in_room(c_id, g_users[c_id].room_id, p, VIEW_RANGE);
+		switch (p->Weapon)
+		{
+		case EWeaponType::Baton:
+		{
+			baton_sweep(c_id, p);
+			break;
+		}
+		case EWeaponType::Taser:
+		case EWeaponType::Pistol:
+		{
+			line_trace(c_id, p);
+			break;
+		}
+		default:
+			break;
+		}
 		break;
 	}
 	case tryHealHeader: 
@@ -874,6 +1086,10 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+		auto healer = it->second;
 		// 근처 치료 가능한 유저 탐색
 		auto targetOpt = SphereTraceClosestCultist(c_id, SPHERE_TRACE_RADIUS);
 		if (!targetOpt) {
@@ -883,8 +1099,12 @@ void process_packet(int c_id, char* packet) {
 
 		const int targetId = *targetOpt;
 		std::cout << "[Heal] healer=" << c_id << " target=" << (int)targetId << "\n";
-		if (g_users[c_id].cultist_state.ABP_DoHeal ||
-			g_users[targetId].cultist_state.ABP_GetHeal)
+		auto tit = g_users.find(targetId);
+		if (tit == g_users.end())
+			break;
+		auto target = tit->second;
+
+		if (healer->cultist_state.ABP_DoHeal || target->cultist_state.ABP_GetHeal)
 		{
 			std::cout << "Heal already in progress\n";
 			break;
@@ -910,8 +1130,8 @@ void process_packet(int c_id, char* packet) {
 		pkt.SpawnLoc = healerPos;
 		pkt.SpawnRot = moveRot;
 		pkt.isHealer = true;
-		g_users[c_id].cultist_state.ABP_DoHeal = true;
-		g_users[c_id].do_send_packet(&pkt);
+		healer->heal_partner = targetId;
+		healer->do_send_packet(&pkt);
 
 		double yaw = std::fmod(moveRot.yaw + 180.0, 360.0);
 		if (yaw < 0.0) { 
@@ -926,8 +1146,8 @@ void process_packet(int c_id, char* packet) {
 		pkt.SpawnLoc = targetPos;
 		pkt.SpawnRot.yaw = yaw;
 		pkt.isHealer = false;
-		g_users[c_id].cultist_state.ABP_GetHeal = true;
-		g_users[targetId].do_send_packet(&pkt);
+		target->heal_partner = c_id;
+		target->do_send_packet(&pkt);
 
 		TIMER_EVENT ev;
 		ev.wakeup_time = std::chrono::system_clock::now() + 1s;
@@ -937,6 +1157,182 @@ void process_packet(int c_id, char* packet) {
 		timer_queue.push(ev);
 		break;
 	}
+	case endHealHeader:
+	{
+		auto* p = reinterpret_cast<NoticePacket*>(packet);
+		if (p->size != sizeof(NoticePacket)) {
+			std::cout << "Invalid NoticePacket size\n";
+			break;
+		}
+
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+		auto healer = it->second;
+		int heal_partner{ healer->heal_partner };
+		auto hit = g_users.find(heal_partner);
+		if (hit == g_users.end())
+			break;
+		auto target = hit->second;
+
+		healer->heal_partner = -1;
+		target->heal_partner = -1;
+
+		BoolPacket packet;
+		packet.header = endHealHeader;
+		packet.result = false;
+		packet.size = sizeof(BoolPacket);
+		target->do_send_packet(&packet);
+		break;
+	}
+	case ritualStartHeader: 
+	{
+		auto* p = reinterpret_cast<RitualNoticePacket*>(packet);
+		if (p->size != sizeof(RitualNoticePacket)) {
+			std::cout << "Invalid RitualNoticePacket size\n";
+			break;
+		}
+
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		int room_id = user->room_id;
+		if (room_id < 0 || room_id >= MAX_ROOM) 
+			break;
+
+		uint8_t ritual_id = p->ritual_id;
+		if (ritual_id >= 5) 
+			break;
+
+		auto& altar = g_altars[room_id][ritual_id];
+		altar.isActivated = true;
+		altar.time = std::chrono::system_clock::now();
+
+		std::cout << "[RitualStart] cultist=" << c_id << " altar=" << (int)ritual_id << "gauge= " << altar.gauge << "\n";
+		// 0퍼면 냅두고 아니면 클라한테 몇펀지 보내주기
+		break;
+	}
+	case ritualDataHeader:
+	{
+		auto* p = reinterpret_cast<RitualNoticePacket*>(packet);
+		if (p->size != sizeof(RitualNoticePacket)) {
+			std::cout << "Invalid RitualNoticePacket size\n";
+			break;
+		}
+
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		int room_id = user->room_id;
+		if (room_id < 0 || room_id >= MAX_ROOM) 
+			break;
+		uint8_t ritual_id = p->ritual_id;
+		if (ritual_id >= 5) 
+			break;
+
+		auto& altar = g_altars[room_id][ritual_id];
+
+		if (!altar.isActivated)
+			break;
+
+		auto now = std::chrono::system_clock::now();
+		auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - altar.time).count();
+		if (elapsed > 0) {
+			int add = static_cast<int>(elapsed) * 10;
+			altar.gauge = std::min(100, altar.gauge + add);
+			altar.time = now;
+		}
+		// reason: 1 -> 성공 / 2 -> 실패
+		if (p->reason == 1)
+			altar.gauge = std::min(100, altar.gauge + 10);
+		else if (p->reason == 2)
+			altar.gauge = std::max(0, altar.gauge - 10);		
+
+		RitualGagePacket gauge{};
+		gauge.header = ritualDataHeader;
+		gauge.size = sizeof(RitualGagePacket);
+		gauge.ritual_id = ritual_id;
+		gauge.gauge = altar.gauge;
+		user->do_send_packet(&gauge);
+
+		// broadcast_in_room(c_id, room_id, &gauge);
+		std::cout << "[RitualData] altar=" << (int)ritual_id << " gauge=" << altar.gauge << "\n";
+		break;
+	}
+	case ritualEndHeader:
+	{
+		auto* p = reinterpret_cast<RitualNoticePacket*>(packet);
+		if (p->size != sizeof(RitualNoticePacket)) {
+			std::cout << "Invalid RitualNoticePacket size\n";
+			break;
+		}
+
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		int room_id = user->room_id;
+		if (room_id < 0 || room_id >= MAX_ROOM) 
+			break;
+
+		uint8_t ritual_id = p->ritual_id;
+		if (ritual_id >= 5) 
+			break;
+		if (p->reason == 3) {
+			auto& altar = g_altars[room_id][ritual_id];
+			auto now = std::chrono::system_clock::now();
+			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - altar.time).count();
+			if (elapsed > 0) {
+				int add = static_cast<int>(elapsed / 100); // 0.1초당 1% 증가
+				altar.gauge = std::min(100, altar.gauge + add);
+				altar.time = now;
+			}
+			if (altar.gauge >= 100) {
+				RitualNoticePacket packet;
+				packet.header = ritualEndHeader;
+				packet.size = sizeof(RitualNoticePacket);
+				packet.ritual_id = ritual_id;
+				packet.reason = 4;
+				user->do_send_packet(&packet);
+			}
+			altar.isActivated = false;
+			std::cout << "[RitualEnd] cultist=" << c_id << " altar=" << (int)ritual_id << " gauge: " << altar.gauge << "\n";
+		}
+		if (p->reason == 4) {
+			auto& altar = g_altars[room_id][ritual_id];
+			auto now = std::chrono::system_clock::now();
+			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - altar.time).count();
+			if (elapsed > 0) {
+				int add = static_cast<int>(elapsed) * 10;
+				altar.gauge = std::min(100, altar.gauge + add);
+				altar.time = now;
+			}
+			if (altar.gauge >= 98) {
+				RitualNoticePacket packet;
+				packet.header = ritualEndHeader;
+				packet.size = sizeof(RitualNoticePacket);
+				packet.ritual_id = ritual_id;
+				packet.reason = 4;
+				user->do_send_packet(&packet);
+			}
+			else {
+				RitualNoticePacket packet;
+				packet.header = ritualEndHeader;
+				packet.size = sizeof(RitualNoticePacket);
+				packet.ritual_id = ritual_id;
+				packet.reason = altar.gauge;
+				user->do_send_packet(&packet);
+			}
+			altar.isActivated = false;
+			std::cout << "[RitualEnd] cultist=" << c_id << " altar=" << (int)ritual_id << " gauge: " << altar.gauge << "\n";
+		}
+		break;
+	}
 	case connectionHeader:
 	{
 		auto* p = reinterpret_cast<IdOnlyPacket*>(packet);
@@ -944,24 +1340,37 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid ConnectionPacket size\n";
 			break;
 		}
-		
+
+		p->id = c_id;
+		auto user = g_users.find(c_id);
+		if (user == g_users.end())
+			break;
 		std::cout << "Client[" << c_id << "] connected" << std::endl;
 		// 새로 접속한 유저(id)에게 본인 id 확정 send
-		g_users[c_id].do_send_packet(p);
+		user->second->do_send_packet(p);
 		break;
 	}
 	case DisconnectionHeader: 
 	{
+		auto user = g_users.find(c_id);
+		if (user == g_users.end())
+			break;
+
 		std::lock_guard<std::mutex> lk(g_room_mtx);
-		g_room_q.push(RoomTask{ c_id, RM_DISCONNECT, g_users[c_id].role, g_users[c_id].room_id });
+		g_room_q.push(RoomTask{ c_id, RM_DISCONNECT,user->second->role, user->second->room_id });
 		g_room_cv.notify_one();
 		break;
 	}
 	case disableHeader:
 	{
-		g_users[c_id].setState(ST_DISABLE);
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
 
-		int room_id = g_users[c_id].room_id;
+		auto user = it->second;
+		user->setState(ST_DEAD);
+
+		int room_id = user->room_id;
 		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size())) {
 			std::cout << "Invalid room ID in disableHeader\n";
 			break;
@@ -969,13 +1378,15 @@ void process_packet(int c_id, char* packet) {
 
 		bool allCultistsDisabled = true;
 
-		const room& r = g_rooms[room_id];
+		const Room& r = g_rooms[room_id].first;
 		for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
 		{
-			uint8_t pid = r.player_ids[i];
-			if (pid == UINT8_MAX) continue;
-
-			if (g_users.count(pid) && g_users[pid].getRole() == 0 && g_users[pid].getState() != ST_DISABLE) {
+			int pid = r.player_ids[i];
+			if (pid == -1) continue;
+			auto pit = g_users.find(pid);
+			if (pit != g_users.end() &&
+				pit->second->role == 0 &&
+				pit->second->state != ST_DEAD) {
 				allCultistsDisabled = false;
 				break;
 			}
@@ -993,13 +1404,27 @@ void process_packet(int c_id, char* packet) {
 			std::vector<int> ids_to_disconnect;
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
 			{
-				uint8_t pid = r.player_ids[i];
-				if (pid == UINT8_MAX) continue;
+				int pid = r.player_ids[i];
+				if (pid == -1) continue;
+				auto pit = g_users.find(pid);
+				if (pit == g_users.end())
+					continue;
 
-				if (g_users.count(pid) && g_users[pid].isValidSocket())
+				auto user = pit->second;
+				if (user->role == 100)
+				{
+					KillCultistAi(pid);
+					continue;
+				}
+				else if (user->role == 101)
+				{
+					KillPoliceAi(pid);
+					continue;
+				}
+				if (user->isValidSocket())
 				{
 					newPacket.id = pid;
-					g_users[pid].do_send_packet(&newPacket);
+					user->do_send_packet(&newPacket);
 					ids_to_disconnect.push_back(pid);
 				}
 			}
@@ -1009,12 +1434,12 @@ void process_packet(int c_id, char* packet) {
 				disconnect(id);
 			}
 			// 매치가 끝났으니 room을 초기화
-			g_rooms[room_id].cultist = 0;
-			g_rooms[room_id].police = 0;
+			g_rooms[room_id].first.cultist = 0;
+			g_rooms[room_id].first.police = 0;
 			for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i) {
-				g_rooms[room_id].player_ids[i] = UINT8_MAX;
+				g_rooms[room_id].first.player_ids[i] = -1;
 			}
-			g_rooms[room_id].isIngame = false;
+			g_rooms[room_id].first.isIngame = false;
 		}
 		break;
 	}
@@ -1025,7 +1450,7 @@ void process_packet(int c_id, char* packet) {
 			std::cout << "Invalid requestHeader size\n";
 			break;
 		}
-		int role = static_cast<int>(p->role);
+		uint8_t role = p->role;
 		{
 			std::lock_guard<std::mutex> lk(g_room_mtx);
 			g_room_q.push(RoomTask{ c_id, RM_REQ, role, -1 });
@@ -1041,9 +1466,12 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 		int room_id = p->room_number;
+		auto user = g_users.find(c_id);
+		if (user == g_users.end())
+			break;
 		{
 			std::lock_guard<std::mutex> lk(g_room_mtx);
-			g_room_q.push(RoomTask{ c_id, RM_ENTER, g_users[c_id].role, room_id });
+			g_room_q.push(RoomTask{ c_id, RM_ENTER, user->second->role, room_id });
 		}
 		g_room_cv.notify_one();
 		break;
@@ -1060,7 +1488,6 @@ void process_packet(int c_id, char* packet) {
 	{
 		// 1. player 상태를 ready로 변경
 		// 2. InRoomPacket으로 방 상태 업데이트를 방 전원에게 broadcast
-		g_users[c_id].setState(ST_READY);
 		break;
 	}
 	case gameStartHeader: 
@@ -1071,9 +1498,12 @@ void process_packet(int c_id, char* packet) {
 			break;
 		}
 		int room_id = p->room_number;
+		auto user = g_users.find(c_id);
+		if (user == g_users.end())
+			break;
 		{
 			std::lock_guard<std::mutex> lk(g_room_mtx);
-			g_room_q.push(RoomTask{ c_id, RM_GAMESTART, g_users[c_id].role, room_id});
+			g_room_q.push(RoomTask{ c_id, RM_GAMESTART,  user->second->role, room_id});
 		}
 		g_room_cv.notify_one();
 		break;
@@ -1132,6 +1562,16 @@ void process_packet(int c_id, char* packet) {
 		g_db_cv.notify_one();
 		break;
 	}
+	case quitHeader:
+	{
+		auto user = g_users.find(c_id);
+		if (user == g_users.end())
+			break;
+		std::lock_guard<std::mutex> lk(g_room_mtx);
+		g_room_q.push(RoomTask{ c_id, RM_QUIT, user->second->role,user->second->room_id });
+		g_room_cv.notify_one();
+		break;
+	}
 	default:
 		char header = packet[0];
 		std::cout << "invalidHeader From id: " << c_id << "header: " << header << std::endl;
@@ -1166,18 +1606,19 @@ void mainLoop(HANDLE h_iocp) {
 		{
 		case OP_ACCEPT:
 		{
-			int new_id = client_id++;
-			SESSION sess;
-			sess.id = new_id;
-			sess.prev_remain = 0;
-			sess.state = ST_FREE;
-			sess.c_socket = g_c_socket;
-			sess.role = -1;
-			sess.room_id = -1;
-			sess.heal_gage = 0;
-			g_users.insert(std::make_pair(new_id, sess));	// 여기 emplace로 바꿀 순 없을까?
+			int new_id = get_new_session_id();
+			auto sess = std::make_shared<SESSION>(new_id, g_c_socket);
+			auto it = g_users.find(new_id);
+			if (it != g_users.end())
+			{
+				it->second = sess;
+			}
+			else
+			{
+				g_users.insert({ new_id, sess });
+			}
 			CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket), h_iocp, new_id, 0);
-			g_users[new_id].do_recv();
+			sess->do_recv();
 
 			SOCKADDR_IN* client_addr = (SOCKADDR_IN*)(g_a_over.send_buffer + sizeof(SOCKADDR_IN) + 16);
 			std::cout << "클라이언트 접속: IP = " << inet_ntoa(client_addr->sin_addr) << ", Port = " << ntohs(client_addr->sin_port) << std::endl;
@@ -1188,8 +1629,13 @@ void mainLoop(HANDLE h_iocp) {
 			AcceptEx(g_s_socket, g_c_socket, g_a_over.send_buffer, 0, addr_size + 16, addr_size + 16, 0, &g_a_over.over);
 			break;
 		}
-		case OP_RECV: {
-			int remain_data = num_bytes + g_users[key].prev_remain;
+		case OP_RECV: 
+		{
+			auto it = g_users.find((int)key);
+			if (it == g_users.end())
+				break;
+			auto user = it->second;
+			int remain_data = num_bytes + user->prev_remain;
 			char* p = eo->send_buffer;
 			while (remain_data > 0) {
 				int packet_size = p[1];
@@ -1200,11 +1646,11 @@ void mainLoop(HANDLE h_iocp) {
 				}
 				else break;
 			}
-			g_users[key].prev_remain = remain_data;
+			user->prev_remain = remain_data;
 			if (remain_data > 0) {
 				memcpy(eo->send_buffer, p, remain_data);
 			}
-			g_users[key].do_recv();
+			user->do_recv();
 			break;
 		}
 		case OP_SEND:
@@ -1217,12 +1663,17 @@ void mainLoop(HANDLE h_iocp) {
 			auto* pkt = reinterpret_cast<BoolPacket*>(eo->send_buffer);
 			int cid = static_cast<int>(key);
 
-			if (pkt->result && g_users.count(cid)) {
-				g_users[cid].account_id = eo->account_id;
-			}
+			auto it = g_users.find(cid);
+			if (it != g_users.end())
+			{
+				auto user = it->second;
 
-			if (g_users.count(cid) && g_users[cid].isValidSocket())
-				g_users[cid].do_send_packet(pkt);
+				if (pkt->result)
+					user->account_id = eo->account_id;
+
+				if (user->isValidSocket())
+					user->do_send_packet(pkt);
+			}
 
 			delete eo;
 			break;
@@ -1232,8 +1683,9 @@ void mainLoop(HANDLE h_iocp) {
 		{
 			// eo->send_buffer 안에 BoolPacket이 있음
 			// key는 c_id
-			if (g_users.count((int)key) && g_users[(int)key].isValidSocket()) {
-				g_users[(int)key].do_send_packet(eo->send_buffer);
+			auto it = g_users.find((int)key);
+			if (it != g_users.end() && it->second->isValidSocket()) {
+				it->second->do_send_packet(eo->send_buffer);
 			}
 			delete eo;
 			break;
@@ -1245,8 +1697,9 @@ void mainLoop(HANDLE h_iocp) {
 		case OP_ROOM_DISCONNECT:
 		{
 			int cid = static_cast<int>(key);
-			if (g_users.count(cid) && g_users[cid].isValidSocket())
-				g_users[cid].do_send_packet(eo->send_buffer);
+			auto it = g_users.find(cid);
+			if (it != g_users.end() && it->second->isValidSocket())
+				it->second->do_send_packet(eo->send_buffer);
 
 			delete eo;
 			break;
@@ -1257,13 +1710,39 @@ void mainLoop(HANDLE h_iocp) {
 
 int main()
 {
+	// map
+	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset, NewmapLandmassLotate, XYZ::XZ_Y)) {
+		std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ load fail" << std::endl;
+	}
+	else{
+		std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ loaded" << std::endl;
+	}
+	if (!Level3Map.Load("SM_0421Level3Merged.OBJ", Level3MapOffset, Level3MapLotate, XYZ::XY_Z)) {
+		std::cout << "SM_0421Level3Merged.OBJ load fail" << std::endl;
+	}
+	else {
+		std::cout << "SM_0421Level3Merged.OBJ loaded" << std::endl;
+	}
+
+	// navmesh
+	//if (!NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset, NewmapLandmassNavScale)) {
+	//	std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj load fail" << std::endl;
+	//}
+	//else {
+	//	std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
+	//}
+	//if (!Level3NavMesh.Load("Level_3-NavMesh-M-2026.04.19-13.23.45.obj", Level3MapOffset, Level3NavScale)) {
+	//	std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj load fail" << std::endl;
+	//}
+	//else {
+	//	std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj loaded" << std::endl;
+	//}
+
 	HANDLE h_iocp;
-	std::wcout.imbue(std::locale("korean"));	// 한국어로 출력
+	std::wcout.imbue(std::locale("korean"));
 
 	WSADATA WSAData;
 	WSAStartup(MAKEWORD(2, 0), &WSAData);
-
-	//std::thread CommandThread(CommandWorker);
 
 	g_s_socket = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
 	if (g_s_socket <= 0) {
@@ -1294,10 +1773,26 @@ int main()
 	//	std::cout << "DB 초기화 실패, 프로그램 종료\n";
 	//	return 0;
 	//}
+	g_rooms[0].first.room_id = 0;
+	g_rooms[0].first.police = 0;
+	g_rooms[0].first.cultist = 0;
+	g_rooms[0].first.isIngame = false;
+	for (int j = 0; j < MAX_PLAYERS_PER_ROOM; ++j) {
+		g_rooms[0].first.player_ids[j] = -1;
+	}
+	g_rooms[0].second = LEVEL3;
+	InitializeAltars(0);
 
-	for (int i = 0; i < 100; ++i) {
-		g_rooms[i].room_id = i;
-		InitializeAltarLoc(i);
+	for (int i = 1; i < 100; ++i) {
+		g_rooms[i].first.room_id = i;
+		g_rooms[i].first.police = 0;
+		g_rooms[i].first.cultist = 0;
+		g_rooms[i].first.isIngame = false;
+        for (int j = 0; j < MAX_PLAYERS_PER_ROOM; ++j) {
+            g_rooms[i].first.player_ids[j] = -1;
+        }
+		g_rooms[i].second = LANDMASS;
+		InitializeAltars(i);
 	}
 	g_h_iocp = h_iocp;
 
@@ -1305,6 +1800,8 @@ int main()
 	std::thread room_thread{ RoomWorkerLoop };
 	std::thread timer_thread{ HealTimerLoop };
 	std::thread command_thread{ CommandWorker };
+	std::thread cultist_ai_thread{ CultistAIWorkerLoop };
+	std::thread police_ai_thread{ PoliceAIWorkerLoop };
 	mainLoop(h_iocp);
 
 	g_db_cv.notify_all();
@@ -1313,9 +1810,9 @@ int main()
 	room_thread.join();
 	timer_thread.join();
 	command_thread.join();
+	cultist_ai_thread.join();
+	police_ai_thread.join();
 
-
-	//StopAIWorker();
 	closesocket(g_s_socket);
 	WSACleanup();
 }

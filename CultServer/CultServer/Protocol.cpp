@@ -1,5 +1,6 @@
 #include "Protocol.h"
-#include <thread>
+#include "PoliceAI.h"
+#include "CultistAI.h"
 
 FPoliceCharacterState AiState{ -1,
 	baseX, baseY, baseZ,
@@ -22,7 +23,9 @@ EXP_OVER::EXP_OVER()
 
 EXP_OVER::EXP_OVER(char* packet)
 {
-	wsabuf.len = packet[1];
+	uint16_t packet_size;
+	memcpy(&packet_size, packet + 1, sizeof(uint16_t));
+	wsabuf.len = packet_size;
 	wsabuf.buf = send_buffer;
 	ZeroMemory(&over, sizeof(over));
 	comp_type = OP_SEND;
@@ -45,14 +48,67 @@ void SESSION::do_recv()
 
 SESSION::SESSION() {}
 
-SESSION::SESSION(int session_id) : c_socket(INVALID_SOCKET), id(session_id), role(99)		// AI Session
+SESSION::SESSION(int session_id, SOCKET sock)
+	: c_socket(sock), id(session_id), role(INVALID_ROLE), room_id{ -1 }, prev_remain{},
+	heal_gauge{}, heal_partner{}, state{ S_STATE::ST_ROOM }
 {
-	AiState.PlayerID = id;
-	police_state = AiState;
-	std::cout << "AI SESSION 积己凳. ID: " << AiState.PlayerID << " role: 99 (PoliceAI)" << std::endl;
+	ai = nullptr;
+	visible_ids.clear();
+	dog = {};
+	crow = {};
 }
 
-SESSION::~SESSION(){ }
+SESSION::SESSION(int session_id, uint8_t ai_role, int room_id) 
+	: c_socket(INVALID_SOCKET), id(session_id), role(ai_role), room_id(room_id), 
+	prev_remain{}, heal_gauge{}, state{ S_STATE::ST_INGAME }// AI Session
+{
+	visible_ids.clear();
+	dog = {};
+	crow = {};
+
+	FVector spawn{};
+	if (room_id >= 0 && room_id < MAX_ROOM)
+	{
+		auto maptype = g_rooms[room_id].second;
+		if (maptype == LANDMASS)
+			spawn = LandmassSpawnLocation;
+		else if (maptype == LEVEL3)
+			spawn = Level3SpawnLocation;
+	}
+
+	if (ai_role == 100)   // Cultist AI
+	{
+		ai = std::make_unique<CultistAIController>(this);
+		cultist_state = CultistDummyState;
+		cultist_state.PositionX = static_cast<float>(spawn.x);
+		cultist_state.PositionY = static_cast<float>(spawn.y);
+		cultist_state.PositionZ = static_cast<float>(spawn.z);
+
+		cultist_state.PlayerID = session_id;
+		std::cout << "[AI] Cultist SESSION 积己 ID=" << id << "\n";
+	}
+	else if (ai_role == 101)  // Police AI
+	{
+		police_state = PoliceDummyState;
+		police_state.PositionX = static_cast<float>(spawn.x);
+		police_state.PositionY = static_cast<float>(spawn.y);
+		police_state.PositionZ = static_cast<float>(spawn.z);
+		police_state.PlayerID = session_id;
+
+		ai = std::make_unique<PoliceAIController>(this);
+		auto* policeAI = dynamic_cast<PoliceAIController*>(ai.get());
+		if (policeAI) {
+			policeAI->dogAI = std::make_unique<DogAIController>(this);
+			policeAI->dogAI->Init();
+		}
+
+		std::cout << "[AI] Police SESSION 积己 ID=" << id << "\n";
+	}
+	else
+	{
+		std::cout << "[AI] 舅 荐 绝绰 role: " << ai_role << "\n";
+	}
+}
 
 void SESSION::do_send_packet(void* packet)
 {
@@ -60,12 +116,9 @@ void SESSION::do_send_packet(void* packet)
 	WSASend(c_socket, &packet_data->wsabuf, 1, 0, 0, &packet_data->over, 0);
 }
 
-void SESSION::setState(const char st) {
+void SESSION::setState(const S_STATE st) {
+	std::lock_guard<std::mutex> lk(s_lock);
 	state = st;
-}
-
-char SESSION::getState() const {
-	return state;
 }
 
 void SESSION::setPoliceState(const FPoliceCharacterState& state) {
@@ -77,17 +130,9 @@ const FPoliceCharacterState& SESSION::getPoliceState() const
 	return police_state;
 }
 
-void SESSION::setRole(const int r) {
+void SESSION::setRole(const uint8_t r) {
 	if(role != r)
 		role = r;
-}
-
-int SESSION::getRole() const {
-	return role;
-}
-
-SOCKET SESSION::getSocket() const {
-	return c_socket;
 }
 
 bool SESSION::isValidSocket() const
@@ -95,6 +140,68 @@ bool SESSION::isValidSocket() const
 	return c_socket != INVALID_SOCKET;
 }
 
-bool SESSION::isValidState() const {
-	return (state == ST_INGAME) || (state == ST_DISABLE);
+void SESSION::setAIState(const AIState st)
+{
+	if (ai) {
+		auto* cultistAI = dynamic_cast<CultistAIController*>(ai.get());
+		if (!cultistAI)
+			return;
+
+		std::lock_guard<std::mutex> lk(s_lock);
+		cultistAI->bb.ai_state = st;
+	}
+}
+
+bool SESSION::isAI() const
+{
+	return role == 100 || role == 101;
+}
+
+void SESSION::resetForReuse()
+{
+	if (c_socket != INVALID_SOCKET) {
+		closesocket(c_socket);
+		c_socket = INVALID_SOCKET;
+	}
+
+	role = INVALID_ROLE;
+	prev_remain = 0;
+	room_id = -1;
+	account_id.clear();
+	visible_ids.clear();
+
+	heal_gauge = 0;
+	heal_partner = -1;
+
+	dog = {};
+	crow = {};
+
+	std::lock_guard<std::mutex> lk(s_lock);
+	state = S_STATE::ST_FREE;
+
+	if (ai) {
+		ai.reset();
+		dog = {};
+	}
+}
+
+bool Selector::Run(AIController& ai, float dt)
+{
+	for (auto& c : children)
+	{
+		if (c->Run(ai, dt))
+			return true;
+	}
+	return false;
+}
+
+
+bool Sequence::Run(AIController& ai, float dt)
+{
+	for (auto& c : children)
+	{
+		if (!c->Run(ai, dt))
+			return false;
+	}
+	return true;
 }

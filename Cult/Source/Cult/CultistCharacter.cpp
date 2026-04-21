@@ -245,6 +245,23 @@ void ACultistCharacter::ToggleCrouch()
 	}
 }
 
+// 의식 성공여부 함수 호출
+void ACultistCharacter::NotifySkillCheckResult(bool bSuccess)
+{
+
+	if (MySocketCultistActor && CurrentAltar)
+	{
+		if (bSuccess)
+		{
+			MySocketCultistActor->SendRitualSkillCheck(CurrentAltar->AltarID, 1);
+		}
+		else
+		{
+			MySocketCultistActor->SendRitualSkillCheck(CurrentAltar->AltarID, 2);
+		}
+	}
+}
+
 void ACultistCharacter::PerformRitual()
 {
 	if (!bIsPerformingRitual) return;
@@ -294,8 +311,16 @@ void ACultistCharacter::StartRitual()
 	if (!bIsPerformingRitual)
 	{
 		bIsPerformingRitual = true;
-		TaskRitualProgress = 0.0f;
-		GetWorld()->GetTimerManager().SetTimer(RitualTimerHandle, this, &ACultistCharacter::PerformRitual, 0.1f, true);
+		//TaskRitualProgress = 0.0f;
+		//GetWorld()->GetTimerManager().SetTimer(RitualTimerHandle, this, &ACultistCharacter::PerformRitual, 0.1f, true);
+		
+		CurrentAltar->StartRitualQTE(this);
+		if (MySocketCultistActor)
+		{
+			uint8 RitualID = (uint8)CurrentAltar->AltarID;
+			MySocketCultistActor->SendStartRitual(RitualID);
+		}
+		
 		UE_LOG(LogTemp, Warning, TEXT("Ritual Started."));
 
 	}
@@ -305,21 +330,6 @@ void ACultistCharacter::StartRitual()
 	}
 
 
-
-
-	if (TaskRitualWidget)
-	{
-		TaskRitualWidget->SetVisibility(ESlateVisibility::Visible);
-	}
-	if (!GetWorld()->GetTimerManager().IsTimerActive(SkillCheckTimerHandle))
-	{
-		GetWorld()->GetTimerManager().SetTimer(SkillCheckTimerHandle, this, &ACultistCharacter::StartNextSkillCheck, SkilCheckIntervalTime, false);
-		UE_LOG(LogTemp, Warning, TEXT("SkillCheck Timer Set"));
-	}
-	//StartNextSkillCheck();
-	//GetCharacterMovement()->DisableMovement();
-
-	// Animation
 }
 
 // 중단 x, 완료처리
@@ -346,23 +356,22 @@ void ACultistCharacter::StopRitual()
 void ACultistCharacter::CancelRitual()
 {
 	UE_LOG(LogTemp, Warning, TEXT("Ritual Canceled"));
+	if (!bIsPerformingRitual)return;
+
 
 	bIsPerformingRitual = false;
 
-	GetWorld()->GetTimerManager().ClearTimer(RitualTimerHandle);
-	GetWorld()->GetTimerManager().ClearTimer(TaskRitualTimerHandle);
-
-	if (TaskRitualWidget)
+	// QTE중단
+	if (CurrentAltar)
 	{
-		TaskRitualWidget->SetVisibility(ESlateVisibility::Hidden);
-		TaskRitualProgress = 0.0f;
+		CurrentAltar->StopRitualQTE(this);
+		if (MySocketCultistActor)
+		{
+			uint8 RitualID = (uint8)CurrentAltar->AltarID;
+			MySocketCultistActor->SendEndRitual(RitualID, 3);
+		}
 	}
-	// 스킬체크 위젯 제거
-	if (SkillCheckWidget)
-	{
-		SkillCheckWidget->RemoveFromParent();
-		SkillCheckWidget = nullptr;
-	}
+	
 
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 }
@@ -540,7 +549,7 @@ void ACultistCharacter::TakeDamage(float DamageAmount)
 {
 	if (bIsStunned)return;
 	bIsHitByAnAttack = true;
-	
+	SendEndHeal();
 	// Ritual 상태 해제
 	bIsPerformingRitual = false;
 
@@ -932,10 +941,21 @@ void ACultistCharacter::ConfirmPlacement()
 
 	FVector SpawnLocation = SpawnedPreviewActor->GetActorLocation();
 	FRotator SpawnRotation = SpawnedPreviewActor->GetActorRotation();
+	// SpawnRotation.Pitch -= 90.0f;
+
+
+	//if (ProceduralBranchActorClass)
+	//{
+	//	MySocketCultistActor->SendTree(SpawnLocation, SpawnRotation);
+	//}
 
 	if (TreeObstacleActorClass)
 	{
-		MySocketCultistActor->SendSkill(SpawnLocation, SpawnRotation, 1);
+		MySocketCultistActor->SendTree(SpawnLocation, SpawnRotation);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("ConfirmPlacement: TreeObstacleActorClass is not set in blueprint!"));
 	}
 
 	SpawnedPreviewActor->Destroy();
@@ -962,9 +982,9 @@ void ACultistCharacter::LookUpCamera(float Value)
 
 void ACultistCharacter::TriggerSkillCheckInput()
 {
-	if (SkillCheckWidget)
+	if (bIsPerformingRitual && CurrentAltar)
 	{
-		SkillCheckWidget->OnInputPressed();
+		CurrentAltar->OnPlayerInput();
 	}
 }
 
@@ -973,7 +993,7 @@ void ACultistCharacter::OnCrowSkillPressed()
 	if (!CrowClass) return;
 
 	// 소환
-	if (!CrowInstance)
+	if (!CrowInstance && !crowIsAvailable)
 	{
 		FActorSpawnParameters Params;
 		Params.Owner = this;
@@ -983,7 +1003,8 @@ void ACultistCharacter::OnCrowSkillPressed()
 		const FRotator SpawnRot = GetActorRotation();
 
 		CrowInstance = GetWorld()->SpawnActor<ACrowActor>(CrowClass, SpawnLoc, SpawnRot, Params);
-		MySocketCultistActor->SendSkill(SpawnLoc, SpawnRot, 2);
+		crowIsAvailable = true;
+		MySocketCultistActor->SendCrowSpawn(SpawnLoc, SpawnRot);
 		if (CrowInstance)
 		{
 			CrowInstance->InitCrow(this, CrowLifetime);
@@ -1001,6 +1022,7 @@ void ACultistCharacter::OnCrowControlPressed()
 {
 	if (!CrowClass)return;
 	if (!CrowInstance)return;
+	if (!crowIsAvailable)return;
 
 	APlayerController* PC = Cast<APlayerController>(GetController());
 	if (!PC)return;
@@ -1128,9 +1150,22 @@ void ACultistCharacter::SendTryHeal()
 		MySocketCultistActor->SendTryHeal();
 	}
 }
+void ACultistCharacter::SendEndHeal()
+{
+	if (MySocketCultistActor)
+	{
+		MySocketCultistActor->SendEndHeal();
+	}
+}
+
 
 int ACultistCharacter::GetPlayerID() const {
 	return my_ID;
+}
+
+AMySocketCultistActor* ACultistCharacter::GetMySocketActor()
+{
+	return MySocketCultistActor;
 }
 
 void ACultistCharacter::SendDisableToServer()

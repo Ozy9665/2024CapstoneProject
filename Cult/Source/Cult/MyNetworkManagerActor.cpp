@@ -3,6 +3,7 @@
 
 #include "MyNetworkManagerActor.h"
 #include "Engine/Engine.h"
+#include <vector>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <Kismet/GameplayStatics.h>
@@ -14,13 +15,6 @@ AMyNetworkManagerActor::AMyNetworkManagerActor()
 {
     // Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
     PrimaryActorTick.bCanEverTick = false;
-
-    WSADATA WsaData;
-    int Result = WSAStartup(MAKEWORD(2, 2), &WsaData);
-    if (Result != 0)
-    {
-        UE_LOG(LogTemp, Error, TEXT("WSAStartup failed: %d"), Result);
-    }
 }
 
 // Called when the game starts or when spawned
@@ -33,7 +27,15 @@ void AMyNetworkManagerActor::BeginPlay()
         return;
     }
     UE_LOG(LogTemp, Error, TEXT("Actor Spawned"));
-    CheckServer();
+
+    WSADATA WsaData;
+    int Result = WSAStartup(MAKEWORD(2, 2), &WsaData);
+    if (Result != 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("WSAStartup failed: %d"), Result);
+    }
+
+    // CheckServer();
 }
 
 // Called every frame
@@ -72,15 +74,18 @@ bool AMyNetworkManagerActor::CanConnectToServer(const FString& ServerIP, int32 S
 
 void AMyNetworkManagerActor::CheckServer()
 {
-    FString ServerIP = TEXT("127.0.0.1");  // 서버 IP 주소
-    int32 ServerPort = 7777;               // 포트 번호
+    FString ServerIP = GI->ServerIP;
+    int32 ServerPort = GI->ServerPort;
 
     if(!CanConnectToServer(ServerIP, ServerPort))
     {
         UE_LOG(LogTemp, Error, TEXT("Server Is Closed."));
+        UE_LOG(LogTemp, Warning, TEXT("Try Connect IP=[%s], Port=%d"), *ServerIP, ServerPort);
+
+        OnConnectFailed.Broadcast();
         return;
-        // 서버 접속 실패시 게임 종료로 수정
     }
+    OnConnectSuccess.Broadcast();
 
     ReceiveData();
     GI->ClientSocket = ClientSocket;
@@ -200,27 +205,18 @@ void AMyNetworkManagerActor::RequestRoomInfo()
 
 void AMyNetworkManagerActor::ProcessRoomInfo(const char* Buffer) 
 {
-    RoomsPakcet Packet;
-    memcpy(&Packet, Buffer, sizeof(RoomsPakcet));
+    const RoomsPakcet* Packet = reinterpret_cast<const RoomsPakcet*>(Buffer);
 
     rooms.Empty();
-    rooms.Reserve(10);
-
-    for (int i = 0; i < 10; ++i)
+    rooms.Reserve(MAX_ROOM_LIST);
+    for (int i = 0; i < MAX_ROOM_LIST; ++i)
     {
-        const PacketRoom& pr = Packet.rooms[i];
+        const RoomData& pr = Packet->rooms[i];
             
         Froom fr;
         fr.room_id = pr.room_id;
         fr.police = pr.police;
         fr.cultist = pr.cultist;
-        fr.isIngame = pr.isIngame;
-
-        fr.player_ids.Empty();
-        fr.player_ids.Reserve(5);
-        for (int j = 0; j < 5; ++j)
-            fr.player_ids.Add(pr.player_ids[j]);
-
         rooms.Add(MoveTemp(fr));
     }
     AsyncTask(ENamedThreads::GameThread, [this]()
@@ -262,144 +258,178 @@ void AMyNetworkManagerActor::RequestRitualData() {
 
 void AMyNetworkManagerActor::ProcessRitualData(const char* Buffer)
 {
-    FNetVec n1{}, n2{}, n3{};
-    FMemory::Memcpy(&n1, Buffer + 2, 24);  // Loc1
-    FMemory::Memcpy(&n2, Buffer + 26, 24);  // Loc2
-    FMemory::Memcpy(&n3, Buffer + 50, 24);  // Loc3
+    const RitualPacket* pkt = reinterpret_cast<const RitualPacket*>(Buffer);
+    FVector L[ALTAR_PER_ROOM];
+    for (int i = 0; i < ALTAR_PER_ROOM; ++i)
+    {
+        L[i] = AMySocketActor::ToUE(pkt->Loc[i]);
+    }
+    MAPTYPE maptype = pkt->maptype;
 
-    const FVector L1 = AMySocketActor::ToUE(n1);
-    const FVector L2 = AMySocketActor::ToUE(n2);
-    const FVector L3 = AMySocketActor::ToUE(n3);
-
-    AsyncTask(ENamedThreads::GameThread, [this, L1, L2, L3]() {
+    AsyncTask(ENamedThreads::GameThread, [this, L, maptype]() {
         GI->RutialSpawnLocations.Empty();
-        GI->RutialSpawnLocations = TArray<FVector>{ L1, L2, L3 };
-        for (int32 i = 0; i < GI->RutialSpawnLocations.Num(); ++i)
+        for (int i = 0; i < ALTAR_PER_ROOM; ++i)
         {
-            const FVector& Loc = GI->RutialSpawnLocations[i];
-            UE_LOG(LogTemp, Warning, TEXT("RitualLocation[%d]: %s"), i, *Loc.ToString());
+            GI->RutialSpawnLocations.Add(L[i]);
+            UE_LOG(LogTemp, Warning, TEXT("RitualLocation[%d]: %s"), i, *L[i].ToString());
         }
-        UE_LOG(LogTemp, Warning, TEXT("OnGameStartConfirmed: Ritual Saved."));
-        OnGameStartConfirmed.Broadcast();
+
+        switch (maptype)
+        {
+        case LANDMASS:
+        {
+            UE_LOG(LogTemp, Warning, TEXT("LandMassStartConfirmed: Ritual Saved."));
+            LandMassStartConfirmed.Broadcast();
+            break;
+        }
+        case LEVEL3:
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Level3StartConfirmed: Ritual Saved."));
+            Level3StartConfirmed.Broadcast();
+            break;
+        }
+        default:
+            UE_LOG(LogTemp, Warning, TEXT("unknown maptype: %d."), maptype);
+            break;
+        }
+
     });
 }
 
 void AMyNetworkManagerActor::ReceiveData() 
 {
     AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this]() {
-        char Buffer[BufferSize];
-        int32 BytesReceived = recv(ClientSocket, Buffer, BufferSize, 0);
-        if (BytesReceived > 0)
-        {
-            int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
-            int PacketSize = static_cast<int>(static_cast<unsigned char>(Buffer[1]));
-            if (BytesReceived != PacketSize)
+        std::vector<char> PendingBuffer;
+        PendingBuffer.reserve(4096);
+
+        while (true) {
+            char Buffer[BufferSize];
+            int32 BytesReceived = recv(ClientSocket, Buffer, BufferSize, 0);
+            if (BytesReceived > 0)
             {
-                UE_LOG(LogTemp, Warning, TEXT("Invalid packet size: Received %d, Expected %d: header:%d"), BytesReceived, PacketSize, PacketType);
+                PendingBuffer.insert(PendingBuffer.end(), Buffer, Buffer + BytesReceived);
+                if (PendingBuffer.size() < 3)
+                    continue;
+
+                uint8 PacketType = static_cast<uint8>(PendingBuffer[0]);
+                uint16 PacketSize;
+                memcpy(&PacketSize, PendingBuffer.data() + 1, sizeof(uint16));
+
+                if (PendingBuffer.size() < PacketSize)
+                    continue;
+                const char* PacketData = PendingBuffer.data();
+
+                switch (PacketType)
+                {
+                case connectionHeader:
+                {
+                    const IdOnlyPacket* p = reinterpret_cast<const IdOnlyPacket*>(PacketData);
+                    my_ID = p->id;
+                    UE_LOG(LogTemp, Warning, TEXT("ID: %d"), my_ID);
+                    break;
+                }
+                case requestHeader:
+                {
+                    ProcessRoomInfo(PacketData);
+                    break;
+                }
+                case enterHeader:
+                {
+                    RequestRitualData();
+                    break;
+                }
+                case leaveHeader:
+                {
+                    AsyncTask(ENamedThreads::GameThread, [this]() {
+                        OnGameStartUnConfirmed.Broadcast();
+                        UE_LOG(LogTemp, Warning, TEXT("OnGameStartUnConfirmed"));
+                        });
+                    break;
+                }
+                case ritualHeader:
+                {
+                    ProcessRitualData(PacketData);
+                    break;
+                }
+                case loginHeader:
+                {
+                    const BoolPacket* p = reinterpret_cast<const BoolPacket*>(PacketData);
+                    bool bSuccess = p->result;
+                    uint8_t ReasonCode = p->reason;
+                    AsyncTask(ENamedThreads::GameThread, [this, bSuccess, ReasonCode]() {
+                        if (bSuccess)
+                        {
+                            OnLoginSuccess.Broadcast();
+                            UE_LOG(LogTemp, Warning, TEXT("Login Success"));
+                        }
+                        else
+                        {
+                            OnLoginFailed.Broadcast(ReasonCode);
+                            UE_LOG(LogTemp, Warning, TEXT("Login Failed"));
+                        }
+                        });
+                    break;
+                }
+                case idExistHeader:
+                {
+                    const BoolPacket* p = reinterpret_cast<const BoolPacket*>(PacketData);
+                    bool bSuccess = p->result;
+                    AsyncTask(ENamedThreads::GameThread, [this, bSuccess]() {
+                        if (bSuccess)
+                        {
+                            OnIdIsExist.Broadcast();
+                            UE_LOG(LogTemp, Warning, TEXT("Id already Exist"));
+                        }
+                        else
+                        {
+                            GI->canUseId = true;
+                            OnIdIsNotExist.Broadcast();
+                            UE_LOG(LogTemp, Warning, TEXT("Can sign up"));
+                        }
+                        });
+                    break;
+                }
+                case signUpHeader:
+                {
+                    const BoolPacket* p = reinterpret_cast<const BoolPacket*>(PacketData);
+                    bool bSuccess = p->result;
+                    AsyncTask(ENamedThreads::GameThread, [this, bSuccess]() {
+                        if (bSuccess)
+                        {
+                            OnSignUpSuccess.Broadcast();
+                            UE_LOG(LogTemp, Warning, TEXT("Sign up Finished."));
+                        }
+                        else
+                        {
+                            OnSignUpFailed.Broadcast();
+                            UE_LOG(LogTemp, Warning, TEXT("Can't sign up"));
+                        }
+                        });
+                    break;
+                }
+                default:
+                    UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
+                    break;
+                }
+
+                PendingBuffer.erase(
+                    PendingBuffer.begin(),
+                    PendingBuffer.begin() + PacketSize
+                );
                 return;
             }
-            switch (PacketType)
+            else if (BytesReceived == 0 || WSAGetLastError() == WSAECONNRESET)
             {
-            case connectionHeader:
+                UE_LOG(LogTemp, Log, TEXT("Connection closed by server."));
+                CheckServer();
+                return;
+            }
+            else
             {
-                my_ID = static_cast<unsigned char>(Buffer[2]);
-                break;
+                UE_LOG(LogTemp, Error, TEXT("recv failed with error: %ld"), WSAGetLastError());
+                CheckServer();
+                return;
             }
-            case requestHeader:
-            {
-                ProcessRoomInfo(Buffer);
-                break;
-            }
-            case enterHeader: 
-            {
-                RequestRitualData();
-                break;
-            }
-            case leaveHeader: 
-            {
-                AsyncTask(ENamedThreads::GameThread, [this]() {
-                    OnGameStartUnConfirmed.Broadcast();
-                    UE_LOG(LogTemp, Warning, TEXT("OnGameStartUnConfirmed"));
-                    });
-                break;
-            }
-            case ritualHeader:
-            {
-                ProcessRitualData(Buffer);
-                break;
-            }
-            case loginHeader:
-            {
-                BoolPacket* p = reinterpret_cast<BoolPacket*>(Buffer);
-                bool bSuccess = p->result;
-                uint8_t ReasonCode = p->reason;
-                AsyncTask(ENamedThreads::GameThread, [this, bSuccess, ReasonCode]() {
-                    if (bSuccess)
-                    {
-                        OnLoginSuccess.Broadcast();
-                        UE_LOG(LogTemp, Warning, TEXT("Login Success"));
-                    }
-                    else
-                    {
-                        OnLoginFailed.Broadcast(ReasonCode);
-                        UE_LOG(LogTemp, Warning, TEXT("Login Failed"));
-                    }
-                    });
-                break;
-            }
-            case idExistHeader:
-            {
-                BoolPacket* p = reinterpret_cast<BoolPacket*>(Buffer);
-                bool bSuccess = p->result;
-                AsyncTask(ENamedThreads::GameThread, [this, bSuccess]() {
-                    if (bSuccess)
-                    {
-                        OnIdIsExist.Broadcast();
-                        UE_LOG(LogTemp, Warning, TEXT("Id already Exist"));
-                    }
-                    else
-                    {
-                        GI->canUseId = true;
-                        OnIdIsNotExist.Broadcast();
-                        UE_LOG(LogTemp, Warning, TEXT("Can sign up"));
-                    }
-                    });
-                break;
-            }
-            case signUpHeader:
-            {
-                BoolPacket* p = reinterpret_cast<BoolPacket*>(Buffer);
-                bool bSuccess = p->result;
-                AsyncTask(ENamedThreads::GameThread, [this, bSuccess]() {
-                    if (bSuccess)
-                    {
-                        OnSignUpSuccess.Broadcast();
-                        UE_LOG(LogTemp, Warning, TEXT("Sign up Finished."));
-                    }
-                    else
-                    {
-                        OnSignUpFailed.Broadcast();
-                        UE_LOG(LogTemp, Warning, TEXT("Can't sign up"));
-                    }
-                    });
-                break;
-            }
-            default:
-                UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
-                break;
-            }
-        }
-        else if (BytesReceived == 0 || WSAGetLastError() == WSAECONNRESET)
-        {
-            UE_LOG(LogTemp, Log, TEXT("Connection closed by server."));
-            CheckServer();
-            return;
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("recv failed with error: %ld"), WSAGetLastError());
-            CheckServer();
-            return;
         }
         });
 }

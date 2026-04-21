@@ -4,6 +4,7 @@
 #include "MySocketPoliceActor.h"
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <vector>
 #include "Camera/CameraActor.h"
 #include "PoliceCharacter.h"
 #include "Components/TextBlock.h"
@@ -43,12 +44,7 @@ void AMySocketPoliceActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
     if (ClientSocket != INVALID_SOCKET)
     {
         SendDisconnection();
-        closesocket(ClientSocket);
-        ClientSocket = INVALID_SOCKET;
     }
-
-    WSACleanup();
-    UE_LOG(LogTemp, Log, TEXT("Client socket closed and cleaned up."));
 }
 
 void AMySocketPoliceActor::SetClientSocket(SOCKET InSocket, int32 RoomNumber)
@@ -92,55 +88,79 @@ void AMySocketPoliceActor::ReceiveData()
 {
     AsyncTask(ENamedThreads::AnyBackgroundThreadNormalTask, [this]()
         {
+            std::vector<char> PendingBuffer;
+            PendingBuffer.reserve(4096);
+
             while (true)
             {
                 char Buffer[BufferSize];
                 int32 BytesReceived = recv(ClientSocket, Buffer, BufferSize, 0);
                 if (BytesReceived > 0)
                 {
-                    int PacketType = static_cast<int>(static_cast<unsigned char>(Buffer[0]));
-                    int PacketSize = static_cast<int>(static_cast<unsigned char>(Buffer[1]));
-                    if (BytesReceived != PacketSize)
+                    PendingBuffer.insert(PendingBuffer.end(), Buffer, Buffer + BytesReceived);
+                    while (true) 
                     {
-                        UE_LOG(LogTemp, Warning, TEXT("Invalid packet size: Received %d, Expected %d"), BytesReceived, PacketSize);
-                        continue;
-                    }
+                        if (PendingBuffer.size() < 3)
+                            break;
 
-                    switch (PacketType)
-                    {
-                    case cultistHeader:
-                        ProcessPlayerData(Buffer);
-                        break;
-                    case skillHeader:
-                        ProcessSkillData(Buffer);
-                        break;
-                    case particleHeader:
-                        //ProcessParticleData(Buffer);
-                        break;
-                    case hitHeader:
-                        //ProcessHitData(Buffer);
-                        break;
-                    case connectionHeader:
-                        ProcessConnection(Buffer);
-                        break;
-                    case DisconnectionHeader:
-                        ProcessDisconnection(Buffer);
-                        break;
-                    case disappearHeader:
-                    {
-                        unsigned char id = static_cast<unsigned char>(Buffer[2]);
-                        HideCharacter(id, true);
-                        break;
-                    }
-                    case appearHeader:
-                    {
-                        unsigned char id = static_cast<unsigned char>(Buffer[2]);
-                        HideCharacter(id, false);
-                        break;
-                    }
-                    default:
-                        UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
-                        break;
+                        uint8 PacketType = static_cast<uint8>(PendingBuffer[0]);
+                        uint16 PacketSize;
+                        memcpy(&PacketSize, PendingBuffer.data() + 1, sizeof(uint16));
+
+                        if (PendingBuffer.size() < PacketSize)
+                            break;
+
+                        std::vector<char> OnePacket(PendingBuffer.begin(),
+                            PendingBuffer.begin() + PacketSize);
+
+                        PendingBuffer.erase(PendingBuffer.begin(),
+                            PendingBuffer.begin() + PacketSize);
+
+                        switch (PacketType)
+                        {
+                        case cultistHeader:
+                            ProcessPlayerData(OnePacket.data());
+                            break;
+                        case treeHeader:
+                            ProcessTreeData(OnePacket.data());
+                            break;
+                        case crowSpawnHeader:
+                            ProcessCrowSpawnData(OnePacket.data());
+                            break;
+                        case crowDataHeader:
+                            ProcessCrowData(OnePacket.data());
+                            break;
+                        case crowDisableHeader:
+                            ProcessCrowDisable(OnePacket.data());
+                            break;
+                        case particleHeader:
+                            //ProcessParticleData(OnePacket.data());
+                            break;
+                        case hitHeader:
+                            //ProcessHitData(OnePacket.data());
+                            break;
+                        case connectionHeader:
+                            ProcessConnection(OnePacket.data());
+                            break;
+                        case DisconnectionHeader:
+                            ProcessDisconnection(OnePacket.data());
+                            break;
+                        case disappearHeader:
+                        {
+                            unsigned char id = static_cast<unsigned char>(OnePacket[2]);
+                            HideCharacter(id, true);
+                            break;
+                        }
+                        case appearHeader:
+                        {
+                            unsigned char id = static_cast<unsigned char>(OnePacket[2]);
+                            HideCharacter(id, false);
+                            break;
+                        }
+                        default:
+                            UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
+                            break;
+                        }
                     }
                 }
                 else if (BytesReceived == 0 || WSAGetLastError() == WSAECONNRESET)
@@ -161,8 +181,8 @@ void AMySocketPoliceActor::ReceiveData()
 
 void AMySocketPoliceActor::ProcessPlayerData(const char* Buffer)
 {
-    FCultistCharacterState ReceivedState;
-    memcpy(&ReceivedState, Buffer + 2, sizeof(FCultistCharacterState));
+    const CultistPacket* pkt = reinterpret_cast<const CultistPacket*>(Buffer);
+    const FCultistCharacterState& ReceivedState = pkt->state;
     {
         FScopeLock Lock(&ReceivedDataMutex);
         ReceivedCultistStates.FindOrAdd(ReceivedState.PlayerID) = ReceivedState;
@@ -171,51 +191,32 @@ void AMySocketPoliceActor::ProcessPlayerData(const char* Buffer)
 
 void AMySocketPoliceActor::ProcessHitData(const char* Buffer)
 {
-    FHitPacket ReceivedState;
-    memcpy(&ReceivedState, Buffer + 2, sizeof(FHitPacket));
-    {
-        FScopeLock Lock(&ReceivedDataMutex);
-        switch (ReceivedState.Weapon)
-        {
-        case EWeaponType::Baton:
-            break;
-        case EWeaponType::Pistol:
-            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
-            break;
-        case EWeaponType::Taser:
-            UE_LOG(LogTemp, Error, TEXT("EWeaponType received: %d"), ReceivedState.Weapon);
-            break;
-        default:
-            UE_LOG(LogTemp, Error, TEXT("EWeaponType Error: %d"), ReceivedState.Weapon);
-            break;
-        }
-    }
+    const HitResultPacket* ReceivedPacket = reinterpret_cast<const HitResultPacket*>(Buffer);
+    UE_LOG(LogTemp, Error, TEXT("ProcessHitData error with attacker: %d"), ReceivedPacket->AttackerID);
 }
 
-void AMySocketPoliceActor::ProcessSkillData(const char* Buffer) 
+void AMySocketPoliceActor::ProcessTreeData(const char* Buffer) 
 {
-    SkillPacket ReceivedSkill;
-    memcpy(&ReceivedSkill, Buffer, sizeof(SkillPacket));
-
-    const int Key = static_cast<int>(ReceivedSkill.casterId);
+    const TreePacket* ReceivedSkill = reinterpret_cast<const TreePacket*>(Buffer);
+    const int Key = ReceivedSkill->casterId;
+ 
     ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
     if (!FoundChar) {
-        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d not found"), ReceivedSkill.casterId);
+        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d not found"), Key);
         return;
     }
 
     ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
     if (!CasterCultist) {
-        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d is not Cultist"), ReceivedSkill.casterId);
+        UE_LOG(LogTemp, Warning, TEXT("[Skill] caster %d is not Cultist"), Key);
         return;
     }
 
     TWeakObjectPtr<ACultistCharacter> WeakCaster = CasterCultist;
-    const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedSkill.SpawnLoc);
-    const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedSkill.SpawnRot);
-    const uint8    Skill = ReceivedSkill.skill;
+    const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedSkill->SpawnLoc);
+    const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedSkill->SpawnRot);
 
-    AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot, Skill]() {
+    AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot]() {
         ACultistCharacter* Caster = WeakCaster.Get();
         if (!IsValid(Caster)) return;
 
@@ -223,44 +224,126 @@ void AMySocketPoliceActor::ProcessSkillData(const char* Buffer)
         Params.Owner = Caster;
         Params.Instigator = Caster;
         Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-        switch (Skill)
-        {
-        case 1:
-        {
-            if (!Caster->TreeObstacleActorClass) {
-                UE_LOG(LogTemp, Error, TEXT("[Skill] %s TreeObstacleActorClass is null"), *Caster->GetName());
-                break;
-            }
-            Caster->GetWorld()->SpawnActor<ATreeObstacleActor>(
-                Caster->TreeObstacleActorClass, SpawnLoc, SpawnRot, Params);
-            break;
+
+        if (!Caster->TreeObstacleActorClass) {
+            UE_LOG(LogTemp, Error, TEXT("[Skill] %s TreeObstacleActorClass is null"), *Caster->GetName());
+            return;
         }
-        case 2:
+        Caster->GetWorld()->SpawnActor<ATreeObstacleActor>(Caster->TreeObstacleActorClass, SpawnLoc, SpawnRot, Params);
+        
+    });
+}
+
+void AMySocketPoliceActor::ProcessCrowSpawnData(const char* Buffer) 
+{
+    const Crow* ReceivedCrow = reinterpret_cast<const Crow*>(Buffer);
+    const int Key = ReceivedCrow->owner;
+
+    ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
+    if (!FoundChar) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] caster %d not found"), Key);
+        return;
+    }
+
+    ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
+    if (!CasterCultist) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] caster %d is not Cultist"), Key);
+        return;
+    }
+
+    TWeakObjectPtr<ACultistCharacter> WeakCaster = CasterCultist;
+    const FVector  SpawnLoc = AMySocketActor::ToUE(ReceivedCrow->loc);
+    const FRotator SpawnRot = AMySocketActor::ToUE(ReceivedCrow->rot);
+
+    AsyncTask(ENamedThreads::GameThread, [WeakCaster, SpawnLoc, SpawnRot]() {
+        ACultistCharacter* Caster = WeakCaster.Get();
+        if (!IsValid(Caster))
+            return;
+
+        FActorSpawnParameters Params;
+        Params.Owner = Caster;
+        Params.Instigator = Caster;
+        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+        if (!Caster->CrowClass) {
+            UE_LOG(LogTemp, Error, TEXT("[CrowSpawn] %s CrowClass is null"), *Caster->GetName());
+            return;
+        }
+        if (!Caster->CrowInstance)
         {
-            if (!Caster->CrowClass) {
-                UE_LOG(LogTemp, Error, TEXT("[Skill] %s CrowClass is null"), *Caster->GetName());
-                break;
-            }
             Caster->CrowInstance = Caster->GetWorld()->SpawnActor<ACrowActor>(
                 Caster->CrowClass, SpawnLoc, SpawnRot, Params);
-            if (Caster->CrowInstance) {
-                Caster->CrowInstance->InitCrow(Caster, Caster->CrowLifetime);
-            }
-            break;
-        }
-        default:
-            UE_LOG(LogTemp, Error, TEXT("Unknown Skill Number: %d"), Skill);
-            break;
+            UE_LOG(LogTemp, Warning, TEXT("[CrowSpawn] Spawned crow for caster=%s"), *Caster->GetName());
         }
         });
 }
 
+void AMySocketPoliceActor::ProcessCrowData(const char* Buffer) 
+{
+    const Crow* ReceivedCrow = reinterpret_cast<const Crow*>(Buffer);
+    const int Key = ReceivedCrow->owner;
+
+    ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
+    if (!FoundChar) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowData] caster %d not found"), Key);
+        return;
+    }
+
+    ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
+    if (!CasterCultist) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowData] caster %d is not Cultist"), Key);
+        return;
+    }
+    if (CasterCultist->CrowInstance) {
+        // 까마귀 업데이트
+        AsyncTask(ENamedThreads::GameThread, [CI = CasterCultist->CrowInstance, ReceivedCrow]() {
+            if (IsValid(CI)) {
+                CI->SetActorLocation(AMySocketActor::ToUE(ReceivedCrow->loc));
+                CI->SetActorRotation(AMySocketActor::ToUE(ReceivedCrow->rot));
+            }
+            });
+    }
+}
+
+void AMySocketPoliceActor::ProcessCrowDisable(const char* Buffer) 
+{
+    const IdOnlyPacket* packet = reinterpret_cast<const IdOnlyPacket*>(Buffer);
+    const int Key = packet->id;
+
+    ACharacter* FoundChar = SpawnedCharacters.FindRef(Key);
+    if (!FoundChar) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowDisable] caster %d not found"), Key);
+        return;
+    }
+
+    ACultistCharacter* CasterCultist = Cast<ACultistCharacter>(FoundChar);
+    if (!CasterCultist) {
+        UE_LOG(LogTemp, Warning, TEXT("[CrowDisable] caster %d is not Cultist"), Key);
+        return;
+    }
+
+    if (CasterCultist->CrowInstance)
+    {
+        ACrowActor* CI = CasterCultist->CrowInstance;
+
+        AsyncTask(ENamedThreads::GameThread, [CasterCultist, CI]() {
+            if (IsValid(CI))
+            {
+                CI->Destroy();
+            }
+            CasterCultist->CrowInstance = nullptr;
+            CasterCultist->crowIsAvailable = false;
+            });
+    }
+}
+
 void AMySocketPoliceActor::ProcessConnection(const char* Buffer) {
-    unsigned char connectedId = static_cast<unsigned char>(Buffer[2]);
-    unsigned char role = static_cast<unsigned char>(Buffer[3]);
+    const IdRolePacket* pkt = reinterpret_cast<const IdRolePacket*>(Buffer);
+    const int connectedId = pkt->id;
+    const uint8_t role = pkt->role;
 
     if (my_ID == -1) {
-        my_ID = static_cast<int>(connectedId);
+        my_ID = connectedId;
         UE_LOG(LogTemp, Warning, TEXT("Connected. My ID is: %d"), my_ID);
 
         if (MyCharacter) {
@@ -270,7 +353,7 @@ void AMySocketPoliceActor::ProcessConnection(const char* Buffer) {
     else {
         AsyncTask(ENamedThreads::GameThread, [this, connectedId, role]() mutable
             {
-                if (role == 0) // Cultist
+                if (role == 0 || role == 100) // Cultist
                 {
                     this->SpawnCultistCharacter(connectedId);
                 }
@@ -285,7 +368,8 @@ void AMySocketPoliceActor::ProcessConnection(const char* Buffer) {
 
 void AMySocketPoliceActor::ProcessDisconnection(const char* Buffer)
 {
-    int DisconnectedID = static_cast<int>(static_cast<unsigned char>(Buffer[2]));
+    const IdOnlyPacket* pkt = reinterpret_cast<const IdOnlyPacket*>(Buffer);
+    const int DisconnectedID = pkt->id;
     if (DisconnectedID == my_ID)
     {
         CloseConnection();
@@ -303,10 +387,35 @@ void AMySocketPoliceActor::SendPlayerData()
         Packet.header = policeHeader;
         Packet.size = sizeof(PolicePacket);
         Packet.state = GetCharacterState();
+        
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(PolicePacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
             UE_LOG(LogTemp, Error, TEXT("SendPlayerData failed with error: %ld"), WSAGetLastError());
+        }
+        SendDogData();
+    }
+    else
+    {
+        CloseConnection();
+    }
+}
+
+void AMySocketPoliceActor::SendDogData() {
+    if (!MyCharacter || !MyCharacter->PoliceDogInstance) {
+        UE_LOG(LogTemp, Error, TEXT("No PoliceDogInstance "));
+        return;
+    }
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        DogPacket Packet;
+        Packet.header = dogHeader;
+        Packet.size = sizeof(DogPacket);
+        Packet.dog = GetDog();
+        int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(DogPacket), 0);
+        if (BytesSent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendDogData failed with error: %ld"), WSAGetLastError());
         }
     }
     else
@@ -315,13 +424,9 @@ void AMySocketPoliceActor::SendPlayerData()
     }
 }
 
-void AMySocketPoliceActor::SendHitData(FHitPacket hitPacket) {
+void AMySocketPoliceActor::SendHitData(HitPacket Packet) {
     if (ClientSocket != INVALID_SOCKET)
     {
-        HitPacket Packet;
-        Packet.header = hitHeader;
-        Packet.size = sizeof(HitPacket);
-        Packet.data = hitPacket;
         int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(HitPacket), 0);
         if (BytesSent == SOCKET_ERROR)
         {
@@ -337,7 +442,7 @@ void AMySocketPoliceActor::SendHitData(FHitPacket hitPacket) {
 FPoliceCharacterState AMySocketPoliceActor::GetCharacterState()
 {
     FPoliceCharacterState State;
-    State.PlayerID = my_ID;
+    State.PlayerID = MyCharacter->my_ID;
 
     // 위치 및 회전 설정
     State.PositionX = MyCharacter->GetActorLocation().X;
@@ -375,6 +480,20 @@ FPoliceCharacterState AMySocketPoliceActor::GetCharacterState()
     return State;
 }
 
+Dog AMySocketPoliceActor::GetDog() {
+    Dog dog{};
+    dog.owner = MyCharacter->my_ID;
+    if (MyCharacter->PoliceDogInstance)
+    {
+        dog.loc = AMySocketActor::ToNet(MyCharacter->PoliceDogInstance->GetActorLocation());
+        dog.rot = AMySocketActor::ToNet(MyCharacter->PoliceDogInstance->GetActorRotation());
+
+        // 개 상태 추가
+    }
+
+    return dog;
+}
+
 void AMySocketPoliceActor::SpawnCultistCharacter(const unsigned char PlayerID)
 {
     // 이미 캐릭터가 존재하면 아무 작업도 하지 않음
@@ -396,12 +515,13 @@ void AMySocketPoliceActor::SpawnCultistCharacter(const unsigned char PlayerID)
     SpawnParams.Owner = this;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-    ACharacter* NewCharacter = GetWorld()->SpawnActor<ACharacter>(
+    ACultistCharacter* NewCharacter = GetWorld()->SpawnActor<ACultistCharacter>(
         GI->CultistClientClass,
         FVector(CultistDummyState.PositionX, CultistDummyState.PositionY, CultistDummyState.PositionZ),
         FRotator(CultistDummyState.RotationPitch, CultistDummyState.RotationYaw, CultistDummyState.RotationRoll),
         SpawnParams
     );
+
     if (NewCharacter)
     {
         SpawnedCharacters.Add(PlayerID, NewCharacter);
@@ -439,9 +559,10 @@ void AMySocketPoliceActor::ProcessCharacterUpdates()
     FScopeLock Lock(&ReceivedDataMutex);
     for (auto& Pair : ReceivedCultistStates)
     {
+        const int PlayerID = Pair.Key;
         const FCultistCharacterState& State = Pair.Value;
 
-        if (ACharacter* FoundChar = SpawnedCharacters.FindRef(Pair.Value.PlayerID))
+        if (ACharacter* FoundChar = SpawnedCharacters.FindRef(PlayerID))
         {
             if (ACultistCharacter* CultistChar = Cast<ACultistCharacter>(FoundChar))
             {
@@ -449,8 +570,8 @@ void AMySocketPoliceActor::ProcessCharacterUpdates()
             }
         }
         else {
-            UE_LOG(LogTemp, Warning, TEXT("No PlayerID %d"), Pair.Value.PlayerID);
-            KeysToRemove.Add(Pair.Value.PlayerID);
+            UE_LOG(LogTemp, Warning, TEXT("No PlayerID %d"), PlayerID);
+            KeysToRemove.Add(PlayerID);
         }
     }
     for (int32 Key : KeysToRemove)
@@ -676,6 +797,18 @@ void AMySocketPoliceActor::HideCharacter(int PlayerID, bool bHide) {
         });
 }
 
+void AMySocketPoliceActor::SendQuit() {
+    NoticePacket Packet;
+    Packet.header = quitHeader;
+    Packet.size = sizeof(NoticePacket);
+
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(NoticePacket), 0);
+    if (BytesSent == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("SendDisconnection failed with error: %ld"), WSAGetLastError());
+    }
+}
+
 void AMySocketPoliceActor::SendDisconnection() {
     NoticePacket Packet;
     Packet.header = DisconnectionHeader;
@@ -686,6 +819,12 @@ void AMySocketPoliceActor::SendDisconnection() {
     {
         UE_LOG(LogTemp, Error, TEXT("SendDisconnection failed with error: %ld"), WSAGetLastError());
     }
+
+    closesocket(ClientSocket);
+    ClientSocket = INVALID_SOCKET;
+
+    WSACleanup();
+    UE_LOG(LogTemp, Log, TEXT("Client socket closed and cleaned up."));
 }
 
 void AMySocketPoliceActor::CloseConnection() {
@@ -760,8 +899,6 @@ const TMap<int, ACharacter*>& AMySocketPoliceActor::GetSpawnedCharacters() const
 {
     return SpawnedCharacters;
 }
-
-
 
 // Called every frame
 void AMySocketPoliceActor::Tick(float DeltaTime)

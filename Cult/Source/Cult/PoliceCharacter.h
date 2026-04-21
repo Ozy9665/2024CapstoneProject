@@ -14,7 +14,9 @@
 #include"GameFramework/Character.h"
 #include"GameFramework/SpringArmComponent.h"
 #include "Perception/AIPerceptionStimuliSourceComponent.h"
+#include "PoliceDog.h"
 #include "PoliceCharacter.generated.h"
+
 
 class AMySocketPoliceActor;
 
@@ -60,6 +62,13 @@ public:
 	float AimPitch;
 
 
+	// Basic / Sound Value / 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
+	float RunNoiseInterval = 0.5f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
+	float RunNoiseLoudness = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
+	bool bRunNoiseLooping = false;
 
 	// Combat
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category ="Weapon")
@@ -229,5 +238,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
 	float ImpulseAmount = 1200.0f;
 
+	// PoliceDog
+	UPROPERTY(EditDefaultsOnly, Category = "PoliceDog")
+	TSubclassOf<APoliceDog> PoliceDogClass;
+	UPROPERTY(EditDefaultsOnly, Category = "PoliceDog")
+	APoliceDog* PoliceDogInstance = nullptr;
+
 	int my_ID = -1;
+	UFUNCTION(BlueprintPure)
+	static AMySocketPoliceActor* GetMySocketActor();
 };

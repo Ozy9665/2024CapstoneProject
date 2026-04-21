@@ -31,17 +31,15 @@ void ATreeObstacleActor::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	if (GrowState == ETreeGrowState::GrowingTrunk)
-	{	
+	{
 		ElapsedTime += DeltaTime;
 		float Alpha = FMath::Clamp(ElapsedTime / GrowTime, 0.f, 1.f);
 
-		// Z스케일
 		FVector NewScale = FMath::Lerp(FVector(0.01f, 0.01f, 0.01f), FVector(1.f, 1.f, 1.f), Alpha);
-		TreeMesh->SetWorldScale3D(NewScale * 0.1f) ;
+		TreeMesh->SetWorldScale3D(NewScale * 0.1f);
 
-		// 위로만 자라도록 
 		FVector BaseLocation = InitialLocation;
-		FVector ScaleOffset = FVector(0.f, 0.f, GrowHeight * (0.5f * (1 - NewScale.Z)));  // 중간점 보정
+		FVector ScaleOffset = FVector(0.f, 0.f, GrowHeight * (0.5f * (1 - NewScale.Z)));
 		SetActorLocation(BaseLocation - ScaleOffset);
 
 		if (Alpha >= 1.f)
@@ -55,17 +53,31 @@ void ATreeObstacleActor::Tick(float DeltaTime)
 	{
 		bool bAllGrown = true;
 
+		// 가지별 루프
 		for (FBranchData& Branch : AllBranches)
 		{
 			if (!Branch.Spline || Branch.Meshes.Num() == 0) continue;
 
 			float TotalLength = Branch.Spline->GetSplineLength();
+
+			// 이미 다 자란 가지는 아예 계산 스킵
+			if (Branch.CurrentLength >= TotalLength) continue;
+
+			// 길이 업데이트
 			Branch.CurrentLength += BranchGrowSpeed * DeltaTime;
 
+			// 아직 덜 자란 가지가 있다면 false
 			if (Branch.CurrentLength < TotalLength)
+			{
 				bAllGrown = false;
+			}
+			else
+			{
+				Branch.CurrentLength = TotalLength;
+			}
 
 			const int32 NumSegments = Branch.Meshes.Num();
+
 			for (int32 j = 0; j < NumSegments; ++j)
 			{
 				USplineMeshComponent* Segment = Branch.Meshes[j];
@@ -74,16 +86,28 @@ void ATreeObstacleActor::Tick(float DeltaTime)
 				const float SegmentStart = TotalLength / NumSegments * j;
 				const float SegmentEnd = TotalLength / NumSegments * (j + 1);
 
-				if (Branch.CurrentLength < SegmentStart) continue;
+				// 아직 자랄 차례x
+				if (Branch.CurrentLength < SegmentStart)
+				{
+					if (Segment->IsVisible()) Segment->SetVisibility(false);
+					continue;
+				}
+				// 다 자란 부분 -> 켜주기
+				if (Branch.CurrentLength > SegmentEnd)
+				{
+					if (!Segment->IsVisible()) Segment->SetVisibility(true);
+					continue;
+				}
 
-				float VisibleLength = FMath::Clamp(Branch.CurrentLength - SegmentStart, 0.f, SegmentEnd - SegmentStart);
+				// 스플라인 계산 수행
+				float VisibleLength = Branch.CurrentLength - SegmentStart;
 
 				FVector Start = Branch.Spline->GetLocationAtDistanceAlongSpline(SegmentStart, ESplineCoordinateSpace::Local);
 				FVector End = Branch.Spline->GetLocationAtDistanceAlongSpline(SegmentStart + VisibleLength, ESplineCoordinateSpace::Local);
-				FVector StartTangent = Branch.Spline->GetTangentAtDistanceAlongSpline(SegmentStart, ESplineCoordinateSpace::Local) * 1.f;
-				FVector EndTangent = Branch.Spline->GetTangentAtDistanceAlongSpline(SegmentStart + VisibleLength, ESplineCoordinateSpace::Local) * 1.f;
+				FVector StartTangent = Branch.Spline->GetTangentAtDistanceAlongSpline(SegmentStart, ESplineCoordinateSpace::Local);
+				FVector EndTangent = Branch.Spline->GetTangentAtDistanceAlongSpline(SegmentStart + VisibleLength, ESplineCoordinateSpace::Local);
 
-				Segment->SetVisibility(true);
+				if (!Segment->IsVisible()) Segment->SetVisibility(true);
 				Segment->SetStartAndEnd(Start, StartTangent, End, EndTangent);
 			}
 		}
@@ -91,8 +115,8 @@ void ATreeObstacleActor::Tick(float DeltaTime)
 		if (bAllGrown)
 		{
 			GrowState = ETreeGrowState::Done;
-			SetActorTickEnabled(false);
-			UE_LOG(LogTemp, Warning, TEXT("🌲 전체 가지 성장 완료"));
+			SetActorTickEnabled(false); // 틱 끄기
+			UE_LOG(LogTemp, Warning, TEXT("All Branch Grown"));
 		}
 	}
 	else if (GrowState == ETreeGrowState::Done)
@@ -199,6 +223,18 @@ void ATreeObstacleActor::CreateBranch(const FVector& StartLocation, const FRotat
 		Mesh->SetVisibility(false);
 		Mesh->RegisterComponent();
 		AddInstanceComponent(Mesh);
+
+		const float SegmentLen = Spline->GetSplineLength() / NumSegments;
+		const float LocalStartDist = SegmentLen * i;
+		const float LocalEndDist = SegmentLen * (i + 1);
+
+		FVector StartPos = Spline->GetLocationAtDistanceAlongSpline(LocalStartDist, ESplineCoordinateSpace::Local);
+		FVector StartTan = Spline->GetTangentAtDistanceAlongSpline(LocalStartDist, ESplineCoordinateSpace::Local);
+		FVector EndPos = Spline->GetLocationAtDistanceAlongSpline(LocalEndDist, ESplineCoordinateSpace::Local);
+		FVector EndTan = Spline->GetTangentAtDistanceAlongSpline(LocalEndDist, ESplineCoordinateSpace::Local);
+
+		Mesh->SetStartAndEnd(StartPos, StartTan, EndPos, EndTan);
+		Mesh->SetVisibility(false);
 
 		Branch.Meshes.Add(Mesh);
 	}

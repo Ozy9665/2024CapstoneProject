@@ -6,17 +6,21 @@
 #include <array>
 #include "MySocketActor.generated.h"
 
-
 USTRUCT(BlueprintType)
 struct Froom {
 	GENERATED_BODY()
-	UPROPERTY(BlueprintReadWrite) uint8 room_id;
+	UPROPERTY(BlueprintReadWrite) int room_id;
 	UPROPERTY(BlueprintReadWrite) uint8 police;
 	UPROPERTY(BlueprintReadWrite) uint8 cultist;
-	UPROPERTY(BlueprintReadWrite) bool isIngame;
-	UPROPERTY(BlueprintReadWrite) TArray<int32> player_ids;
 };
 
+enum MAPTYPE { LANDMASS, LEVEL3 };
+
+constexpr int MAX_PLAYERS_PER_ROOM = 5;
+constexpr int MAX_ROOM_LIST = 10;
+constexpr int ALTAR_PER_ROOM = 3;
+
+#pragma pack(push, 1)
 struct FNetVec {
 	double x; 
 	double y; 
@@ -29,10 +33,26 @@ struct FNetRot {
 	double z;
 };
 
-#pragma pack(push, 1)
+struct Dog {
+	int owner;
+	FNetVec loc;
+	FNetRot rot;
+	float Speed;
+	bool is_barking;
+};
+
+struct Crow {
+	int owner;
+	FNetVec loc;
+	FNetRot rot;
+	// 까마귀 상태
+	bool is_alive;
+
+};
+
 struct FPoliceCharacterState
 {
-	int32 PlayerID;
+	int PlayerID;
 	// 위치
 	float PositionX;
 	float PositionY;
@@ -61,7 +81,7 @@ struct FPoliceCharacterState
 
 struct FCultistCharacterState
 {
-	int32 PlayerID;
+	int PlayerID;
 	// 위치
 	float PositionX;
 	float PositionY;
@@ -78,18 +98,18 @@ struct FCultistCharacterState
 
 	float CurrentHealth;
 	// 상태
-	uint8_t Crouch;
-	uint8_t ABP_IsPerforming;
-	uint8_t ABP_IsHitByAnAttack;
-	uint8_t ABP_IsFrontKO;
-	uint8_t ABP_IsElectric;
-	uint8_t ABP_TTStun;
-	uint8_t ABP_TTGetUp;
-	uint8_t ABP_IsDead;
-	uint8_t ABP_IsStunned;
-	uint8_t ABP_DoHeal;
-	uint8_t ABP_GetHeal;
-	uint8_t bIsPakour;
+	bool Crouch;
+	bool ABP_IsPerforming;
+	bool ABP_IsHitByAnAttack;
+	bool ABP_IsFrontKO;
+	bool ABP_IsElectric;
+	bool ABP_TTStun;
+	bool ABP_TTGetUp;
+	bool ABP_IsDead;
+	bool ABP_IsStunned;
+	bool ABP_DoHeal;
+	bool ABP_GetHeal;
+	bool bIsPakour;
 };
 
 struct FImpactPacket
@@ -108,122 +128,169 @@ struct FImpactPacket
 	float MuzzleRoll;
 };
 
-struct FHitPacket {
-	uint8_t AttackerID;
-	uint8_t TargetID;
+struct HitResultPacket {
+	uint8_t  header;
+	uint16_t  size;
+	int AttackerID;
+	int TargetID;
 	EWeaponType Weapon;
 };
 
 struct CultistPacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	FCultistCharacterState state;
+};
+
+struct CrowPacket {
+	uint8_t  header;
+	uint16_t size;
+	Crow crow;
 };
 
 struct PolicePacket {
 	uint8_t  header;
-	uint8_t size;
+	uint16_t size;
 	FPoliceCharacterState state;
+};
+
+struct DogPacket {
+	uint8_t  header;
+	uint16_t size;
+	Dog dog;
 };
 
 struct ParticlePacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	FImpactPacket data;
 };
 
 struct HitPacket {
 	uint8_t  header;
-	uint8_t  size;
-	FHitPacket data;
+	uint16_t  size;
+	EWeaponType Weapon;
+	FNetVec TraceStart;
+	FNetVec TraceDir;
 };
 
 struct IdOnlyPacket {
 	uint8_t header;
-	uint8_t size;
-	uint8_t id;
+	uint16_t size;
+	int id;
 };
 
 struct RoleOnlyPacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
+	uint8_t role;
+};
+
+struct IdRolePacket {
+	uint8_t header;
+	uint16_t size;
+	int id;
 	uint8_t role;
 };
 
 struct PacketRoom {
-	uint8_t room_id;
+	int room_id;
 	uint8_t police;
 	uint8_t cultist;
-	bool isIngame;
-	uint8_t player_ids[5];
+	uint8_t isIngame;
+	int player_ids[5];
+};
+
+struct RoomData {
+	int room_id;
+	uint8_t police;
+	uint8_t cultist;
 };
 
 struct RoomsPakcet {
 	uint8_t header;
-	uint8_t size;
-	PacketRoom rooms[10];
+	uint16_t  size;
+	RoomData rooms[MAX_ROOM_LIST];
 };
 
 struct RoomDataPacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	PacketRoom room_data;
 };
 
 struct RoomNumberPacket {
 	uint8_t header;
-	uint8_t size;
-	uint8_t room_number;
+	uint16_t size;
+	int room_number;
 };
 
 struct NoticePacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 };
 
-struct SkillPacket {
+struct TreePacket {
 	uint8_t header;
-	uint8_t size;
-	uint8_t casterId;
-	uint8_t skill;	// 1: 나무, 2: 까마귀
+	uint16_t size;
+	int casterId;
 	FNetVec SpawnLoc;
 	FNetRot SpawnRot;
 };
 
-struct RitualPacket {
+struct RitualPacket
+{
 	uint8_t header;
-	uint8_t size;
-	FNetVec Loc1;
-	FNetVec Loc2;
-	FNetVec Loc3;
+	uint16_t size;
+	FNetVec Loc[ALTAR_PER_ROOM];
+	MAPTYPE maptype;
 };
 
 struct IdPacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	char id[32];
 };
 
 struct IdPwPacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	char id[32];
 	char pw[32];
 };
 
 struct BoolPacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	bool result;
 	uint8_t reason;
 };
 
 struct MovePacket {
 	uint8_t header;
-	uint8_t size;
+	uint16_t size;
 	FNetVec SpawnLoc;
 	FNetRot SpawnRot;
 	bool isHealer;
+};
+
+struct RitualNoticePacket {
+	uint8_t header;
+	uint16_t size;
+	uint8_t ritual_id;
+	uint8_t reason;
+	// reason 0 -> start
+	// reason 1 -> skill check suc
+	// reason 2 -> skill check fail
+	// reason 3 -> end
+	// reason 4 -> ritial 100%
+};
+
+struct RitualGagePacket {
+	uint8_t header;
+	uint16_t size;
+	uint8_t ritual_id;
+	int gauge;
 };
 
 #pragma pack(pop)
@@ -253,7 +320,7 @@ public:
 constexpr int32 BufferSize{ 1024 };
 //-- ingame header
 constexpr char cultistHeader = 0;
-constexpr char skillHeader = 1;
+constexpr char treeHeader = 1;
 constexpr char policeHeader = 2;
 constexpr char particleHeader = 3;
 constexpr char hitHeader = 4;
@@ -265,6 +332,13 @@ constexpr char appearHeader = 18;
 constexpr char tryHealHeader = 19;
 constexpr char doHealHeader = 20;
 constexpr char endHealHeader = 21;
+constexpr char ritualStartHeader = 22;
+constexpr char ritualDataHeader = 23;
+constexpr char ritualEndHeader = 24;
+constexpr char dogHeader = 25;
+constexpr char crowSpawnHeader = 26;
+constexpr char crowDataHeader = 27;
+constexpr char crowDisableHeader = 28;
 
 //-- room header
 constexpr char requestHeader = 8;
@@ -276,8 +350,10 @@ constexpr char ritualHeader = 13;
 constexpr char loginHeader = 14;
 constexpr char idExistHeader = 15;
 constexpr char signUpHeader = 16;
+constexpr char quitHeader = 29;
 
-constexpr FCultistCharacterState CultistDummyState{ -1, 110, -1100,  2770, 0, 90, 0 };
+constexpr FCultistCharacterState CultistDummyState{ -1, -10219.0f, 2560.0f, -3009.0f, 0.f, 90.f, 0.f, 0.f, 0.f, 0.f, 0.f,
+	false, false, false, false, false, false, false, false, false, false, false, false };
 constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.f, 90.f, 0.f,	0.f, 0.f, 0.f, 0.f,
 	false, false, false, EWeaponType::Baton, false, EVaultingType::OneHandVault, false, false, false, false };
 

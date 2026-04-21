@@ -30,6 +30,18 @@
     <ClCompile Include="db.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="map.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="CultistAI.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MapManager.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Combat.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Protocol.h">
@@ -42,6 +54,18 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="db.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="map.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="CultistAI.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MapManager.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Combat.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

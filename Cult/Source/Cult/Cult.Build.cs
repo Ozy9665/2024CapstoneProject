@@ -8,16 +8,26 @@ public class Cult : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore","UMG" ,"AIModule","NavigationSystem", "Niagara", "Landscape", "ProceduralMeshComponent" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore","UMG" ,"AIModule","NavigationSystem", "Navmesh", "Niagara", "Landscape", "ProceduralMeshComponent",   "GeometryCollectionEngine",
+    "ChaosSolverEngine","FieldSystemEngine" });
 
-		PrivateDependencyModuleNames.AddRange(new string[] {  });
+        PublicDefinitions.AddRange(new string[]
+        {
+            "NOMINMAX",
+            "WIN32_LEAN_AND_MEAN"
+        });
 
-		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
-		
-		// Uncomment if you are using online features
-		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
+        if (Target.Type == TargetType.Editor)
+		{
+            PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd" });
+        }
 
-		// To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
-	}
+        // Uncomment if you are using Slate UI
+        // PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
+
+        // Uncomment if you are using online features
+        // PrivateDependencyModuleNames.Add("OnlineSubsystem");
+
+        // To include OnlineSubsystemSteam, add it to the plugins section in your uproject file with the Enabled attribute set to true
+    }
 }

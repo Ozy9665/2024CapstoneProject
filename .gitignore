@@ -1,6 +1,9 @@
 /Document/sjm/study/
 /Cult/.vs/
 /Cult/Windows/
+test/Windows/
+/Windows/
+*.obj
 # Unreal 관련
 *.suo
 *.sln
@@ -26,3 +29,4 @@ Cult/.vs/Cult/v17/DocumentLayout.json
 /CultServer/.vs
 /CultServer/CultServer/x64
 /Cult/Content/TemplesKor
+Cult/Content/Cult_Custom/NewMap/SM_0421Level3Merged.uasset

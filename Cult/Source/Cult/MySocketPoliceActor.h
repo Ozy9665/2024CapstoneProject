@@ -43,27 +43,34 @@ public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
-	void SetClientSocket(SOCKET InSocket, int32 RoomNumber);
-	void LogAndCleanupSocketError(const TCHAR* ErrorMessage);
+	void SetClientSocket(SOCKET, int32);
+	void LogAndCleanupSocketError(const TCHAR*);
 	void ReceiveData();
-	void ProcessPlayerData(const char* Buffer);
-	void ProcessHitData(const char* Buffer);
-	void ProcessSkillData(const char* Buffer);
-	void ProcessConnection(const char* Buffer);
-	void ProcessDisconnection(const char* Buffer);
+	void ProcessPlayerData(const char*);
+	void ProcessHitData(const char*);
+	void ProcessTreeData(const char*);
+	void ProcessCrowSpawnData(const char*);
+	void ProcessCrowData(const char*);
+	void ProcessCrowDisable(const char* Buffer);
+	void ProcessConnection(const char*);
+	void ProcessDisconnection(const char*);
 	void SendPlayerData();
-	void SendHitData(FHitPacket hitPacket);
+	void SendDogData();
+	void SendHitData(HitPacket);
 	FPoliceCharacterState GetCharacterState();
-	void SpawnCultistCharacter(const unsigned char PlayerID);
+	Dog GetDog();
+	void SpawnCultistCharacter(const unsigned char);
 	void ProcessCharacterUpdates();
-	void UpdateCultistState(ACharacter* Character, const FCultistCharacterState& State);
-	void UpdateCultistAnimInstanceProperties(UAnimInstance* AnimInstance, const FCultistCharacterState& State);
+	void UpdateCultistState(ACharacter*, const FCultistCharacterState&);
+	void UpdateCultistAnimInstanceProperties(UAnimInstance*, const FCultistCharacterState&);
 	void CheckImpactEffect();
-	void SpawnImpactEffect(FHitResult HitResult);
-	void SendParticleData(FHitResult HitResult);
+	void SpawnImpactEffect(FHitResult);
+	void SendParticleData(FHitResult);
 	void HideCharacter(int, bool);
+	UFUNCTION(BlueprintCallable)
+	void SendQuit();
 	void SendDisconnection();
 	void CloseConnection();
-	void SafeDestroyCharacter(int PlayerID);
+	void SafeDestroyCharacter(int);
 	const TMap<int, ACharacter*>& GetSpawnedCharacters() const;
 };

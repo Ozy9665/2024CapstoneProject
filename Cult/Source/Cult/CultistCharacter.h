@@ -12,6 +12,7 @@
 #include "Altar.h"
 #include "CultistSkillCheckWidget.h"
 #include "RitualPerformer.h"
+#include "ProceduralBranchActor.h"
 #include "CultistCharacter.generated.h"
 
 class AMySocketCultistActor;
@@ -60,6 +61,7 @@ public:
 	void StartRitual() override;
 	void StopRitual() override;
 	void CancelRitual();
+	void NotifySkillCheckResult(bool bSuccess);
 
 	// 의식중 여부
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ritual")
@@ -215,7 +217,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Abilities")
 	TSubclassOf<class ATreeObstacleActor> TreeObstacleActorClass;
 
-	UPROPERTY(EditAnywhere, Category = "Abilities")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Abilities")
 	TSubclassOf<class AProceduralBranchActor> ProceduralBranchActorClass;
 
 	UPROPERTY()
@@ -266,6 +268,7 @@ public:
 	ACrowActor* CrowInstance = nullptr;
 	UPROPERTY(EditDefaultsOnly, Category="CrowSkill")
 	float CrowLifetime = 12.f;
+	bool crowIsAvailable{ false };
 
 	// Heal
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Interaction")
@@ -288,6 +291,9 @@ public:
 	TObjectPtr<ACharacter> HealPartner;
 	UFUNCTION(BlueprintCallable, Category = "Cult|Heal")
 	void SendTryHeal();
+
+	UFUNCTION(BlueprintCallable, Category = "CultHeal")
+	void SendEndHeal();
 	UPROPERTY(EditDefaultsOnly, Category = "Animation|Heal")
 	UAnimMontage* AS_BandageArmSitting1_Montage;
 
@@ -299,6 +305,8 @@ public:
 
 	int my_ID = -1;
 	int GetPlayerID() const;
+	UFUNCTION(BlueprintPure)
+	static AMySocketCultistActor* GetMySocketActor();
 	void SendDisableToServer();
 	ACameraActor* GetFollowCameraActor() const;
 };

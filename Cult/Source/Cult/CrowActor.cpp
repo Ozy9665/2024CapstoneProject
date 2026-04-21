@@ -9,6 +9,11 @@
 #include "Camera/CameraActor.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
+#include "MySocketCultistActor.h"
+#include "CultistCharacter.h"
+
+extern AMySocketCultistActor* MySocketCultistActor;
+
 // Sets default values
 ACrowActor::ACrowActor()
 {
@@ -395,6 +400,14 @@ ECrowState ACrowActor::GetState() const
 
 void ACrowActor::DestroyCrow()
 {
+	if (ACultistCharacter* Cultist = Cast<ACultistCharacter>(CrowOwner))
+	{
+		Cultist->crowIsAvailable = false;
+		Cultist->CrowInstance = nullptr;
+	}
+	if (MySocketCultistActor) {
+		MySocketCultistActor->SendCrowDisable();
+	}
 	Destroy();
 }
 

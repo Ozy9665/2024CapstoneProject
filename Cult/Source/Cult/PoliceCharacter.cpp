@@ -269,7 +269,7 @@ void APoliceCharacter::StartAttack()
 			ShootPistol();
 		}
 
-		//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
+		GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
 		break;
 	case EWeaponType::Taser:
 		if (bIsAiming)
@@ -280,7 +280,7 @@ void APoliceCharacter::StartAttack()
 			FireTaser();
 		}
 
-		//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
+		GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndAttack, 1.0f, false);
 		break;
 	}
 
@@ -293,6 +293,21 @@ void APoliceCharacter::FireTaser()
 	if (bIsShooting || !bIsAiming)return;
 	bIsShooting = true;
 
+	if (MySocketPoliceActor)
+	{
+		FVector CameraLocation;
+		FRotator CameraRotation;
+		GetActorEyesViewPoint(CameraLocation, CameraRotation);
+		HitPacket HitPacket;
+		HitPacket.header = hitHeader;
+		HitPacket.size = sizeof(HitPacket);
+		HitPacket.Weapon = EWeaponType::Taser;
+		HitPacket.TraceStart = AMySocketActor::ToNet(CameraLocation);
+		HitPacket.TraceDir = AMySocketActor::ToNet(CameraRotation.Vector());
+		MySocketPoliceActor->SendHitData(HitPacket);
+	}
+	//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndPistolShoot, 1.1f, false);
+	/*
 	FVector CameraLocation;
 	FRotator CameraRotation;
 	GetActorEyesViewPoint(CameraLocation, CameraRotation);
@@ -332,6 +347,7 @@ void APoliceCharacter::FireTaser()
 			}
 		}
 	}
+	*/
 }
 
 void APoliceCharacter::EndFireTaser()
@@ -348,16 +364,31 @@ void APoliceCharacter::ShootPistol()
 	if (bIsShooting || !bIsAiming)return;
 	bIsShooting = true;
 
+	if (MySocketPoliceActor)
+	{
+		FVector CameraLocation;
+		FRotator CameraRotation;
+		GetActorEyesViewPoint(CameraLocation, CameraRotation);
+		HitPacket HitPacket;
+		HitPacket.header = hitHeader;
+		HitPacket.size = sizeof(HitPacket);
+		HitPacket.Weapon = EWeaponType::Pistol;
+		HitPacket.TraceStart = AMySocketActor::ToNet(CameraLocation);
+		HitPacket.TraceDir = AMySocketActor::ToNet(CameraRotation.Vector());
+		MySocketPoliceActor->SendHitData(HitPacket);
+	}
+	//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndPistolShoot, 1.1f, false);
+	/*
 	// 방법1. Muzzle 기준
 	FVector Start = MuzzleLocation->GetComponentLocation();
 	FVector ForwardVector = MuzzleLocation->GetForwardVector();
 	FVector End = Start + (ForwardVector * 10000.0f);	// 사거리
 
 	// 방법2. 카메라기준
+	FVector TraceStart = CameraLocation;
 	FVector CameraLocation;
 	FRotator CameraRotation;
 	GetActorEyesViewPoint(CameraLocation, CameraRotation);
-	FVector TraceStart = CameraLocation;
 	FVector TraceEnd = TraceStart + (CameraRotation.Vector() * 10000.0f);	// 사거리
 
 	// 공통
@@ -398,8 +429,7 @@ void APoliceCharacter::ShootPistol()
 		}
 
 	}
-	//GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &APoliceCharacter::EndPistolShoot, 1.1f, false);
-
+	*/
 }
 
 void APoliceCharacter::EndPistolShoot()
@@ -413,11 +443,19 @@ void APoliceCharacter::EndPistolShoot()
 //					============근접공격============
 void APoliceCharacter::BatonAttack()
 {
-	if (!this)
+	if (MySocketPoliceActor)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("BatonAttack: this is NULL"));
-		return;
+		FVector Start = GetActorLocation();
+		FVector ForwardVector = GetActorForwardVector();
+		HitPacket HitPacket;
+		HitPacket.header = hitHeader;
+		HitPacket.size = sizeof(HitPacket);
+		HitPacket.Weapon = EWeaponType::Baton;
+		HitPacket.TraceStart = AMySocketActor::ToNet(Start);
+		HitPacket.TraceDir = AMySocketActor::ToNet(ForwardVector);
+		MySocketPoliceActor->SendHitData(HitPacket);
 	}
+	/*
 	UE_LOG(LogTemp, Warning, TEXT("BatonAttackStart"));
 	FVector Start = GetActorLocation();
 	FVector ForwardVector = GetActorForwardVector();
@@ -464,6 +502,7 @@ void APoliceCharacter::BatonAttack()
 			UE_LOG(LogTemp, Warning, TEXT("HitActor is not in SpawnedCharacters!"));
 		}
 	}
+	*/
 }
 
 void APoliceCharacter::OnAttackHit(AActor* HitActor)
@@ -788,4 +827,9 @@ void APoliceCharacter::TestCollapse()
 
 	//	DrawDebugSphere(GetWorld(), TestTargetBlock->GetComponentLocation(), 30.f, 12, FColor::Red, false, 2.0f);
 	}
+}
+
+AMySocketPoliceActor* APoliceCharacter::GetMySocketActor()
+{
+	return MySocketPoliceActor;
 }
