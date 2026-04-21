@@ -28,7 +28,7 @@ struct NodeCompare
 
 class MAP {
 public:
-    bool Load(const std::string&, const Vec3&, const Vec3& rot);
+    bool Load(const std::string&, const Vec3&, const Vec3&, const XYZ&);
 
     bool LineTrace(
         const Ray& worldRay,
@@ -36,6 +36,9 @@ public:
         float& hitDist,
         int& hitTriIndex
     ) const;
+
+    void DebugPrintSummary() const;
+    void DebugPrintGridSample() const;
 
 protected:
     struct CellKey {
@@ -66,6 +69,7 @@ protected:
     float invCell{ 1.0f / cellSize };
     Vec3 offset;
     Vec3 rotation;
+    XYZ xyz;
 
     bool LoadOBJ(const std::string&,
         std::vector<MapVertex>&,

@@ -23,48 +23,48 @@ struct RunawayCandidate
 };
 
 // Condition
-class CanRunawayNode : public BTNode {
+class CultistCanRunawayNode : public BTNode {
 public:
     bool Run(AIController& ai, float dt) override;
 };
 
-class CanChaseNode : public BTNode {
+class CultistCanChaseNode : public BTNode {
 public:
     bool Run(AIController& ai, float dt) override;
 };
 
-class CanHealNode : public BTNode {
+class CultistCanHealNode : public BTNode {
 public:
     bool Run(AIController& ai, float dt) override;
 };
 
-class CanRitualNode : public BTNode {
+class CultistCanRitualNode : public BTNode {
 public:
     bool Run(AIController& ai, float dt) override;
 };
 
 // Action
-class RunawayNode : public BTNode {
+class CultistRunawayNode : public BTNode {
 public:
     bool Run(AIController& ai, float dt) override;
 };
 
-class ChaseNode : public BTNode {
+class CultistChaseNode : public BTNode {
 public:
     bool Run(AIController& ai, float dt) override;
 };
 
-class HealNode : public BTNode {
+class CultistHealNode : public BTNode {
 public:
     bool Run(AIController& ai, float dt) override;
 };
 
-class RitualNode : public BTNode {
+class CultistRitualNode : public BTNode {
 public:
     bool Run(AIController& ai, float dt) override;
 };
 
-class PatrolNode : public BTNode {
+class CultistPatrolNode : public BTNode {
 public:
     bool Run(AIController& ai, float dt) override;
 };

@@ -118,7 +118,12 @@ void baton_sweep(int c_id, HitPacket* p)
 					static_cast<float>(start.y),
 					static_cast<float>(start.z)
 				};
-				ApplyBatonHitToAI(*target, attackerPos);
+
+				auto* ai = dynamic_cast<CultistAIController*>(target->ai.get());
+				if (ai)
+				{
+					ai->ApplyBatonHit(attackerPos);
+				}
 			}
 
 			HitResultPacket result{

@@ -75,6 +75,7 @@ constexpr char quitHeader = 29;
 
 // map
 enum MAPTYPE { LANDMASS, LEVEL3 };
+enum XYZ { XY_Z, XZ_Y };
 
 enum DB_EVENT { EV_LOGIN, EV_EXIST, EV_SIGNUP };
 struct DBTask {

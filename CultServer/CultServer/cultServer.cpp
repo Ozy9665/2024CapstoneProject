@@ -1711,32 +1711,32 @@ void mainLoop(HANDLE h_iocp) {
 int main()
 {
 	// map
-	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset, NewmapLandmassLotate)) {
+	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset, NewmapLandmassLotate, XYZ::XZ_Y)) {
 		std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ load fail" << std::endl;
 	}
 	else{
 		std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ loaded" << std::endl;
 	}
-	//if (!Level3Map.Load("SM_Level3_MERGED_StaticMeshActor_281.OBJ", Level3MapOffset, Level3MapLotate)) {
-	//	std::cout << "SM_Level3_MERGED_StaticMeshActor_281.OBJ load fail" << std::endl;
-	//}
-	//else {
-	//	std::cout << "SM_Level3_MERGED_StaticMeshActor_281.OBJ loaded" << std::endl;
-	//}
+	if (!Level3Map.Load("SM_0421Level3Merged.OBJ", Level3MapOffset, Level3MapLotate, XYZ::XY_Z)) {
+		std::cout << "SM_0421Level3Merged.OBJ load fail" << std::endl;
+	}
+	else {
+		std::cout << "SM_0421Level3Merged.OBJ loaded" << std::endl;
+	}
 
 	// navmesh
-	if (!NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset, NewmapLandmassNavScale)) {
-		std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj load fail" << std::endl;
-	}
-	else {
-		std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
-	}
-	if (!Level3NavMesh.Load("Level_3-NavMesh-M-2026.04.19-13.23.45.obj", Level3MapOffset, Level3NavScale)) {
-		std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj load fail" << std::endl;
-	}
-	else {
-		std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj loaded" << std::endl;
-	}
+	//if (!NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset, NewmapLandmassNavScale)) {
+	//	std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj load fail" << std::endl;
+	//}
+	//else {
+	//	std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
+	//}
+	//if (!Level3NavMesh.Load("Level_3-NavMesh-M-2026.04.19-13.23.45.obj", Level3MapOffset, Level3NavScale)) {
+	//	std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj load fail" << std::endl;
+	//}
+	//else {
+	//	std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj loaded" << std::endl;
+	//}
 
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));

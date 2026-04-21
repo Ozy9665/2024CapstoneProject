@@ -539,28 +539,28 @@ CultistAIController::CultistAIController(SESSION* o)
     // Runaway
     {
         auto seq = std::make_unique<Sequence>();
-        seq->children.push_back(std::make_unique<CanRunawayNode>());
-        seq->children.push_back(std::make_unique<RunawayNode>());
+        seq->children.push_back(std::make_unique<CultistCanRunawayNode>());
+        seq->children.push_back(std::make_unique<CultistRunawayNode>());
         rootSelector->children.push_back(std::move(seq));
     }
 
     // Chase + Heal
     {
         auto seq = std::make_unique<Sequence>();
-        seq->children.push_back(std::make_unique<CanChaseNode>());
+        seq->children.push_back(std::make_unique<CultistCanChaseNode>());
 
         auto chaseSelector = std::make_unique<Selector>();
 
         // Heal
         {
             auto healSeq = std::make_unique<Sequence>();
-            healSeq->children.push_back(std::make_unique<CanHealNode>());
-            healSeq->children.push_back(std::make_unique<HealNode>());
+            healSeq->children.push_back(std::make_unique<CultistCanHealNode>());
+            healSeq->children.push_back(std::make_unique<CultistHealNode>());
             chaseSelector->children.push_back(std::move(healSeq));
         }
 
         // ±âº» Chase
-        chaseSelector->children.push_back(std::make_unique<ChaseNode>());
+        chaseSelector->children.push_back(std::make_unique<CultistChaseNode>());
 
         seq->children.push_back(std::move(chaseSelector));
         rootSelector->children.push_back(std::move(seq));
@@ -569,64 +569,64 @@ CultistAIController::CultistAIController(SESSION* o)
     // Ritual
     {
         auto seq = std::make_unique<Sequence>();
-        seq->children.push_back(std::make_unique<CanRitualNode>());
-        seq->children.push_back(std::make_unique<RitualNode>());
+        seq->children.push_back(std::make_unique<CultistCanRitualNode>());
+        seq->children.push_back(std::make_unique<CultistRitualNode>());
         rootSelector->children.push_back(std::move(seq));
     }
 
     // Patrol
-    rootSelector->children.push_back(std::make_unique<PatrolNode>());
+    rootSelector->children.push_back(std::make_unique<CultistPatrolNode>());
 
     root = std::move(rootSelector);
 }
 
 // Condition Node
-bool CanRunawayNode::Run(AIController& ai, float)
+bool CultistCanRunawayNode::Run(AIController& ai, float)
 {
     return static_cast<CultistAIController&>(ai).CanRunaway();
 }
 
-bool CanChaseNode::Run(AIController& ai, float)
+bool CultistCanChaseNode::Run(AIController& ai, float)
 {
     return static_cast<CultistAIController&>(ai).CanChase();
 }
 
-bool CanHealNode::Run(AIController& ai, float)
+bool CultistCanHealNode::Run(AIController& ai, float)
 {
     return static_cast<CultistAIController&>(ai).CanHeal();
 }
 
-bool CanRitualNode::Run(AIController& ai, float)
+bool CultistCanRitualNode::Run(AIController& ai, float)
 {
     return static_cast<CultistAIController&>(ai).CanRitual();
 }
 
 // Action Node
-bool RunawayNode::Run(AIController& ai, float dt)
+bool CultistRunawayNode::Run(AIController& ai, float dt)
 {
     static_cast<CultistAIController&>(ai).Runaway(dt);
     return true;
 }
 
-bool ChaseNode::Run(AIController& ai, float dt)
+bool CultistChaseNode::Run(AIController& ai, float dt)
 {
     static_cast<CultistAIController&>(ai).Chase(dt);
     return true;
 }
 
-bool HealNode::Run(AIController& ai, float dt)
+bool CultistHealNode::Run(AIController& ai, float dt)
 {
     static_cast<CultistAIController&>(ai).Heal(dt);
     return true;
 }
 
-bool RitualNode::Run(AIController& ai, float dt)
+bool CultistRitualNode::Run(AIController& ai, float dt)
 {
     static_cast<CultistAIController&>(ai).Ritual(dt);
     return true;
 }
 
-bool PatrolNode::Run(AIController& ai, float dt)
+bool CultistPatrolNode::Run(AIController& ai, float dt)
 {
     static_cast<CultistAIController&>(ai).Patrol(dt);
     return true;

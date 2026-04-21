@@ -6,10 +6,11 @@
 #include <queue>
 #include <random>
 
-bool MAP::Load(const std::string& objPath, const Vec3& MapOffset, const Vec3& rot)
+bool MAP::Load(const std::string& objPath, const Vec3& MapOffset, const Vec3& rot, const XYZ& xyzOffset)
 {
     offset = MapOffset;
     rotation = rot;
+    xyz = xyzOffset;
     vertices.clear();
     triangles.clear();
     tris.clear();
@@ -23,6 +24,8 @@ bool MAP::Load(const std::string& objPath, const Vec3& MapOffset, const Vec3& ro
     BuildTriangleAABBs();
     BuildSpatialGrid();
 
+    DebugPrintSummary();
+    DebugPrintGridSample();
     return true;
 }
 
@@ -52,11 +55,18 @@ bool MAP::LoadOBJ(const std::string& path,
             float ox, oy, oz;
             ss >> ox >> oy >> oz;
             MapVertex v{};
-            // OBJ: X,Z = 평면 / Y = 높이
-            // UE : X,Y = 평면 / Z = 높이
-            v.x = ox;
-            v.y = oz;
-            v.z = oy;
+            if (xyz == XYZ::XZ_Y)
+            {
+                v.x = ox;
+                v.y = oz;
+                v.z = oy;
+            }
+            else // XYZ::XY_Z
+            {
+                v.x = ox;
+                v.y = oy;
+                v.z = oz;
+            }
             outVertices.push_back(v);
         }
         else if (type == "f")
@@ -453,6 +463,56 @@ Vec3 MAP::GridToWorld(int gx, int gy) const
     w.y = worldAABB.minY + (gy + 0.5f) * cellSize;
     w.z = offset.z; // 고정 높이
     return w;
+}
+
+void MAP::DebugPrintSummary() const
+{
+    std::cout << "==== MAP DEBUG ====\n";
+
+    std::cout << "Vertices: " << vertices.size() << "\n";
+    std::cout << "Triangles: " << triangles.size() << "\n";
+    std::cout << "MapTris: " << tris.size() << "\n";
+
+    std::cout << "[AABB]\n";
+    std::cout << "X: " << worldAABB.minX << " ~ " << worldAABB.maxX << "\n";
+    std::cout << "Y: " << worldAABB.minY << " ~ " << worldAABB.maxY << "\n";
+    std::cout << "Z: " << worldAABB.minZ << " ~ " << worldAABB.maxZ << "\n";
+
+    std::cout << "[Offset]\n";
+    std::cout << offset.x << ", " << offset.y << ", " << offset.z << "\n";
+
+    std::cout << "[Rotation]\n";
+    std::cout << rotation.x << ", " << rotation.y << ", " << rotation.z << "\n";
+
+    // tri 샘플
+    std::cout << "[Triangle sample]\n";
+    for (int i = 0; i < std::min(5, (int)tris.size()); ++i)
+    {
+        const auto& t = tris[i];
+        std::cout << i << ": ("
+            << t.a.x << "," << t.a.y << "," << t.a.z << ") | ("
+            << t.b.x << "," << t.b.y << "," << t.b.z << ") | ("
+            << t.c.x << "," << t.c.y << "," << t.c.z << ")\n";
+    }
+
+    std::cout << "Grid cells: " << grid.size() << "\n";
+
+    std::cout << "====================\n";
+}
+
+void MAP::DebugPrintGridSample() const
+{
+    std::cout << "[GRID SAMPLE]\n";
+
+    int count = 0;
+    for (const auto& [key, triList] : grid)
+    {
+        std::cout << "Cell (" << key.x << ", " << key.z << ") -> triCount="
+            << triList.size() << "\n";
+
+        if (++count >= 10)
+            break;
+    }
 }
 
 // NevMesh
