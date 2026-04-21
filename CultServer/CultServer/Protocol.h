@@ -443,16 +443,17 @@ struct CultistBlackboard
 	int snapStreak{};
 
 	int target_id = -1;
+	float last_dist_to_target = FLT_MAX;
 
 	Vec3 patrol_target{};
 	bool has_patrol_target = false;
 
-	int ritual_id{};
-	float last_dist_to_target = FLT_MAX;
+	int ritual_id = -1;
 
 	int stuck_ticks{};
 
-	Vec3 runaway_target{};
+	int runaway_id = -1;
+	Vec3 runaway_pos{};
 	bool has_runaway_target{};
 	int runaway_ticks{};
 };
@@ -500,6 +501,7 @@ struct DogBlackboard
 
 class SESSION;
 
+// ai controller
 class AIController {
 public:
 	SESSION* owner;
@@ -510,6 +512,24 @@ public:
 };
 class CultistAIController;
 class PoliceAIController;
+
+class BTNode {
+public:
+	virtual bool Run(AIController& ai, float dt) = 0;
+	virtual ~BTNode() = default;
+};
+
+class Selector : public BTNode {
+public:
+	std::vector<std::unique_ptr<BTNode>> children;
+	bool Run(AIController& ai, float dt) override;
+};
+
+class Sequence : public BTNode {
+public:
+	std::vector<std::unique_ptr<BTNode>> children;
+	bool Run(AIController& ai, float dt) override;
+};
 
 #pragma pack(pop)
 
@@ -673,9 +693,11 @@ constexpr float CHASE_START_RANGE{ 1500.f };
 constexpr float CHASE_STOP_RANGE{ 150.f };
 constexpr float ARRIVE_RANGE{ 100.f };
 constexpr float STUCK_RANGE{ 5.f };
+constexpr int MAX_STUCK_TICK{ 60 };
 constexpr float FOLLOW_MAX_DIST{ 800.f };
 constexpr float DOG_MAX_DIST{ 3000.f };
 constexpr float DOG_SPEED{ 500.f };
 constexpr float POLICE_SPEED{ 350.f };
 constexpr float CULTIST_SPEED{ 300.f };
 constexpr float ATTACK_COOL_DOWN{ 3.f };
+constexpr float HEAL_DIST{ 30.f };

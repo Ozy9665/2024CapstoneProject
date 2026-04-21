@@ -184,3 +184,24 @@ void SESSION::resetForReuse()
 		dog = {};
 	}
 }
+
+bool Selector::Run(AIController& ai, float dt)
+{
+	for (auto& c : children)
+	{
+		if (c->Run(ai, dt))
+			return true;
+	}
+	return false;
+}
+
+
+bool Sequence::Run(AIController& ai, float dt)
+{
+	for (auto& c : children)
+	{
+		if (!c->Run(ai, dt))
+			return false;
+	}
+	return true;
+}

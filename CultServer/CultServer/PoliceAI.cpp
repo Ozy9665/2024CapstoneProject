@@ -95,6 +95,7 @@ void KillPoliceAi(int ai_id)
     std::cout << "[Command] AI removed. ID=" << ai_id << "\n";
 }
 
+// Movements
 static void StopMovement(SESSION& session)
 {
     session.police_state.VelocityX = 0.f;
@@ -131,67 +132,6 @@ static void MoveToNearestTriangle(SESSION& session, const Vec3& cur)
     }
 }
 
-void PoliceAIWorkerLoop()
-{
-    using clock = std::chrono::steady_clock;
-    auto nextTick = clock::now();
-
-    while (true)
-    {
-        auto now = clock::now();
-
-        std::chrono::duration<float> delta = now - nextTick + std::chrono::duration<float>(fixed_dt);
-        float dt = delta.count();
-
-        if (dt < 0.f) dt = 0.f;
-        if (dt > 0.05f) dt = 0.05f;
-
-        for (int ai_id : g_police_ai_ids)
-        {
-            auto it = g_users.find(ai_id);
-            if (it == g_users.end())
-                continue;
-
-            auto session = it->second;
-            if (session->role != 101)
-                continue;
-
-            auto aiPtr = session->ai;
-            if (!aiPtr)
-                continue;
-
-            auto* policeAI = dynamic_cast<PoliceAIController*>(aiPtr.get());
-            if (!policeAI)
-                continue;
-
-            if (policeAI->bb.ai_state == AIState::Free)
-                continue;
-
-            auto& st = session->police_state;
-
-            session->ai->Update(dt);
-
-            PolicePacket packet{};
-            packet.header = policeHeader;
-            packet.size = sizeof(PolicePacket);
-            packet.state = session->police_state;
-            broadcast_in_room(*session, &packet, VIEW_RANGE);
-
-            DogPacket d{};
-            d.header = dogHeader;
-            d.size = sizeof(DogPacket);
-            d.dog = session->dog;
-            broadcast_in_room(*session, &d, VIEW_RANGE);
-        }
-
-        nextTick += std::chrono::duration_cast<clock::duration>(
-            std::chrono::duration<float>(fixed_dt));
-
-        std::this_thread::sleep_until(nextTick);
-    }
-}
-
-// Movements
 static float Dist(const Vec3& a, const Vec3& b)
 {
     float dx = a.x - b.x;
@@ -464,6 +404,115 @@ static bool IsCultistTargetAttackable(const SESSION& target)
     return true;
 }
 
+static int FindNearbyCultist(int room_id, int self_id)
+{
+    if (room_id < 0 || room_id >= MAX_ROOM)
+        return -1;
+
+    auto selfIt = g_users.find(self_id);
+    if (selfIt == g_users.end())
+        return -1;
+
+    auto self = selfIt->second;
+
+    Vec3 selfPos{
+    self->police_state.PositionX,
+    self->police_state.PositionY,
+    self->police_state.PositionZ
+    };
+
+    const auto& room = g_rooms[room_id].first;
+
+    int best_id = -1;
+    float best_dist_sq = VIEW_RANGE_SQ;
+
+    for (int pid : room.player_ids)
+    {
+        if (pid == -1 || pid == self_id)
+            continue;
+
+        auto it = g_users.find(pid);
+        if (it == g_users.end() || !it->second)
+            continue;
+
+        auto target = it->second;
+        if (!IsCultistTargetAttackable(*target))
+            continue;
+
+        float dx = target->cultist_state.PositionX - selfPos.x;
+        float dy = target->cultist_state.PositionY - selfPos.y;
+        float dist_sq = dx * dx + dy * dy;
+
+        if (dist_sq < best_dist_sq)
+        {
+            best_dist_sq = dist_sq;
+            best_id = pid;
+        }
+    }
+
+    return best_id;
+}
+
+void PoliceAIWorkerLoop()
+{
+    using clock = std::chrono::steady_clock;
+    auto nextTick = clock::now();
+
+    while (true)
+    {
+        auto now = clock::now();
+
+        std::chrono::duration<float> delta = now - nextTick + std::chrono::duration<float>(fixed_dt);
+        float dt = delta.count();
+
+        if (dt < 0.f) dt = 0.f;
+        if (dt > 0.05f) dt = 0.05f;
+
+        for (int ai_id : g_police_ai_ids)
+        {
+            auto it = g_users.find(ai_id);
+            if (it == g_users.end())
+                continue;
+
+            auto session = it->second;
+            if (session->role != 101)
+                continue;
+
+            auto aiPtr = session->ai;
+            if (!aiPtr)
+                continue;
+
+            auto* policeAI = dynamic_cast<PoliceAIController*>(aiPtr.get());
+            if (!policeAI)
+                continue;
+
+            if (policeAI->bb.ai_state == AIState::Free)
+                continue;
+
+            auto& st = session->police_state;
+
+            session->ai->Update(dt);
+
+            PolicePacket packet{};
+            packet.header = policeHeader;
+            packet.size = sizeof(PolicePacket);
+            packet.state = session->police_state;
+            broadcast_in_room(*session, &packet, VIEW_RANGE);
+
+            DogPacket d{};
+            d.header = dogHeader;
+            d.size = sizeof(DogPacket);
+            d.dog = session->dog;
+            broadcast_in_room(*session, &d, VIEW_RANGE);
+        }
+
+        nextTick += std::chrono::duration_cast<clock::duration>(
+            std::chrono::duration<float>(fixed_dt));
+
+        std::this_thread::sleep_until(nextTick);
+    }
+}
+
 // PoliceAIController
 PoliceAIController::PoliceAIController(SESSION* o)
     : AIController(o)
@@ -516,26 +565,6 @@ PoliceAIController::PoliceAIController(SESSION* o)
     // Patrol (fallback)
     rootSelector->children.push_back(std::make_unique<PatrolNode>());
     root = std::move(rootSelector);
-}
-
-bool Selector::Run(AIController& ai, float dt)
-{
-    for (auto& c : children)
-    {
-        if (c->Run(ai, dt))
-            return true;
-    }
-    return false;
-}
-
-bool Sequence::Run(AIController& ai, float dt)
-{
-    for (auto& c : children)
-    {
-        if (!c->Run(ai, dt))
-            return false;
-    }
-    return true;
 }
 
 // Condition Node
@@ -865,55 +894,6 @@ void PoliceAIController::PistolShoot(float dt)
     BeginBehaviorLock(ATTACK_COOL_DOWN);
 }
 
-static int FindNearbyCultist(int room_id, int self_id)
-{
-    if (room_id < 0 || room_id >= MAX_ROOM)
-        return -1;
-
-    auto selfIt = g_users.find(self_id);
-    if (selfIt == g_users.end())
-        return -1;
-
-    auto self = selfIt->second;
-
-    Vec3 selfPos{
-    self->police_state.PositionX,
-    self->police_state.PositionY,
-    self->police_state.PositionZ
-    };
-
-    const auto& room = g_rooms[room_id].first;
-
-    int best_id = -1;
-    float best_dist_sq = VIEW_RANGE_SQ;
-
-    for (int pid : room.player_ids)
-    {
-        if (pid == -1 || pid == self_id)
-            continue;
-
-        auto it = g_users.find(pid);
-        if (it == g_users.end() || !it->second)
-            continue;
-
-        auto target = it->second;
-        if (!IsCultistTargetAttackable(*target))
-            continue;
-
-        float dx = target->cultist_state.PositionX - selfPos.x;
-        float dy = target->cultist_state.PositionY - selfPos.y;
-        float dist_sq = dx * dx + dy * dy;
-
-        if (dist_sq < best_dist_sq)
-        {
-            best_dist_sq = dist_sq;
-            best_id = pid;
-        }
-    }
-
-    return best_id;
-}
-
 // BT
 void PoliceAIController::UpdateBlackboard(float dt)
 {
@@ -1040,7 +1020,7 @@ void PoliceAIController::UpdateBlackboard(float dt)
     bb.lastSnapPos = cur;
 
     // stuck 발생 시 처리
-    if (bb.stuck_ticks > 30)
+    if (bb.stuck_ticks > MAX_STUCK_TICK)
     {
         std::cout << "[FIX] stuck -> reset path\n";
 

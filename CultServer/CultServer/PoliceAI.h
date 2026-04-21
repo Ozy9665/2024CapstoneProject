@@ -9,25 +9,6 @@ void KillPoliceAi(int ai_id);
 
 void PoliceAIWorkerLoop();
 
-// ai controller
-class BTNode {
-public:
-    virtual bool Run(AIController& ai, float dt) = 0;
-    virtual ~BTNode() = default;
-};
-
-class Selector : public BTNode {
-public:
-    std::vector<std::unique_ptr<BTNode>> children;
-    bool Run(AIController& ai, float dt) override;
-};
-
-class Sequence : public BTNode {
-public:
-    std::vector<std::unique_ptr<BTNode>> children;
-    bool Run(AIController& ai, float dt) override;
-};
-
 // Dog AI
 // Condition
 
