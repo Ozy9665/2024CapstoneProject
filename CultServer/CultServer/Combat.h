@@ -6,4 +6,4 @@ bool line_sphere_intersect(const FVector&, const FVector&, const FVector&, doubl
 
 void baton_sweep(int, HitPacket*);
 
-void line_trace(int, HitPacket*);
+void shoot_attack(int, HitPacket*);

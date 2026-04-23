@@ -56,6 +56,15 @@ void baton_sweep(int c_id, HitPacket* p)
 	FVector start{ p->TraceStart.x, p->TraceStart.y, p->TraceStart.z };
 	FVector forward{ p->TraceDir.x, p->TraceDir.y, p->TraceDir.z };
 
+	float len = std::sqrt(forward.x * forward.x + forward.y * forward.y + forward.z * forward.z);
+	if (len > 1e-6f)
+	{
+		forward.x /= len;
+		forward.y /= len;
+		forward.z /= len;
+	}
+
+
 	Ray ray{
 		static_cast<float>(start.x),
 		static_cast<float>(start.y),
@@ -140,7 +149,7 @@ void baton_sweep(int c_id, HitPacket* p)
 	}
 }
 
-void line_trace(int c_id, HitPacket* p)
+void shoot_attack(int c_id, HitPacket* p)
 {
 	auto it = g_users.find(c_id);
 	if (it == g_users.end())
@@ -154,13 +163,24 @@ void line_trace(int c_id, HitPacket* p)
 	FVector start{ p->TraceStart.x, p->TraceStart.y, p->TraceStart.z };
 	FVector dir{ p->TraceDir.x,   p->TraceDir.y,   p->TraceDir.z };
 
+	Vec3 d{
+		(float)dir.x,
+		(float)dir.y,
+		(float)dir.z
+	};
+
+	float len = sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+	if (len > 0.0001f) {
+		d.x /= len;
+		d.y /= len;
+		d.z /= len;
+	}
+
 	Ray ray{
-		static_cast<float>(start.x),
-		static_cast<float>(start.y),
-		static_cast<float>(start.z),
-		static_cast<float>(dir.x),
-		static_cast<float>(dir.y),
-		static_cast<float>(dir.z)
+		(float)start.x,
+		(float)start.y,
+		(float)start.z,
+		d.x, d.y, d.z
 	};
 
 	double range = (p->Weapon == EWeaponType::Taser) ? TASER_RANGE : PISTOL_RANGE;
@@ -180,7 +200,7 @@ void line_trace(int c_id, HitPacket* p)
 		std::cout << "[MAP MISS]\n";
 	}
 
-	FVector end = start + dir * range;
+	FVector end = start + FVector{ d.x, d.y, d.z } *range;
 
 	for (int otherId : g_rooms[room].first.player_ids)
 	{

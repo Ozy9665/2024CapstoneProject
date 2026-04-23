@@ -1070,7 +1070,7 @@ void process_packet(int c_id, char* packet) {
 		case EWeaponType::Taser:
 		case EWeaponType::Pistol:
 		{
-			line_trace(c_id, p);
+			shoot_attack(c_id, p);
 			break;
 		}
 		default:
@@ -1711,12 +1711,13 @@ void mainLoop(HANDLE h_iocp) {
 int main()
 {
 	// map
-	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset, NewmapLandmassLotate, XYZ::XZ_Y)) {
-		std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ load fail" << std::endl;
-	}
-	else{
-		std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ loaded" << std::endl;
-	}
+	//if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset, NewmapLandmassLotate, XYZ::XZ_Y)) {
+	//	std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ load fail" << std::endl;
+	//}
+	//else{
+	//	std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ loaded" << std::endl;
+	//}
+
 	if (!Level3Map.Load("SM_0421Level3Merged.OBJ", Level3MapOffset, Level3MapLotate, XYZ::XY_Z)) {
 		std::cout << "SM_0421Level3Merged.OBJ load fail" << std::endl;
 	}
@@ -1731,6 +1732,7 @@ int main()
 	//else {
 	//	std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
 	//}
+
 	//if (!Level3NavMesh.Load("Level_3-NavMesh-M-2026.04.19-13.23.45.obj", Level3MapOffset, Level3NavScale)) {
 	//	std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj load fail" << std::endl;
 	//}

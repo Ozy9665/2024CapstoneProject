@@ -152,17 +152,17 @@ void MAP::BuildTriangleAABBs()
 {
     triAABBs.clear();
     triAABBs.reserve(tris.size());
-
+    const float EXPAND = 1.0f;
     for (const auto& t : tris)
     {
         AABB aabb;
-        aabb.minX = std::min({ t.a.x, t.b.x, t.c.x });
-        aabb.minY = std::min({ t.a.y, t.b.y, t.c.y });
-        aabb.minZ = std::min({ t.a.z, t.b.z, t.c.z });
+        aabb.minX = std::min({ t.a.x, t.b.x, t.c.x }) - EXPAND;
+        aabb.minY = std::min({ t.a.y, t.b.y, t.c.y }) - EXPAND;
+        aabb.minZ = std::min({ t.a.z, t.b.z, t.c.z }) - EXPAND;
 
-        aabb.maxX = std::max({ t.a.x, t.b.x, t.c.x });
-        aabb.maxY = std::max({ t.a.y, t.b.y, t.c.y });
-        aabb.maxZ = std::max({ t.a.z, t.b.z, t.c.z });
+        aabb.maxX = std::max({ t.a.x, t.b.x, t.c.x }) + EXPAND;
+        aabb.maxY = std::max({ t.a.y, t.b.y, t.c.y }) + EXPAND;
+        aabb.maxZ = std::max({ t.a.z, t.b.z, t.c.z }) + EXPAND;
 
         triAABBs.push_back(aabb);
     }
@@ -174,22 +174,22 @@ void MAP::BuildSpatialGrid()
     grid.reserve(triAABBs.size());
 
     const float baseX = worldAABB.minX;
-    const float baseZ = worldAABB.minZ;
+    const float baseY = worldAABB.minY;
 
     for (int i = 0; i < (int)triAABBs.size(); ++i)
     {
         const AABB& a = triAABBs[i];
 
-        const int minX = static_cast<int>(std::floor((a.minX - baseX) * invCell));
-        const int maxX = static_cast<int>(std::floor((a.maxX - baseX) * invCell));
-        const int minZ = static_cast<int>(std::floor((a.minZ - baseZ) * invCell));
-        const int maxZ = static_cast<int>(std::floor((a.maxZ - baseZ) * invCell));
+        const int minX = (int)std::floor((a.minX - baseX) * invCell);
+        const int maxX = (int)std::floor((a.maxX - baseX) * invCell);
+        const int minY = (int)std::floor((a.minY - baseY) * invCell);
+        const int maxY = (int)std::floor((a.maxY - baseY) * invCell);
 
         for (int x = minX; x <= maxX; ++x)
         {
-            for (int z = minZ; z <= maxZ; ++z)
+            for (int y = minY; y <= maxY; ++y)
             {
-                auto [it, inserted] = grid.try_emplace(CellKey{ x, z });
+                auto [it, inserted] = grid.try_emplace(CellKey{ x, y });
                 it->second.push_back(i);
             }
         }
@@ -262,27 +262,36 @@ static bool RayTri(const Ray& r, const MapTri& t, float maxDist, float& outT)
     float pz = r.dir.x * e2y - r.dir.y * e2x;
 
     float det = e1x * px + e1y * py + e1z * pz;
-    std::cout << "[DET] " << det << "\n";
-    if (std::abs(det) < EPS) return false;
 
-    float inv = 1.0f / det;
-    float tx = r.start.x - ax, ty = r.start.y - ay, tz = r.start.z - az;
+    if (std::fabs(det) < EPS)
+        return false;
 
-    float u = (tx * px + ty * py + tz * pz) * inv;
-    if (u < 0 || u > 1) return false;
+    float invDet = 1.0f / det;
+
+    float tx = r.start.x - ax;
+    float ty = r.start.y - ay;
+    float tz = r.start.z - az;
+
+    float u = (tx * px + ty * py + tz * pz) * invDet;
+    if (u < 0.0f || u > 1.0f)
+        return false;
 
     float qx = ty * e1z - tz * e1y;
     float qy = tz * e1x - tx * e1z;
     float qz = tx * e1y - ty * e1x;
 
-    float v = (r.dir.x * qx + r.dir.y * qy + r.dir.z * qz) * inv;
-    if (v < 0 || u + v > 1) return false;
+    float v = (r.dir.x * qx + r.dir.y * qy + r.dir.z * qz) * invDet;
+    if (v < 0.0f || u + v > 1.0f)
+        return false;
 
-    float tHit = (e2x * qx + e2y * qy + e2z * qz) * inv;
-    if (tHit > EPS && tHit <= maxDist) {
+    float tHit = (e2x * qx + e2y * qy + e2z * qz) * invDet;
+
+    if (tHit > EPS && tHit < maxDist)
+    {
         outT = tHit;
         return true;
     }
+
     return false;
 }
 
@@ -293,62 +302,30 @@ bool MAP::LineTrace(const Ray& worldRay, float maxDist, float& hitDist, int& hit
     hitTriIndex = -1;
 
     const float baseX = worldAABB.minX;
-    const float baseZ = worldAABB.minZ;
+    const float baseY = worldAABB.minY;
 
     auto toCellX = [&](float x)
         {
             return (int)std::floor((x - baseX) * invCell);
         };
 
-    auto toCellZ = [&](float z)
+    auto toCellY = [&](float y)
         {
-            return (int)std::floor((z - baseZ) * invCell);
+            return (int)std::floor((y - baseY) * invCell);
         };
 
-    int cx = toCellX(ray.start.x);
-    int cz = toCellZ(ray.start.z);
-
-    const float endX = ray.start.x + ray.dir.x * maxDist;
-    const float endZ = ray.start.z + ray.dir.z * maxDist;
-
-    const int endCellX = toCellX(endX);
-    const int endCellZ = toCellZ(endZ);
-
-    const int stepX = (ray.dir.x > 0.f) ? 1 : (ray.dir.x < 0.f ? -1 : 0);
-    const int stepZ = (ray.dir.z > 0.f) ? 1 : (ray.dir.z < 0.f ? -1 : 0);
-
-    auto boundaryX = [&](int x)
+    auto TestCell = [&](int gx, int gy)
         {
-            return baseX + (x + (stepX > 0 ? 1 : 0)) * cellSize;
-        };
+            auto it = grid.find({ gx, gy });
+            if (it == grid.end())
+                return;
 
-    auto boundaryZ = [&](int z)
-        {
-            return baseZ + (z + (stepZ > 0 ? 1 : 0)) * cellSize;
-        };
-
-    float tMaxX = (stepX == 0) ? FLT_MAX
-        : (boundaryX(cx) - ray.start.x) / ray.dir.x;
-
-    float tMaxZ = (stepZ == 0) ? FLT_MAX
-        : (boundaryZ(cz) - ray.start.z) / ray.dir.z;
-
-    const float tDeltaX = (stepX == 0) ? FLT_MAX
-        : (cellSize / std::abs(ray.dir.x));
-
-    const float tDeltaZ = (stepZ == 0) ? FLT_MAX
-        : (cellSize / std::abs(ray.dir.z));
-
-    while (true)
-    {
-        auto it = grid.find({ cx, cz });
-        if (it != grid.end())
-        {
-            std::cout << "[GRID HIT CELL] (" << cx << ", " << cz
+            std::cout << "[GRID HIT CELL] (" << gx << ", " << gy
                 << ") triCount=" << it->second.size() << "\n";
+
             for (int triIdx : it->second)
             {
-                if (!RayAABB(ray, triAABBs[triIdx], hitDist))
+                if (!RayAABB_XY(ray, triAABBs[triIdx], hitDist))
                     continue;
 
                 float tHit = 0.f;
@@ -361,29 +338,94 @@ bool MAP::LineTrace(const Ray& worldRay, float maxDist, float& hitDist, int& hit
                     hitTriIndex = triIdx;
                 }
             }
+        };
 
-            if (hitTriIndex >= 0 &&
-                std::min(tMaxX, tMaxZ) > hitDist)
-                break;
+    int cx = toCellX(ray.start.x);
+    int cy = toCellY(ray.start.y);
+
+    const float endX = ray.start.x + ray.dir.x * maxDist;
+    const float endY = ray.start.y + ray.dir.y * maxDist;
+
+    const int endCellX = toCellX(endX);
+    const int endCellY = toCellY(endY);
+
+    const int stepX = (ray.dir.x > 0.f) ? 1 : (ray.dir.x < 0.f ? -1 : 0);
+    const int stepY = (ray.dir.y > 0.f) ? 1 : (ray.dir.y < 0.f ? -1 : 0);
+
+    auto boundaryX = [&](int x)
+        {
+            return baseX + (x + (stepX > 0 ? 1 : 0)) * cellSize;
+        };
+
+    auto boundaryY = [&](int y)
+        {
+            return baseY + (y + (stepY > 0 ? 1 : 0)) * cellSize;
+        };
+
+    float tMaxX = (stepX == 0) ? FLT_MAX
+        : (boundaryX(cx) - ray.start.x) / ray.dir.x;
+
+    float tMaxY = (stepY == 0) ? FLT_MAX
+        : (boundaryY(cy) - ray.start.y) / ray.dir.y;
+
+    const float tDeltaX = (stepX == 0) ? FLT_MAX
+        : (cellSize / std::abs(ray.dir.x));
+
+    const float tDeltaY = (stepY == 0) ? FLT_MAX
+        : (cellSize / std::abs(ray.dir.y));
+
+    constexpr float TIE_EPS = 1e-5f;
+
+    while (true)
+    {
+        TestCell(cx, cy);
+
+        if (hitTriIndex >= 0 &&
+            std::min(tMaxX, tMaxY) > hitDist)
+        {
+            break;
         }
-        std::cout << "[CELL start] (" << cx << ", " << cz << ")\n";
 
-        if (cx == endCellX && cz == endCellZ)
+        std::cout << "[CELL start] (" << cx << ", " << cy << ")\n";
+
+        if (cx == endCellX && cy == endCellY)
             break;
 
-        if (tMaxX < tMaxZ)
+        const float diff = tMaxX - tMaxY;
+
+        if (std::abs(diff) <= TIE_EPS)
+        {
+            // 코너를 통과하는 경우: 둘 다 진행
+            if (stepX != 0)
+                TestCell(cx + stepX, cy);
+
+            if (stepY != 0)
+                TestCell(cx, cy + stepY);
+
+            if (hitTriIndex >= 0 &&
+                std::min(tMaxX, tMaxY) > hitDist)
+            {
+                break;
+            }
+
+            if (stepX != 0)
+                cx += stepX;
+            if (stepY != 0)
+                cy += stepY;
+
+            tMaxX += tDeltaX;
+            tMaxY += tDeltaY;
+        }
+        else if (diff < 0.f)
         {
             cx += stepX;
             tMaxX += tDeltaX;
         }
         else
         {
-            cz += stepZ;
-            tMaxZ += tDeltaZ;
+            cy += stepY;
+            tMaxY += tDeltaY;
         }
-
-        if (std::min(tMaxX, tMaxZ) > maxDist)
-            break;
     }
 
     return hitTriIndex >= 0;

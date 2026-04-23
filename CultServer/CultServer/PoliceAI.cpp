@@ -862,7 +862,7 @@ void PoliceAIController::TaserShoot(float dt)
         0.f
     };
 
-    line_trace(owner->id, &p);
+    shoot_attack(owner->id, &p);
     BeginBehaviorLock(ATTACK_COOL_DOWN);
 }
 
@@ -890,7 +890,7 @@ void PoliceAIController::PistolShoot(float dt)
         0.f
     };
 
-    line_trace(owner->id, &p);
+    shoot_attack(owner->id, &p);
     BeginBehaviorLock(ATTACK_COOL_DOWN);
 }
 
