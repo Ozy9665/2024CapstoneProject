@@ -325,7 +325,7 @@ static int FindNearbyPolice(int room_id, int self_id)
         if (target->room_id != room_id)
             continue;
 
-        if (target->role != 101 && !target->isValidSocket())
+        if (!((target->role == 1 && target->isValidSocket()) || target->role == 101))
             continue;
 
         float dx = target->police_state.PositionX - selfPos.x;

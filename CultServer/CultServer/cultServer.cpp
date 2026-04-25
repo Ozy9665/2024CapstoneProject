@@ -1733,12 +1733,12 @@ int main()
 	//	std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
 	//}
 
-	//if (!Level3NavMesh.Load("Level_3-NavMesh-M-2026.04.19-13.23.45.obj", Level3MapOffset, Level3NavScale)) {
-	//	std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj load fail" << std::endl;
-	//}
-	//else {
-	//	std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj loaded" << std::endl;
-	//}
+	if (!Level3NavMesh.Load("Level_3-NavMesh-M-2026.04.19-13.23.45.obj", Level3MapOffset, Level3NavScale)) {
+		std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj load fail" << std::endl;
+	}
+	else {
+		std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj loaded" << std::endl;
+	}
 
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));
