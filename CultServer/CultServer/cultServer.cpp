@@ -494,6 +494,8 @@ void HealTimerLoop() {
 			auto it_target = g_users.find(ev.target_id);
 			if (it_actor == g_users.end() || it_target == g_users.end())
 				continue;
+			if (!it_actor->second || !it_target->second)
+				continue;
 
 			auto actor = it_actor->second;
 			auto target = it_target->second;
@@ -687,6 +689,19 @@ void CommandWorker()
 				std::cout << "[Command] Usage: kill <ai_id>\n";
 				continue;
 			}
+			auto it = g_users.find(ai_id);
+			if (it == g_users.end())
+			{
+				std::cout << "[Command] No such user: " << ai_id << "\n";
+				continue;
+			}
+			auto user = it->second;
+			if (!user)
+			{
+				std::cout << "[Command] Null session: " << ai_id << "\n";
+				continue;
+			}
+
 			if (g_users[ai_id]->role == 100) {
 				KillCultistAi(ai_id);
 			}
@@ -877,6 +892,8 @@ std::optional<int> SphereTraceClosestCultist(int centerId, float radius) {
 			continue;
 
 		const auto target = it->second;
+		if (!target)
+			continue;
 
 		// 소켓/상태/역할 필터
 		if (!target->isValidSocket())   
@@ -911,6 +928,8 @@ void process_packet(int c_id, char* packet) {
 			break;
 
 		auto user = it->second;
+		if (!user)
+			break;
 		user->cultist_state = p->state;
 		broadcast_in_room(*user, p, VIEW_RANGE);
 		break;
@@ -928,6 +947,8 @@ void process_packet(int c_id, char* packet) {
 			break;
 
 		auto user = it->second;
+		if (!user)
+			break;
 		broadcast_in_room(*user, p, VIEW_RANGE);
 		break;
 	}
@@ -943,6 +964,8 @@ void process_packet(int c_id, char* packet) {
 			break;
 
 		auto user = it->second;
+		if (!user)
+			break;
 		user->crow = p->crow;
 		if (!user->crow.is_alive) {
 			break;
@@ -964,6 +987,8 @@ void process_packet(int c_id, char* packet) {
 			break;
 
 		auto user = it->second;
+		if (!user)
+			break;
 		user->crow = p->crow;
 		if (!user->crow.is_alive) {
 			break;
@@ -984,6 +1009,8 @@ void process_packet(int c_id, char* packet) {
 			break;
 
 		auto user = it->second; 
+		if (!user)
+			break;
 		user->crow.is_alive = false;
 
 		broadcast_in_room(*user, p, VIEW_RANGE);
@@ -1004,6 +1031,8 @@ void process_packet(int c_id, char* packet) {
 			break;
 
 		auto user = it->second;
+		if (!user)
+			break;
 		user->police_state = p->state;
 
 		broadcast_in_room(*user, p, VIEW_RANGE);
@@ -1024,6 +1053,8 @@ void process_packet(int c_id, char* packet) {
 			break;
 
 		auto user = it->second;
+		if (!user)
+			break;
 		user->dog = p->dog;
 
 		broadcast_in_room(*user, p, VIEW_RANGE);
@@ -1042,6 +1073,8 @@ void process_packet(int c_id, char* packet) {
 			break;
 
 		auto user = it->second;
+		if (!user)
+			break;
 		int room_id = user->room_id;
 		if (room_id < 0 || room_id >= static_cast<int>(g_rooms.size()))
 		{
@@ -1070,7 +1103,7 @@ void process_packet(int c_id, char* packet) {
 		case EWeaponType::Taser:
 		case EWeaponType::Pistol:
 		{
-			line_trace(c_id, p);
+			shoot_attack(c_id, p);
 			break;
 		}
 		default:
@@ -1090,6 +1123,8 @@ void process_packet(int c_id, char* packet) {
 		if (it == g_users.end())
 			break;
 		auto healer = it->second;
+		if (!healer)
+			break;
 		// 근처 치료 가능한 유저 탐색
 		auto targetOpt = SphereTraceClosestCultist(c_id, SPHERE_TRACE_RADIUS);
 		if (!targetOpt) {
@@ -1103,7 +1138,8 @@ void process_packet(int c_id, char* packet) {
 		if (tit == g_users.end())
 			break;
 		auto target = tit->second;
-
+		if (!target)
+			break;
 		if (healer->cultist_state.ABP_DoHeal || target->cultist_state.ABP_GetHeal)
 		{
 			std::cout << "Heal already in progress\n";
@@ -1169,12 +1205,15 @@ void process_packet(int c_id, char* packet) {
 		if (it == g_users.end())
 			break;
 		auto healer = it->second;
+		if (!haeler)
+			break;
 		int heal_partner{ healer->heal_partner };
 		auto hit = g_users.find(heal_partner);
 		if (hit == g_users.end())
 			break;
 		auto target = hit->second;
-
+		if (!target)
+			break;
 		healer->heal_partner = -1;
 		target->heal_partner = -1;
 
@@ -1198,6 +1237,8 @@ void process_packet(int c_id, char* packet) {
 			break;
 
 		auto user = it->second;
+		if (!user)
+			break;
 		int room_id = user->room_id;
 		if (room_id < 0 || room_id >= MAX_ROOM) 
 			break;
@@ -1227,6 +1268,8 @@ void process_packet(int c_id, char* packet) {
 			break;
 
 		auto user = it->second;
+		if (!user)
+			break;
 		int room_id = user->room_id;
 		if (room_id < 0 || room_id >= MAX_ROOM) 
 			break;
@@ -1276,6 +1319,8 @@ void process_packet(int c_id, char* packet) {
 			break;
 
 		auto user = it->second;
+		if (!user)
+			break;
 		int room_id = user->room_id;
 		if (room_id < 0 || room_id >= MAX_ROOM) 
 			break;
@@ -1343,6 +1388,8 @@ void process_packet(int c_id, char* packet) {
 
 		p->id = c_id;
 		auto user = g_users.find(c_id);
+		if (!user)
+			break;
 		if (user == g_users.end())
 			break;
 		std::cout << "Client[" << c_id << "] connected" << std::endl;
@@ -1711,12 +1758,13 @@ void mainLoop(HANDLE h_iocp) {
 int main()
 {
 	// map
-	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset, NewmapLandmassLotate, XYZ::XZ_Y)) {
-		std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ load fail" << std::endl;
-	}
-	else{
-		std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ loaded" << std::endl;
-	}
+	//if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset, NewmapLandmassLotate, XYZ::XZ_Y)) {
+	//	std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ load fail" << std::endl;
+	//}
+	//else{
+	//	std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ loaded" << std::endl;
+	//}
+
 	if (!Level3Map.Load("SM_0421Level3Merged.OBJ", Level3MapOffset, Level3MapLotate, XYZ::XY_Z)) {
 		std::cout << "SM_0421Level3Merged.OBJ load fail" << std::endl;
 	}
@@ -1731,12 +1779,13 @@ int main()
 	//else {
 	//	std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
 	//}
-	//if (!Level3NavMesh.Load("Level_3-NavMesh-M-2026.04.19-13.23.45.obj", Level3MapOffset, Level3NavScale)) {
-	//	std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj load fail" << std::endl;
-	//}
-	//else {
-	//	std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj loaded" << std::endl;
-	//}
+
+	if (!Level3NavMesh.Load("Level_3-NavMesh-M-2026.04.19-13.23.45.obj", Level3MapOffset, Level3NavScale)) {
+		std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj load fail" << std::endl;
+	}
+	else {
+		std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj loaded" << std::endl;
+	}
 
 	HANDLE h_iocp;
 	std::wcout.imbue(std::locale("korean"));
