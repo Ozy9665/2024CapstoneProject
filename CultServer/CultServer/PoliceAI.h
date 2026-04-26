@@ -65,6 +65,10 @@ public:
     void Stop(float);
     void Follow(float);
     void Explore(float);
+    
+private:
+    void MoveAlongPathDog(const Vec3&, float);
+    int FindNearbyCultistForDog();
 };
 
 
@@ -135,7 +139,6 @@ public:
     explicit PoliceAIController(SESSION* o);
 
     void Update(float) override;
-
     void UpdateBlackboard(float);
     void RunBehaviorTree(float);
 
@@ -152,6 +155,13 @@ public:
     void PistolShoot(float);
     void Chase(float);
     void Patrol(float);
-
     void BeginBehaviorLock(float);
+
+    bool HasLineOfSight(int);
+private:
+    void StopMovement();
+    void MoveAlongPath(const Vec3&, float);
+    void SnapToNavMesh();
+    void MoveToNearestTriangle(const Vec3&);
+    int FindNearbyCultist();
 };

@@ -50,7 +50,7 @@ void baton_sweep(int c_id, HitPacket* p)
 
 	auto attacker = it->second;
 	if (!attacker)
-		break;
+		return;
 	int room = attacker->room_id;
 	if (room < 0)
 		return;
@@ -158,6 +158,8 @@ void shoot_attack(int c_id, HitPacket* p)
 		return;
 
 	auto attacker = it->second;
+	if (!attacker)
+		return;
 	int room = attacker->room_id;
 	if (room < 0)
 		return;
