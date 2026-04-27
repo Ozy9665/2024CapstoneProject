@@ -24,8 +24,8 @@ bool MAP::Load(const std::string& objPath, const Vec3& MapOffset, const Vec3& ro
     BuildTriangleAABBs();
     BuildSpatialGrid();
 
-    DebugPrintSummary();
-    DebugPrintGridSample();
+    //DebugPrintSummary();
+    //DebugPrintGridSample();
     return true;
 }
 
@@ -580,8 +580,8 @@ bool NAVMESH::Load(const std::string& objPath, const Vec3& MapOffset, const Vec3
     BuildSpatialGridNav();
     BuildComponents();
 
-    DebugPrintSummary();
-    DebugPrintAdjacencySample();
+    //DebugPrintSummary();
+    //DebugPrintAdjacencySample();
     return true;
 }
 
@@ -1059,7 +1059,7 @@ bool NAVMESH::FindTriPath(
         Vec3 d{
             triCenters[t].x - goal.x,
             triCenters[t].y - goal.y,
-            0.f
+            triCenters[t].z - goal.z
         };
         return std::sqrt(d.x * d.x + d.y * d.y);
         };
@@ -1094,9 +1094,9 @@ bool NAVMESH::FindTriPath(
             Vec3 d{
                 triCenters[nb].x - triCenters[cur.tri].x,
                 triCenters[nb].y - triCenters[cur.tri].y,
-                0.f
+                triCenters[nb].z - triCenters[cur.tri].z
             };
-            float dist = std::sqrt(d.x * d.x + d.y * d.y);
+            float dist = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
 
             float g = cur.g + dist;
             float f = g + heuristic(nb);

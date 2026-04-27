@@ -96,4 +96,8 @@ public:
 
     bool CanMove() const;
     void ApplyBatonHit(const Vec3&);
+
+private:
+    void MoveToNearestTriangle(const Vec3& cur);
+
 };

@@ -756,15 +756,12 @@ void PoliceAIController::MoveAlongPath(const Vec3& targetPos, float deltaTime)
         owner->police_state.PositionZ
     };
 
-    if (!std::isfinite(cur.x) || !std::isfinite(cur.y))
+    if (!std::isfinite(cur.x) || !std::isfinite(cur.y) || !std::isfinite(cur.z))
     {
         std::cout << "[FIX] NaN detected -> reset path\n";
 
         bb.path.clear();
         bb.has_patrol_target = false;
-
-        owner->police_state.PositionX = bb.lastSnapPos.x;
-        owner->police_state.PositionY = bb.lastSnapPos.y;
 
         Vec3 safe{
             owner->police_state.PositionX,
@@ -851,11 +848,10 @@ void PoliceAIController::MoveAlongPath(const Vec3& targetPos, float deltaTime)
     Vec3 dir{
         next.x - cur.x,
         next.y - cur.y,
-        0.f
+        next.z - cur.z
     };
 
-    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
-
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
     if (len <= POLICE_SPEED * deltaTime)
     {
         bb.path.erase(bb.path.begin());
@@ -870,7 +866,7 @@ void PoliceAIController::MoveAlongPath(const Vec3& targetPos, float deltaTime)
 
         dir.x = next.x - cur.x;
         dir.y = next.y - cur.y;
-        dir.z = 0.f;
+        dir.z = next.z - cur.z;
         len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
         if (len < 1e-6f)
         {
@@ -887,19 +883,20 @@ void PoliceAIController::MoveAlongPath(const Vec3& targetPos, float deltaTime)
 
     dir.x /= len;
     dir.y /= len;
-    dir.z = 0.f;
+    dir.z /= len;
 
     // 위치 갱신
     owner->police_state.PositionX += dir.x * POLICE_SPEED * deltaTime;
     owner->police_state.PositionY += dir.y * POLICE_SPEED * deltaTime;
-    SnapToNavMesh();
-
+    owner->police_state.PositionZ += dir.z * POLICE_SPEED * deltaTime;
+    
     owner->police_state.VelocityX = dir.x * POLICE_SPEED;
     owner->police_state.VelocityY = dir.y * POLICE_SPEED;
     owner->police_state.VelocityZ = dir.z * POLICE_SPEED;
     owner->police_state.Speed = std::sqrt(
         owner->police_state.VelocityX * owner->police_state.VelocityX +
-        owner->police_state.VelocityY * owner->police_state.VelocityY
+        owner->police_state.VelocityY * owner->police_state.VelocityY + 
+        owner->police_state.VelocityZ * owner->police_state.VelocityZ
     );
 
     // state 회전 갱신
@@ -945,8 +942,7 @@ void PoliceAIController::MoveToNearestTriangle(const Vec3& cur)
         else
         {
             // fallback
-            owner->police_state.PositionX = 0.f;
-            owner->police_state.PositionY = 0.f;
+            return;
         }
     }
 }
@@ -1378,7 +1374,6 @@ void DogAIController::Update(float dt)
 }
 
 // Dog Movement
-
 void DogAIController::MoveAlongPathDog(const Vec3& targetPos, float dt)
 {
     Vec3 cur{
@@ -1386,6 +1381,24 @@ void DogAIController::MoveAlongPathDog(const Vec3& targetPos, float dt)
         static_cast<float>(owner->dog.loc.y),
         static_cast<float>(owner->dog.loc.z)
     };
+
+    if (!std::isfinite(cur.x) || !std::isfinite(cur.y) || !std::isfinite(cur.z))
+    {
+        std::cout << "[FIX] NaN detected -> reset path\n";
+
+        db.path.clear();
+        owner->dog.is_barking = false;
+
+        Vec3 safe{
+            owner->dog.loc.x,
+            owner->dog.loc.y,
+            owner->dog.loc.z
+        };
+
+        MoveToNearestTriangle(safe);
+
+        return;
+    }
 
     if (Dist(cur, targetPos) <= ARRIVE_RANGE)
     {
@@ -1469,6 +1482,12 @@ void DogAIController::MoveAlongPathDog(const Vec3& targetPos, float dt)
     owner->dog.loc.y += dir.y * DOG_SPEED * dt;
     owner->dog.loc.z += dir.z * DOG_SPEED * dt;
 
+    //owner->dog.Speed = std::sqrt(
+    //    owner->dog.vel.x * owner->dog.vel.x +
+    //    owner->dog.vel.y * owner->dog.vel.y +
+    //    owner->dog.vel.z * owner->dog.vel.z
+    //);
+
     owner->dog.rot.yaw = std::atan2(dir.y, dir.x) * RAD_TO_DEG;
 }
 
@@ -1515,4 +1534,26 @@ int DogAIController::FindNearbyCultistForDog()
     }
 
     return best_id;
+}
+
+void DogAIController::MoveToNearestTriangle(const Vec3& cur)
+{
+    NAVMESH* nav = GetNavMesh(owner->room_id);
+    if (nav)
+    {
+        int tri = nav->FindContainingTriangle(cur);
+        if (tri >= 0)
+        {
+            Vec3 safe = nav->GetTriCenter(tri);
+
+            owner->dog.loc.x = safe.x;
+            owner->dog.loc.y = safe.y;
+            owner->dog.loc.z = safe.z;
+        }
+        else
+        {
+            // fallback
+            return;
+        }
+    }
 }

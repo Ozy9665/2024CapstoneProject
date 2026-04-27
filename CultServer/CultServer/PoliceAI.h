@@ -69,6 +69,7 @@ public:
 private:
     void MoveAlongPathDog(const Vec3&, float);
     int FindNearbyCultistForDog();
+    void MoveToNearestTriangle(const Vec3&);
 };
 
 

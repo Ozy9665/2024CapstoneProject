@@ -122,6 +122,24 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
         session.cultist_state.PositionZ
     };
 
+    //if (!std::isfinite(cur.x) || !std::isfinite(cur.y) || !std::isfinite(cur.z))
+    //{
+    //    std::cout << "[FIX] NaN detected -> reset path\n";
+
+    //    bb.path.clear();
+    //    bb.has_patrol_target = false;
+
+    //    Vec3 safe{
+    //        owner->police_state.PositionX,
+    //        owner->police_state.PositionY,
+    //        owner->police_state.PositionZ
+    //    };
+
+    //    MoveToNearestTriangle(safe);
+
+    //    return;
+    //}
+
     if (Dist(cur, targetPos) <= ARRIVE_RANGE)
     {
         StopMovement(session);
@@ -134,7 +152,8 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
 
     float dx = targetPos.x - cultistAI->bb.lastTargetPos.x;
     float dy = targetPos.y - cultistAI->bb.lastTargetPos.y;
-    float dist2 = dx * dx + dy * dy;
+    float dz = targetPos.z - cultistAI->bb.lastTargetPos.z;
+    float dist2 = dx * dx + dy * dy + dz * dz;
 
     if (dist2 > REPATH_DIST * REPATH_DIST)
     {
@@ -199,11 +218,10 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
     Vec3 dir{
         next.x - cur.x,
         next.y - cur.y,
-        0.f
-        // next.z - cur.z
+        next.z - cur.z
     };
-    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
-    // float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
     if (len <= CULTIST_SPEED * deltaTime)
     {
         cultistAI->bb.path.erase(cultistAI->bb.path.begin());
@@ -218,7 +236,8 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
 
         dir.x = next.x - cur.x;
         dir.y = next.y - cur.y;
-        len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+        dir.z = next.z - cur.z;
+        len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
         std::cout << " if (len <= speed * deltaTime)" << std::endl;
     }
 
@@ -230,20 +249,22 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
 
     dir.x /= len;
     dir.y /= len;
-    // dir.z /= len;
+    dir.z /= len;
 
     // 위치 갱신
     session.cultist_state.PositionX += dir.x * CULTIST_SPEED * deltaTime;
     session.cultist_state.PositionY += dir.y * CULTIST_SPEED * deltaTime;
-    // ai.cultist_state.PositionZ += dir.z * CULTIST_SPEED * deltaTime;
+    session.cultist_state.PositionZ += dir.z * CULTIST_SPEED * deltaTime;
 
     session.cultist_state.VelocityX = dir.x * CULTIST_SPEED;
     session.cultist_state.VelocityY = dir.y * CULTIST_SPEED;
-    session.cultist_state.VelocityZ = 0.f;
+    session.cultist_state.VelocityZ = dir.z * CULTIST_SPEED;
+
     session.cultist_state.Speed = std::sqrt(
-            session.cultist_state.VelocityX * session.cultist_state.VelocityX +
-            session.cultist_state.VelocityY * session.cultist_state.VelocityY
-        );
+        session.cultist_state.VelocityX * session.cultist_state.VelocityX +
+        session.cultist_state.VelocityY * session.cultist_state.VelocityY +
+        session.cultist_state.VelocityZ * session.cultist_state.VelocityZ
+    );
 
     // state 회전 갱신
     if (len > 1e-3f)
@@ -1149,4 +1170,27 @@ void CultistAIController::Update(float dt)
 {
     UpdateBlackboard(dt);
     RunBehaviorTree(dt);
+}
+
+// Movement
+void CultistAIController::MoveToNearestTriangle(const Vec3& cur)
+{
+    NAVMESH* nav = GetNavMesh(owner->room_id);
+    if (nav)
+    {
+        int tri = nav->FindContainingTriangle(cur);
+        if (tri >= 0)
+        {
+            Vec3 safe = nav->GetTriCenter(tri);
+
+            owner->cultist_state.PositionX = safe.x;
+            owner->cultist_state.PositionY = safe.y;
+            owner->cultist_state.PositionZ = safe.z;
+        }
+        else
+        {
+            // fallback
+            return;
+        }
+    }
 }
