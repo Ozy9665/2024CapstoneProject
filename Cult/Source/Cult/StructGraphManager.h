@@ -266,6 +266,8 @@ public:
 
 	// ÁöÁø
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
+	void DisableAllProxies();
+	UFUNCTION(BlueprintCallable, Category = "StructGraph")
 	void StartEarthquake();
 
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
