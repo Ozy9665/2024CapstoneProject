@@ -1205,7 +1205,7 @@ void process_packet(int c_id, char* packet) {
 		if (it == g_users.end())
 			break;
 		auto healer = it->second;
-		if (!haeler)
+		if (!healer)
 			break;
 		int heal_partner{ healer->heal_partner };
 		auto hit = g_users.find(heal_partner);
@@ -1388,8 +1388,6 @@ void process_packet(int c_id, char* packet) {
 
 		p->id = c_id;
 		auto user = g_users.find(c_id);
-		if (!user)
-			break;
 		if (user == g_users.end())
 			break;
 		std::cout << "Client[" << c_id << "] connected" << std::endl;
@@ -1415,6 +1413,8 @@ void process_packet(int c_id, char* packet) {
 			break;
 
 		auto user = it->second;
+		if (!user)
+			break;
 		user->setState(ST_DEAD);
 
 		int room_id = user->room_id;

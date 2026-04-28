@@ -1006,7 +1006,8 @@ void AStructGraphManager::TriggerStage3()
 	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage3 Start (Single-flow continuous)"));
 
 	PlayShake(QuakeStage3LongShakeClass, Stage3LongScale);
-
+	DisableAllProxies();
+	EnsureGCPhysicsReady_Stage3();
 	StartStage3Continuous();
 }
 
@@ -2431,4 +2432,36 @@ void AStructGraphManager::DumpGCCache(const FString& Why)
 	DumpArr(TEXT("WALL"), GCWalls);
 	DumpArr(TEXT("COL"), GCColumns);
 	DumpArr(TEXT("SLAB"), GCSlabs);
+}
+void AStructGraphManager::DisableAllProxies()
+{
+	auto DisableProxyOn = [&](const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr)
+		{
+			for (const auto& W : Arr)
+			{
+				UGeometryCollectionComponent* GC = W.Get();
+				if (!IsValid(GC)) continue;
+
+				AActor* Owner = GC->GetOwner();
+				if (!IsValid(Owner)) continue;
+
+				TArray<UActorComponent*> Comps;
+				Owner->GetComponents(UStaticMeshComponent::StaticClass(), Comps);
+
+				for (UActorComponent* C : Comps)
+				{
+					UStaticMeshComponent* SM = Cast<UStaticMeshComponent>(C);
+					if (!IsValid(SM)) continue;
+
+					if (SM->ComponentHasTag(TEXT("GC_PROXY")))
+					{
+						SM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+					}
+				}
+			}
+		};
+
+	DisableProxyOn(GCWalls);
+	DisableProxyOn(GCColumns);
+	DisableProxyOn(GCSlabs);
 }
