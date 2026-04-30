@@ -157,6 +157,9 @@ void AMySocketPoliceActor::ReceiveData()
                             HideCharacter(id, false);
                             break;
                         }
+                        case collapseHeader:
+                            ProcessCollapse(OnePacket.data());
+                            break;
                         default:
                             UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
                             break;
@@ -377,6 +380,13 @@ void AMySocketPoliceActor::ProcessDisconnection(const char* Buffer)
     else {
         SafeDestroyCharacter(DisconnectedID);
     }
+}
+
+void AMySocketPoliceActor::ProcessCollapse(const char* Buffer)
+{
+    const CollapsePacket* pkt = reinterpret_cast<const CollapsePacket*>(Buffer);
+    // packet에 담길 데이터로 건물 붕괴 시뮬 시작
+    return;
 }
 
 void AMySocketPoliceActor::SendPlayerData()
