@@ -172,35 +172,29 @@ public:
     std::vector<int> triComponentId;
 
 private:
-    bool LoadNavOBJ(const std::string&,
-        std::vector<MapVertex>&,
-        std::vector<MapTriangle>&);
-
-    bool LoadOBJAndComputeAABB_Nav(const std::string&,
-        std::vector<MapVertex>&, std::vector<MapTriangle>&, AABB&);
-
-    void WeldVertices(std::vector<MapVertex>&, std::vector<MapTriangle>&);
-
     Vec3 scale;
     std::vector<std::array<int, 3>> triNeighbors;
     std::vector<Vec3> triCenters;
     std::vector<Portal> portals;
 
+    bool LoadNavOBJ(const std::string&,
+        std::vector<MapVertex>&,
+        std::vector<MapTriangle>&);
+    bool LoadOBJAndComputeAABB_Nav(const std::string&,
+        std::vector<MapVertex>&, std::vector<MapTriangle>&, AABB&);
+    void WeldVertices(std::vector<MapVertex>&, std::vector<MapTriangle>&);
+    float TriangleArea2D(const MapTriangle&) const;
+    void RemoveDegenerateTriangles(float);
     void BuildAdjacency();
-
+    void KeepLargestComponent();
+    void RebuildWorldAABB();
     void BuildTriCenters();
-
     void BuildSpatialGridNav();
-
     void BuildComponents();
-
     bool GetSharedEdge(int, int, Vec3&, Vec3&) const;
-
     float TriHeightAtXY(int, float, float) const;
-
     void TryCellContain(int, int, const Vec3&,
         int& bestTri, float& bestDz) const;
-
     int TryCellSnapRing(int, int, const Vec3&,
         float& bestD2) const;
     void DebugPrintSummary() const;

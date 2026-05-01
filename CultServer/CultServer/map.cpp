@@ -572,16 +572,26 @@ bool NAVMESH::Load(const std::string& objPath, const Vec3& MapOffset, const Vec3
         return false;
     
     WeldVertices(vertices, triangles);
-    BuildAdjacency();
-    BuildTriCenters();
 
+    RemoveDegenerateTriangles(1.0f);
+
+    BuildAdjacency();
+    BuildComponents();
+
+    KeepLargestComponent();
+
+    BuildAdjacency();
+
+    BuildTriCenters();
     BuildTriangles();
     BuildTriangleAABBs();
+
+    RebuildWorldAABB();
     BuildSpatialGridNav();
     BuildComponents();
 
-    //DebugPrintSummary();
-    //DebugPrintAdjacencySample();
+    DebugPrintSummary();
+    DebugPrintAdjacencySample();
     return true;
 }
 
@@ -711,6 +721,40 @@ void NAVMESH::WeldVertices(
     vertices.swap(newVerts);
 }
 
+float NAVMESH::TriangleArea2D(const MapTriangle& t) const
+{
+    const auto& a = vertices[t.v0];
+    const auto& b = vertices[t.v1];
+    const auto& c = vertices[t.v2];
+
+    const float abx = b.x - a.x;
+    const float aby = b.y - a.y;
+    const float acx = c.x - a.x;
+    const float acy = c.y - a.y;
+
+    return std::abs(abx * acy - aby * acx) * 0.5f;
+}
+
+void NAVMESH::RemoveDegenerateTriangles(float minArea)
+{
+    std::vector<MapTriangle> filtered;
+    filtered.reserve(triangles.size());
+
+    for (const auto& t : triangles)
+    {
+        if (t.v0 == t.v1 || t.v1 == t.v2 || t.v2 == t.v0)
+            continue;
+
+        const float area = TriangleArea2D(t);
+        if (area < minArea)
+            continue;
+
+        filtered.push_back(t);
+    }
+
+    triangles.swap(filtered);
+}
+
 static EdgeKey MakeEdge(int v0, int v1)
 {
     return (v0 < v1) ? EdgeKey{ v0, v1 } : EdgeKey{ v1, v0 };
@@ -826,6 +870,70 @@ void NAVMESH::BuildComponents()
         }
 
         compId++;
+    }
+}
+
+void NAVMESH::KeepLargestComponent()
+{
+    if (triComponentId.empty())
+        return;
+
+    std::unordered_map<int, int> counts;
+
+    for (int compId : triComponentId)
+    {
+        if (compId >= 0)
+            counts[compId]++;
+    }
+
+    int largestComp = -1;
+    int largestCount = 0;
+
+    for (const auto& [compId, count] : counts)
+    {
+        if (count > largestCount)
+        {
+            largestComp = compId;
+            largestCount = count;
+        }
+    }
+
+    if (largestComp < 0)
+        return;
+
+    std::vector<MapTriangle> filtered;
+    filtered.reserve(largestCount);
+
+    for (int i = 0; i < static_cast<int>(triangles.size()); ++i)
+    {
+        if (triComponentId[i] == largestComp)
+            filtered.push_back(triangles[i]);
+    }
+
+    triangles.swap(filtered);
+}
+
+void NAVMESH::RebuildWorldAABB()
+{
+    worldAABB.minX = worldAABB.minY = worldAABB.minZ = FLT_MAX;
+    worldAABB.maxX = worldAABB.maxY = worldAABB.maxZ = -FLT_MAX;
+
+    for (const auto& t : triangles)
+    {
+        const int ids[3] = { t.v0, t.v1, t.v2 };
+
+        for (int id : ids)
+        {
+            const auto& v = vertices[id];
+
+            worldAABB.minX = std::min(worldAABB.minX, v.x);
+            worldAABB.minY = std::min(worldAABB.minY, v.y);
+            worldAABB.minZ = std::min(worldAABB.minZ, v.z);
+
+            worldAABB.maxX = std::max(worldAABB.maxX, v.x);
+            worldAABB.maxY = std::max(worldAABB.maxY, v.y);
+            worldAABB.maxZ = std::max(worldAABB.maxZ, v.z);
+        }
     }
 }
 
