@@ -1562,6 +1562,25 @@ void process_packet(int c_id, char* packet) {
 		g_room_cv.notify_one();
 		break;
 	}
+	case collapseHeader:
+	{
+		auto* p = reinterpret_cast<CollapsePacket*>(packet);
+		if (p->size != sizeof(CollapsePacket)) {
+			std::cout << "Invalid CollapsePacket size\n";
+			break;
+		}
+
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		if (!user)
+			break;
+
+		broadcast_in_room(*user, p, VIEW_RANGE);
+		break;
+	}
 	case loginHeader:
 	{
 		auto* p = reinterpret_cast<IdPwPacket*>(packet);
@@ -1765,20 +1784,20 @@ int main()
 	//	std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ loaded" << std::endl;
 	//}
 
-	if (!Level3Map.Load("SM_0421Level3Merged.OBJ", Level3MapOffset, Level3MapLotate, XYZ::XY_Z)) {
-		std::cout << "SM_0421Level3Merged.OBJ load fail" << std::endl;
-	}
-	else {
-		std::cout << "SM_0421Level3Merged.OBJ loaded" << std::endl;
-	}
-
-	// navmesh
-	//if (!NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset, NewmapLandmassNavScale)) {
-	//	std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj load fail" << std::endl;
+	//if (!Level3Map.Load("SM_0421Level3Merged.OBJ", Level3MapOffset, Level3MapLotate, XYZ::XY_Z)) {
+	//	std::cout << "SM_0421Level3Merged.OBJ load fail" << std::endl;
 	//}
 	//else {
-	//	std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
+	//	std::cout << "SM_0421Level3Merged.OBJ loaded" << std::endl;
 	//}
+
+	// navmesh
+	if (!NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset, NewmapLandmassNavScale)) {
+		std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj load fail" << std::endl;
+	}
+	else {
+		std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
+	}
 
 	if (!Level3NavMesh.Load("Level_3-NavMesh-M-2026.04.19-13.23.45.obj", Level3MapOffset, Level3NavScale)) {
 		std::cout << "Level_3-NavMesh-M-2026.04.19-13.23.45.obj load fail" << std::endl;

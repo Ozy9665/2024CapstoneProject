@@ -67,6 +67,7 @@ public:
 	void SpawnImpactEffect(FHitResult);
 	void SendParticleData(FHitResult);
 	void HideCharacter(int, bool);
+	void ProcessCollapse(const char*);
 	UFUNCTION(BlueprintCallable)
 	void SendQuit();
 	void SendDisconnection();

@@ -1390,9 +1390,9 @@ void DogAIController::MoveAlongPathDog(const Vec3& targetPos, float dt)
         owner->dog.is_barking = false;
 
         Vec3 safe{
-            owner->dog.loc.x,
-            owner->dog.loc.y,
-            owner->dog.loc.z
+            static_cast<double>(owner->dog.loc.x),
+            static_cast<double>(owner->dog.loc.y),
+            static_cast<double>(owner->dog.loc.z)
         };
 
         MoveToNearestTriangle(safe);

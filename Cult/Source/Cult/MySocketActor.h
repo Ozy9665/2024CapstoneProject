@@ -293,6 +293,12 @@ struct RitualGagePacket {
 	int gauge;
 };
 
+struct CollapsePacket
+{
+	uint8_t header;
+	uint16_t size;
+};
+
 #pragma pack(pop)
 
 UCLASS()
@@ -339,6 +345,7 @@ constexpr char dogHeader = 25;
 constexpr char crowSpawnHeader = 26;
 constexpr char crowDataHeader = 27;
 constexpr char crowDisableHeader = 28;
+constexpr char collapseHeader = 30;
 
 //-- room header
 constexpr char requestHeader = 8;
