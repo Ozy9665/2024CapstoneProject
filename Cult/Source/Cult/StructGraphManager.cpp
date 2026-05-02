@@ -1000,7 +1000,6 @@ void AStructGraphManager::TriggerStage3()
 	GetWorldTimerManager().ClearTimer(Stage3SlabDelayHandle);
 	GetWorldTimerManager().ClearTimer(Stage3ContinuousHandle);
 
-	// 그래프 기반 흔들림 루프는 Stage3에서 끈다(간섭 차단)
 	StopEarthquake();
 
 	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage3 Start (Single-flow continuous)"));
@@ -1053,9 +1052,7 @@ void AStructGraphManager::TriggerPulse2()
 
 	Stage2_PulseCount++;
 
-	// Stage2는 "금/스폴링 준비 단계" -> 물리 풀지 않기
-	// (Stage3에서만 Sim/Grav ON)
-	// ※ 혹시 다른 곳에서 Walls Sim을 켜는 코드가 있으면 그게 날아감의 원인임.
+
 	auto ForceStage2StageSimNoGrav = [](UGeometryCollectionComponent* GC)
 		{
 			if (!IsValid(GC)) return;
@@ -1063,16 +1060,13 @@ void AStructGraphManager::TriggerPulse2()
 			GC->SetSimulatePhysics(true);   
 			GC->SetEnableGravity(false);    
 
-			// ✅ 튐/와르르 방지용 댐핑(값은 취향인데, 일단 이 정도면 안정적)
 			GC->SetLinearDamping(8.0f);
 			GC->SetAngularDamping(25.0f);
 
 			GC->WakeAllRigidBodies();
 		};
 
-	// ----------------------------
 	// 1) WALL: crack (weak)
-	// ----------------------------
 	UGeometryCollectionComponent* WallGC = nullptr;
 	if (GCWalls.Num() > 0)
 	{
@@ -1096,15 +1090,13 @@ void AStructGraphManager::TriggerPulse2()
 				);
 
 				const float CrackRadius = 120.f;
-				const float CrackMag = 900.f;     // ✅ 매우 약하게
+				const float CrackMag = 900.f;    
 				ApplyStrainToGC(WallGC, CrackPoint, CrackRadius, CrackMag, 1);
 			}
 		}
 	}
 
-	// ----------------------------
 	// 2) COLUMN: crack (weak, shear-like)
-	// ----------------------------
 	UGeometryCollectionComponent* ColGC = nullptr;
 	if (GCColumns.Num() > 0)
 	{
@@ -1121,7 +1113,7 @@ void AStructGraphManager::TriggerPulse2()
 
 				const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.75f);
 
-				// ✅ Planar 균등 분할 기둥이면, 하부를 4방향 돌려가며 치면 "전단 금" 느낌이 남
+				// 하부 4방향 -> 전단
 				Stage2_ColumnShearIdx = (Stage2_ColumnShearIdx + 1) % 4;
 
 				FVector Offset = FVector::ZeroVector;
@@ -1139,23 +1131,20 @@ void AStructGraphManager::TriggerPulse2()
 					Stage2Stream.FRandRange(-6.f, 6.f)
 				);
 
-				const float CrackRadius = 70.f;   // 기둥은 더 좁게
-				const float CrackMag = 1100.f;    // 벽보다 살짝만
+				const float CrackRadius = 70.f; 
+				const float CrackMag = 1100.f;  
 				ApplyStrainToGC(ColGC, CrackPoint, CrackRadius, CrackMag, 1);
 			}
 		}
 	}
 
-	// ----------------------------
-	// 3) SPALL: budgeted (only 1~2 times total)
-	// ----------------------------
 	// Stage2 끝날 때쯤(후반부)에만 한번씩 "한 조각" 떨어지게 유도
 	if (Stage2_SpallBudget > 0)
 	{
 		const float Alpha = Stage2Elapsed / FMath::Max(0.01f, Stage2_Duration);
 		const bool bLate = (Alpha > 0.65f);
 
-		// 랜덤하게 가끔만 실행 (너무 자주면 와르르)
+		// 랜덤하게 가끔만 실행
 		const bool bDoSpall = bLate && (Stage2Stream.FRand() < 0.25f);
 
 		if (bDoSpall)
@@ -1189,8 +1178,8 @@ void AStructGraphManager::TriggerPulse2()
 						Stage2Stream.FRandRange(-5.f, 5.f)
 					);
 
-					const float SpallRadius = 30.f;     // ✅ 매우 작게(한 조각)
-					const float SpallMag = 18000.f;     // ✅ 여기만 강하게(하지만 횟수 극소)
+					const float SpallRadius = 30.f;    
+					const float SpallMag = 18000.f;    
 					ApplyStrainToGC(Target, SpallPoint, SpallRadius, SpallMag, 1);
 
 					UE_LOG(LogTemp, Warning, TEXT("[Stage2] Spall (%d left) on %s"),
@@ -1562,7 +1551,6 @@ void AStructGraphManager::EnablePhysicsForGCArray(
 				if (bEnableGrav) BI->SetEnableGravity(true);
 				if (bEnableSim)  BI->WakeInstance();
 			}
-			// 4) Sim/Grav 목표인데 적용이 안 됐으면 즉시 복구 (Stage3 전용 Set 없이)
 			if (bEnableSim && bEnableGrav)
 			{
 				const bool bNeedFix = (!GC->IsSimulatingPhysics()) || (!GC->IsGravityEnabled());
@@ -1699,13 +1687,7 @@ void AStructGraphManager::OnGCBreak(const FChaosBreakEvent& BreakEvent)
 	UWorld* World = GetWorld();
 	if (!IsValid(World)) return;
 
-	// ----------------------------
-	// 0) (선택) Stage3에서만 먼지/보정 적용
-	//    - Stage2에서도 스폴링 깨짐이 있으면 연기 남발 방지
-	// ----------------------------
-	// Stage3에서만 보정/연기 원하면 이 줄을 살려.
-	// if (QuakeStage != EQuakeStage::Stage3) return;
-
+	
 	// ----------------------------
 	// 1) 깨짐 직후 물리/중력 꼬임 보정
 	// ----------------------------
@@ -1742,9 +1724,7 @@ void AStructGraphManager::OnGCBreak(const FChaosBreakEvent& BreakEvent)
 			G->WakeAllRigidBodies();
 		});
 
-	// ----------------------------
 	// 2) Dust/Smoke Niagara spawn
-	// ----------------------------
 	if (!DustNiagara) return;
 
 	// BreakEvent.Component가 nullptr일 수 있으니 안전하게
@@ -1760,7 +1740,6 @@ void AStructGraphManager::OnGCBreak(const FChaosBreakEvent& BreakEvent)
 	}
 	Last = Now;
 
-	// 너무 약한 깨짐(미세한 조각)에는 스폰 안 하도록 컷
 	const float Speed = BreakEvent.Velocity.Size();
 	if (Speed < 80.f) // 필요하면 50~200 사이 튜닝
 	{
@@ -2111,7 +2090,6 @@ void AStructGraphManager::EnablePhysicsForGCArray_NoRecreate(
 			GC->SetCollisionProfileName(TEXT("PhysicsActor"));
 			GC->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 
-			// ⚠️ 절대 RecreatePhysicsState() 하지 않는다
 			GC->SetSimulatePhysics(bEnableSim);
 			GC->SetEnableGravity(bEnableGrav);
 
