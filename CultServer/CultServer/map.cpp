@@ -1121,7 +1121,13 @@ int NAVMESH::FindContainingTriangle(const Vec3& pos) const
     int best = -1;
     float bestDz = FLT_MAX;
 
-    TryCellContain(cx, cy, pos, best, bestDz);
+    for (int dx = -1; dx <= 1; ++dx)
+    {
+        for (int dy = -1; dy <= 1; ++dy)
+        {
+            TryCellContain(cx + dx, cy + dy, pos, best, bestDz);
+        }
+    }
 
     if (best >= 0)
     {
@@ -1148,28 +1154,22 @@ bool NAVMESH::FindTriPath(
     int startTri = FindContainingTriangle(start);
     int goalTri = FindContainingTriangle(goal);
 
-    auto degree = [&](int t) {
-        int c = 0;
-        for (int nb : triNeighbors[t])
-            if (nb >= 0) ++c;
-        return c;
-        };
-
     if (startTri < 0 || goalTri < 0)
         return false;
 
     std::vector<TriNode> nodes;
     TriNodeCompare comp{ &nodes };
     std::priority_queue<int, std::vector<int>, TriNodeCompare> open(comp);
-    std::unordered_map<int, int> visited;
+    std::vector<int> visited(triangles.size(), -1);
 
-    auto heuristic = [&](int t) {
-        Vec3 d{
-            triCenters[t].x - goal.x,
-            triCenters[t].y - goal.y,
-            triCenters[t].z - goal.z
-        };
-        return std::sqrt(d.x * d.x + d.y * d.y);
+    auto heuristic = [&](int t)
+        {
+            const Vec3& c = triCenters[t];
+
+            const float dx = c.x - goal.x;
+            const float dy = c.y - goal.y;
+
+            return std::sqrt(dx * dx + dy * dy);
         };
 
     nodes.push_back({ startTri, 0.f, heuristic(startTri), -1 });
@@ -1183,7 +1183,7 @@ bool NAVMESH::FindTriPath(
         open.pop();
 
         auto& cur = nodes[curIdx];
-        if (visited.count(cur.tri))
+        if (visited[cur.tri] != -1)
             continue;
 
         visited[cur.tri] = curIdx;
@@ -1194,31 +1194,42 @@ bool NAVMESH::FindTriPath(
             break;
         }
 
+        const Vec3& curCenter = triCenters[cur.tri];
+
         for (int nb : triNeighbors[cur.tri])
         {
-            if (nb < 0 || visited.count(nb))
+            if (nb < 0 || visited[nb] != -1)
                 continue;
 
-            Vec3 d{
-                triCenters[nb].x - triCenters[cur.tri].x,
-                triCenters[nb].y - triCenters[cur.tri].y,
-                triCenters[nb].z - triCenters[cur.tri].z
-            };
-            float dist = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+            const Vec3& nbCenter = triCenters[nb];
 
-            float g = cur.g + dist;
-            float f = g + heuristic(nb);
+            const float dx = nbCenter.x - curCenter.x;
+            const float dy = nbCenter.y - curCenter.y;
+            const float dz = nbCenter.z - curCenter.z;
 
-            int idx = (int)nodes.size();
+            const float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+            const float g = cur.g + dist;
+            const float f = g + heuristic(nb);
+
+            const int idx = static_cast<int>(nodes.size());
             nodes.push_back({ nb, g, f, curIdx });
             open.push(idx);
         }
     }
 
     if (goalIdx < 0) {
-        std::cout << "[TRI A* FAIL] explored=" << visited.size()
+        int explored = 0;
+        for (int v : visited)
+        {
+            if (v != -1)
+                ++explored;
+        }
+
+        std::cout << "[TRI A* FAIL] explored=" << explored
             << " startTri=" << startTri
             << " goalTri=" << goalTri << "\n";
+
         return false;
     }
 
@@ -1419,17 +1430,19 @@ int NAVMESH::GetRandomTriangle(int startTri, int steps) const
     {
         const auto& neighbors = triNeighbors[cur];
 
-        std::vector<int> valid;
-        for (int k = 0; k < 3; ++k)
+        int valid[3];
+        int count = 0;
+
+        for (int nb : neighbors)
         {
-            if (neighbors[k] >= 0)
-                valid.push_back(neighbors[k]);
+            if (nb >= 0)
+                valid[count++] = nb;
         }
 
-        if (valid.empty())
+        if (count == 0)
             break;
 
-        std::uniform_int_distribution<size_t> dist(0, valid.size() - 1);
+        std::uniform_int_distribution<int> dist(0, count - 1);
         cur = valid[dist(dre)];
     }
 

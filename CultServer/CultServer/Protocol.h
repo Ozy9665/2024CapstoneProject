@@ -682,6 +682,14 @@ constexpr FVector LandMassAltarLocations[5] = {
 	{  -5730.0f,  1330.0f, -3110.0f }
 };
 
+constexpr FVector Level3AltarLocations[5] = {
+	{ 4225.f, 53659.f, 150.f },
+	{ 7592.f, 53584.f, 90.f },
+	{ 4192.f, 4192.f,  710.f },
+	{ 7285.f, 50780.f, 90.f },
+	{ 6641.f, 57640.f, 90.f }
+};
+
 constexpr double BATON_RANGE{ 200.0 };
 constexpr double TASER_RANGE{ 1000.0 };
 constexpr double PISTOL_RANGE{ 5000.0 };
