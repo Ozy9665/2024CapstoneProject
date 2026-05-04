@@ -20,6 +20,7 @@
 #include <concurrent_unordered_set.h>
 #include <concurrent_unordered_map.h>
 #include <algorithm>
+#include <random>
 #include "Protocol.h"
 #include "error.h"
 #include "PoliceAI.h"
@@ -60,21 +61,43 @@ void InitializeAltars(int room_num) {
 	}
 
 	std::array<int, ALTAR_PER_ROOM> order;
-	for (int i = 0; i < ALTAR_PER_ROOM; ++i) {
-		order[i] = i;
+	std::iota(order.begin(), order.end(), 0);
+
+	static thread_local std::default_random_engine dre{ std::random_device{}() };
+	std::shuffle(order.begin(), order.end(), dre);
+
+	switch (g_rooms[room_num].second)
+	{
+	case MAPTYPE::LANDMASS:
+	{
+		for (int i = 0; i < ALTAR_PER_ROOM; ++i)
+		{
+			auto& altar = g_altars[room_num][i];
+
+			altar.loc = LandMassAltarLocations[order[i]];
+			altar.isActivated = false;
+			altar.id = i;
+			altar.gauge = 0;
+		}
+		break;
+	}
+	case MAPTYPE::LEVEL3:
+	{
+		for (int i = 0; i < ALTAR_PER_ROOM; ++i)
+		{
+			auto& altar = g_altars[room_num][i];
+
+			altar.loc = Level3AltarLocations[order[i]];
+			altar.isActivated = false;
+			altar.id = i;
+			altar.gauge = 0;
+		}
+		break;
+	}
+	default:
+		break;
 	}
 
-	for (int i = 0; i < ALTAR_PER_ROOM - 1; ++i) {
-		int j = i + rand() % (ALTAR_PER_ROOM - i);
-		std::swap(order[i], order[j]);
-	}
-
-	for (int i = 0; i < ALTAR_PER_ROOM; ++i) {
-		g_altars[room_num][i].loc = LandMassAltarLocations[order[i]];
-		g_altars[room_num][i].isActivated = false;
-		g_altars[room_num][i].id = i;
-		g_altars[room_num][i].gauge = 0;
-	}
 }
 
 // db event ť
@@ -702,14 +725,14 @@ void CommandWorker()
 				continue;
 			}
 
-			if (g_users[ai_id]->role == 100) {
+			if (user->role == 100) {
 				KillCultistAi(ai_id);
 			}
-			else if (g_users[ai_id]->role == 101) {
+			else if (user->role == 101) {
 				KillPoliceAi(ai_id);
 			}
 			else {
-				std::cout << "invalid ai_id: " << ai_id << " role: " << static_cast<int>(g_users[ai_id]->role) << std::endl;
+				std::cout << "invalid ai_id: " << ai_id << " role: " << static_cast<int>(user->role) << std::endl;
 			}
 			
 		}
