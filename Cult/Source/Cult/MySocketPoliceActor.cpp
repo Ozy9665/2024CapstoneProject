@@ -10,6 +10,8 @@
 #include "Components/TextBlock.h"
 #include "TreeObstacleActor.h"
 #include "CrowActor.h"
+#include "StructGraphManager.h"
+#include "Kismet/GameplayStatics.h"
 
 #pragma comment(lib, "ws2_32.lib")
 AMySocketPoliceActor* MySocketPoliceActor = nullptr;
@@ -386,6 +388,28 @@ void AMySocketPoliceActor::ProcessCollapse(const char* Buffer)
 {
     const CollapsePacket* pkt = reinterpret_cast<const CollapsePacket*>(Buffer);
     // packet에 담길 데이터로 건물 붕괴 시뮬 시작
+
+    if (!pkt)
+        return;
+
+    UWorld* World = GetWorld();
+    if (!World)
+        return;
+
+    AActor* FoundActor = UGameplayStatics::GetActorOfClass(
+        World,
+        AStructGraphManager::StaticClass()
+    );
+
+    AStructGraphManager* StructGraphManager = Cast<AStructGraphManager>(FoundActor);
+    if (!StructGraphManager)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Collapse] StructGraphManager not found"));
+        return;
+    }
+
+    StructGraphManager->TriggerStage3();
+
     return;
 }
 
