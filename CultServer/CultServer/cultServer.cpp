@@ -638,6 +638,54 @@ void disconnect(int c_id)
 	}
 }
 
+void SendCollapsePacketToRoom(int room_id)
+{
+	if (room_id < 0 || room_id >= MAX_ROOM)
+	{
+		std::cout << "[Collapse] Invalid room id: " << room_id << "\n";
+		return;
+	}
+
+	const auto& room = g_rooms[room_id].first;
+
+	std::shared_ptr<SESSION> sender = nullptr;
+
+	for (int pid : room.player_ids)
+	{
+		if (pid == -1)
+			continue;
+
+		auto it = g_users.find(pid);
+		if (it == g_users.end())
+			continue;
+
+		if (!it->second)
+			continue;
+
+		if (!it->second->isValidSocket() || it->second->state == ST_FREE)
+			continue;
+
+		sender = it->second;
+		break;
+	}
+
+	if (!sender)
+	{
+		std::cout << "[Collapse] No valid sender in room: " << room_id << "\n";
+		return;
+	}
+
+	CollapsePacket pkt{};
+	pkt.header = collapseHeader;
+	pkt.size = sizeof(CollapsePacket);
+
+	broadcast_in_room<CollapsePacket>(*sender, &pkt);
+
+	sender->do_send_packet(&pkt);
+
+	std::cout << "[Collapse] Sent collapse packet to room: " << room_id << "\n";
+}
+
 void CommandWorker()
 {
 	while (true)
@@ -735,6 +783,24 @@ void CommandWorker()
 				std::cout << "invalid ai_id: " << ai_id << " role: " << static_cast<int>(user->role) << std::endl;
 			}
 			
+		}
+		else if (cmd == "collapse")
+		{
+			int room_id;
+
+			if (!(iss >> room_id))
+			{
+				std::cout << "[Command] Usage: collapse <room_id>\n";
+				continue;
+			}
+
+			if (room_id < 0 || room_id >= MAX_ROOM)
+			{
+				std::cout << "[Command] Invalid room id: " << room_id << "\n";
+				continue;
+			}
+
+			SendCollapsePacketToRoom(room_id);
 		}
 		else if (cmd == "exit")
 		{

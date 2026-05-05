@@ -392,6 +392,12 @@ void AMySocketPoliceActor::ProcessCollapse(const char* Buffer)
     if (!pkt)
         return;
 
+    if (pkt->size != sizeof(CollapsePacket))
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[Collapse] Invalid packet size"));
+        return;
+    }
+
     UWorld* World = GetWorld();
     if (!World)
         return;
