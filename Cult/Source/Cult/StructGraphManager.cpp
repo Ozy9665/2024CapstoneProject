@@ -952,25 +952,14 @@ void AStructGraphManager::TriggerStage1()
 
 void AStructGraphManager::TriggerStage2()
 {
-	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage2 Start (Local strain pulses on GC walls)"));
+	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage2 Start"));
+
+	BuildGCCache(); 
 
 	Stage2Stream.Initialize(Stage2Seed);
-
 	Stage2_PulseCount = 0;
 	Stage2_SpallBudget = 2;
 	Stage2_ColumnShearIdx = 0;
-
-	//EnablePhysicsForTaggedGC(GCWallTag, true, true);
-	//EnablePhysicsForGCArray(GCWalls, true, true);
-	/*EnablePhysicsForGCArray(GCColumns, true, true);
-	EnablePhysicsForGCArray(GCSlabs, true, true);*/
-
-	ApplyDampingToTaggedGC(GCWallTag, Stage2LinearDamping, Stage2AngularDamping);
-
-
-	//SeismicBase = Stage1_SeismicBase;
-	//SeismicOmega = Stage1_Omega;
-	//StartEarthquake();
 
 	Stage2Elapsed = 0.f;
 	GetWorldTimerManager().ClearTimer(Stage2Timer);
@@ -983,12 +972,7 @@ void AStructGraphManager::TriggerStage2()
 		true
 	);
 
-	const float Now = GetWorld()->GetTimeSeconds();
-	if (Now - LastStage2ShakeTime >= 0.5f) 
-	{
-		PlayShake(QuakeContinuousShakeClass, Stage2ShakeScale);
-		LastStage2ShakeTime = Now;
-	}
+	PlayShake(QuakeContinuousShakeClass, Stage2ShakeScale);
 }
 
 void AStructGraphManager::TriggerStage3()
@@ -1052,71 +1036,79 @@ void AStructGraphManager::TriggerPulse2()
 
 	Stage2_PulseCount++;
 
-
-	auto ForceStage2StageSimNoGrav = [](UGeometryCollectionComponent* GC)
+	auto PrepStage2SimNoGrav = [](UGeometryCollectionComponent* GC)
 		{
 			if (!IsValid(GC)) return;
 
-			GC->SetSimulatePhysics(true);   
-			GC->SetEnableGravity(false);    
+			GC->SetSimulatePhysics(true);
+			GC->SetEnableGravity(false);
+
+			GC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			GC->SetCollisionProfileName(TEXT("PhysicsActor"));
+			GC->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Block);
+			GC->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 
 			GC->SetLinearDamping(8.0f);
 			GC->SetAngularDamping(25.0f);
 
-			GC->WakeAllRigidBodies();
+			if (FBodyInstance* BI = GC->GetBodyInstance())
+			{
+				BI->SetEnableGravity(false);
+			}
 		};
 
-	// 1) WALL: crack (weak)
+	// ----------------------------
+	// 1) WALL crack
+	// ----------------------------
 	UGeometryCollectionComponent* WallGC = nullptr;
 	if (GCWalls.Num() > 0)
 	{
 		WallGC = PickRandomValidGC(GCWalls, Stage2Stream);
 		if (IsValid(WallGC) && WallGC->IsRegistered() && !WallGC->IsBeingDestroyed())
 		{
-			ForceStage2StageSimNoGrav(WallGC);
+			PrepStage2SimNoGrav(WallGC);
 
-			AActor* A = WallGC->GetOwner();
-			if (IsValid(A) && !A->IsActorBeingDestroyed())
+			if (AActor* A = WallGC->GetOwner())
 			{
 				FVector Origin, Extent;
 				A->GetActorBounds(true, Origin, Extent);
-
 				const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.75f);
 
-				const FVector CrackPoint = Base + FVector(
+				const FVector P = Base + FVector(
 					Stage2Stream.FRandRange(-Extent.X * 0.30f, Extent.X * 0.30f),
 					Stage2Stream.FRandRange(-Extent.Y * 0.15f, Extent.Y * 0.15f),
 					Stage2Stream.FRandRange(-8.f, 8.f)
 				);
 
 				const float CrackRadius = 120.f;
-				const float CrackMag = 900.f;    
-				ApplyStrainToGC(WallGC, CrackPoint, CrackRadius, CrackMag, 1);
+
+				const float CrackMag = 4500.f; 
+
+				ApplyStrainToGC(WallGC, P, CrackRadius, CrackMag, 1);
 			}
 		}
 	}
 
-	// 2) COLUMN: crack (weak, shear-like)
+	// ----------------------------
+	// 2) COLUMN crack (shear)
+	// ----------------------------
 	UGeometryCollectionComponent* ColGC = nullptr;
 	if (GCColumns.Num() > 0)
 	{
 		ColGC = PickRandomValidGC(GCColumns, Stage2Stream);
 		if (IsValid(ColGC) && ColGC->IsRegistered() && !ColGC->IsBeingDestroyed())
 		{
-			ForceStage2StageSimNoGrav(ColGC);
+			PrepStage2SimNoGrav(ColGC);
 
-			AActor* A = ColGC->GetOwner();
-			if (IsValid(A) && !A->IsActorBeingDestroyed())
+			if (AActor* A = ColGC->GetOwner())
 			{
 				FVector Origin, Extent;
 				A->GetActorBounds(true, Origin, Extent);
-
 				const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.75f);
 
-				// 하부 4방향 -> 전단
 				Stage2_ColumnShearIdx = (Stage2_ColumnShearIdx + 1) % 4;
 
-				FVector Offset = FVector::ZeroVector;
+				FVector Offset;
 				switch (Stage2_ColumnShearIdx)
 				{
 				case 0: Offset = FVector(18.f, 0.f, 0.f); break;
@@ -1125,62 +1117,53 @@ void AStructGraphManager::TriggerPulse2()
 				default:Offset = FVector(0.f, -18.f, 0.f); break;
 				}
 
-				const FVector CrackPoint = Base + Offset + FVector(
-					Stage2Stream.FRandRange(-6.f, 6.f),
-					Stage2Stream.FRandRange(-6.f, 6.f),
-					Stage2Stream.FRandRange(-6.f, 6.f)
-				);
+				const FVector P = Base + Offset;
 
-				const float CrackRadius = 70.f; 
-				const float CrackMag = 1100.f;  
-				ApplyStrainToGC(ColGC, CrackPoint, CrackRadius, CrackMag, 1);
+				const float CrackRadius = 70.f;
+				const float CrackMag = 6000.f;
+
+				ApplyStrainToGC(ColGC, P, CrackRadius, CrackMag, 1);
 			}
 		}
 	}
 
-	// Stage2 끝날 때쯤(후반부)에만 한번씩 "한 조각" 떨어지게 유도
+	// ----------------------------
+	// 3) SPALL (후반에 1~2회)
+	// ----------------------------
 	if (Stage2_SpallBudget > 0)
 	{
 		const float Alpha = Stage2Elapsed / FMath::Max(0.01f, Stage2_Duration);
 		const bool bLate = (Alpha > 0.65f);
-
-		// 랜덤하게 가끔만 실행
 		const bool bDoSpall = bLate && (Stage2Stream.FRand() < 0.25f);
 
 		if (bDoSpall)
 		{
 			Stage2_SpallBudget--;
 
-			UGeometryCollectionComponent* Target = nullptr;
-
-			// 벽/기둥 중 하나 선택
-			if (IsValid(WallGC) && IsValid(ColGC))
-			{
-				Target = (Stage2Stream.FRand() < 0.6f) ? WallGC : ColGC;
-			}
-			else
-			{
-				Target = IsValid(WallGC) ? WallGC : ColGC;
-			}
+			UGeometryCollectionComponent* Target = (Stage2Stream.FRand() < 0.6f) ? WallGC : ColGC;
+			if (!IsValid(Target)) Target = IsValid(WallGC) ? WallGC : ColGC;
 
 			if (IsValid(Target))
 			{
-				AActor* A = Target->GetOwner();
-				if (IsValid(A))
+				if (AActor* A = Target->GetOwner())
 				{
 					FVector Origin, Extent;
 					A->GetActorBounds(true, Origin, Extent);
 					const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.75f);
 
-					const FVector SpallPoint = Base + FVector(
+					const FVector P = Base + FVector(
 						Stage2Stream.FRandRange(-25.f, 25.f),
 						Stage2Stream.FRandRange(-25.f, 25.f),
 						Stage2Stream.FRandRange(-5.f, 5.f)
 					);
 
-					const float SpallRadius = 30.f;    
-					const float SpallMag = 18000.f;    
-					ApplyStrainToGC(Target, SpallPoint, SpallRadius, SpallMag, 1);
+					const float SpallRadius = 30.f;
+					const float SpallMag = 18000.f; 
+					ApplyStrainToGC(Target, P, SpallRadius, SpallMag, 1);
+
+					// 타겟조각
+					Target->AddImpulseAtLocation(FVector(0, 0, -1) * 8000.f, P, NAME_None);
+					Target->WakeAllRigidBodies();
 
 					UE_LOG(LogTemp, Warning, TEXT("[Stage2] Spall (%d left) on %s"),
 						Stage2_SpallBudget, *GetNameSafe(A));
@@ -1189,13 +1172,7 @@ void AStructGraphManager::TriggerPulse2()
 		}
 	}
 
-	// 카메라 흔들림(연출만)
-	const float Now = GetWorld()->GetTimeSeconds();
-	if (Now - LastStage2ShakeTime >= 0.5f)
-	{
-		PlayShake(QuakeContinuousShakeClass, Stage2ShakeScale);
-		LastStage2ShakeTime = Now;
-	}
+	PlayShake(QuakeContinuousShakeClass, Stage2ShakeScale);
 }
 
 
