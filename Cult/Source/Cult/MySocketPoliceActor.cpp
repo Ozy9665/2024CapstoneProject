@@ -387,7 +387,6 @@ void AMySocketPoliceActor::ProcessDisconnection(const char* Buffer)
 void AMySocketPoliceActor::ProcessCollapse(const char* Buffer)
 {
     const CollapsePacket* pkt = reinterpret_cast<const CollapsePacket*>(Buffer);
-    // packetø° ¥„±Ê µ•¿Ã≈Õ∑Œ ∞«π∞ ∫ÿ±´ Ω√πƒ Ω√¿€
 
     if (!pkt)
         return;
@@ -398,25 +397,32 @@ void AMySocketPoliceActor::ProcessCollapse(const char* Buffer)
         return;
     }
 
-    UWorld* World = GetWorld();
-    if (!World)
-        return;
+    TWeakObjectPtr<AMySocketPoliceActor> WeakThis(this);
 
-    AActor* FoundActor = UGameplayStatics::GetActorOfClass(
-        World,
-        AStructGraphManager::StaticClass()
-    );
+    AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+        {
+            AMySocketPoliceActor* Self = WeakThis.Get();
+            if (!Self)
+                return;
 
-    AStructGraphManager* StructGraphManager = Cast<AStructGraphManager>(FoundActor);
-    if (!StructGraphManager)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[Collapse] StructGraphManager not found"));
-        return;
-    }
+            UWorld* World = Self->GetWorld();
+            if (!World)
+                return;
 
-    StructGraphManager->TriggerStage3();
+            AActor* FoundActor = UGameplayStatics::GetActorOfClass(
+                World,
+                AStructGraphManager::StaticClass()
+            );
 
-    return;
+            AStructGraphManager* StructGraphManager = Cast<AStructGraphManager>(FoundActor);
+            if (!StructGraphManager)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[Collapse] StructGraphManager not found"));
+                return;
+            }
+
+            StructGraphManager->TriggerStage3();
+        });
 }
 
 void AMySocketPoliceActor::SendPlayerData()
