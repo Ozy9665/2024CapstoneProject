@@ -1863,8 +1863,7 @@ void mainLoop(HANDLE h_iocp) {
 	}
 }
 
-int main()
-{
+int main(){
 	// map
 	//if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset, NewmapLandmassLotate, XYZ::XZ_Y)) {
 	//	std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ load fail" << std::endl;

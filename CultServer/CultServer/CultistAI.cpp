@@ -103,6 +103,37 @@ static float Dist(const Vec3& a, const Vec3& b)
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+static float DistSq3D(const Vec3& a, const Vec3& b)
+{
+    const float dx = a.x - b.x;
+    const float dy = a.y - b.y;
+    const float dz = a.z - b.z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
+static void CompactPath(std::vector<Vec3>& path, float minGap)
+{
+    if (path.empty())
+        return;
+
+    const float minGapSq = minGap * minGap;
+
+    std::vector<Vec3> compact;
+    compact.reserve(path.size());
+
+    compact.push_back(path.front());
+
+    for (int i = 1; i < static_cast<int>(path.size()); ++i)
+    {
+        if (DistSq3D(compact.back(), path[i]) >= minGapSq)
+        {
+            compact.push_back(path[i]);
+        }
+    }
+
+    path.swap(compact);
+}
+
 static void StopMovement(SESSION& session)
 {
     session.cultist_state.VelocityX = 0.f;
@@ -121,24 +152,6 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
         session.cultist_state.PositionY,
         session.cultist_state.PositionZ
     };
-
-    //if (!std::isfinite(cur.x) || !std::isfinite(cur.y) || !std::isfinite(cur.z))
-    //{
-    //    std::cout << "[FIX] NaN detected -> reset path\n";
-
-    //    bb.path.clear();
-    //    bb.has_patrol_target = false;
-
-    //    Vec3 safe{
-    //        owner->police_state.PositionX,
-    //        owner->police_state.PositionY,
-    //        owner->police_state.PositionZ
-    //    };
-
-    //    MoveToNearestTriangle(safe);
-
-    //    return;
-    //}
 
     if (Dist(cur, targetPos) <= ARRIVE_RANGE)
     {
@@ -190,7 +203,16 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
             StopMovement(session);
             return;
         }
-        cultistAI->bb.path = smoothPath;
+        CompactPath(smoothPath, 20.f);
+
+        if (smoothPath.size() < 2)
+        {
+            StopMovement(session);
+            cultistAI->bb.path.clear();
+            return;
+        }
+
+        cultistAI->bb.path = std::move(smoothPath);
     }
 
     if (cultistAI->bb.path.empty())
@@ -224,26 +246,35 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
     float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
     if (len <= CULTIST_SPEED * deltaTime)
     {
+        session.cultist_state.PositionX = next.x;
+        session.cultist_state.PositionY = next.y;
+        session.cultist_state.PositionZ = next.z;
+
+        std::cout << " if (len <= speed * deltaTime)" << std::endl;
         cultistAI->bb.path.erase(cultistAI->bb.path.begin());
 
-        if (cultistAI->bb.path.empty())
+        if (cultistAI->bb.path.size() <= 1)
         {
+            std::cout << "[SHORT_WAYPOINT_CLEAR_PATH]\n";
+            cultistAI->bb.path.clear();
             StopMovement(session);
             return;
         }
 
-        next = cultistAI->bb.path[0];
-
-        dir.x = next.x - cur.x;
-        dir.y = next.y - cur.y;
-        dir.z = next.z - cur.z;
-        len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
-        std::cout << " if (len <= speed * deltaTime)" << std::endl;
+        return;
     }
 
     if (len < 1e-3f)
     {
-        StopMovement(session);
+        cultistAI->bb.path.erase(cultistAI->bb.path.begin());
+
+        if (cultistAI->bb.path.size() <= 1)
+        {
+            cultistAI->bb.path.clear();
+            StopMovement(session);
+            return;
+        }
+
         return;
     }
 
@@ -1151,6 +1182,19 @@ void CultistAIController::UpdateBlackboard(float dt)
 
     if (bb.stuck_ticks > 30)
     {
+        std::cout
+            << "[STUCK_CLEAR]"
+            << " id=" << owner->id
+            << " state=" << static_cast<int>(bb.ai_state)
+            << " pathSize=" << bb.path.size()
+            << " target=" << bb.target_id
+            << " runaway=" << bb.runaway_id
+            << " pos=("
+            << owner->cultist_state.PositionX << ","
+            << owner->cultist_state.PositionY << ","
+            << owner->cultist_state.PositionZ << ")"
+            << "\n";
+
         bb.path.clear();
         bb.has_patrol_target = false;
         bb.has_runaway_target = false;
