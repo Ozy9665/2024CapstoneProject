@@ -47,6 +47,21 @@ struct FNetObjectState
 	float LastOwnerChangeTime = 0.0f;
 };
 
+USTRUCT(BlueprintType)
+struct FRoomObjectState
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadWrite)
+	int32 RoomID = -1;
+
+	UPROPERTY(BlueprintReadWrite)
+	TArray<FNetObjectState> Desks;
+
+	UPROPERTY(BlueprintReadWrite)
+	TSet<int32> DirtyObjectIDs;
+};
+
 enum MAPTYPE { LANDMASS, LEVEL3 };
 
 constexpr int MAX_PLAYERS_PER_ROOM = 5;
@@ -331,6 +346,38 @@ struct CollapsePacket
 	uint8_t header;
 	uint16_t size;
 };
+
+struct ObjectOwnerClaimPacket
+{
+	uint8_t header;
+	uint16_t size;
+	uint16_t object_id;
+};
+
+struct ObjectUpdateData
+{
+	uint16_t object_id;
+	FNetVec loc;
+	FNetRot rot;
+};
+
+struct ObjectUpdatePacket
+{
+	uint8_t header;
+	uint16_t size;
+	uint16_t count;
+	// ObjectUpdateData[count] objects;
+};
+
+struct ObjectMoveEndPacket
+{
+	uint8_t header;
+	uint16_t size;
+	uint16_t object_id;
+	FNetVec loc;
+	FNetRot rot;
+};
+
 
 #pragma pack(pop)
 

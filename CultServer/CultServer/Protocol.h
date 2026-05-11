@@ -464,6 +464,37 @@ struct CollapsePacket
 	uint16_t size;
 };
 
+struct ObjectOwnerClaimPacket
+{
+	uint8_t header;
+	uint16_t size;
+	uint16_t object_id;
+};
+
+struct ObjectUpdateData
+{
+	uint16_t object_id;
+	FVector loc;
+	FRotator rot;
+};
+
+struct ObjectUpdatePacket
+{
+	uint8_t header;
+	uint16_t size;
+	uint16_t count;
+	// ObjectUpdateData[count] objects;
+};
+
+struct ObjectMoveEndPacket
+{
+	uint8_t header;
+	uint16_t size;
+	uint16_t object_id;
+	FVector loc;
+	FRotator rot;
+};
+
 struct CultistBlackboard 
 {
 	AIState ai_state = AIState::Patrol;
