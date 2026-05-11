@@ -23,6 +23,7 @@ constexpr int MAX_ID = INT_MAX;
 constexpr int MAX_USER = 10000;
 constexpr int ALTAR_PER_ROOM = 3;
 constexpr uint8_t INVALID_ROLE = 0xFF;
+constexpr int MAX_DESK_OBJECTS = 240;
 
 constexpr float VIEW_RANGE = 3000.0f;           // 시야 반경
 constexpr float VIEW_RANGE_SQ = VIEW_RANGE * VIEW_RANGE;
@@ -171,6 +172,28 @@ struct Room {
 	uint8_t cultist;
 	uint8_t isIngame;
 	int  player_ids[MAX_PLAYERS_PER_ROOM];
+};
+
+struct Object
+{
+	int object_id;
+	int owner_id;
+
+	FVector position{};
+	FRotator rotation{};
+	FVector velocity{};
+	FVector angular_velocity{};
+
+	bool dirty = false;
+
+	float last_update_time = 0.0f;
+	float last_owner_change_time = 0.0f;
+};
+
+struct RoomObject {
+	int room_id;
+	std::array<Object, MAX_DESK_OBJECTS> desks{};
+	std::unordered_set<int> dirty_object_ids;
 };
 
 struct Altar {

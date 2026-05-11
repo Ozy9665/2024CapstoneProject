@@ -14,6 +14,39 @@ struct Froom {
 	UPROPERTY(BlueprintReadWrite) uint8 cultist;
 };
 
+USTRUCT(BlueprintType)
+struct FNetObjectState
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadWrite)
+	int32 ObjectID = -1;
+
+	UPROPERTY(BlueprintReadWrite)
+	int32 OwnerID = -1;
+
+	UPROPERTY(BlueprintReadWrite)
+	FVector Position = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadWrite)
+	FRotator Rotation = FRotator::ZeroRotator;
+
+	UPROPERTY(BlueprintReadWrite)
+	FVector Velocity = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadWrite)
+	FVector AngularVelocity = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadWrite)
+	bool bDirty = false;
+
+	UPROPERTY(BlueprintReadWrite)
+	float LastUpdateTime = 0.0f;
+
+	UPROPERTY(BlueprintReadWrite)
+	float LastOwnerChangeTime = 0.0f;
+};
+
 enum MAPTYPE { LANDMASS, LEVEL3 };
 
 constexpr int MAX_PLAYERS_PER_ROOM = 5;

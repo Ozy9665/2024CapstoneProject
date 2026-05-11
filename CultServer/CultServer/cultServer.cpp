@@ -54,6 +54,7 @@ NAVMESH Level3NavMesh;
 
 std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
 std::array<std::array<Altar, ALTAR_PER_ROOM>, MAX_ROOM> g_altars;
+std::array<RoomObject, MAX_ROOM> g_roomObjects;
 
 void InitializeAltars(int room_num) {
 	if (room_num < 0 || room_num >= static_cast<int>(g_altars.size())) {
@@ -98,6 +99,35 @@ void InitializeAltars(int room_num) {
 		break;
 	}
 
+}
+
+void InitializeRoomObjects(int room_num)
+{
+	if (room_num < 0 || room_num >= MAX_ROOM)
+		return;
+
+	RoomObject& roomObject = g_roomObjects[room_num];
+
+	roomObject.room_id = room_num;
+	roomObject.dirty_object_ids.clear();
+
+	for (int i = 0; i < MAX_DESK_OBJECTS; ++i)
+	{
+		Object& obj = roomObject.desks[i];
+
+		obj.object_id = i;
+		obj.owner_id = -1;
+
+		obj.position = {};
+		obj.rotation = {};
+		obj.velocity = {};
+		obj.angular_velocity = {};
+
+		obj.dirty = false;
+
+		obj.last_update_time = 0.0f;
+		obj.last_owner_change_time = 0.0f;
+	}
 }
 
 // db event ť
@@ -1950,6 +1980,13 @@ int main(){
 		g_rooms[i].second = LANDMASS;
 		InitializeAltars(i);
 	}
+
+	for (int room_id = 0; room_id < MAX_ROOM; ++room_id)
+	{
+		InitializeRoomObjects(room_id);
+	}
+
+
 	g_h_iocp = h_iocp;
 
 	std::thread db_thread{ DBWorkerLoop };
