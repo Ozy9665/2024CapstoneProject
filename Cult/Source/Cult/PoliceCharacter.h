@@ -247,4 +247,15 @@ public:
 	int my_ID = -1;
 	UFUNCTION(BlueprintPure)
 	static AMySocketPoliceActor* GetMySocketActor();
+
+	UFUNCTION()
+	void OnCapsuleHit(
+		UPrimitiveComponent* HitComponent,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		FVector NormalImpulse,
+		const FHitResult& Hit
+	);
+
+	int32 GetObjectIDFromActor(AActor* Actor) const;
 };

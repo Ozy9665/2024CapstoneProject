@@ -38,6 +38,11 @@ private:
 	TArray<FVector> ImpactLocations;
 	UMyGameInstance* GI;
 	TArray<int32> KeysToRemove;
+	TSet<int32> LocalOwnedObjectIDs;
+	TMap<int32, float> LocalOwnedObjectStopTimers;
+
+	UPROPERTY()
+	TMap<int32, AActor*> SyncedObjectActors;
 
 public:	
 	// Called every frame
@@ -74,4 +79,10 @@ public:
 	void CloseConnection();
 	void SafeDestroyCharacter(int);
 	const TMap<int, ACharacter*>& GetSpawnedCharacters() const;
+	bool IsLocalOwnedObject(int32) const;
+	void AddLocalOwnedObject(int32);
+	void RemoveLocalOwnedObject(int32);
+	void UpdateLocalOwnedObjects(float);
+	void SendObjectMoveEnd(int32, const FVector&, const FRotator&);
+	void SendObjectOwnerClaim(int32);
 };

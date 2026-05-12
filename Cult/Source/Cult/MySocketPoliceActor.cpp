@@ -946,6 +946,89 @@ const TMap<int, ACharacter*>& AMySocketPoliceActor::GetSpawnedCharacters() const
     return SpawnedCharacters;
 }
 
+bool AMySocketPoliceActor::IsLocalOwnedObject(int32 ObjectID) const
+{
+    return LocalOwnedObjectIDs.Contains(ObjectID);
+}
+
+void AMySocketPoliceActor::AddLocalOwnedObject(int32 ObjectID)
+{
+    LocalOwnedObjectIDs.Add(ObjectID);
+    LocalOwnedObjectStopTimers.FindOrAdd(ObjectID) = 0.0f;
+
+    UE_LOG(LogTemp, Warning, TEXT("[ObjectOwner] Add LocalOwnedObject ID=%d Count=%d"),
+        ObjectID,
+        LocalOwnedObjectIDs.Num()
+    );
+}
+
+void AMySocketPoliceActor::RemoveLocalOwnedObject(int32 ObjectID)
+{
+    LocalOwnedObjectIDs.Remove(ObjectID);
+    LocalOwnedObjectStopTimers.Remove(ObjectID);
+
+    UE_LOG(LogTemp, Warning, TEXT("[ObjectOwner] Remove LocalOwnedObject ID=%d Count=%d"),
+        ObjectID,
+        LocalOwnedObjectIDs.Num()
+    );
+}
+
+void AMySocketPoliceActor::UpdateLocalOwnedObjects(float DeltaTime)
+{
+    TArray<int32> EndObjects;
+
+    for (int32 ObjectID : LocalOwnedObjectIDs)
+    {
+        AActor* ObjectActor = SyncedObjectActors.FindRef(ObjectID);
+        if (!ObjectActor)
+            continue;
+
+        UStaticMeshComponent* MeshComp = ObjectActor->FindComponentByClass<UStaticMeshComponent>();
+        if (!MeshComp)
+            continue;
+
+        const FVector Velocity = MeshComp->GetPhysicsLinearVelocity();
+        const float Speed = Velocity.Size();
+
+        float& StopTimer = LocalOwnedObjectStopTimers.FindOrAdd(ObjectID);
+
+        if (Speed <= StopSpeedThreshold)
+        {
+            StopTimer += DeltaTime;
+        }
+        else
+        {
+            StopTimer = 0.0f;
+        }
+
+        if (StopTimer >= StopTimeThreshold)
+        {
+            SendObjectMoveEnd(
+                ObjectID,
+                ObjectActor->GetActorLocation(),
+                ObjectActor->GetActorRotation()
+            );
+
+            EndObjects.Add(ObjectID);
+        }
+    }
+
+    for (int32 ObjectID : EndObjects)
+    {
+        RemoveLocalOwnedObject(ObjectID);
+    }
+}
+ 
+void AMySocketPoliceActor::SendObjectMoveEnd(int32 ObjectID, const FVector& Loc, const FRotator& Rot)
+{
+
+}
+
+void AMySocketPoliceActor::SendObjectOwnerClaim(int32 ObjectID)
+{
+
+}
+
 // Called every frame
 void AMySocketPoliceActor::Tick(float DeltaTime)
 {
@@ -953,6 +1036,7 @@ void AMySocketPoliceActor::Tick(float DeltaTime)
 
     SendPlayerData();
     ProcessCharacterUpdates();
+    UpdateLocalOwnedObjects(DeltaTime);
     // ProcessObjectUpdates(DeltaTime);
 }
 

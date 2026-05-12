@@ -446,3 +446,7 @@ constexpr FPoliceCharacterState PoliceDummyState{ -1,	110.f, -1100.f, 2770.f,	0.
 
 constexpr float BatonAttackDamage = 50.0f;
 constexpr float PistolAttackDamage = 50.0f;
+
+
+constexpr float StopSpeedThreshold = 3.0f;
+constexpr float StopTimeThreshold = 0.3f;
