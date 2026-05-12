@@ -309,4 +309,15 @@ public:
 	static AMySocketCultistActor* GetMySocketActor();
 	void SendDisableToServer();
 	ACameraActor* GetFollowCameraActor() const;
+
+	UFUNCTION()
+	void OnCapsuleHit(
+		UPrimitiveComponent* HitComponent,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComp,
+		FVector NormalImpulse,
+		const FHitResult& Hit
+	);
+
+	int32 GetObjectIDFromActor(AActor* Actor) const;
 };

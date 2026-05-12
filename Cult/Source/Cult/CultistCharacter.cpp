@@ -85,6 +85,8 @@ void ACultistCharacter::BeginPlay()
 
 	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 
+	// Ãæµ¹
+	GetCapsuleComponent()->OnComponentHit.AddDynamic(this, &ACultistCharacter::OnCapsuleHit);
 
 	SpringArmComp = FindComponentByClass<USpringArmComponent>();
 	if (SpringArmComp)
@@ -1183,4 +1185,70 @@ ACameraActor* ACultistCharacter::GetFollowCameraActor() const
 		return Cast<ACameraActor>(CAC->GetChildActor());
 	}
 	return nullptr;
+}
+
+void ACultistCharacter::OnCapsuleHit(
+	UPrimitiveComponent* HitComponent,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComp,
+	FVector NormalImpulse,
+	const FHitResult& Hit)
+{
+	if (!IsLocallyControlled())
+		return;
+
+	if (!OtherActor || OtherActor == this)
+		return;
+
+	const int32 ObjectID = GetObjectIDFromActor(OtherActor);
+	if (ObjectID < 0)
+		return;
+
+	if (!MySocketCultistActor)
+		return;
+
+	if (MySocketCultistActor->IsLocalOwnedObject(ObjectID))
+		return;
+
+	MySocketCultistActor->AddLocalOwnedObject(ObjectID);
+	MySocketCultistActor->SendObjectOwnerClaim(ObjectID);
+}
+
+int32 ACultistCharacter::GetObjectIDFromActor(AActor* Actor) const
+{
+	if (!Actor)
+		return -1;
+
+#if WITH_EDITOR
+	const FString ActorName = Actor->GetActorLabel();
+#else
+	const FString ActorName = Actor->GetName();
+#endif
+
+	if (!ActorName.StartsWith(TEXT("SchoolDesk")))
+	{
+		return -1;
+	}
+
+	FString Digits;
+
+	for (int32 i = ActorName.Len() - 1; i >= 0; --i)
+	{
+		if (!FChar::IsDigit(ActorName[i]))
+			break;
+
+		Digits.InsertAt(0, ActorName[i]);
+	}
+
+	if (Digits.IsEmpty())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[ObjectID] Failed. Actor=%s"), *ActorName);
+		return -1;
+	}
+
+	const int32 ObjectID = FCString::Atoi(*Digits);
+
+	UE_LOG(LogTemp, Warning, TEXT("[ObjectID] Actor=%s ObjectID=%d"), *ActorName, ObjectID);
+
+	return ObjectID;
 }

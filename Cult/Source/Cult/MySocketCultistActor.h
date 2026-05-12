@@ -44,6 +44,11 @@ private:
 	UMyGameInstance* GI;
 	TArray<int32> KeysToRemove;
 	TWeakObjectPtr<UAnimInstance> BoundAnimInstance;
+	TSet<int32> LocalOwnedObjectIDs;
+	TMap<int32, float> LocalOwnedObjectStopTimers;
+
+	UPROPERTY()
+	TMap<int32, AActor*> SyncedObjectActors;
 
 public:	
 	// Called every frame
@@ -100,4 +105,10 @@ public:
 	UFUNCTION()
 	void HandleMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 
+	bool IsLocalOwnedObject(int32) const;
+	void AddLocalOwnedObject(int32);
+	void RemoveLocalOwnedObject(int32);
+	void UpdateLocalOwnedObjects(float);
+	void SendObjectMoveEnd(int32, const FVector&, const FRotator&);
+	void SendObjectOwnerClaim(int32);
 };
