@@ -992,6 +992,13 @@ void AStructGraphManager::TriggerStage3()
 
 	PlayShake(QuakeStage3LongShakeClass, Stage3LongScale);
 	DisableAllProxies_Global(TEXT("Stage3DisableAll"));
+
+	// 임시
+	SetGCPawnResponse(GCWalls, ECR_Ignore);
+	SetGCPawnResponse(GCColumns, ECR_Ignore);
+	SetGCPawnResponse(GCSlabs, ECR_Ignore);
+
+
 	GetWorld()->GetTimerManager().SetTimerForNextTick([this]()
 		{
 			DisableAllProxies_Global(TEXT("Stage3DisableAll_NextTick"));
