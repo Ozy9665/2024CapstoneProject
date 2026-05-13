@@ -265,6 +265,8 @@ public:
 	//void ForceGravityFixTick(TWeakObjectPtr<UGeometryCollectionComponent> WeakGC, int32 FramesLeft);
 
 	// ÁöÁø
+	void SetGCPawnResponse(const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr,
+		ECollisionResponse Resp);
 	void SetProxyCollisionForOwner(AActor* InOwnerActor, bool bEnable, FName Why);
 
 
@@ -418,6 +420,12 @@ public:
 	void DumpGCCache(const FString& Why);
 
 	// Geometry Collection 
+
+	void DisableAllProxies_Global(const FString& Why);
+	void DumpAllProxies_Global(const FString& Why);
+
+	static void SetProxyCollisionForActor(AActor* InActor, ECollisionEnabled::Type NewMode, const FString& Why);
+
 	UPROPERTY(EditAnywhere, Category = "StructGraph|Stage2")
 	FName GCWallTag = "GC_WALL";
 

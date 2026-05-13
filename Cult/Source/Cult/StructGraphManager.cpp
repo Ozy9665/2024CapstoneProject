@@ -14,6 +14,7 @@
 #include "Math/UnrealMathUtility.h"
 #include "UObject/UnrealType.h"
 #include "NiagaraFunctionLibrary.h"
+#include "Components/PrimitiveComponent.h"
 
 AStructGraphManager::AStructGraphManager()
 {
@@ -990,7 +991,12 @@ void AStructGraphManager::TriggerStage3()
 	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage3 Start (Single-flow continuous)"));
 
 	PlayShake(QuakeStage3LongShakeClass, Stage3LongScale);
-	DisableAllProxies();
+	DisableAllProxies_Global(TEXT("Stage3DisableAll"));
+	GetWorld()->GetTimerManager().SetTimerForNextTick([this]()
+		{
+			DisableAllProxies_Global(TEXT("Stage3DisableAll_NextTick"));
+			DumpAllProxies_Global(TEXT("AfterStage3Disable"));
+		});
 	EnsureGCPhysicsReady_Stage3();
 	StartStage3Continuous();
 }
@@ -2397,11 +2403,11 @@ void AStructGraphManager::DisableAllProxies()
 
 	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
 	{
-		AActor* Owner = *It;
-		if (!IsValid(Owner)) continue;
+		AActor* OwnerActor = *It;
+		if (!IsValid(OwnerActor)) continue;
 
 		TArray<UStaticMeshComponent*> SMs;
-		Owner->GetComponents<UStaticMeshComponent>(SMs);
+		OwnerActor->GetComponents<UStaticMeshComponent>(SMs);
 
 		for (UStaticMeshComponent* SM : SMs)
 		{
@@ -2418,12 +2424,12 @@ void AStructGraphManager::DisableAllProxies()
 
 void AStructGraphManager::SetProxyCollisionForOwner(AActor* InOwnerActor, bool bEnable, FName Why)
 {
-	if (!IsValid(Owner)) return;
+	if (!IsValid(InOwnerActor)) return;
 
 	static const FName ProxyTag(TEXT("GC_PROXY"));
 
 	TArray<UStaticMeshComponent*> SMs;
-	Owner->GetComponents<UStaticMeshComponent>(SMs);
+	InOwnerActor->GetComponents<UStaticMeshComponent>(SMs);
 
 	for (UStaticMeshComponent* SM : SMs)
 	{
@@ -2438,8 +2444,83 @@ void AStructGraphManager::SetProxyCollisionForOwner(AActor* InOwnerActor, bool b
 		// 꺼진 프록시 체크
 		UE_LOG(LogTemp, Warning, TEXT("[Proxy][%s] Owner=%s Comp=%s -> Coll=%d"),
 			*Why.ToString(),
-			*GetNameSafe(Owner),
+			*GetNameSafe(InOwnerActor),
 			*GetNameSafe(SM),
 			(int32)SM->GetCollisionEnabled());
 	}
+}
+
+void AStructGraphManager::SetProxyCollisionForActor(AActor* InActor, ECollisionEnabled::Type NewMode, const FString& Why)
+{
+	if (!IsValid(InActor)) return;
+
+	TInlineComponentArray<UPrimitiveComponent*> PrimComps;
+	InActor->GetComponents(PrimComps);
+
+	for (UPrimitiveComponent* PC : PrimComps)
+	{
+		if (!IsValid(PC)) continue;
+
+		if (PC->ComponentHasTag(TEXT("GC_PROXY")))
+		{
+			PC->SetCollisionEnabled(NewMode);
+
+			UE_LOG(LogTemp, Warning, TEXT("[Proxy][%s] %s.%s -> %d"),
+				*Why,
+				*GetNameSafe(InActor),
+				*GetNameSafe(PC),
+				(int32)NewMode);
+		}
+	}
+}
+
+void AStructGraphManager::DisableAllProxies_Global(const FString& Why)
+{
+	if (!GetWorld()) return;
+
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		SetProxyCollisionForActor(*It, ECollisionEnabled::NoCollision, Why);
+	}
+}
+
+void AStructGraphManager::DumpAllProxies_Global(const FString& Why)
+{
+	if (!GetWorld()) return;
+
+	int32 Count = 0;
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		AActor* A = *It;
+		if (!IsValid(A)) continue;
+
+		TInlineComponentArray<UPrimitiveComponent*> PrimComps;
+		A->GetComponents(PrimComps);
+
+		for (UPrimitiveComponent* PC : PrimComps)
+		{
+			if (!IsValid(PC)) continue;
+			if (!PC->ComponentHasTag(TEXT("GC_PROXY"))) continue;
+
+			Count++;
+			UE_LOG(LogTemp, Warning, TEXT("[ProxyDump][%s] %s.%s Coll=%d"),
+				*Why, *GetNameSafe(A), *GetNameSafe(PC), (int32)PC->GetCollisionEnabled());
+		}
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[ProxyDump][%s] TotalProxyComps=%d"), *Why, Count);
+}
+
+void AStructGraphManager::SetGCPawnResponse(
+	const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr,
+	ECollisionResponse Resp)
+{
+	ForEachValidGC(Arr, [&](UGeometryCollectionComponent* GC)
+		{
+			if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
+
+			GC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			GC->SetCollisionResponseToChannel(ECC_Pawn, Resp);
+			GC->SetCollisionResponseToChannel(ECC_Camera, Resp);
+		});
 }
