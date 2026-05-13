@@ -1802,7 +1802,7 @@ void AStructGraphManager::StartStage3Continuous()
 	Stage3_RecreatedOnce.Reset();
 
 	bStage3ContinuousRunning = true;
-
+	DisableAllProxies();
 	Stage3TickCounter = 0;
 	Stage3StartTimeSec = GetWorld()->GetTimeSeconds();
 
