@@ -1,5 +1,6 @@
 ﻿#include "StructGraphManager.h"
 #include "Components/StaticMeshComponent.h"
+#include "EngineUtils.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
@@ -1660,9 +1661,11 @@ void AStructGraphManager::OnGCBreak(const FChaosBreakEvent& BreakEvent)
 {
 	UGeometryCollectionComponent* GC = Cast<UGeometryCollectionComponent>(BreakEvent.Component);
 	if (!IsValid(GC)) return;
+	SetProxyCollisionForOwner(GC->GetOwner(), false, TEXT("OnBreak"));
 
 	UWorld* World = GetWorld();
 	if (!IsValid(World)) return;
+
 
 	
 	// ----------------------------
@@ -2390,33 +2393,53 @@ void AStructGraphManager::DumpGCCache(const FString& Why)
 }
 void AStructGraphManager::DisableAllProxies()
 {
-	auto DisableProxyOn = [&](const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr)
+	static const FName ProxyTag(TEXT("GC_PROXY"));
+
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		AActor* Owner = *It;
+		if (!IsValid(Owner)) continue;
+
+		TArray<UStaticMeshComponent*> SMs;
+		Owner->GetComponents<UStaticMeshComponent>(SMs);
+
+		for (UStaticMeshComponent* SM : SMs)
 		{
-			for (const auto& W : Arr)
-			{
-				UGeometryCollectionComponent* GC = W.Get();
-				if (!IsValid(GC)) continue;
+			if (!IsValid(SM)) continue;
+			if (!SM->ComponentHasTag(ProxyTag)) continue;
 
-				AActor* Owner = GC->GetOwner();
-				if (!IsValid(Owner)) continue;
+			SM->SetSimulatePhysics(false);
+			SM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			SM->SetGenerateOverlapEvents(false);
+		}
+	}
 
-				TArray<UActorComponent*> Comps;
-				Owner->GetComponents(UStaticMeshComponent::StaticClass(), Comps);
+}
 
-				for (UActorComponent* C : Comps)
-				{
-					UStaticMeshComponent* SM = Cast<UStaticMeshComponent>(C);
-					if (!IsValid(SM)) continue;
+void AStructGraphManager::SetProxyCollisionForOwner(AActor* InOwnerActor, bool bEnable, FName Why)
+{
+	if (!IsValid(Owner)) return;
 
-					if (SM->ComponentHasTag(TEXT("GC_PROXY")))
-					{
-						SM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-					}
-				}
-			}
-		};
+	static const FName ProxyTag(TEXT("GC_PROXY"));
 
-	DisableProxyOn(GCWalls);
-	DisableProxyOn(GCColumns);
-	DisableProxyOn(GCSlabs);
+	TArray<UStaticMeshComponent*> SMs;
+	Owner->GetComponents<UStaticMeshComponent>(SMs);
+
+	for (UStaticMeshComponent* SM : SMs)
+	{
+		if (!IsValid(SM)) continue;
+		if (!SM->ComponentHasTag(ProxyTag)) continue;
+
+		SM->SetSimulatePhysics(false);
+		SM->SetGenerateOverlapEvents(false);
+		SM->SetCollisionEnabled(bEnable ? ECollisionEnabled::QueryAndPhysics
+			: ECollisionEnabled::NoCollision);
+
+		// 꺼진 프록시 체크
+		UE_LOG(LogTemp, Warning, TEXT("[Proxy][%s] Owner=%s Comp=%s -> Coll=%d"),
+			*Why.ToString(),
+			*GetNameSafe(Owner),
+			*GetNameSafe(SM),
+			(int32)SM->GetCollisionEnabled());
+	}
 }

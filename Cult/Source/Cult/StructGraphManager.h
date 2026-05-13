@@ -265,6 +265,9 @@ public:
 	//void ForceGravityFixTick(TWeakObjectPtr<UGeometryCollectionComponent> WeakGC, int32 FramesLeft);
 
 	// ÁöÁø
+	void SetProxyCollisionForOwner(AActor* InOwnerActor, bool bEnable, FName Why);
+
+
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
 	void DisableAllProxies();
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
