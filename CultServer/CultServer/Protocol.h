@@ -468,12 +468,12 @@ struct ObjectOwnerClaimPacket
 {
 	uint8_t header;
 	uint16_t size;
-	uint16_t object_id;
+	int object_id;
 };
 
 struct ObjectUpdateData
 {
-	uint16_t object_id;
+	int object_id;
 	FVector loc;
 	FRotator rot;
 };
@@ -490,7 +490,7 @@ struct ObjectMoveEndPacket
 {
 	uint8_t header;
 	uint16_t size;
-	uint16_t object_id;
+	int object_id;
 	FVector loc;
 	FRotator rot;
 };

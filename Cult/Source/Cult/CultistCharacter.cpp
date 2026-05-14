@@ -1200,7 +1200,7 @@ void ACultistCharacter::OnCapsuleHit(
 	if (!OtherActor || OtherActor == this)
 		return;
 
-	const int32 ObjectID = GetObjectIDFromActor(OtherActor);
+	const int ObjectID = GetObjectIDFromActor(OtherActor);
 	if (ObjectID < 0)
 		return;
 
@@ -1214,7 +1214,7 @@ void ACultistCharacter::OnCapsuleHit(
 	MySocketCultistActor->SendObjectOwnerClaim(ObjectID);
 }
 
-int32 ACultistCharacter::GetObjectIDFromActor(AActor* Actor) const
+int ACultistCharacter::GetObjectIDFromActor(AActor* Actor) const
 {
 	if (!Actor)
 		return -1;
@@ -1232,7 +1232,7 @@ int32 ACultistCharacter::GetObjectIDFromActor(AActor* Actor) const
 
 	FString Digits;
 
-	for (int32 i = ActorName.Len() - 1; i >= 0; --i)
+	for (int i = ActorName.Len() - 1; i >= 0; --i)
 	{
 		if (!FChar::IsDigit(ActorName[i]))
 			break;
@@ -1246,7 +1246,7 @@ int32 ACultistCharacter::GetObjectIDFromActor(AActor* Actor) const
 		return -1;
 	}
 
-	const int32 ObjectID = FCString::Atoi(*Digits);
+	const int ObjectID = FCString::Atoi(*Digits);
 
 	UE_LOG(LogTemp, Warning, TEXT("[ObjectID] Actor=%s ObjectID=%d"), *ActorName, ObjectID);
 

@@ -105,10 +105,11 @@ public:
 	UFUNCTION()
 	void HandleMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 
-	bool IsLocalOwnedObject(int32) const;
-	void AddLocalOwnedObject(int32);
-	void RemoveLocalOwnedObject(int32);
+	bool IsLocalOwnedObject(int) const;
+	void AddLocalOwnedObject(int);
+	void RemoveLocalOwnedObject(int);
 	void UpdateLocalOwnedObjects(float);
-	void SendObjectMoveEnd(int32, const FVector&, const FRotator&);
-	void SendObjectOwnerClaim(int32);
+	void SendObjectOwnerClaim(int);
+	void SendObjectUpdatePacket(const TArray<ObjectUpdateData>&);
+	void SendObjectMoveEnd(int, const FVector&, const FRotator&);
 };

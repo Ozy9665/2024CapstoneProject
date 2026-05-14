@@ -319,5 +319,5 @@ public:
 		const FHitResult& Hit
 	);
 
-	int32 GetObjectIDFromActor(AActor* Actor) const;
+	int GetObjectIDFromActor(AActor* Actor) const;
 };

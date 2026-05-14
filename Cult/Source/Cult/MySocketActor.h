@@ -351,12 +351,12 @@ struct ObjectOwnerClaimPacket
 {
 	uint8_t header;
 	uint16_t size;
-	uint16_t object_id;
+	int object_id;
 };
 
 struct ObjectUpdateData
 {
-	uint16_t object_id;
+	int object_id;
 	FNetVec loc;
 	FNetRot rot;
 };
@@ -373,7 +373,7 @@ struct ObjectMoveEndPacket
 {
 	uint8_t header;
 	uint16_t size;
-	uint16_t object_id;
+	int object_id;
 	FNetVec loc;
 	FNetRot rot;
 };
@@ -426,6 +426,9 @@ constexpr char crowSpawnHeader = 26;
 constexpr char crowDataHeader = 27;
 constexpr char crowDisableHeader = 28;
 constexpr char collapseHeader = 30;
+constexpr char objectClaimHeader = 31;
+constexpr char objectUpdateHeader = 32;
+constexpr char objectEndHeader = 33;
 
 //-- room header
 constexpr char requestHeader = 8;

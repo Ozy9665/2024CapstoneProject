@@ -1859,12 +1859,12 @@ void AMySocketCultistActor::SafeDestroyCharacter(int PlayerID)
         });
 }
 
-bool AMySocketCultistActor::IsLocalOwnedObject(int32 ObjectID) const
+bool AMySocketCultistActor::IsLocalOwnedObject(int ObjectID) const
 {
     return LocalOwnedObjectIDs.Contains(ObjectID);
 }
 
-void AMySocketCultistActor::AddLocalOwnedObject(int32 ObjectID)
+void AMySocketCultistActor::AddLocalOwnedObject(int ObjectID)
 {
     LocalOwnedObjectIDs.Add(ObjectID);
     LocalOwnedObjectStopTimers.FindOrAdd(ObjectID) = 0.0f;
@@ -1875,7 +1875,7 @@ void AMySocketCultistActor::AddLocalOwnedObject(int32 ObjectID)
     );
 }
 
-void AMySocketCultistActor::RemoveLocalOwnedObject(int32 ObjectID)
+void AMySocketCultistActor::RemoveLocalOwnedObject(int ObjectID)
 {
     LocalOwnedObjectIDs.Remove(ObjectID);
     LocalOwnedObjectStopTimers.Remove(ObjectID);
@@ -1888,9 +1888,10 @@ void AMySocketCultistActor::RemoveLocalOwnedObject(int32 ObjectID)
 
 void AMySocketCultistActor::UpdateLocalOwnedObjects(float DeltaTime)
 {
-    TArray<int32> EndObjects;
+    TArray<ObjectUpdateData> Updates;
+    TArray<int> EndObjects;
 
-    for (int32 ObjectID : LocalOwnedObjectIDs)
+    for (int ObjectID : LocalOwnedObjectIDs)
     {
         AActor* ObjectActor = SyncedObjectActors.FindRef(ObjectID);
         if (!ObjectActor)
@@ -1923,86 +1924,94 @@ void AMySocketCultistActor::UpdateLocalOwnedObjects(float DeltaTime)
             );
 
             EndObjects.Add(ObjectID);
+            continue;
         }
+
+        ObjectUpdateData Data{};
+        Data.object_id = ObjectID;
+        Data.loc = AMySocketActor::ToNet(ObjectActor->GetActorLocation());
+        Data.rot = AMySocketActor::ToNet(ObjectActor->GetActorRotation());
+
+        Updates.Add(Data);
     }
 
-    for (int32 ObjectID : EndObjects)
+    if (!Updates.IsEmpty())
+    {
+        SendObjectUpdatePacket(Updates);
+    }
+
+    for (int ObjectID : EndObjects)
     {
         RemoveLocalOwnedObject(ObjectID);
     }
 }
 
-void AMySocketCultistActor::SendObjectMoveEnd(int32 ObjectID, const FVector& Loc, const FRotator& Rot)
+void AMySocketCultistActor::SendObjectOwnerClaim(int ObjectID)
 {
+    ObjectOwnerClaimPacket Packet;
+    Packet.header = objectClaimHeader;
+    Packet.size = sizeof(ObjectOwnerClaimPacket);
+    Packet.object_id = ObjectID;
 
-}
-
-void AMySocketCultistActor::SendObjectOwnerClaim(int32 ObjectID)
-{
-
-}
-
-/*
-void AMySocketClientActor::InitializeBlocks()
-{
-    TArray<AActor*> FoundBlocks;
-    UGameplayStatics::GetAllActorsOfClass(GetWorld(), AReplicatedPhysicsBlock::StaticClass(), FoundBlocks);
-
-    int32 BlockIndex = 1;
-    for (AActor* Actor : FoundBlocks)
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(ObjectOwnerClaimPacket), 0);
+    if (BytesSent == SOCKET_ERROR)
     {
-        AReplicatedPhysicsBlock* Block = Cast<AReplicatedPhysicsBlock>(Actor);
-        if (Block)
-        {
-            SyncedBlocks.Add(BlockIndex, Block);
-            FTransform BlockTransform = Block->GetActorTransform();
-
-            BlockIndex++;
-        }
+        UE_LOG(LogTemp, Error, TEXT("SendObjectOwnerClaim failed with error: %ld"), WSAGetLastError());
     }
 }
-*/
-/*
-void AMySocketClientActor::ProcessObjectData(char* Buffer, int32 BytesReceived) {
-    int32 Offset = sizeof(uint8);
 
-    if (BytesReceived < Offset + sizeof(int32) + sizeof(FTransform)) {
-        UE_LOG(LogTemp, Error, TEXT("Invalid object data packet received."));
+void AMySocketCultistActor::SendObjectUpdatePacket(const TArray<ObjectUpdateData>& Updates)
+{
+    if (ClientSocket == INVALID_SOCKET)
         return;
-    }
 
-    int32 BlockID;
-    FTransform NewTransform;
+    if (Updates.IsEmpty())
+        return;
 
-    memcpy(&BlockID, Buffer + Offset, sizeof(int32));
-    Offset += sizeof(int32);
-    memcpy(&NewTransform, Buffer + Offset, sizeof(FTransform));
+    ObjectUpdatePacket Header{};
+    Header.header = objectUpdateHeader;
+    Header.count = static_cast<uint16_t>(Updates.Num());
+    Header.size = static_cast<uint16_t>(
+        sizeof(ObjectUpdatePacket) + sizeof(ObjectUpdateData) * Updates.Num()
+        );
 
-    LastReceivedTransform.FindOrAdd(BlockID) = NewTransform;
-}
-*/
-/*
-void AMySocketClientActor::ProcessObjectUpdates(float DeltaTime)
-{
-    for (auto& Pair : LastReceivedTransform)
+    TArray<uint8> Buffer;
+    Buffer.SetNumUninitialized(Header.size);
+
+    int32 Offset = 0;
+
+    FMemory::Memcpy(Buffer.GetData() + Offset, &Header, sizeof(ObjectUpdatePacket));
+    Offset += sizeof(ObjectUpdatePacket);
+
+    FMemory::Memcpy(
+        Buffer.GetData() + Offset,
+        Updates.GetData(),
+        sizeof(ObjectUpdateData) * Updates.Num()
+    );
+
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(Buffer.GetData()), Buffer.Num(), 0);
+    if (BytesSent == SOCKET_ERROR)
     {
-        int32 BlockID = Pair.Key;
-        FTransform TargetTransform = Pair.Value;
-
-        if (AReplicatedPhysicsBlock* Block = SyncedBlocks.FindRef(BlockID))
-        {
-            FVector InterpolatedLocation = FMath::VInterpTo(
-                Block->GetActorLocation(), TargetTransform.GetLocation(), DeltaTime, 5.0f);
-
-            FRotator InterpolatedRotation = FMath::RInterpTo(
-                Block->GetActorRotation(), TargetTransform.GetRotation().Rotator(), DeltaTime, 5.0f);
-
-            Block->SetActorLocation(InterpolatedLocation);
-            Block->SetActorRotation(InterpolatedRotation);
-        }
+        UE_LOG(LogTemp, Error, TEXT("SendObjectUpdatePacket failed. Error=%ld"), WSAGetLastError());
     }
 }
-*/
+
+void AMySocketCultistActor::SendObjectMoveEnd(int ObjectID, const FVector& Loc, const FRotator& Rot)
+{
+    ObjectMoveEndPacket Packet;
+    Packet.header = objectEndHeader;
+    Packet.size = sizeof(ObjectMoveEndPacket);
+    Packet.object_id = ObjectID;
+    Packet.loc = AMySocketActor::ToNet(Loc);
+    Packet.rot = AMySocketActor::ToNet(Rot);
+
+    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(&Packet), sizeof(ObjectMoveEndPacket), 0);
+    if (BytesSent == SOCKET_ERROR)
+    {
+        UE_LOG(LogTemp, Error, TEXT("SendObjectMoveEnd failed with error: %ld"), WSAGetLastError());
+    }
+}
+
 // Called every frame
 void AMySocketCultistActor::Tick(float DeltaTime)
 {
@@ -2010,6 +2019,5 @@ void AMySocketCultistActor::Tick(float DeltaTime)
     SendPlayerData();
     ProcessCharacterUpdates();
     UpdateLocalOwnedObjects(DeltaTime);
-    // ProcessObjectUpdates(DeltaTime);
 }
 

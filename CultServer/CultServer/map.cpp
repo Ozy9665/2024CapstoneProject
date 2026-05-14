@@ -590,8 +590,8 @@ bool NAVMESH::Load(const std::string& objPath, const Vec3& MapOffset, const Vec3
     BuildSpatialGridNav();
     BuildComponents();
 
-    DebugPrintSummary();
-    DebugPrintAdjacencySample();
+    //DebugPrintSummary();
+    //DebugPrintAdjacencySample();
     return true;
 }
 
