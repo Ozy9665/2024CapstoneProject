@@ -62,6 +62,9 @@ constexpr char crowSpawnHeader = 26;
 constexpr char crowDataHeader = 27;
 constexpr char crowDisableHeader = 28;
 constexpr char collapseHeader = 30;
+constexpr char objectClaimHeader = 31;
+constexpr char objectUpdateHeader = 32;
+constexpr char objectEndHeader = 33;
 
 //-- room header
 constexpr char requestHeader = 8;
@@ -181,13 +184,8 @@ struct Object
 
 	FVector position{};
 	FRotator rotation{};
-	FVector velocity{};
-	FVector angular_velocity{};
 
 	bool dirty = false;
-
-	float last_update_time = 0.0f;
-	float last_owner_change_time = 0.0f;
 };
 
 struct RoomObject {

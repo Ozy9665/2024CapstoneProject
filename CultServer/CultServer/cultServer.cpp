@@ -120,14 +120,20 @@ void InitializeRoomObjects(int room_num)
 
 		obj.position = {};
 		obj.rotation = {};
-		obj.velocity = {};
-		obj.angular_velocity = {};
 
 		obj.dirty = false;
-
-		obj.last_update_time = 0.0f;
-		obj.last_owner_change_time = 0.0f;
 	}
+}
+
+Object* GetDeskObject(int room_id, int object_id)
+{
+	if (room_id < 0 || room_id >= MAX_ROOM)
+		return nullptr;
+
+	if (object_id < 0 || object_id >= MAX_DESK_OBJECTS)
+		return nullptr;
+
+	return &g_roomObjects[room_id].desks[object_id];
 }
 
 // db event ť
@@ -1755,6 +1761,128 @@ void process_packet(int c_id, char* packet) {
 		std::lock_guard<std::mutex> lk(g_room_mtx);
 		g_room_q.push(RoomTask{ c_id, RM_QUIT, user->second->role,user->second->room_id });
 		g_room_cv.notify_one();
+		break;
+	}
+	case objectClaimHeader:
+	{
+		auto* p = reinterpret_cast<ObjectOwnerClaimPacket*>(packet);
+		if (p->size != sizeof(ObjectOwnerClaimPacket)) {
+			std::cout << "Invalid ObjectOwnerClaimPacket size\n";
+			break;
+		}
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		if (!user)
+			break;
+
+		Object* obj = GetDeskObject(user->room_id, p->object_id);
+		if (!obj)
+			break;
+
+		obj->owner_id = c_id;
+		obj->dirty = true;
+
+		g_roomObjects[user->room_id].dirty_object_ids.insert(p->object_id);
+		broadcast_in_room(*user, p, VIEW_RANGE);
+		break;
+	}
+	case objectUpdateHeader:
+	{
+		auto* p = reinterpret_cast<ObjectUpdatePacket*>(packet);
+		if (p->count == 0 || p->count > MAX_DESK_OBJECTS)
+		{
+			std::cout << "Invalid objectUpdateHeader count\n";
+			break;
+		}
+		const int expectedSize =
+			sizeof(ObjectUpdatePacket) + sizeof(ObjectUpdateData) * p->count;
+		if (p->size != expectedSize)
+		{
+			std::cout << "Invalid objectUpdateHeader size\n";
+			break;
+		}
+
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		if (!user)
+			break;
+
+		int offset = sizeof(ObjectUpdatePacket);
+		for (int i = 0; i < p->count; ++i)
+		{
+			auto* data = reinterpret_cast<ObjectUpdateData*>(packet + offset);
+			offset += sizeof(ObjectUpdateData);
+
+			Object* obj = GetDeskObject(user->room_id, data->object_id);
+			if (!obj)
+				continue;
+			if (obj->owner_id != c_id)
+				continue;
+
+			obj->position = FVector(
+				data->loc.x,
+				data->loc.y,
+				data->loc.z
+			);
+
+			obj->rotation = FRotator(
+				data->rot.pitch,
+				data->rot.yaw,
+				data->rot.roll
+			);
+
+			obj->dirty = true;
+			g_roomObjects[user->room_id].dirty_object_ids.insert(data->object_id);
+
+		}
+		broadcast_in_room(*user, p, VIEW_RANGE);
+
+		break;
+	}
+	case objectEndHeader:
+	{
+		auto* p = reinterpret_cast<ObjectMoveEndPacket*>(packet);
+		if (p->size != sizeof(ObjectMoveEndPacket)) {
+			std::cout << "Invalid ObjectMoveEndPacket size\n";
+			break;
+		}
+		auto it = g_users.find(c_id);
+		if (it == g_users.end())
+			break;
+
+		auto user = it->second;
+		if (!user)
+			break;
+
+		Object* obj = GetDeskObject(user->room_id, p->object_id);
+		if (!obj)
+			break;
+		if (obj->owner_id != c_id)
+			break;
+
+		obj->position = FVector(
+			p->loc.x,
+			p->loc.y,
+			p->loc.z
+		);
+
+		obj->rotation = FRotator(
+			p->rot.pitch,
+			p->rot.yaw,
+			p->rot.roll
+		);
+
+		obj->owner_id = -1;
+		obj->dirty = false;
+		g_roomObjects[user->room_id].dirty_object_ids.erase(p->object_id);
+
+		broadcast_in_room(*user, p, VIEW_RANGE);
 		break;
 	}
 	default:
