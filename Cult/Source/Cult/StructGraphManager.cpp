@@ -991,7 +991,9 @@ void AStructGraphManager::TriggerStage3()
 	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage3 Start (Single-flow continuous)"));
 
 	PlayShake(QuakeStage3LongShakeClass, Stage3LongScale);
-	DisableAllProxies_Global(TEXT("Stage3DisableAll"));
+	DisableAllProxies();
+	DebugDumpProxyCollision(TEXT("After DisableAllProxies"));
+	DebugDumpGCCollision(TEXT("After Stage3 Setup"));
 
 	// 임시
 	SetGCPawnResponse(GCWalls, ECR_Ignore);
@@ -2530,4 +2532,78 @@ void AStructGraphManager::SetGCPawnResponse(
 			GC->SetCollisionResponseToChannel(ECC_Pawn, Resp);
 			GC->SetCollisionResponseToChannel(ECC_Camera, Resp);
 		});
+}
+
+void AStructGraphManager::DebugDumpProxyCollision(const TCHAR* Reason)
+{
+	int32 TotalProxy = 0;
+	int32 StillBlocking = 0;
+
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		AActor* A = *It;
+		if (!IsValid(A)) continue;
+
+		TArray<UActorComponent*> Comps;
+		A->GetComponents(UStaticMeshComponent::StaticClass(), Comps);
+
+		for (UActorComponent* C : Comps)
+		{
+			UStaticMeshComponent* SM = Cast<UStaticMeshComponent>(C);
+			if (!IsValid(SM)) continue;
+			if (!SM->ComponentHasTag(TEXT("GC_PROXY"))) continue;
+
+			TotalProxy++;
+
+			const bool bNoCol = (SM->GetCollisionEnabled() == ECollisionEnabled::NoCollision);
+			const ECollisionResponse PawnResp = SM->GetCollisionResponseToChannel(ECC_Pawn);
+
+			// 완전히 꺼졌는지
+			const bool bOk = bNoCol || (PawnResp == ECR_Ignore);
+
+			if (!bOk)
+			{
+				StillBlocking++;
+				UE_LOG(LogTemp, Warning, TEXT("[ProxyDump][%s] BLOCKING: Actor=%s Comp=%s Coll=%d PawnResp=%d"),
+					Reason,
+					*A->GetName(),
+					*SM->GetName(),
+					(int32)SM->GetCollisionEnabled(),
+					(int32)PawnResp);
+			}
+		}
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[ProxyDump][%s] TotalProxy=%d StillBlocking=%d"),
+		Reason, TotalProxy, StillBlocking);
+}
+
+void AStructGraphManager::DebugDumpGCCollision(const TCHAR* Reason)
+{
+	auto DumpArr = [&](const TCHAR* Label, const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr)
+		{
+			int32 N = 0;
+			for (const auto& W : Arr)
+			{
+				UGeometryCollectionComponent* GC = W.Get();
+				if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) continue;
+				N++;
+
+				const ECollisionResponse PawnResp = GC->GetCollisionResponseToChannel(ECC_Pawn);
+
+				UE_LOG(LogTemp, Warning, TEXT("[GCDump][%s][%s] %s Sim=%d Grav=%d Coll=%d PawnResp=%d"),
+					Reason,
+					Label,
+					*GetNameSafe(GC->GetOwner()),
+					GC->IsSimulatingPhysics() ? 1 : 0,
+					GC->IsGravityEnabled() ? 1 : 0,
+					(int32)GC->GetCollisionEnabled(),
+					(int32)PawnResp);
+			}
+			UE_LOG(LogTemp, Warning, TEXT("[GCDump][%s][%s] Count=%d"), Reason, Label, N);
+		};
+
+	DumpArr(TEXT("Walls"), GCWalls);
+	DumpArr(TEXT("Columns"), GCColumns);
+	DumpArr(TEXT("Slabs"), GCSlabs);
 }

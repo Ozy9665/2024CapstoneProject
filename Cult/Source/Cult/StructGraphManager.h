@@ -269,6 +269,10 @@ public:
 		ECollisionResponse Resp);
 	void SetProxyCollisionForOwner(AActor* InOwnerActor, bool bEnable, FName Why);
 
+	// 콜리전 디버그용
+	void DebugDumpProxyCollision(const TCHAR* Reason);
+	void DebugDumpGCCollision(const TCHAR* Reason);
+
 
 	UFUNCTION(BlueprintCallable, Category = "StructGraph")
 	void DisableAllProxies();
