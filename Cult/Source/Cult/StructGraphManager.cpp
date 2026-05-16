@@ -992,6 +992,7 @@ void AStructGraphManager::TriggerStage3()
 
 	PlayShake(QuakeStage3LongShakeClass, Stage3LongScale);
 	DisableAllProxies();
+	// 디버그
 	DebugDumpProxyCollision(TEXT("After DisableAllProxies"));
 	DebugDumpGCCollision(TEXT("After Stage3 Setup"));
 
@@ -1008,6 +1009,18 @@ void AStructGraphManager::TriggerStage3()
 		});
 	EnsureGCPhysicsReady_Stage3();
 	StartStage3Continuous();
+
+	// 임시
+	GetWorldTimerManager().SetTimerForNextTick([this]()
+		{
+			DebugDumpProxyCollision(TEXT("NextTick"));
+		});
+
+	FTimerHandle Tmp;
+	GetWorldTimerManager().SetTimer(Tmp, [this]()
+		{
+			DebugDumpProxyCollision(TEXT("T+1.0s"));
+		}, 1.0f, false);
 }
 
 UGeometryCollectionComponent* AStructGraphManager::FindNearestGC(const FVector& WorldPoint) const
