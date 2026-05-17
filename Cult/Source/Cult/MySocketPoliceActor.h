@@ -42,6 +42,9 @@ private:
 	TMap<int32, float> LocalOwnedObjectStopTimers;
 
 	UPROPERTY()
+	TMap<AActor*, int32> SyncedObjectActorToID;
+
+	UPROPERTY()
 	TMap<int32, AActor*> SyncedObjectActors;
 
 public:	
@@ -86,4 +89,10 @@ public:
 	void SendObjectOwnerClaim(int);
 	void SendObjectUpdatePacket(const TArray<ObjectUpdateData>&);
 	void SendObjectMoveEnd(int, const FVector&, const FRotator&);
+	void InitializeSyncedObjects();
+	int GetObjectIDByActor(AActor* Actor) const;
+	void RequestObjectOwnerClaim(int);
+	void ProcessObjectClaim(const char*);
+	void ProcessObjectUpdate(const char*);
+	void ProcessObjectEnd(const char*);
 };

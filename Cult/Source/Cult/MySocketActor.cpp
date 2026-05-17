@@ -27,9 +27,9 @@ FVector AMySocketActor::ToUE(const FNetVec& v)
 FRotator AMySocketActor::ToUE(const FNetRot& r)
 {
 	return FRotator(
-        static_cast<double>(r.x),
-        static_cast<double>(r.y),
-        static_cast<double>(r.z)
+        static_cast<double>(r.pitch),
+        static_cast<double>(r.yaw),
+        static_cast<double>(r.roll)
     );
 }
 

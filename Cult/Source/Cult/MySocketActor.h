@@ -76,9 +76,9 @@ struct FNetVec {
 };
 
 struct FNetRot {
-	double x;
-	double y;
-	double z;
+	double pitch;
+	double yaw;
+	double roll;
 };
 
 struct Dog {

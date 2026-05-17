@@ -37,6 +37,8 @@ void AMySocketPoliceActor::BeginPlay()
     if (!GI) {
         UE_LOG(LogTemp, Error, TEXT("My Socket Police Actor GetGameInstance Failed!"));
     }
+
+    InitializeSyncedObjects();
 }
 
 void AMySocketPoliceActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -161,6 +163,15 @@ void AMySocketPoliceActor::ReceiveData()
                         }
                         case collapseHeader:
                             ProcessCollapse(OnePacket.data());
+                            break;
+                        case objectClaimHeader:
+                            ProcessObjectClaim(OnePacket.data());
+                            break;
+                        case objectUpdateHeader:
+                            ProcessObjectUpdate(OnePacket.data());
+                            break;
+                        case objectEndHeader:
+                            ProcessObjectEnd(OnePacket.data());
                             break;
                         default:
                             UE_LOG(LogTemp, Warning, TEXT("Unknown packet type received: %d"), PacketType);
@@ -1097,6 +1108,213 @@ void AMySocketPoliceActor::SendObjectMoveEnd(int ObjectID, const FVector& Loc, c
     {
         UE_LOG(LogTemp, Error, TEXT("SendObjectMoveEnd failed with error: %ld"), WSAGetLastError());
     }
+}
+
+int AMySocketPoliceActor::GetObjectIDByActor(AActor* Actor) const
+{
+    if (!Actor)
+        return -1;
+
+    const int* ObjectID = SyncedObjectActorToID.Find(Actor);
+    if (!ObjectID)
+        return -1;
+
+    return *ObjectID;
+}
+
+void AMySocketPoliceActor::InitializeSyncedObjects()
+{
+    SyncedObjectActors.Empty();
+    SyncedObjectActorToID.Empty();
+
+    TArray<AActor*> FoundActors;
+    UGameplayStatics::GetAllActorsOfClass(
+        GetWorld(),
+        AActor::StaticClass(),
+        FoundActors
+    );
+
+    TArray<AActor*> SyncActors;
+
+    for (AActor* Actor : FoundActors)
+    {
+        if (!Actor)
+            continue;
+
+        if (!Actor->ActorHasTag(TEXT("SyncObject")))
+            continue;
+
+        SyncActors.Add(Actor);
+    }
+
+    SyncActors.Sort([](const AActor& A, const AActor& B)
+        {
+            const FVector LA = A.GetActorLocation();
+            const FVector LB = B.GetActorLocation();
+
+            if (!FMath::IsNearlyEqual(LA.X, LB.X))
+                return LA.X < LB.X;
+
+            if (!FMath::IsNearlyEqual(LA.Y, LB.Y))
+                return LA.Y < LB.Y;
+
+            return LA.Z < LB.Z;
+        });
+
+    for (int i = 0; i < SyncActors.Num(); ++i)
+    {
+        AActor* Actor = SyncActors[i];
+        if (!Actor)
+            continue;
+
+        const int ObjectID = i;
+
+        SyncedObjectActors.Add(ObjectID, Actor);
+        SyncedObjectActorToID.Add(Actor, ObjectID);
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[ObjectSync] Total Registered=%d"), SyncedObjectActors.Num());
+}
+
+void AMySocketPoliceActor::RequestObjectOwnerClaim(int ObjectID)
+{
+    if (ObjectID < 0)
+        return;
+
+    if (IsLocalOwnedObject(ObjectID))
+        return;
+
+    AddLocalOwnedObject(ObjectID);
+    SendObjectOwnerClaim(ObjectID);
+}
+
+void AMySocketPoliceActor::ProcessObjectClaim(const char* Buffer)
+{
+    const ObjectOwnerClaimPacket* Packet = reinterpret_cast<const ObjectOwnerClaimPacket*>(Buffer);
+
+    if (Packet->size != sizeof(ObjectOwnerClaimPacket))
+        return;
+
+    const int ObjectID = Packet->object_id;
+
+    if (IsLocalOwnedObject(ObjectID))
+    {
+        RemoveLocalOwnedObject(ObjectID);
+
+        UE_LOG(LogTemp, Warning, TEXT("[ObjectSync] Claim received. Lost ownership ID=%d"), ObjectID);
+    }
+}
+
+void AMySocketPoliceActor::ProcessObjectUpdate(const char* Buffer)
+{
+    const ObjectUpdatePacket* Packet =
+        reinterpret_cast<const ObjectUpdatePacket*>(Buffer);
+
+    if (Packet->count == 0)
+        return;
+
+    const int ExpectedSize =
+        sizeof(ObjectUpdatePacket) + sizeof(ObjectUpdateData) * Packet->count;
+
+    if (Packet->size != ExpectedSize)
+        return;
+
+    TArray<ObjectUpdateData> Updates;
+    Updates.Reserve(Packet->count);
+
+    int Offset = sizeof(ObjectUpdatePacket);
+
+    for (int i = 0; i < Packet->count; ++i)
+    {
+        const ObjectUpdateData* Data =
+            reinterpret_cast<const ObjectUpdateData*>(Buffer + Offset);
+
+        Offset += sizeof(ObjectUpdateData);
+
+        Updates.Add(*Data);
+    }
+
+    AsyncTask(ENamedThreads::GameThread, [this, Updates]()
+        {
+            for (const ObjectUpdateData& Data : Updates)
+            {
+                const int ObjectID = Data.object_id;
+
+                if (IsLocalOwnedObject(ObjectID))
+                    continue;
+
+                AActor* ObjectActor = SyncedObjectActors.FindRef(ObjectID);
+                if (!ObjectActor)
+                    continue;
+
+                const FVector NewLoc(
+                    static_cast<float>(Data.loc.x),
+                    static_cast<float>(Data.loc.y),
+                    static_cast<float>(Data.loc.z)
+                );
+
+                const FRotator NewRot(
+                    static_cast<float>(Data.rot.pitch),
+                    static_cast<float>(Data.rot.yaw),
+                    static_cast<float>(Data.rot.roll)
+                );
+
+                ObjectActor->SetActorLocationAndRotation(
+                    NewLoc,
+                    NewRot,
+                    false,
+                    nullptr,
+                    ETeleportType::TeleportPhysics
+                );
+            }
+        });
+}
+
+void AMySocketPoliceActor::ProcessObjectEnd(const char* Buffer)
+{
+    const ObjectMoveEndPacket* Packet =
+        reinterpret_cast<const ObjectMoveEndPacket*>(Buffer);
+
+    if (Packet->size != sizeof(ObjectMoveEndPacket))
+        return;
+
+    const ObjectMoveEndPacket PacketCopy = *Packet;
+
+    AsyncTask(ENamedThreads::GameThread, [this, PacketCopy]()
+        {
+            const int ObjectID = PacketCopy.object_id;
+
+            AActor* ObjectActor = SyncedObjectActors.FindRef(ObjectID);
+            if (!ObjectActor)
+                return;
+
+            const FVector NewLoc(
+                static_cast<float>(PacketCopy.loc.x),
+                static_cast<float>(PacketCopy.loc.y),
+                static_cast<float>(PacketCopy.loc.z)
+            );
+
+            const FRotator NewRot(
+                static_cast<float>(PacketCopy.rot.pitch),
+                static_cast<float>(PacketCopy.rot.yaw),
+                static_cast<float>(PacketCopy.rot.roll)
+            );
+
+            ObjectActor->SetActorLocationAndRotation(
+                NewLoc,
+                NewRot,
+                false,
+                nullptr,
+                ETeleportType::TeleportPhysics
+            );
+
+            if (IsLocalOwnedObject(ObjectID))
+            {
+                RemoveLocalOwnedObject(ObjectID);
+
+                UE_LOG(LogTemp, Warning, TEXT("[ObjectSync] End received. Remove ownership ID=%d"), ObjectID);
+            }
+        });
 }
 
 // Called every frame

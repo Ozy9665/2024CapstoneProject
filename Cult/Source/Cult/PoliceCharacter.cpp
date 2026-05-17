@@ -850,18 +850,14 @@ void APoliceCharacter::OnCapsuleHit(
 	if (!OtherActor || OtherActor == this)
 		return;
 
+	if (!MySocketPoliceActor)
+		return;
+
 	const int ObjectID = GetObjectIDFromActor(OtherActor);
 	if (ObjectID < 0)
 		return;
 
-	if (!MySocketPoliceActor)
-		return;
-
-	if (MySocketPoliceActor->IsLocalOwnedObject(ObjectID))
-		return;
-
-	MySocketPoliceActor->AddLocalOwnedObject(ObjectID);
-	MySocketPoliceActor->SendObjectOwnerClaim(ObjectID);
+	MySocketPoliceActor->RequestObjectOwnerClaim(ObjectID);
 }
 
 int APoliceCharacter::GetObjectIDFromActor(AActor* Actor) const
@@ -869,36 +865,23 @@ int APoliceCharacter::GetObjectIDFromActor(AActor* Actor) const
 	if (!Actor)
 		return -1;
 
-#if WITH_EDITOR
-	const FString ActorName = Actor->GetActorLabel();
-#else
-	const FString ActorName = Actor->GetName();
-#endif
+	if (!Actor->ActorHasTag(TEXT("SyncObject")))
+		return -1;
 
-	if (!ActorName.StartsWith(TEXT("SchoolDesk")))
+	if (!MySocketPoliceActor)
+		return -1;
+
+	const int ObjectID = MySocketPoliceActor->GetObjectIDByActor(Actor);
+	if (ObjectID < 0)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[ObjectID] Not Registered Actor=%s"), *Actor->GetName());
 		return -1;
 	}
 
-	FString Digits;
-
-	for (int i = ActorName.Len() - 1; i >= 0; --i)
-	{
-		if (!FChar::IsDigit(ActorName[i]))
-			break;
-
-		Digits.InsertAt(0, ActorName[i]);
-	}
-
-	if (Digits.IsEmpty())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[ObjectID] Failed. Actor=%s"), *ActorName);
-		return -1;
-	}
-
-	const int ObjectID = FCString::Atoi(*Digits);
-
-	UE_LOG(LogTemp, Warning, TEXT("[ObjectID] Actor=%s ObjectID=%d"), *ActorName, ObjectID);
+	UE_LOG(LogTemp, Warning, TEXT("[ObjectID] Actor=%s ObjectID=%d"),
+		*Actor->GetName(),
+		ObjectID
+	);
 
 	return ObjectID;
 }
