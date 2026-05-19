@@ -436,7 +436,7 @@ void AMySocketPoliceActor::ProcessRitualEnd(const char* Buffer) {
         const int reason = Received->reason;
 
         TWeakObjectPtr<AMySocketPoliceActor> WeakThis(this);
-        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, ritual_id, reason]()
             {
                 AMySocketPoliceActor* Self = WeakThis.Get();
                 if (!Self)
