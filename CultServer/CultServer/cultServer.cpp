@@ -1944,24 +1944,31 @@ void mainLoop(HANDLE h_iocp) {
 		}
 		case OP_RECV: 
 		{
-			auto it = g_users.find((int)key);
+			auto it = g_users.find(static_cast<int>(key));
 			if (it == g_users.end())
 				break;
 			auto user = it->second;
+			if (!user)
+				break;
+
 			int remain_data = num_bytes + user->prev_remain;
 			char* p = eo->send_buffer;
-			while (remain_data > 0) {
-				int packet_size = p[1];
+
+			while (remain_data >= 3) {
+				uint16_t packet_size{};
+				memcpy(&packet_size, p + 1, sizeof(uint16_t));
+
 				if (packet_size <= remain_data) {
 					process_packet(static_cast<int>(key), p);
 					p = p + packet_size;
 					remain_data = remain_data - packet_size;
 				}
-				else break;
+				else 
+					break;
 			}
 			user->prev_remain = remain_data;
 			if (remain_data > 0) {
-				memcpy(eo->send_buffer, p, remain_data);
+				memmove(eo->send_buffer, p, remain_data);
 			}
 			user->do_recv();
 			break;

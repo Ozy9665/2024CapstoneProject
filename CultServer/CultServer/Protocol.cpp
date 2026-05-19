@@ -15,7 +15,7 @@ FPoliceCharacterState AiState{ -1,
 
 EXP_OVER::EXP_OVER()
 {
-	wsabuf.len = BUF_SIZE;
+	wsabuf.len = MAX_SEND_BUFFER_SIZE;
 	wsabuf.buf = send_buffer;
 	comp_type = OP_RECV;
 	ZeroMemory(&over, sizeof(over));
@@ -23,13 +23,13 @@ EXP_OVER::EXP_OVER()
 
 EXP_OVER::EXP_OVER(char* packet)
 {
-	uint16_t packet_size;
+	uint16_t packet_size{};
 	memcpy(&packet_size, packet + 1, sizeof(uint16_t));
 	wsabuf.len = packet_size;
 	wsabuf.buf = send_buffer;
 	ZeroMemory(&over, sizeof(over));
 	comp_type = OP_SEND;
-	memcpy(send_buffer, packet, packet[1]);
+	memcpy(send_buffer, packet, packet_size);
 }
 
 void SESSION::do_recv() 
@@ -39,9 +39,16 @@ void SESSION::do_recv()
 		std::cout << "do_recv() aborted: invalid socket\n";
 		return;
 	}
+
+	if (prev_remain < 0 || prev_remain >= MAX_SEND_BUFFER_SIZE)
+	{
+		std::cout << "Invalid prev_remain: " << prev_remain << "\n";
+		return;
+	}
+
 	DWORD recv_flag = 0;
 	memset(&recv_over.over, 0, sizeof(recv_over.over));
-	recv_over.wsabuf.len = BUF_SIZE - prev_remain;
+	recv_over.wsabuf.len = MAX_SEND_BUFFER_SIZE - prev_remain;
 	recv_over.wsabuf.buf = recv_over.send_buffer + prev_remain;
 	WSARecv(c_socket, &recv_over.wsabuf, 1, 0, &recv_flag, &recv_over.over, 0);
 }

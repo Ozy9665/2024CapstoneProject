@@ -95,4 +95,6 @@ public:
 	void ProcessObjectClaim(const char*);
 	void ProcessObjectUpdate(const char*);
 	void ProcessObjectEnd(const char*);
+	void ProcessRitualData(const char*);
+	void ProcessRitualEnd(const char*);
 };

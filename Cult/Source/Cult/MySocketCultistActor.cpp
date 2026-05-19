@@ -166,7 +166,12 @@ void AMySocketCultistActor::ReceiveData()
                         case DisconnectionHeader:
                             ProcessDisconnection(OnePacket.data());
                             break;
-
+                        case ritualDataHeader:
+                            ProcessRitualData(OnePacket.data());
+                            break;
+                        case ritualEndHeader:
+                            ProcessRitualEnd(OnePacket.data());
+                            break;
                         case disappearHeader:
                         {
                             unsigned char id = static_cast<unsigned char>(OnePacket[2]);
@@ -184,7 +189,6 @@ void AMySocketCultistActor::ReceiveData()
                         case doHealHeader:
                             ProcessDoHeal(OnePacket.data());
                             break;
-
                         case endHealHeader:
                             ProcessEndHeal(OnePacket.data());
                             break;
