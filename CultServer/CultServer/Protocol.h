@@ -13,7 +13,7 @@
 #include "error.h"
 
 constexpr short SERVER_PORT = 7777;
-constexpr int BUF_SIZE = 200;
+constexpr int MAX_SEND_BUFFER_SIZE = 16384;
 constexpr int MAX_ROOM = 100;
 constexpr int MAX_ROOM_LIST = 10;
 constexpr int MAX_PLAYERS_PER_ROOM = 5;
@@ -601,7 +601,7 @@ public:
 
 	WSAOVERLAPPED	over;
 	int				id;
-	char			send_buffer[1024];
+	char			send_buffer[MAX_SEND_BUFFER_SIZE];
 	WSABUF			wsabuf;
 	COMP_TYPE		comp_type;
 	char account_id[32]{};
@@ -745,7 +745,7 @@ constexpr FVector Level3AltarLocations[5] = {
 constexpr double BATON_RANGE{ 200.0 };
 constexpr double TASER_RANGE{ 1000.0 };
 constexpr double PISTOL_RANGE{ 5000.0 };
-constexpr float POLICE_HALF_HEIGHT{ 90.f };
+constexpr float CHARACTER_HALF_HEIGHT{ 90.f };
 
 // ai
 constexpr float RAD_TO_DEG{ 180.f / PI };

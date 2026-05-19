@@ -149,6 +149,12 @@ void AMySocketPoliceActor::ReceiveData()
                         case DisconnectionHeader:
                             ProcessDisconnection(OnePacket.data());
                             break;
+                        case ritualDataHeader:
+                            ProcessRitualData(OnePacket.data());
+                            break;
+                        case ritualEndHeader:
+                            ProcessRitualEnd(OnePacket.data());
+                            break;
                         case disappearHeader:
                         {
                             unsigned char id = static_cast<unsigned char>(OnePacket[2]);
@@ -392,6 +398,85 @@ void AMySocketPoliceActor::ProcessDisconnection(const char* Buffer)
     }
     else {
         SafeDestroyCharacter(DisconnectedID);
+    }
+}
+
+void AMySocketPoliceActor::ProcessRitualData(const char* Buffer)
+{
+    const RitualGagePacket* Received = reinterpret_cast<const RitualGagePacket*>(Buffer);
+    const uint8_t ritual_id = Received->ritual_id;
+    const int gauge = Received->gauge;
+
+    AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
+        // gauge으로 ritual gauge 수정
+        TArray<AActor*> FoundAltars;
+        UGameplayStatics::GetAllActorsOfClass(GetWorld(), AAltar::StaticClass(), FoundAltars);
+
+        for (AActor* Actor : FoundAltars)
+        {
+            AAltar* TargetAltar = Cast<AAltar>(Actor);
+
+            if (TargetAltar && TargetAltar->AltarID == (int32)ritual_id)
+            {
+                TargetAltar->AddToRitualGauge((float)gauge);
+                break;
+            }
+        }
+        });
+}
+
+void AMySocketPoliceActor::ProcessRitualEnd(const char* Buffer) {
+    const RitualNoticePacket* Received = reinterpret_cast<const RitualNoticePacket*>(Buffer);
+    if (Received->reason == 4) {
+        // 제단 100퍼센트 완료
+        // 캐릭터 손 떼게 하고, 제단 100퍼센트로 수정
+        TWeakObjectPtr<AMySocketPoliceActor> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis]()
+            {
+                AMySocketPoliceActor* Self = WeakThis.Get();
+                if (!Self)
+                    return;
+
+                UWorld* World = Self->GetWorld();
+                if (!World)
+                    return;
+
+                AActor* FoundActor = UGameplayStatics::GetActorOfClass(
+                    World,
+                    AStructGraphManager::StaticClass()
+                );
+
+                AStructGraphManager* StructGraphManager = Cast<AStructGraphManager>(FoundActor);
+                if (!StructGraphManager)
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("[Collapse] StructGraphManager not found"));
+                    return;
+                }
+
+                StructGraphManager->TriggerStage3();
+            });
+    }
+    else {
+        const uint8_t ritual_id = Received->ritual_id;
+        const int gauge = Received->reason;
+        AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
+            AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
+                // gauge로 ritual gauge
+                TArray<AActor*> FoundAltars;
+                UGameplayStatics::GetAllActorsOfClass(GetWorld(), AAltar::StaticClass(), FoundAltars);
+
+                for (AActor* Actor : FoundAltars)
+                {
+                    AAltar* TargetAltar = Cast<AAltar>(Actor);
+
+                    if (TargetAltar && TargetAltar->AltarID == (int32)ritual_id)
+                    {
+                        TargetAltar->AddToRitualGauge((float)gauge);
+                        break;
+                    }
+                }
+                });
+            });
     }
 }
 

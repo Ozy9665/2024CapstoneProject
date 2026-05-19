@@ -1452,14 +1452,14 @@ int NAVMESH::GetRandomTriangle(int startTri, int steps) const
 bool NAVMESH::SnapPositionToNavMesh(Vec3& pos) const
 {
     Vec3 feetPos = pos;
-    feetPos.z -= POLICE_HALF_HEIGHT;
+    feetPos.z -= CHARACTER_HALF_HEIGHT;
 
     const int tri = FindContainingTriangle(feetPos);
     if (tri < 0)
         return false;
 
     float groundZ = TriHeightAtXY(tri, pos.x, pos.y);
-    pos.z = groundZ + POLICE_HALF_HEIGHT;
+    pos.z = groundZ + CHARACTER_HALF_HEIGHT;
     return true;
 }
 

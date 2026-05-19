@@ -226,7 +226,7 @@ void AAltar::IncreaseRitualGauge()
 
 void AAltar::AddToRitualGauge(float Amount)
 {
-	RitualGauge += Amount;
+	RitualGauge = Amount;
 	RitualGauge = FMath::Clamp(RitualGauge, 0.0f, 100.f);
 
 	// 시각효과 업데이트
