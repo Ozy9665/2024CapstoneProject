@@ -51,6 +51,22 @@ public:
 	UPROPERTY()
 	class UMaterialInstanceDynamic* AltarMID;
 
+	//서버
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ritual|FX")
+	bool bServerRitualFXActive = false;
+
+	UFUNCTION(BlueprintCallable, Category = "Ritual|FX")
+	void StartRitualProgressFXFromServer();
+
+	UFUNCTION(BlueprintCallable, Category = "Ritual|FX")
+	void StopRitualProgressFXFromServer();
+
+	UFUNCTION(BlueprintCallable, Category = "Ritual|FX")
+	void PlayQTESuccessFXFromServer();
+
+	UFUNCTION(BlueprintCallable, Category = "Ritual|FX")
+	void PlayQTEFailFXFromServer();
+
 	// 영역 안 체크
 	bool bPlayerInRange;
 	

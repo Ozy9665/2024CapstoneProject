@@ -65,19 +65,19 @@ void AAltar::BeginPlay()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("StaticLoadObject failed to load StaticMesh!"));
+		//UE_LOG(LogTemp, Error, TEXT("StaticLoadObject failed to load StaticMesh!"));
 	}
 
 	CollisionComp = Cast<UBoxComponent>(GetDefaultSubobjectByName(TEXT("CollisionComp2")));
 	if (CollisionComp)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CollisionComp On"));
+		//UE_LOG(LogTemp, Warning, TEXT("CollisionComp On"));
 
 		CollisionComp->OnComponentBeginOverlap.AddDynamic(this, &AAltar::OnOverlapBegin);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("Check Collision!"));
+		//UE_LOG(LogTemp, Error, TEXT("Check Collision!"));
 	}
 	BaseGainRate = 35.0f;
 
@@ -115,11 +115,11 @@ void AAltar::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherAc
 		}
 		Cultist->SetCurrentAltar(this);
 		//NumCultistsInRange++;
-		UE_LOG(LogTemp, Warning, TEXT("Cultist entered the altar area"));
+		//UE_LOG(LogTemp, Warning, TEXT("Cultist entered the altar area"));
 	}
 	if (OtherActor)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Overlap with %s"), *OtherActor->GetName());
+		//UE_LOG(LogTemp, Warning, TEXT("Overlap with %s"), *OtherActor->GetName());
 	}
 }
 
@@ -142,7 +142,7 @@ void AAltar::OnOverlapEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherActo
 			StopRitualQTE(Cultist);
 		}
 
-		UE_LOG(LogTemp, Warning, TEXT("Cultist left. Total : %d"), NumCultistsInRange);
+		//UE_LOG(LogTemp, Warning, TEXT("Cultist left. Total : %d"), NumCultistsInRange);
 	}
 }
 
@@ -151,53 +151,51 @@ void AAltar::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// 의식 수행 중일 때 게이지 자동 충전
-	if(CurrentPerformingCultist != nullptr)
-	{	
-		// 항상 충전
-		const float AutoGainPerSecond = 10.0f; // 10초 동안 100% 
+	// 1. 게이지 자동 충전은 "내 클라이언트에서 실제 의식 수행 중"일 때만
+	if (CurrentPerformingCultist != nullptr)
+	{
+		const float AutoGainPerSecond = 10.0f; // 10초 동안 100%
 		AddToRitualGauge(RitualGauge + AutoGainPerSecond * DeltaTime);
+	}
 
+	// 2. 서버 or 자신
+	const bool bShouldShowRitualFX =
+		(CurrentPerformingCultist != nullptr) || bServerRitualFXActive;
+
+	if (bShouldShowRitualFX)
+	{
 		float CurrentTime = GetWorld()->GetTimeSeconds();
-		// 0.0~3.0
 		float TimeInCycle = FMath::Fmod(CurrentTime, TotalCycleTime);
 
 		if (TimeInCycle <= FlashDuration)
 		{
-			// 빛나는 구간
 			float Alpha = (TimeInCycle / FlashDuration) * PI;
 			float RawSine = FMath::Sin(Alpha);
 			CurrentGlow = FMath::Pow(RawSine, 2.0f);
 		}
 		else
 		{
-			// 휴식 구간
 			CurrentGlow = 0.0f;
 		}
 
+		const float ProgressNormalized = RitualGauge / 100.0f;
+
 		if (AltarMID)
 		{
-			// 밝기 조절
 			AltarMID->SetScalarParameterValue(FName("GaugeGlow"), CurrentGlow);
-
-			// 색상 조절
-			float ProgressNormalized = RitualGauge / 100.0f;
 			AltarMID->SetScalarParameterValue(FName("RitualProgress"), ProgressNormalized);
+			AltarMID->SetScalarParameterValue(FName("Progress"), ProgressNormalized);
 		}
 
-		// 게이지 따라 채우기
 		if (QTEParticleComponent)
 		{
-			// 0~1
-			float ProgressNormalized = RitualGauge / 100.0f;
-
-			// 값 전달
 			QTEParticleComponent->SetFloatParameter(FName("User_RitualProgress"), ProgressNormalized);
 		}
 	}
 	else
 	{
 		CurrentGlow = 0.0f;
+
 		if (AltarMID)
 		{
 			AltarMID->SetScalarParameterValue(FName("GaugeGlow"), 0.0f);
@@ -214,7 +212,7 @@ void AAltar::IncreaseRitualGauge()
 		RitualGauge += GainRate;
 		RitualGauge = FMath::Clamp(RitualGauge, 0.0f, 100.0f);
 		
-		UE_LOG(LogTemp, Warning, TEXT("Ritual Progress: %f"), RitualGauge);
+		//UE_LOG(LogTemp, Warning, TEXT("Ritual Progress: %f"), RitualGauge);
 
 		// 게임모드에서 100 넘었는지 체크하고, 넘었으면 레벨 재시작 
 		ACultGameMode* GameMode = Cast<ACultGameMode>(GetWorld()->GetAuthGameMode());
@@ -265,7 +263,7 @@ void AAltar::CheckRitualComplete()
 			uint8 RitualID = static_cast<uint8>(AltarID);
 			SocketActor->SendEndRitual(RitualID, 4);
 
-			UE_LOG(LogTemp, Warning, TEXT("[Ritual] Complete sent. AltarID=%d"), AltarID);
+			//UE_LOG(LogTemp, Warning, TEXT("[Ritual] Complete sent. AltarID=%d"), AltarID);
 		}
 
 		// QTE/제단 이펙트 끄기
@@ -345,14 +343,7 @@ void AAltar::OnPlayerInput()
 	if (!CurrentPerformingCultist)return;
 
 	bool bSuccess = (CurrentGlow >= 0.7f);
-
-
-
-
-
 	// 판정 - 입력 시 정면에 회전하는 성공영역이 있는지
-
-
 	if (CurrentPerformingCultist)
 	{
 		CurrentPerformingCultist->NotifySkillCheckResult(bSuccess);
@@ -360,14 +351,13 @@ void AAltar::OnPlayerInput()
 	if (bSuccess)
 	{
 		AddToRitualGauge(RitualGauge + 10.0f);
-		UE_LOG(LogTemp, Warning, TEXT("QTE Success"));
+		//UE_LOG(LogTemp, Warning, TEXT("QTE Success"));
 		// 성공 파티클 스폰
 	}
 	else
 	{
 		AddToRitualGauge(RitualGauge -QTEPenalty);
-		UE_LOG(LogTemp, Warning, TEXT("QTE Fail"));
-
+		//UE_LOG(LogTemp, Warning, TEXT("QTE Fail"));
 		// 실패 파티클
 	}
 }
@@ -398,4 +388,65 @@ void AAltar::ForceCompleteRitual()
 		CurrentPerformingCultist->CancelRitual();
 	}
 	CheckRitualComplete();
+}
+
+void AAltar::StartRitualProgressFXFromServer()
+{
+	bServerRitualFXActive = true;
+
+	const float ProgressNormalized = RitualGauge / 100.0f;
+
+	if (QTEParticleComponent)
+	{
+		QTEParticleComponent->Activate(true);
+		QTEParticleComponent->SetFloatParameter(FName("User_RitualProgress"), ProgressNormalized);
+	}
+
+	if (AltarMID)
+	{
+		AltarMID->SetScalarParameterValue(FName("GaugeGlow"), 1.0f);
+		AltarMID->SetScalarParameterValue(FName("RitualProgress"), ProgressNormalized);
+		AltarMID->SetScalarParameterValue(FName("Progress"), ProgressNormalized);
+	}
+
+}
+
+void AAltar::StopRitualProgressFXFromServer()
+{
+	bServerRitualFXActive = false;
+
+	// 로컬에서 직접 의식 중인 사람이 없을 때만 끈다.
+	if (CurrentPerformingCultist == nullptr)
+	{
+		if (QTEParticleComponent)
+		{
+			QTEParticleComponent->Deactivate();
+		}
+
+		if (AltarMID)
+		{
+			AltarMID->SetScalarParameterValue(FName("GaugeGlow"), 0.0f);
+		}
+	}
+
+}
+
+void AAltar::PlayQTESuccessFXFromServer()
+{
+	// 아직 성공 전용 이펙트가 없으니 임시로 강하게 빛나게 처리
+	if (AltarMID)
+	{
+		AltarMID->SetScalarParameterValue(FName("GaugeGlow"), 1.0f);
+	}
+
+	if (QTEParticleComponent)
+	{
+		QTEParticleComponent->Activate(true);
+	}
+
+}
+
+void AAltar::PlayQTEFailFXFromServer()
+{
+	// 아직 실패 전용 이펙트 없으면 로그만
 }

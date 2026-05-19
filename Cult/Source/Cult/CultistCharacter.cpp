@@ -343,7 +343,6 @@ void ACultistCharacter::StopRitual()
 	GetWorld()->GetTimerManager().ClearTimer(RitualTimerHandle);
 	GetWorld()->GetTimerManager().ClearTimer(TaskRitualTimerHandle);
 
-	UE_LOG(LogTemp, Warning, TEXT("Ritual Stopped"));
 	RitualProgress += RitualSpeed;	// 전체 의식게이지
 
 	if (TaskRitualWidget)
