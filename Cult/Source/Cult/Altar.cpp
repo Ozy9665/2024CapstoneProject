@@ -155,7 +155,8 @@ void AAltar::Tick(float DeltaTime)
 	if(CurrentPerformingCultist != nullptr)
 	{	
 		// 항상 충전
-		AddToRitualGauge(SlowAutoChargeRate * NumCultistsInRange * DeltaTime);
+		const float AutoGainPerSecond = 10.0f; // 10초 동안 100% 
+		AddToRitualGauge(RitualGauge + AutoGainPerSecond * DeltaTime);
 
 		float CurrentTime = GetWorld()->GetTimeSeconds();
 		// 0.0~3.0
@@ -248,6 +249,31 @@ void AAltar::AddToRitualGauge(float Amount)
 
 void AAltar::CheckRitualComplete()
 {
+	if (RitualGauge < 100.0f)
+	{
+		return;
+	}
+
+	ACultistCharacter* CompletedCultist = CurrentPerformingCultist;
+
+	if (CompletedCultist)
+	{
+		AMySocketCultistActor* SocketActor = CompletedCultist->GetMySocketActor();
+
+		if (SocketActor)
+		{
+			uint8 RitualID = static_cast<uint8>(AltarID);
+			SocketActor->SendEndRitual(RitualID, 4);
+
+			UE_LOG(LogTemp, Warning, TEXT("[Ritual] Complete sent. AltarID=%d"), AltarID);
+		}
+
+		// QTE/제단 이펙트 끄기
+		StopRitualQTE(CompletedCultist);
+		CompletedCultist->StopRitual();
+	}
+
+
 	ACultGameMode* GameMode = Cast<ACultGameMode>(GetWorld()->GetAuthGameMode());
 	if (GameMode)
 	{
@@ -333,14 +359,14 @@ void AAltar::OnPlayerInput()
 	}
 	if (bSuccess)
 	{
-		AddToRitualGauge(QTEBonus);
+		AddToRitualGauge(RitualGauge + 10.0f);
 		UE_LOG(LogTemp, Warning, TEXT("QTE Success"));
 		// 성공 파티클 스폰
 	}
 	else
 	{
-		AddToRitualGauge(-QTEPenalty);
-		UE_LOG(LogTemp, Warning, TEXT("QTE Success"));
+		AddToRitualGauge(RitualGauge -QTEPenalty);
+		UE_LOG(LogTemp, Warning, TEXT("QTE Fail"));
 
 		// 실패 파티클
 	}

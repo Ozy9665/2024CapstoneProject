@@ -78,7 +78,7 @@ public:
 	float QTESuccessZoneEndAngle = 359.0f;	// 성공영역 끝 각도
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual | QTE")
-	float QTEBonus = 10.0f;	// 성공 시 게이지
+	float QTEBonus = 30.0f;	// 성공 시 게이지
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual | QTE")
 	float QTEPenalty = 5.0f;
@@ -128,7 +128,7 @@ public:
 
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Ritual")
-	float BaseGainRate = 35.0f;
+	float BaseGainRate = 100.0f;
 
 
 	UFUNCTION(BlueprintCallable, Category="Ritual")
