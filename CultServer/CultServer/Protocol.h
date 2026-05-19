@@ -735,11 +735,11 @@ constexpr FVector LandMassAltarLocations[5] = {
 };
 
 constexpr FVector Level3AltarLocations[5] = {
-	{ 4225.f, 53659.f, 150.f },
-	{ 7592.f, 53584.f, 90.f },
-	{ 4192.f, 4192.f,  710.f },
-	{ 7285.f, 50780.f, 90.f },
-	{ 6641.f, 57640.f, 90.f }
+	{ 4225.f, 53659.f, 60.f },
+	{ 7592.f, 53584.f, 0.f },
+	{ 7285.f, 50780.f, 0.f },
+	{ 6641.f, 57640.f, 0.f },
+	{ 3500.f, 53700.f,  620.f },
 };
 
 constexpr double BATON_RANGE{ 200.0 };
