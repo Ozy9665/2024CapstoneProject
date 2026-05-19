@@ -996,10 +996,7 @@ void AStructGraphManager::TriggerStage3()
 	DebugDumpProxyCollision(TEXT("After DisableAllProxies"));
 	DebugDumpGCCollision(TEXT("After Stage3 Setup"));
 
-	// 임시
-	SetGCPawnResponse(GCWalls, ECR_Ignore);
-	SetGCPawnResponse(GCColumns, ECR_Ignore);
-	SetGCPawnResponse(GCSlabs, ECR_Ignore);
+
 
 
 	GetWorld()->GetTimerManager().SetTimerForNextTick([this]()
@@ -1008,6 +1005,10 @@ void AStructGraphManager::TriggerStage3()
 			DumpAllProxies_Global(TEXT("AfterStage3Disable"));
 		});
 	EnsureGCPhysicsReady_Stage3();
+	// 임시
+	SetGCPawnResponse(GCWalls, ECR_Ignore);
+	SetGCPawnResponse(GCColumns, ECR_Ignore);
+	SetGCPawnResponse(GCSlabs, ECR_Ignore);
 	StartStage3Continuous();
 
 	// 임시
@@ -1803,6 +1804,12 @@ void AStructGraphManager::EnsureGCPhysicsReady_Stage3()
 			GC->WakeAllRigidBodies();
 		});
 
+	//임시
+	SetGCPawnResponse(GCWalls, ECR_Ignore);
+	SetGCPawnResponse(GCColumns, ECR_Ignore);
+	// 슬래브는 걸어야 하니까 일단 Block 유지(테스트 목적이면 Ignore도 가능)
+	SetGCPawnResponse(GCSlabs, ECR_Block);
+
 	UE_LOG(LogTemp, Warning, TEXT("[Stage3 Ready] Walls=%d Cols=%d Slabs=%d"),
 		GCWalls.Num(), GCColumns.Num(), GCSlabs.Num());
 }
@@ -2094,9 +2101,10 @@ void AStructGraphManager::EnablePhysicsForGCArray_NoRecreate(
 				GC->SetMobility(EComponentMobility::Movable);
 			}
 
-			GC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-			GC->SetCollisionProfileName(TEXT("PhysicsActor"));
-			GC->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
+			//임시제거
+			//GC->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+			//GC->SetCollisionProfileName(TEXT("PhysicsActor"));
+			//GC->SetCollisionResponseToChannel(ECC_Pawn, ECR_Block);
 
 			GC->SetSimulatePhysics(bEnableSim);
 			GC->SetEnableGravity(bEnableGrav);
