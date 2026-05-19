@@ -35,13 +35,10 @@ void ACultGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 	
-	// 현재 레벨
-	FString CurrentLevelName = UGameplayStatics::GetCurrentLevelName(this, true);
-	if (CurrentLevelName == "NewMap_LandMass")
-	{
-		UE_LOG(LogTemp, Error, TEXT("SpawnAltars Called"));
-		SpawnAltars();
-	}
+	// 제단 소환
+	UE_LOG(LogTemp, Error, TEXT("SpawnAltars Called"));
+	SpawnAltars();
+
 
 	if (FadeWidgetClass)
 	{

@@ -429,7 +429,12 @@ void AMySocketPoliceActor::ProcessRitualEnd(const char* Buffer) {
     const RitualNoticePacket* Received = reinterpret_cast<const RitualNoticePacket*>(Buffer);
     if (Received->reason == 4) {
         // 제단 100퍼센트 완료
+        
         // 캐릭터 손 떼게 하고, 제단 100퍼센트로 수정
+
+        const uint8_t ritual_id = Received->ritual_id;
+        const int reason = Received->reason;
+
         TWeakObjectPtr<AMySocketPoliceActor> WeakThis(this);
         AsyncTask(ENamedThreads::GameThread, [WeakThis]()
             {
@@ -440,6 +445,8 @@ void AMySocketPoliceActor::ProcessRitualEnd(const char* Buffer) {
                 UWorld* World = Self->GetWorld();
                 if (!World)
                     return;
+
+
 
                 AActor* FoundActor = UGameplayStatics::GetActorOfClass(
                     World,
