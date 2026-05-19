@@ -433,8 +433,6 @@ void AMySocketPoliceActor::ProcessRitualEnd(const char* Buffer) {
         const int reason = Received->reason;
         // 캐릭터 손 떼게 하고, 제단 100퍼센트로 수정
 
-
-
         TWeakObjectPtr<AMySocketPoliceActor> WeakThis(this);
         AsyncTask(ENamedThreads::GameThread, [WeakThis, ritual_id, reason]()
             {

@@ -1725,15 +1725,76 @@ void AMySocketCultistActor::ProcessRitualEnd(const char* Buffer) {
     const RitualNoticePacket* Received = reinterpret_cast<const RitualNoticePacket*>(Buffer);
     if (Received->reason == 4) {
         // 제단 100퍼센트 완료
+        const uint8_t ritual_id = Received->ritual_id;
+        const int reason = Received->reason;
         // 캐릭터 손 떼게 하고, 제단 100퍼센트로 수정
 
+        TWeakObjectPtr<AMySocketCultistActor> WeakThis(this);
+        AsyncTask(ENamedThreads::GameThread, [WeakThis, ritual_id, reason]()
+            {
+                AMySocketCultistActor* Self = WeakThis.Get();
+                if (!Self)
+                    return;
+
+                UWorld* World = Self->GetWorld();
+                if (!World)
+                    return;
+
+                // 추가부분
+                TArray<AActor*> FoundAltars;
+                UGameplayStatics::GetAllActorsOfClass(World, AAltar::StaticClass(), FoundAltars);
+
+                for (AActor* Actor : FoundAltars)
+                {
+                    AAltar* TargetAltar = Cast<AAltar>(Actor);
+                    if (!TargetAltar)
+                        continue;
+
+                    if (TargetAltar->AltarID == static_cast<int32>(ritual_id))
+                    {
+                        TargetAltar->AddToRitualGauge(100.0f);
+
+                        UE_LOG(LogTemp, Warning, TEXT("[RitualEnd] Altar %d gauge to 100"), ritual_id);
+                        break;
+                    }
+                }
+
+                AActor* FoundActor = UGameplayStatics::GetActorOfClass(
+                    World,
+                    AStructGraphManager::StaticClass()
+                );
+
+                AStructGraphManager* StructGraphManager = Cast<AStructGraphManager>(FoundActor);
+                if (!StructGraphManager)
+                {
+                    UE_LOG(LogTemp, Warning, TEXT("[Collapse] StructGraphManager not found"));
+                    return;
+                }
+
+                StructGraphManager->TriggerStage3();
+            });
+            MyCharacter->bIsPerformingRitual = false;
     }
     else {
         const uint8_t ritual_id = Received->ritual_id;
         const int gauge = Received->reason;
         AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
-            // gauge으로 ritual gauge 수정
+            AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
+                // gauge로 ritual gauge
+                TArray<AActor*> FoundAltars;
+                UGameplayStatics::GetAllActorsOfClass(GetWorld(), AAltar::StaticClass(), FoundAltars);
 
+                for (AActor* Actor : FoundAltars)
+                {
+                    AAltar* TargetAltar = Cast<AAltar>(Actor);
+
+                    if (TargetAltar && TargetAltar->AltarID == (int32)ritual_id)
+                    {
+                        TargetAltar->AddToRitualGauge((float)gauge);
+                        break;
+                    }
+                }
+                });
             });
     }
 }
