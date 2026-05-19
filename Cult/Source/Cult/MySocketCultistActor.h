@@ -94,6 +94,7 @@ public:
 	void SendStartRitual(uint8_t);
 	void SendRitualSkillCheck(uint8_t, uint8_t);
 	void SendEndRitual(uint8_t, uint8_t);
+	void ProcessRitualStart(const char*);
 	void ProcessRitualData(const char*);
 	void ProcessRitualEnd(const char*);
 	void ProcessCollapse(const char*);

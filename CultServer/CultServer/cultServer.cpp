@@ -1377,7 +1377,7 @@ void process_packet(int c_id, char* packet) {
 		altar.time = std::chrono::system_clock::now();
 
 		std::cout << "[RitualStart] cultist=" << c_id << " altar=" << (int)ritual_id << "gauge= " << altar.gauge << "\n";
-		// 0퍼면 냅두고 아니면 클라한테 몇펀지 보내주기
+		broadcast_in_room(*user, p, VIEW_RANGE);
 		break;
 	}
 	case ritualDataHeader:
@@ -1415,10 +1415,21 @@ void process_packet(int c_id, char* packet) {
 			altar.time = now;
 		}
 		// reason: 1 -> 성공 / 2 -> 실패
-		if (p->reason == 1)
+		RitualNoticePacket packet{};
+		packet.header = ritualStartHeader;
+		packet.size = sizeof(RitualNoticePacket);
+		packet.ritual_id = ritual_id;
+		packet.reason = p->reason;
+		broadcast_in_room(*user, &packet, VIEW_RANGE);
+
+		if (p->reason == 1) 
+		{
 			altar.gauge = std::min(100, altar.gauge + 10);
+		}
 		else if (p->reason == 2)
+		{
 			altar.gauge = std::max(0, altar.gauge - 10);		
+		}
 
 		RitualGagePacket gauge{};
 		gauge.header = ritualDataHeader;
@@ -1426,8 +1437,7 @@ void process_packet(int c_id, char* packet) {
 		gauge.ritual_id = ritual_id;
 		gauge.gauge = altar.gauge;
 		user->do_send_packet(&gauge);
-
-		// broadcast_in_room(c_id, room_id, &gauge);
+		broadcast_in_room(*user, p, VIEW_RANGE);
 		std::cout << "[RitualData] altar=" << (int)ritual_id << " gauge=" << altar.gauge << "\n";
 		break;
 	}
@@ -1489,6 +1499,7 @@ void process_packet(int c_id, char* packet) {
 				packet.ritual_id = ritual_id;
 				packet.reason = 4;
 				user->do_send_packet(&packet);
+				broadcast_in_room(*user, &packet, VIEW_RANGE);
 			}
 			else {
 				RitualNoticePacket packet;

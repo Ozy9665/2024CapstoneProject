@@ -166,6 +166,9 @@ void AMySocketCultistActor::ReceiveData()
                         case DisconnectionHeader:
                             ProcessDisconnection(OnePacket.data());
                             break;
+                        case ritualStartHeader:
+                            ProcessRitualStart(OnePacket.data());
+                            break;
                         case ritualDataHeader:
                             ProcessRitualData(OnePacket.data());
                             break;
@@ -1694,6 +1697,25 @@ void AMySocketCultistActor::SendEndRitual(uint8_t ritual_id, uint8_t reason) {
     else
     {
         CloseConnection();
+    }
+}
+
+void AMySocketCultistActor::ProcessRitualStart(const char* Buffer)
+{
+    const RitualNoticePacket* Received = reinterpret_cast<const RitualNoticePacket*>(Buffer);
+    const uint8_t ritual_id = Received->ritual_id;
+    const uint8_t reason = Received->reason;
+    if (reason == 0) 
+    {
+        // 해당 제단에 제단 진행 이펙트 표시
+    }
+    else if (reason == 1)
+    {
+        // 해당 제단에 qte 성공 이펙트 표시
+    }
+    else if (reason == 2)
+    {
+        // 해당 제단에 qte 실패 이펙트 표시
     }
 }
 
