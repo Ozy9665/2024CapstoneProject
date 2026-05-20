@@ -1987,8 +1987,9 @@ void AStructGraphManager::Stage3_ContinuousTick()
 
 	TickGravityAssist();
 
-	// 3) strain은 듬성듬성: 0.05 틱이면 %12 => 0.6초마다 1회
-	const bool bDoStrain = (Stage3TickCounter % 12) == 0;
+	//3
+	const int32 EveryN = FMath::Max(1, Stage3_StrainEveryNTicks);
+	const bool bDoStrain = (Stage3TickCounter % EveryN) == 0;
 	if (!bDoStrain) return;
 
 	const bool bPhaseA = (T < 2.0f);                // 전단 준비
@@ -1996,94 +1997,248 @@ void AStructGraphManager::Stage3_ContinuousTick()
 	const bool bPhaseC = (T >= 4.0f);               // 마무리(과한 분해 금지)
 
 
+	const int32 NSlabs = GCSlabs.Num();
+	const float RampAlpha = (T < Stage3_SlabRampStartTime) ? 0.f :
+		FMath::Clamp((T - Stage3_SlabRampStartTime) / FMath::Max(0.01f, (Stage3_SlabRampEndTime - Stage3_SlabRampStartTime)), 0.f, 1.f);
+	const int32 ActiveSlabCount = (NSlabs <= 0) ? 0 : FMath::Clamp(1 + FMath::FloorToInt(RampAlpha * float(NSlabs - 1)), 1, NSlabs);
 
-	// 4) 벽 하부 균열 유지 (대상 1개만, 아주 약하게)
+	const int32 WallTargetsPerStrain =
+		FMath::Clamp(
+			FMath::CeilToInt(GCWalls.Num() * Stage3_WallTargetRatio),
+			Stage3_WallTargetMin,
+			Stage3_WallTargetMax
+		);
+
+	const int32 ColTargetsPerStrain =
+		FMath::Clamp(
+			FMath::CeilToInt(GCColumns.Num() * Stage3_ColTargetRatio),
+			Stage3_ColTargetMin,
+			Stage3_ColTargetMax
+		);
+
+	const int32 SlabTargetsPerStrain =
+		bPhaseB
+		? FMath::Clamp(
+			FMath::CeilToInt(ActiveSlabCount * Stage3_SlabTargetRatio),
+			Stage3_SlabTargetMin,
+			Stage3_SlabTargetMax
+		)
+		: 0;
+
+	// 4) WALL: 여러 벽 하부에 균열 분산
 	{
-		const int32 HitCount = FMath::Min(1, GCWalls.Num());
-		for (int32 i = 0; i < HitCount; ++i)
+		TSet<TWeakObjectPtr<UGeometryCollectionComponent>> Picked;
+		for (int32 n = 0; n < WallTargetsPerStrain; ++n)
 		{
-			UGeometryCollectionComponent* WallGC = GCWalls[i].Get();
+			UGeometryCollectionComponent* WallGC = PickRandomValidGC(GCWalls, Stage3Stream);
 			if (!IsValid(WallGC) || !WallGC->IsRegistered() || WallGC->IsBeingDestroyed()) continue;
+
+			const TWeakObjectPtr<UGeometryCollectionComponent> Key(WallGC);
+			if (Picked.Contains(Key)) continue;
+			Picked.Add(Key);
 
 			AActor* A = WallGC->GetOwner();
 			if (!IsValid(A) || A->IsActorBeingDestroyed()) continue;
 
 			FVector Origin, Extent;
 			A->GetActorBounds(true, Origin, Extent);
+			const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.70f);
 
-			const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.7f);
-			const FVector P = Base + FVector(
-				Stage3Stream.FRandRange(-Extent.X * 0.2f, Extent.X * 0.2f),
-				Stage3Stream.FRandRange(-Extent.Y * 0.2f, Extent.Y * 0.2f),
-				Stage3Stream.FRandRange(-10.f, 10.f)
-			);
-
-			ApplyStrainToGC(WallGC, P, Stage3_BaseStrainRadius, Stage3_BaseStrainMag, 1);
-		}
-	}
-
-	// 5) 전단 누적
-	{
-		UGeometryCollectionComponent* ColGC = Stage3_WeakColumnGC.Get();
-		if (IsValid(ColGC) && ColGC->IsRegistered() && !ColGC->IsBeingDestroyed())
-		{
-			AActor* ColA = ColGC->GetOwner();
-			if (IsValid(ColA) && !ColA->IsActorBeingDestroyed())
+			for (int32 k = 0; k < Stage3_WallPointsPerTarget; ++k)
 			{
-				FVector Origin, Extent;
-				ColA->GetActorBounds(true, Origin, Extent);
+				const FVector P = Base + FVector(
+					Stage3Stream.FRandRange(-Extent.X * 0.25f, Extent.X * 0.25f),
+					Stage3Stream.FRandRange(-Extent.Y * 0.20f, Extent.Y * 0.20f),
+					Stage3Stream.FRandRange(-10.f, 10.f)
+				);
 
-				const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.7f);
-
-				static int32 ShearIdx = 0;
-				ShearIdx = (ShearIdx + 1) % 4;
-
-				FVector Offset;
-				switch (ShearIdx)
-				{
-				case 0: Offset = FVector(12.f, 0.f, 0.f); break;
-				case 1: Offset = FVector(-12.f, 0.f, 0.f); break;
-				case 2: Offset = FVector(0.f, 12.f, 0.f); break;
-				default:Offset = FVector(0.f, -12.f, 0.f); break;
-				}
-
-				const float Mag =
-					bPhaseA ? Stage3_WeakStrainMag :
-					bPhaseB ? Stage3_WeakStrainMag * 0.75f :
-					Stage3_WeakStrainMag * 0.55f;
-
-				ApplyStrainToGC(ColGC, Base + Offset, Stage3_WeakStrainRadius, Mag, 1);
+				ApplyStrainToGC(WallGC, P, Stage3_BaseStrainRadius, Stage3_BaseStrainMag, 1);
 			}
 		}
 	}
 
-	// 6) 슬래브 펀치 누적: PhaseB에서만
-	if (bPhaseB)
+	// 5) COLUMN: 약점 1개 + 전단
 	{
-		UGeometryCollectionComponent* SlabGC = Stage3_TargetSlabGC.Get();
-		if (IsValid(SlabGC) && SlabGC->IsRegistered() && !SlabGC->IsBeingDestroyed())
+		if (UGeometryCollectionComponent* ColGC = Stage3_WeakColumnGC.Get())
 		{
-			const FVector P = Stage3_TargetSlabPunchPoint + FVector(
-				Stage3Stream.FRandRange(-25.f, 25.f),
-				Stage3Stream.FRandRange(-25.f, 25.f),
-				Stage3Stream.FRandRange(-15.f, 15.f)
+			if (ColGC->IsRegistered() && !ColGC->IsBeingDestroyed())
+			{
+				if (AActor* ColA = ColGC->GetOwner())
+				{
+					FVector Origin, Extent;
+					ColA->GetActorBounds(true, Origin, Extent);
+					const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.70f);
+
+					static int32 ShearIdx = 0;
+					ShearIdx = (ShearIdx + 1) % 4;
+
+					FVector Offset =
+						(ShearIdx == 0) ? FVector(12.f, 0.f, 0.f) :
+						(ShearIdx == 1) ? FVector(-12.f, 0.f, 0.f) :
+						(ShearIdx == 2) ? FVector(0.f, 12.f, 0.f) :
+						FVector(0.f, -12.f, 0.f);
+
+					const float Mag =
+						bPhaseA ? Stage3_WeakStrainMag :
+						bPhaseB ? Stage3_WeakStrainMag * 0.75f :
+						Stage3_WeakStrainMag * 0.55f;
+
+					ApplyStrainToGC(ColGC, Base + Offset, Stage3_WeakStrainRadius, Mag, 1);
+				}
+			}
+		}
+
+		const int32 LowCand = FMath::Min(Stage3_LowColumnCandidateCount, GCColumns.Num());
+		for (int32 n = 0; n < ColTargetsPerStrain; ++n)
+		{
+			if (LowCand <= 0) break;
+
+			const int32 PickIdx = Stage3Stream.RandRange(0, LowCand - 1);
+			UGeometryCollectionComponent* ColGC2 = GCColumns[PickIdx].Get();
+			if (!IsValid(ColGC2) || !ColGC2->IsRegistered() || ColGC2->IsBeingDestroyed()) continue;
+
+			AActor* A = ColGC2->GetOwner();
+			if (!IsValid(A) || A->IsActorBeingDestroyed()) continue;
+
+			FVector Origin, Extent;
+			A->GetActorBounds(true, Origin, Extent);
+			const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.75f);
+
+			// 약점보다 약하게(연쇄 유도용)
+			const float SoftMag = Stage3_WeakStrainMag * 0.35f;
+
+			const FVector P = Base + FVector(
+				Stage3Stream.FRandRange(-10.f, 10.f),
+				Stage3Stream.FRandRange(-10.f, 10.f),
+				Stage3Stream.FRandRange(-8.f, 8.f)
 			);
 
-			ApplyStrainToGC(SlabGC, P, Stage3_PunchRadius, Stage3_PunchMag, 1);
+			ApplyStrainToGC(ColGC2, P, Stage3_WeakStrainRadius, SoftMag, 1);
 		}
 	}
 
-	// 7) PhaseC: 2차 분해는 "아주 약하게 1회"
-	if (bPhaseC)
+	// 6) SLAB: PhaseB에서 "타겟 1개 + 추가 하부 슬래브들" 펀치 분산
 	{
-		const int32 Extra = FMath::Min(1, GCSlabs.Num());
-		for (int32 i = 0; i < Extra; ++i)
-		{
-			UGeometryCollectionComponent* G = GCSlabs[i].Get();
-			if (!IsValid(G) || !G->IsRegistered() || G->IsBeingDestroyed()) continue;
+		const int32 SlabN = GCSlabs.Num();
+		if (SlabN <= 0) return;
 
-			const FVector Center = G->Bounds.Origin;
-			ApplyStrainToGC(G, Center + FVector(0, 0, -40.f), 160.f, 60.f, 1);
+		// 아래 슬래브부터 범위 확장(기존 로직 유지)
+		const float SlabRampAlpha = FMath::Clamp(
+			(T - Stage3_SlabRampStartTime) / FMath::Max(0.01f, (Stage3_SlabRampEndTime - Stage3_SlabRampStartTime)),
+			0.f, 1.f);
+
+		const int32 ActiveCount = FMath::Clamp(
+			1 + FMath::FloorToInt(SlabRampAlpha * float(SlabN - 1)),
+			1, SlabN);
+
+		auto PickLowerSlab = [&]() -> UGeometryCollectionComponent*
+			{
+				for (int32 Try = 0; Try < 12; ++Try)
+				{
+					const int32 Idx = Stage3Stream.RandRange(0, ActiveCount - 1);
+					UGeometryCollectionComponent* G = GCSlabs[Idx].Get();
+					if (IsValid(G) && G->IsRegistered() && !G->IsBeingDestroyed()) return G;
+				}
+				return nullptr;
+			};
+
+		auto GetBounds = [&](UGeometryCollectionComponent* G, FVector& Origin, FVector& Extent) -> bool
+			{
+				AActor* A = G ? G->GetOwner() : nullptr;
+				if (!IsValid(A) || A->IsActorBeingDestroyed()) return false;
+				A->GetActorBounds(true, Origin, Extent);
+				return true;
+			};
+
+		// --- 핵심 1) 슬래브용 "실제 펀치Mag" 보정 ---
+		// Stage3_PunchMag가 90 같은 작은 값이면(현재 헤더 기본) 1000배 해서 테스트맵 스케일로 맞춘다.
+		// 이미 큰 값을 넣어뒀으면 그대로 사용.
+		const float PunchMagHard =
+			(Stage3_PunchMag < 2000.f) ? (Stage3_PunchMag * 1000.f) : Stage3_PunchMag;
+
+		const float PunchMagSoft = PunchMagHard * 0.35f;
+
+		// --- 핵심 2) 크랙/펀치 반경/Iterations 튜닝 ---
+		const float CrackRadius = FMath::Clamp(Stage3_PunchRadius * 0.65f, 70.f, 180.f);
+		const float CrackMag = FMath::Clamp(Stage3_BaseStrainMag * 1.25f, 4000.f, 30000.f); // 600~2500 너무 약했음
+
+		const float PunchRadius = FMath::Clamp(Stage3_PunchRadius * 0.55f, 60.f, 160.f);
+		const int32 PunchIterMain = 5;
+		const int32 PunchIterSoft = 3;
+
+		// A) PhaseB/PhaseC: 슬래브 균열을 여러 군데에 "약하게" 깔아준다 (무너질 준비)
+		if (bPhaseB || bPhaseC)
+		{
+			const int32 CrackCount = FMath::Clamp(ActiveCount / 3, 3, 10);
+
+			for (int32 c = 0; c < CrackCount; ++c)
+			{
+				UGeometryCollectionComponent* SlabGC = PickLowerSlab();
+				if (!IsValid(SlabGC)) continue;
+
+				FVector Origin, Extent;
+				if (!GetBounds(SlabGC, Origin, Extent)) continue;
+
+				const FVector P = Origin + FVector(
+					Stage3Stream.FRandRange(-Extent.X * 0.25f, Extent.X * 0.25f),
+					Stage3Stream.FRandRange(-Extent.Y * 0.25f, Extent.Y * 0.25f),
+					Stage3Stream.FRandRange(-Extent.Z * 0.05f, Extent.Z * 0.05f)
+				);
+
+				ApplyStrainToGC(SlabGC, P, CrackRadius, CrackMag, 1);
+			}
+		}
+
+		// B) PhaseB: 2~6개 슬래브에 강한 펀치(실제 붕괴 트리거)
+		if (bPhaseB)
+		{
+			const int32 PunchCount = FMath::Clamp(1 + ActiveCount / 6, 2, 6);
+
+			for (int32 p = 0; p < PunchCount; ++p)
+			{
+				UGeometryCollectionComponent* SlabGC =
+					(p == 0 && Stage3_TargetSlabGC.IsValid()) ? Stage3_TargetSlabGC.Get() : PickLowerSlab();
+				if (!IsValid(SlabGC) || !SlabGC->IsRegistered() || SlabGC->IsBeingDestroyed()) continue;
+
+				FVector Origin, Extent;
+				if (!GetBounds(SlabGC, Origin, Extent)) continue;
+
+				const FVector BaseP =
+					(SlabGC == Stage3_TargetSlabGC.Get() && !Stage3_TargetSlabPunchPoint.IsNearlyZero())
+					? Stage3_TargetSlabPunchPoint
+					: Origin;
+
+				const FVector P = BaseP + FVector(
+					Stage3Stream.FRandRange(-Extent.X * 0.20f, Extent.X * 0.20f),
+					Stage3Stream.FRandRange(-Extent.Y * 0.20f, Extent.Y * 0.20f),
+					Stage3Stream.FRandRange(-Extent.Z * 0.10f, Extent.Z * 0.10f)
+				);
+
+				const float UseMag = (p == 0) ? PunchMagHard : PunchMagSoft;
+				const int32 UseIter = (p == 0) ? PunchIterMain : PunchIterSoft;
+
+				ApplyStrainToGC(SlabGC, P, PunchRadius, UseMag, UseIter);
+
+				// "깨질 때 아래로 꺼지는 느낌"을 살짝 보조 (너무 크면 와르르)
+				SlabGC->AddImpulseAtLocation(FVector(0, 0, -1) * 25000.f, P, NAME_None);
+				SlabGC->WakeAllRigidBodies();
+			}
+		}
+
+		// C) PhaseC: 마무리로 1~2개만 약하게 추가 분해(슬래브가 너무 멀쩡하면 여기만 살짝 올려도 됨)
+		if (bPhaseC)
+		{
+			const int32 Extra = FMath::Min(2, ActiveCount);
+			const float ExtraMag = FMath::Clamp(PunchMagHard * 0.12f, 8000.f, 60000.f);
+
+			for (int32 i = 0; i < Extra; ++i)
+			{
+				UGeometryCollectionComponent* G = GCSlabs[i].Get();
+				if (!IsValid(G) || !G->IsRegistered() || G->IsBeingDestroyed()) continue;
+
+				const FVector Center = G->Bounds.Origin;
+				ApplyStrainToGC(G, Center + FVector(0, 0, -40.f), 160.f, ExtraMag, 2);
+			}
 		}
 	}
 }

@@ -323,8 +323,8 @@ public:
 	float Stage3_WeakStrainRadius = 90.f;
 	float Stage3_WeakStrainMag = 120.f;
 
-	float Stage3_PunchRadius = 140.f;
-	float Stage3_PunchMag = 90.f;
+	float Stage3_PunchRadius = 110.f;
+	float Stage3_PunchMag = 9000.f;
 
 	float Stage3_GravityRampEndTime = 3.5f;  // 2.5~5.0 (늘릴수록 천천히 처짐)
 	bool  bStage3GravityCommitted = false;   // 램프 끝나고 1회만 진짜 gravity ON
@@ -731,6 +731,39 @@ private:
 	UPROPERTY()
 	TArray<TObjectPtr<UStaticMeshComponent>> Walls;
 
+	//strain
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|Scale")
+	float Stage3_WallTargetRatio = 0.20f;
+
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|Scale")
+	int32 Stage3_WallTargetMin = 2;
+
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|Scale")
+	int32 Stage3_WallTargetMax = 10;
+
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|Scale")
+	int32 Stage3_WallPointsPerTarget = 2;   
+
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|Scale")
+	float Stage3_ColTargetRatio = 0.12f;
+
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|Scale")
+	int32 Stage3_ColTargetMin = 1;
+
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|Scale")
+	int32 Stage3_ColTargetMax = 8;
+
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|Scale")
+	float Stage3_SlabTargetRatio = 0.20f;
+
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|Scale")
+	int32 Stage3_SlabTargetMin = 1;
+
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|Scale")
+	int32 Stage3_SlabTargetMax = 8;
+
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|Scale")
+	int32 Stage3_StrainEveryNTicks = 12;   
 
 private:
 	void BuildNodes();
