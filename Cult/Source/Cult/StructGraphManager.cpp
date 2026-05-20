@@ -24,7 +24,7 @@ AStructGraphManager::AStructGraphManager()
 void AStructGraphManager::BeginPlay()
 {
 	Super::BeginPlay();
-	UE_LOG(LogTemp, Warning, TEXT("[StructGraph] BeginPlay: %s"), *GetName());
+	//UE_LOG(LogTemp, Warning, TEXT("[StructGraph] BeginPlay: %s"), *GetName());
 
 	BuildGCCache();
 
@@ -45,7 +45,7 @@ void AStructGraphManager::BeginPlay()
 
 	ApplySettleDampingThenRestore();
 
-	UE_LOG(LogTemp, Warning, TEXT("[Gravity] WorldGravityZ=%.1f"), GetWorld()->GetGravityZ());
+	//UE_LOG(LogTemp, Warning, TEXT("[Gravity] WorldGravityZ=%.1f"), GetWorld()->GetGravityZ());
 }
 
 void AStructGraphManager::InitializeFromBP(
@@ -122,7 +122,7 @@ void AStructGraphManager::StopEarthquake()
 void AStructGraphManager::ResetStructure()
 {
 	StopEarthquake();
-	UE_LOG(LogTemp, Warning, TEXT("[CALL] ResetStructure"));
+	//UE_LOG(LogTemp, Warning, TEXT("[CALL] ResetStructure"));
 	for (FStructGraphNode& N : Nodes)
 	{
 		N.State = EStructDamageState::Intact;
