@@ -310,6 +310,15 @@ void ACultistCharacter::StartRitual()
 		return;
 	}
 
+	UE_LOG(LogTemp, Warning,
+		TEXT("[StartRitual] CurrentAltar=%s AltarID=%d Location=%s PlayerLocation=%s"),
+		*CurrentAltar->GetName(),
+		CurrentAltar->AltarID,
+		*CurrentAltar->GetActorLocation().ToString(),
+		*GetActorLocation().ToString()
+	);
+
+
 	if (!bIsPerformingRitual)
 	{
 		bIsPerformingRitual = true;

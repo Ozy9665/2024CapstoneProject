@@ -138,11 +138,12 @@ void ACultGameMode::SpawnAltars()
 
 	for (int32 i = 0; i < GI->RutialSpawnLocations.Num(); ++i)
 	{	
-		AActor* SpawnedAltar = GetWorld()->SpawnActor<AActor>(AltarClass, GI->RutialSpawnLocations[i], FRotator::ZeroRotator);
-
+		AActor* SpawnedActor = GetWorld()->SpawnActor<AActor>(AltarClass, GI->RutialSpawnLocations[i], FRotator::ZeroRotator);
+		AAltar* SpawnedAltar = Cast<AAltar>(SpawnedActor);
 		if (SpawnedAltar)
 		{
 			SpawnedAltar->SetActorScale3D(FVector(3.0f));
+			SpawnedAltar->InitAltarID(i);
 			UE_LOG(LogTemp, Warning, TEXT("Spawned Altar[%d] at %s"), i, *GI->RutialSpawnLocations[i].ToString());
 		}
 		else

@@ -398,12 +398,14 @@ void AAltar::StartRitualProgressFXFromServer()
 
 	if (QTEParticleComponent)
 	{
+		UE_LOG(LogTemp, Error, TEXT("if (QTEParticleComponent)"));
 		QTEParticleComponent->Activate(true);
 		QTEParticleComponent->SetFloatParameter(FName("User_RitualProgress"), ProgressNormalized);
 	}
 
 	if (AltarMID)
 	{
+		UE_LOG(LogTemp, Error, TEXT("if (AltarMID)"));
 		AltarMID->SetScalarParameterValue(FName("GaugeGlow"), 1.0f);
 		AltarMID->SetScalarParameterValue(FName("RitualProgress"), ProgressNormalized);
 		AltarMID->SetScalarParameterValue(FName("Progress"), ProgressNormalized);
@@ -449,4 +451,16 @@ void AAltar::PlayQTESuccessFXFromServer()
 void AAltar::PlayQTEFailFXFromServer()
 {
 	// 아직 실패 전용 이펙트 없으면 로그만
+}
+
+void AAltar::InitAltarID(int32 InAltarID)
+{
+	AltarID = InAltarID;
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("[Altar Init] Name=%s AltarID=%d Location=%s"),
+		*GetName(),
+		AltarID,
+		*GetActorLocation().ToString()
+	);
 }

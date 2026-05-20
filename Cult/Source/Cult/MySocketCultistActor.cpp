@@ -1719,7 +1719,14 @@ void AMySocketCultistActor::ProcessRitualStart(const char* Buffer)
             if (!World)
                 return;
 
+            UE_LOG(LogTemp, Warning,
+                TEXT("[ProcessRitualStart] recv ritual_id=%d reason=%d"),
+                static_cast<int32>(ritual_id),
+                static_cast<int32>(reason)
+            );
+
             AAltar* TargetAltar = nullptr;
+            int32 MatchCount = 0;
 
             TArray<AActor*> FoundAltars;
             UGameplayStatics::GetAllActorsOfClass(World, AAltar::StaticClass(), FoundAltars);
@@ -1730,15 +1737,48 @@ void AMySocketCultistActor::ProcessRitualStart(const char* Buffer)
                 if (!Altar)
                     continue;
 
+                UE_LOG(LogTemp, Warning,
+                    TEXT("[AltarList] Name=%s AltarID=%d Location=%s"),
+                    *Altar->GetName(),
+                    Altar->AltarID,
+                    *Altar->GetActorLocation().ToString()
+                );
+
                 if (Altar->AltarID == static_cast<int32>(ritual_id))
                 {
-                    TargetAltar = Altar;
-                    break;
+                    ++MatchCount;
+
+                    if (!TargetAltar)
+                    {
+                        TargetAltar = Altar;
+                    }
                 }
             }
 
+            if (MatchCount > 1)
+            {
+                UE_LOG(LogTemp, Error,
+                    TEXT("[ProcessRitualStart] Duplicate AltarID detected. ritual_id=%d MatchCount=%d"),
+                    static_cast<int32>(ritual_id),
+                    MatchCount
+                );
+            }
+
             if (!TargetAltar)
+            {
+                UE_LOG(LogTemp, Error,
+                    TEXT("[ProcessRitualStart] TargetAltar not found. ritual_id=%d"),
+                    static_cast<int32>(ritual_id)
+                );
                 return;
+            }
+
+            UE_LOG(LogTemp, Warning,
+                TEXT("[ProcessRitualStart] TargetAltar=%s AltarID=%d Location=%s"),
+                *TargetAltar->GetName(),
+                TargetAltar->AltarID,
+                *TargetAltar->GetActorLocation().ToString()
+            );
 
             if (reason == 0)
             {
@@ -1753,7 +1793,6 @@ void AMySocketCultistActor::ProcessRitualStart(const char* Buffer)
                 TargetAltar->PlayQTEFailFXFromServer();
             }
         });
-
 }
 
 void AMySocketCultistActor::ProcessRitualData(const char* Buffer) 

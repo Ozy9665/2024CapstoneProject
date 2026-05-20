@@ -167,8 +167,9 @@ public:
 
 	// 제단 id - 추후 레벨에서 지정 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ritual")
-	int32 AltarID = 0;
-
+	int32 AltarID = -1;
+	UFUNCTION(BlueprintCallable, Category = "Ritual")
+	void InitAltarID(int32 InAltarID);
 	
 
 	//UPROPERTY(EditDefaultsOnly, Category="Effects")
