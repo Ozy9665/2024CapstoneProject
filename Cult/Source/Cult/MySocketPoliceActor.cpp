@@ -407,20 +407,96 @@ void AMySocketPoliceActor::ProcessDisconnection(const char* Buffer)
 void AMySocketPoliceActor::ProcessRitualStart(const char* Buffer)
 {
     const RitualNoticePacket* Received = reinterpret_cast<const RitualNoticePacket*>(Buffer);
+
     const uint8_t ritual_id = Received->ritual_id;
     const uint8_t reason = Received->reason;
-    if (reason == 0)
-    {
-        // 해당 제단에 제단 진행 이펙트 표시
-    }
-    else if (reason == 1)
-    {
-        // 해당 제단에 qte 성공 이펙트 표시
-    }
-    else if (reason == 2)
-    {
-        // 해당 제단에 qte 실패 이펙트 표시
-    }
+
+    TWeakObjectPtr<AMySocketPoliceActor> WeakThis(this);
+
+    AsyncTask(ENamedThreads::GameThread, [WeakThis, ritual_id, reason]()
+        {
+            AMySocketPoliceActor* Self = WeakThis.Get();
+            if (!Self)
+                return;
+
+            UWorld* World = Self->GetWorld();
+            if (!World)
+                return;
+
+            UE_LOG(LogTemp, Warning,
+                TEXT("[ProcessRitualStart] recv ritual_id=%d reason=%d"),
+                static_cast<int32>(ritual_id),
+                static_cast<int32>(reason)
+            );
+
+            AAltar* TargetAltar = nullptr;
+            int32 MatchCount = 0;
+
+            TArray<AActor*> FoundAltars;
+            UGameplayStatics::GetAllActorsOfClass(World, AAltar::StaticClass(), FoundAltars);
+
+            for (AActor* Actor : FoundAltars)
+            {
+                AAltar* Altar = Cast<AAltar>(Actor);
+                if (!Altar)
+                    continue;
+
+                UE_LOG(LogTemp, Warning,
+                    TEXT("[AltarList] Name=%s AltarID=%d Location=%s"),
+                    *Altar->GetName(),
+                    Altar->AltarID,
+                    *Altar->GetActorLocation().ToString()
+                );
+
+                if (Altar->AltarID == static_cast<int32>(ritual_id))
+                {
+                    ++MatchCount;
+
+                    if (!TargetAltar)
+                    {
+                        TargetAltar = Altar;
+                    }
+                }
+            }
+
+            if (MatchCount > 1)
+            {
+                UE_LOG(LogTemp, Error,
+                    TEXT("[ProcessRitualStart] Duplicate AltarID detected. ritual_id=%d MatchCount=%d"),
+                    static_cast<int32>(ritual_id),
+                    MatchCount
+                );
+            }
+
+            if (!TargetAltar)
+            {
+                UE_LOG(LogTemp, Error,
+                    TEXT("[ProcessRitualStart] TargetAltar not found. ritual_id=%d"),
+                    static_cast<int32>(ritual_id)
+                );
+                return;
+            }
+
+            UE_LOG(LogTemp, Warning,
+                TEXT("[ProcessRitualStart] TargetAltar=%s AltarID=%d Location=%s"),
+                *TargetAltar->GetName(),
+                TargetAltar->AltarID,
+                *TargetAltar->GetActorLocation().ToString()
+            );
+
+            if (reason == 0)
+            {
+                TargetAltar->StartRitualProgressFXFromServer();
+            }
+            else if (reason == 1)
+            {
+                TargetAltar->PlayQTESuccessFXFromServer();
+            }
+            else if (reason == 2)
+            {
+                TargetAltar->PlayQTEFailFXFromServer();
+            }
+        });
 }
 
 void AMySocketPoliceActor::ProcessRitualData(const char* Buffer)

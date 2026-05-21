@@ -2041,27 +2041,27 @@ void mainLoop(HANDLE h_iocp) {
 
 int main(){
 	// map
-	if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset, NewmapLandmassLotate, XYZ::XZ_Y)) {
-		std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ load fail" << std::endl;
-	}
-	else{
-		std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ loaded" << std::endl;
-	}
+	//if (!NewmapLandmassMap.Load("SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ", NewmapLandmassOffset, NewmapLandmassLotate, XYZ::XZ_Y)) {
+	//	std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ load fail" << std::endl;
+	//}
+	//else{
+	//	std::cout << "SM_MERGED_StaticMeshActor_NewmapLandmass.OBJ loaded" << std::endl;
+	//}
 
-	if (!Level3Map.Load("SM_0421Level3Merged.OBJ", Level3MapOffset, Level3MapLotate, XYZ::XY_Z)) {
-		std::cout << "SM_0421Level3Merged.OBJ load fail" << std::endl;
-	}
-	else {
-		std::cout << "SM_0421Level3Merged.OBJ loaded" << std::endl;
-	}
+	//if (!Level3Map.Load("SM_0421Level3Merged.OBJ", Level3MapOffset, Level3MapLotate, XYZ::XY_Z)) {
+	//	std::cout << "SM_0421Level3Merged.OBJ load fail" << std::endl;
+	//}
+	//else {
+	//	std::cout << "SM_0421Level3Merged.OBJ loaded" << std::endl;
+	//}
 
-	// navmesh
-	if (!NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset, NewmapLandmassNavScale)) {
-		std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj load fail" << std::endl;
-	}
-	else {
-		std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
-	}
+	//// navmesh
+	//if (!NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset, NewmapLandmassNavScale)) {
+	//	std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj load fail" << std::endl;
+	//}
+	//else {
+	//	std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
+	//}
 
 	if (!Level3NavMesh.Load("Level_3-NavMesh-M-2026.05.14-19.20.15.obj", Level3MapOffset, Level3NavScale)) {
 		std::cout << "Level_3-NavMesh-CM-2026.05.14-19.20.15.obj load fail" << std::endl;
@@ -2105,25 +2105,20 @@ int main(){
 	//	std::cout << "DB 초기화 실패, 프로그램 종료\n";
 	//	return 0;
 	//}
-	g_rooms[0].first.room_id = 0;
-	g_rooms[0].first.police = 0;
-	g_rooms[0].first.cultist = 0;
-	g_rooms[0].first.isIngame = false;
-	for (int j = 0; j < MAX_PLAYERS_PER_ROOM; ++j) {
-		g_rooms[0].first.player_ids[j] = -1;
-	}
-	g_rooms[0].second = LEVEL3;
-	InitializeAltars(0);
-
-	for (int i = 1; i < 100; ++i) {
+	for (int i = 0; i < 100; ++i)
+	{
 		g_rooms[i].first.room_id = i;
 		g_rooms[i].first.police = 0;
 		g_rooms[i].first.cultist = 0;
 		g_rooms[i].first.isIngame = false;
-        for (int j = 0; j < MAX_PLAYERS_PER_ROOM; ++j) {
-            g_rooms[i].first.player_ids[j] = -1;
-        }
-		g_rooms[i].second = LANDMASS;
+
+		for (int j = 0; j < MAX_PLAYERS_PER_ROOM; ++j)
+		{
+			g_rooms[i].first.player_ids[j] = -1;
+		}
+
+		g_rooms[i].second = (i % 2 == 0) ? LEVEL3 : LANDMASS;
+
 		InitializeAltars(i);
 	}
 

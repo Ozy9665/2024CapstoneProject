@@ -64,7 +64,7 @@ struct FRoomObjectState
 
 enum MAPTYPE { LANDMASS, LEVEL3 };
 
-constexpr int MAX_PLAYERS_PER_ROOM = 5;
+constexpr int MAX_PLAYERS_PER_ROOM = 4;
 constexpr int MAX_ROOM_LIST = 10;
 constexpr int ALTAR_PER_ROOM = 3;
 

@@ -1850,15 +1850,12 @@ void AMySocketCultistActor::ProcessRitualEnd(const char* Buffer) {
 
                     if (TargetAltar->AltarID == static_cast<int32>(ritual_id))
                     {
-                        TargetAltar->StopRitualProgressFXFromServer();
                         TargetAltar->AddToRitualGauge(100.0f);
 
-
+                        UE_LOG(LogTemp, Warning, TEXT("[RitualEnd] Altar %d gauge to 100"), ritual_id);
                         break;
                     }
                 }
-
-
 
                 AActor* FoundActor = UGameplayStatics::GetActorOfClass(
                     World,
@@ -1874,13 +1871,12 @@ void AMySocketCultistActor::ProcessRitualEnd(const char* Buffer) {
 
                 StructGraphManager->TriggerStage3();
             });
-            MyCharacter->bIsPerformingRitual = false;
     }
     else {
         const uint8_t ritual_id = Received->ritual_id;
-        const int reason = Received->reason;
-        AsyncTask(ENamedThreads::GameThread, [this, ritual_id,  reason]() {
-            AsyncTask(ENamedThreads::GameThread, [this, ritual_id, reason]() {
+        const int gauge = Received->reason;
+        AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
+            AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
                 // gauge·Î ritual gauge
                 TArray<AActor*> FoundAltars;
                 UGameplayStatics::GetAllActorsOfClass(GetWorld(), AAltar::StaticClass(), FoundAltars);
@@ -1891,12 +1887,7 @@ void AMySocketCultistActor::ProcessRitualEnd(const char* Buffer) {
 
                     if (TargetAltar && TargetAltar->AltarID == (int32)ritual_id)
                     {
-                        if (reason == 3)
-                        {
-                            TargetAltar->StopRitualProgressFXFromServer();
-                        }
-
-                        //TargetAltar->AddToRitualGauge((float)gauge);
+                        TargetAltar->AddToRitualGauge((float)gauge);
                         break;
                     }
                 }
