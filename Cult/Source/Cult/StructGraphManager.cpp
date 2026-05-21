@@ -980,7 +980,7 @@ void AStructGraphManager::TriggerStage2()
 void AStructGraphManager::TriggerStage3()
 {
 	BuildGCCache();
-	DumpGCCache(TEXT("BeforeStage3"));
+
 	// 타이머 정리
 	GetWorldTimerManager().ClearTimer(Stage2Timer);
 	GetWorldTimerManager().ClearTimer(Stage3SlabDelayHandle);
@@ -991,37 +991,19 @@ void AStructGraphManager::TriggerStage3()
 	UE_LOG(LogTemp, Warning, TEXT("[Quake] Stage3 Start (Single-flow continuous)"));
 
 	PlayShake(QuakeStage3LongShakeClass, Stage3LongScale);
+
+	// 프록시 충돌 OFF
 	DisableAllProxies();
-	// 디버그
-	DebugDumpProxyCollision(TEXT("After DisableAllProxies"));
-	DebugDumpGCCollision(TEXT("After Stage3 Setup"));
 
-
-
-
-	GetWorld()->GetTimerManager().SetTimerForNextTick([this]()
-		{
-			DisableAllProxies_Global(TEXT("Stage3DisableAll_NextTick"));
-			DumpAllProxies_Global(TEXT("AfterStage3Disable"));
-		});
+	// 물리 준비
 	EnsureGCPhysicsReady_Stage3();
-	// 임시
-	SetGCPawnResponse(GCWalls, ECR_Ignore);
-	SetGCPawnResponse(GCColumns, ECR_Ignore);
-	SetGCPawnResponse(GCSlabs, ECR_Ignore);
+
+	// (임시로 Pawn Ignore)
+	// SetGCPawnResponse(GCWalls, ECR_Ignore);
+	// SetGCPawnResponse(GCColumns, ECR_Ignore);
+	// SetGCPawnResponse(GCSlabs, ECR_Ignore);
+
 	StartStage3Continuous();
-
-	// 임시
-	GetWorldTimerManager().SetTimerForNextTick([this]()
-		{
-			DebugDumpProxyCollision(TEXT("NextTick"));
-		});
-
-	FTimerHandle Tmp;
-	GetWorldTimerManager().SetTimer(Tmp, [this]()
-		{
-			DebugDumpProxyCollision(TEXT("T+1.0s"));
-		}, 1.0f, false);
 }
 
 UGeometryCollectionComponent* AStructGraphManager::FindNearestGC(const FVector& WorldPoint) const
