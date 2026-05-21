@@ -301,40 +301,36 @@ static void MoveAlongPath(SESSION& session, const Vec3& targetPos, float deltaTi
         return;
     }
 
+    dir.x /= len;
+    dir.y /= len;
+    dir.z /= len;
+
     Vec3 candidatePos = cur;
 
     const float moveDist = CULTIST_SPEED * deltaTime;
+    const float stepDist = std::min(moveDist, len);
 
-    if (len <= moveDist)
-    {
-        candidatePos = next;
-    }
-    else
-    {
-        dir.x /= len;
-        dir.y /= len;
-        dir.z /= len;
-
-        candidatePos.x += dir.x * moveDist;
-        candidatePos.y += dir.y * moveDist;
-        candidatePos.z += dir.z * moveDist;
-    }
+    candidatePos.x += dir.x * stepDist;
+    candidatePos.y += dir.y * stepDist;
+    candidatePos.z += dir.z * stepDist;
 
     if (!SnapCultistPositionByCurrentTri(session, *cultistAI, *nav, candidatePos))
     {
-        if (cultistAI->bb.lastValidPos.x != 0.f ||
-            cultistAI->bb.lastValidPos.y != 0.f ||
-            cultistAI->bb.lastValidPos.z != 0.f)
+        Vec3 retryPos = cur;
+
+        const float halfMoveDist = moveDist * 0.5f;
+
+        retryPos.x += dir.x * halfMoveDist;
+        retryPos.y += dir.y * halfMoveDist;
+        retryPos.z += dir.z * halfMoveDist;
+
+        if (!SnapCultistPositionByCurrentTri(session, *cultistAI, *nav, retryPos))
         {
-            session.cultist_state.PositionX = cultistAI->bb.lastValidPos.x;
-            session.cultist_state.PositionY = cultistAI->bb.lastValidPos.y;
-            session.cultist_state.PositionZ = cultistAI->bb.lastValidPos.z;
+            StopMovement(session);
+            return;
         }
 
-        cultistAI->bb.path.clear();
-        cultistAI->bb.currentTri = -1;
-        StopMovement(session);
-        return;
+        candidatePos = retryPos;
     }
 
     session.cultist_state.PositionX = candidatePos.x;

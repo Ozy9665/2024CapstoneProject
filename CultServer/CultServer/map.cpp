@@ -1498,11 +1498,9 @@ bool NAVMESH::ResolveMovedTriangleFromCurrent(
             return true;
         };
 
-    // 현재 삼각형 유지
     if (TryTri(currentTri))
         return true;
 
-    // 현재 삼각형의 neighbor로 이동
     if (IsValidTri(currentTri))
     {
         for (int nb : triNeighbors[currentTri])
@@ -1510,9 +1508,20 @@ bool NAVMESH::ResolveMovedTriangleFromCurrent(
             if (TryTri(nb))
                 return true;
         }
+
+        for (int nb : triNeighbors[currentTri])
+        {
+            if (!IsValidTri(nb))
+                continue;
+
+            for (int nb2 : triNeighbors[nb])
+            {
+                if (TryTri(nb2))
+                    return true;
+            }
+        }
     }
 
-    // currentTri가 깨졌거나, 순간적으로 경계를 크게 넘은 경우 fallback
     const int fallbackTri = FindContainingTriangle(feetPos);
     if (TryTri(fallbackTri))
         return true;
