@@ -1463,6 +1463,63 @@ bool NAVMESH::SnapPositionToNavMesh(Vec3& pos) const
     return true;
 }
 
+bool NAVMESH::ResolveMovedTriangleFromCurrent(
+    int currentTri,
+    const Vec3& feetPos,
+    float maxZDiff,
+    int& outTri,
+    float& outGroundZ
+) const
+{
+    outTri = -1;
+    outGroundZ = feetPos.z;
+
+    auto IsValidTri = [&](int tri) -> bool
+        {
+            return tri >= 0 && tri < static_cast<int>(tris.size());
+        };
+
+    auto TryTri = [&](int tri) -> bool
+        {
+            if (!IsValidTri(tri))
+                return false;
+
+            if (!PointInTri2D(feetPos, tris[tri]))
+                return false;
+
+            const float groundZ = TriHeightAtXY(tri, feetPos.x, feetPos.y);
+            const float dz = std::abs(groundZ - feetPos.z);
+
+            if (dz > maxZDiff)
+                return false;
+
+            outTri = tri;
+            outGroundZ = groundZ;
+            return true;
+        };
+
+    // 현재 삼각형 유지
+    if (TryTri(currentTri))
+        return true;
+
+    // 현재 삼각형의 neighbor로 이동
+    if (IsValidTri(currentTri))
+    {
+        for (int nb : triNeighbors[currentTri])
+        {
+            if (TryTri(nb))
+                return true;
+        }
+    }
+
+    // currentTri가 깨졌거나, 순간적으로 경계를 크게 넘은 경우 fallback
+    const int fallbackTri = FindContainingTriangle(feetPos);
+    if (TryTri(fallbackTri))
+        return true;
+
+    return false;
+}
+
 void NAVMESH::DebugPrintSummary() const
 {
     std::cout << "==== NAVMESH DEBUG ====\n";

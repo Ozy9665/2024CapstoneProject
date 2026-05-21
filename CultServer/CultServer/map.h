@@ -170,6 +170,11 @@ public:
     int GetRandomTriangle(int, int) const;
     bool SnapPositionToNavMesh(Vec3& pos) const;
     std::vector<int> triComponentId;
+    bool ResolveMovedTriangleFromCurrent(
+        int currentTri, const Vec3& feetPos,
+        float maxZDiff, int& outTri,
+        float& outGroundZ) const;
+    float TriHeightAtXY(int, float, float) const;
 
 private:
     Vec3 scale;
@@ -192,7 +197,6 @@ private:
     void BuildSpatialGridNav();
     void BuildComponents();
     bool GetSharedEdge(int, int, Vec3&, Vec3&) const;
-    float TriHeightAtXY(int, float, float) const;
     void TryCellContain(int, int, const Vec3&,
         int& bestTri, float& bestDz) const;
     int TryCellSnapRing(int, int, const Vec3&,

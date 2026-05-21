@@ -516,6 +516,9 @@ struct CultistBlackboard
 	Vec3 runaway_pos{};
 	bool has_runaway_target{};
 	int runaway_ticks{};
+
+	int currentTri = -1;
+	Vec3 lastValidPos{};
 };
 
 struct PoliceBlackboard
@@ -540,6 +543,9 @@ struct PoliceBlackboard
 	int aim_target = -1;
 
 	float attack_lock_time{};
+
+	int currentTri = -1;
+	Vec3 lastValidPos{};
 };
 
 struct DogBlackboard
@@ -769,3 +775,4 @@ constexpr float POLICE_SPEED{ 350.f };
 constexpr float CULTIST_SPEED{ 300.f };
 constexpr float ATTACK_COOL_DOWN{ 3.f };
 constexpr float HEAL_DIST{ 30.f };
+constexpr float SNAP_MAX_Z_DIFF{ 150.f };

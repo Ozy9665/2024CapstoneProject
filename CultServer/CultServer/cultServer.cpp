@@ -2056,12 +2056,12 @@ int main(){
 	//}
 
 	//// navmesh
-	//if (!NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset, NewmapLandmassNavScale)) {
-	//	std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj load fail" << std::endl;
-	//}
-	//else {
-	//	std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
-	//}
+	if (!NewmapLandmassNavMesh.Load("NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj", NewmapLandmassOffset, NewmapLandmassNavScale)) {
+		std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj load fail" << std::endl;
+	}
+	else {
+		std::cout << "NewMap_LandMass-NavMesh-CM-2026.01.31-21.48.45.obj loaded" << std::endl;
+	}
 
 	if (!Level3NavMesh.Load("Level_3-NavMesh-M-2026.05.14-19.20.15.obj", Level3MapOffset, Level3NavScale)) {
 		std::cout << "Level_3-NavMesh-CM-2026.05.14-19.20.15.obj load fail" << std::endl;
