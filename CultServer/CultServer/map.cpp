@@ -320,8 +320,8 @@ bool MAP::LineTrace(const Ray& worldRay, float maxDist, float& hitDist, int& hit
             if (it == grid.end())
                 return;
 
-            std::cout << "[GRID HIT CELL] (" << gx << ", " << gy
-                << ") triCount=" << it->second.size() << "\n";
+            //std::cout << "[GRID HIT CELL] (" << gx << ", " << gy
+            //    << ") triCount=" << it->second.size() << "\n";
 
             for (int triIdx : it->second)
             {
@@ -331,8 +331,8 @@ bool MAP::LineTrace(const Ray& worldRay, float maxDist, float& hitDist, int& hit
                 float tHit = 0.f;
                 if (RayTri(ray, tris[triIdx], hitDist, tHit))
                 {
-                    std::cout << "[TRI HIT] tri=" << triIdx
-                        << " dist=" << tHit << "\n";
+                    //std::cout << "[TRI HIT] tri=" << triIdx
+                    //    << " dist=" << tHit << "\n";
 
                     hitDist = tHit;
                     hitTriIndex = triIdx;
@@ -386,7 +386,7 @@ bool MAP::LineTrace(const Ray& worldRay, float maxDist, float& hitDist, int& hit
             break;
         }
 
-        std::cout << "[CELL start] (" << cx << ", " << cy << ")\n";
+        // std::cout << "[CELL start] (" << cx << ", " << cy << ")\n";
 
         if (cx == endCellX && cy == endCellY)
             break;

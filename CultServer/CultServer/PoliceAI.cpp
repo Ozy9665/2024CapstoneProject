@@ -120,6 +120,53 @@ static inline float Dist(const Vec3& a, const Vec3& b)
     return std::sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+static float DistSq3D(const Vec3& a, const Vec3& b)
+{
+    const float dx = a.x - b.x;
+    const float dy = a.y - b.y;
+    const float dz = a.z - b.z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
+static void CompactPath(std::vector<Vec3>& path, float minGap)
+{
+    if (path.empty())
+        return;
+
+    const float minGapSq = minGap * minGap;
+
+    std::vector<Vec3> compact;
+    compact.reserve(path.size());
+
+    compact.push_back(path.front());
+
+    for (int i = 1; i < static_cast<int>(path.size()); ++i)
+    {
+        if (DistSq3D(compact.back(), path[i]) >= minGapSq)
+        {
+            compact.push_back(path[i]);
+        }
+    }
+
+    path.swap(compact);
+}
+
+static void NormalizePolicePathHeight(NAVMESH& nav, std::vector<Vec3>& path)
+{
+    for (Vec3& p : path)
+    {
+        Vec3 feetPos = p;
+        feetPos.z -= CHARACTER_HALF_HEIGHT;
+
+        int tri = nav.FindContainingTriangle(feetPos);
+        if (tri < 0)
+            continue;
+
+        const float groundZ = nav.TriHeightAtXY(tri, p.x, p.y);
+        p.z = groundZ + CHARACTER_HALF_HEIGHT;
+    }
+}
+
 void PoliceAIWorkerLoop()
 {
     using clock = std::chrono::steady_clock;
@@ -342,10 +389,19 @@ bool PoliceAIController::CanChase()
     return bb.target_id != -1;
 }
 
+static bool IsSimilarHeight(float selfZ, float targetZ)
+{
+    return std::abs(selfZ - targetZ) <= ATTACK_MAX_Z_DIFF;
+}
+
 bool PoliceAIController::CanBatonAttack()
 {
     auto it = g_users.find(bb.target_id);
     if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
+        return false;
+
+    auto target = it->second;
+    if (!IsSimilarHeight(owner->police_state.PositionZ, target->cultist_state.PositionZ))
         return false;
 
     return bb.target_id != -1 &&
@@ -364,6 +420,10 @@ bool PoliceAIController::CanShoot()
     if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
         return false;
 
+    auto target = it->second;
+    if (!IsSimilarHeight(owner->police_state.PositionZ, target->cultist_state.PositionZ))
+        return false;
+
     return bb.target_id != -1 &&
         bb.last_dist_to_target < TASER_RANGE;
 }
@@ -374,6 +434,10 @@ bool PoliceAIController::CanTaser()
     if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
         return false;
 
+    auto target = it->second;
+    if (!IsSimilarHeight(owner->police_state.PositionZ, target->cultist_state.PositionZ))
+        return false;
+
     return bb.target_id != -1 &&
         bb.last_dist_to_target < TASER_RANGE;
 }
@@ -382,6 +446,10 @@ bool PoliceAIController::CanPistol()
 {
     auto it = g_users.find(bb.target_id);
     if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
+        return false;
+
+    auto target = it->second;
+    if (!IsSimilarHeight(owner->police_state.PositionZ, target->cultist_state.PositionZ))
         return false;
 
     return bb.target_id != -1 &&
@@ -690,14 +758,13 @@ void PoliceAIController::UpdateBlackboard(float dt)
     // stuck 발생 시 처리
     if (bb.stuck_ticks > MAX_STUCK_TICK)
     {
-        std::cout << "[FIX] stuck -> reset path\n";
-
         bb.path.clear();
         bb.has_patrol_target = false;
         bb.target_id = -1;
         bb.currentTri = -1;
-        MoveToNearestTriangle(cur);
         bb.stuck_ticks = 0;
+
+        StopMovement();
     }
 }
 
@@ -844,21 +911,42 @@ void PoliceAIController::MoveAlongPath(const Vec3& targetPos, float deltaTime)
             return;
         }
 
-        std::vector<std::pair<Vec3, Vec3>> portals;
-        nav->BuildPortals(triPath, portals);
-
-        if (portals.empty()) {
-            StopMovement();
-            return;
-        }
-
-        std::vector<Vec3> smoothPath;
-        if (!nav->SmoothPath(cur, targetPos, portals, smoothPath) || smoothPath.size() < 2)
+        if (triPath.size() <= 1)
         {
-            StopMovement();
-            return;
+            bb.path.clear();
+            bb.path.push_back(cur);
+            bb.path.push_back(targetPos);
         }
-        bb.path = smoothPath;
+        else
+        {
+            std::vector<std::pair<Vec3, Vec3>> portals;
+            nav->BuildPortals(triPath, portals);
+
+            if (portals.empty())
+            {
+                StopMovement();
+                return;
+            }
+
+            std::vector<Vec3> smoothPath;
+            if (!nav->SmoothPath(cur, targetPos, portals, smoothPath) || smoothPath.size() < 2)
+            {
+                StopMovement();
+                return;
+            }
+
+            CompactPath(smoothPath, 20.f);
+            NormalizePolicePathHeight(*nav, smoothPath);
+
+            if (smoothPath.size() < 2)
+            {
+                StopMovement();
+                bb.path.clear();
+                return;
+            }
+
+            bb.path = std::move(smoothPath);
+        }
     }
 
     if (bb.path.empty())

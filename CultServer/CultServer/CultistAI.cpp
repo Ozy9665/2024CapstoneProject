@@ -431,8 +431,11 @@ void CultistAIController::Patrol(float dt)
 
     if (bb.stuck_ticks > MAX_STUCK_TICK)
     {
-        bb.has_patrol_target = false;
         bb.path.clear();
+        bb.has_patrol_target = false;
+        bb.target_id = -1;
+        bb.currentTri = -1;
+        bb.stuck_ticks = 0;
         return;
     }
 

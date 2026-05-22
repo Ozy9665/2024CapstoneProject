@@ -776,3 +776,4 @@ constexpr float CULTIST_SPEED{ 300.f };
 constexpr float ATTACK_COOL_DOWN{ 3.f };
 constexpr float HEAL_DIST{ 30.f };
 constexpr float SNAP_MAX_Z_DIFF{ 150.f };
+constexpr float ATTACK_MAX_Z_DIFF{ 120.f };
