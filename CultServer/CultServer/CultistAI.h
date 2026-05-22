@@ -99,6 +99,7 @@ public:
 private:
     void UpdateBlackboard(float);
     void RunBehaviorTree(float);
+    void UpdateRitualTarget();
 
     void MoveToNearestTriangle(const Vec3&);
     void StopMovement();

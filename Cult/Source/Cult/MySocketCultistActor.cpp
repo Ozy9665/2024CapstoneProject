@@ -1876,22 +1876,20 @@ void AMySocketCultistActor::ProcessRitualEnd(const char* Buffer) {
         const uint8_t ritual_id = Received->ritual_id;
         const int gauge = Received->reason;
         AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
-            AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
-                // gauge·Î ritual gauge
-                TArray<AActor*> FoundAltars;
-                UGameplayStatics::GetAllActorsOfClass(GetWorld(), AAltar::StaticClass(), FoundAltars);
+            // gauge·Î ritual gauge
+            TArray<AActor*> FoundAltars;
+            UGameplayStatics::GetAllActorsOfClass(GetWorld(), AAltar::StaticClass(), FoundAltars);
 
-                for (AActor* Actor : FoundAltars)
+            for (AActor* Actor : FoundAltars)
+            {
+                AAltar* TargetAltar = Cast<AAltar>(Actor);
+
+                if (TargetAltar && TargetAltar->AltarID == (int32)ritual_id)
                 {
-                    AAltar* TargetAltar = Cast<AAltar>(Actor);
-
-                    if (TargetAltar && TargetAltar->AltarID == (int32)ritual_id)
-                    {
-                        TargetAltar->AddToRitualGauge((float)gauge);
-                        break;
-                    }
+                    TargetAltar->AddToRitualGauge((float)gauge);
+                    break;
                 }
-                });
+            }
             });
     }
 }

@@ -734,7 +734,7 @@ constexpr FPoliceCharacterState PoliceDummyState{ -1, 0.f, 0.f, 0.f,	0.f, 90.f, 
 
 constexpr FVector LandMassAltarLocations[5] = {
 	{ -10740.0f, 10460.0f, -3124.0f },
-	{ -11450.0f,  4640.0f, -3126.0f },
+	{ -11400.0f,  4430.0f, -3126.0f },
 	{   1530.0f,  6070.0f, -3124.0f },
 	{   1450.0f, -1925.0f, -3124.0f },
 	{  -5730.0f,  1330.0f, -3110.0f }
@@ -765,7 +765,7 @@ constexpr float ALTAR_TRIGGER_RANGE{ 600.f };
 constexpr float ALTAR_TRIGGER_RANGE_SQ{ ALTAR_TRIGGER_RANGE * ALTAR_TRIGGER_RANGE };
 constexpr float CHASE_START_RANGE{ 1500.f };
 constexpr float CHASE_STOP_RANGE{ 150.f };
-constexpr float ARRIVE_RANGE{ 100.f };
+constexpr float ARRIVE_RANGE{ 200.f };
 constexpr float STUCK_RANGE{ 5.f };
 constexpr int MAX_STUCK_TICK{ 60 };
 constexpr float FOLLOW_MAX_DIST{ 800.f };

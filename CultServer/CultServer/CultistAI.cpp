@@ -256,6 +256,14 @@ CultistAIController::CultistAIController(SESSION* o)
         rootSelector->children.push_back(std::move(seq));
     }
 
+    // Ritual
+    {
+        auto seq = std::make_unique<Sequence>();
+        seq->children.push_back(std::make_unique<CultistCanRitualNode>());
+        seq->children.push_back(std::make_unique<CultistRitualNode>());
+        rootSelector->children.push_back(std::move(seq));
+    }
+
     // Chase + Heal
     {
         auto seq = std::make_unique<Sequence>();
@@ -275,14 +283,6 @@ CultistAIController::CultistAIController(SESSION* o)
         chaseSelector->children.push_back(std::make_unique<CultistChaseNode>());
 
         seq->children.push_back(std::move(chaseSelector));
-        rootSelector->children.push_back(std::move(seq));
-    }
-
-    // Ritual
-    {
-        auto seq = std::make_unique<Sequence>();
-        seq->children.push_back(std::make_unique<CultistCanRitualNode>());
-        seq->children.push_back(std::make_unique<CultistRitualNode>());
         rootSelector->children.push_back(std::move(seq));
     }
 
@@ -484,6 +484,23 @@ void CultistAIController::Chase(float dt)
 
 void CultistAIController::Runaway(float dt)
 {
+    if (bb.ritual_id != -1) 
+    {
+        Altar& altar = g_altars[owner->room_id][bb.ritual_id];
+        if (!altar.isActivated)
+            return;
+
+        altar.isActivated = false;
+
+        RitualNoticePacket packet{};
+        packet.header = ritualStartHeader;
+        packet.size = sizeof(RitualNoticePacket);
+        packet.ritual_id = bb.ritual_id;
+        packet.reason = altar.gauge;
+
+        broadcast_in_room(*owner, &packet, VIEW_RANGE);
+    }
+
     MAP* map = GetMap(owner->room_id);
     NAVMESH* nav = GetNavMesh(owner->room_id);
     if (!map || !nav)
@@ -634,21 +651,40 @@ void CultistAIController::Heal(float dt)
 
 void CultistAIController::Ritual(float dt)
 {
-    if (bb.ritual_id < 0)
+    if (bb.ritual_id < 0 || bb.ritual_id >= ALTAR_PER_ROOM)
         return;
 
     Altar& altar = g_altars[owner->room_id][bb.ritual_id];
 
-    Vec3 altarPos{
-        (float)altar.loc.x,
-        (float)altar.loc.y,
-        (float)altar.loc.z
+    if (altar.gauge >= 100)
+    {
+        altar.isActivated = false;
+        bb.ritual_id = -1;
+        return;
+    }
+
+    Vec3 selfPos{
+        owner->cultist_state.PositionX,
+        owner->cultist_state.PositionY,
+        owner->cultist_state.PositionZ
     };
 
-    MoveAlongPath(altarPos, dt);
+    Vec3 altarPos{
+        static_cast<float>(altar.loc.x),
+        static_cast<float>(altar.loc.y),
+        static_cast<float>(altar.loc.z)
+    };
 
-    if (!bb.path.empty())
+    Vec3 selfFeetPos = selfPos;
+    selfFeetPos.z -= CHARACTER_HALF_HEIGHT;
+
+    const float dist = Dist(selfFeetPos, altarPos);
+
+    if (dist > ARRIVE_RANGE)
+    {
+        MoveAlongPath(altarPos, dt);
         return;
+    }
 
     StopMovement();
 
@@ -656,6 +692,14 @@ void CultistAIController::Ritual(float dt)
     {
         altar.isActivated = true;
         altar.time = std::chrono::system_clock::now();
+
+        RitualNoticePacket packet{};
+        packet.header = ritualStartHeader;
+        packet.size = sizeof(RitualNoticePacket);
+        packet.ritual_id = bb.ritual_id;
+        packet.reason = 0;
+
+        broadcast_in_room(*owner, &packet, VIEW_RANGE);
         return;
     }
 
@@ -664,11 +708,18 @@ void CultistAIController::Ritual(float dt)
 
     if (elapsed > 0)
     {
-        int add = elapsed / 100;
+        int add = static_cast<int>(elapsed / 100);
         if (add > 0)
         {
             altar.gauge = std::min(100, altar.gauge + add);
             altar.time = now;
+            std::cout << "[Ritual Gauge]"
+                << " ai=" << owner->id
+                << " ritual_id=" << bb.ritual_id
+                << " add=" << add
+                << " new=" << altar.gauge
+                << " elapsed_ms=" << elapsed
+                << "\n";
         }
     }
 
@@ -676,6 +727,18 @@ void CultistAIController::Ritual(float dt)
     {
         altar.isActivated = false;
         bb.ritual_id = -1;
+
+        RitualNoticePacket packet{};
+        packet.header = ritualStartHeader;
+        packet.size = sizeof(RitualNoticePacket);
+        packet.ritual_id = bb.ritual_id;
+        packet.reason = 4;
+
+        broadcast_in_room(*owner, &packet, VIEW_RANGE);
+        std::cout << "[Ritual Complete]"
+            << " ai=" << owner->id
+            << " ritual_id=" << bb.ritual_id
+            << "\n";
     }
 }
 
@@ -805,25 +868,7 @@ void CultistAIController::UpdateBlackboard(float dt)
         bb.last_dist_to_target = FLT_MAX;
     }
 
-    bb.ritual_id = -1;
-
-    for (int i = 0; i < ALTAR_PER_ROOM; ++i)
-    {
-        Altar& altar = g_altars[owner->room_id][i];
-
-        if (altar.isActivated || altar.gauge >= 100)
-            continue;
-
-        float dx = owner->cultist_state.PositionX - (float)altar.loc.x;
-        float dy = owner->cultist_state.PositionY - (float)altar.loc.y;
-        float dist2 = dx * dx + dy * dy;
-
-        if (dist2 <= ALTAR_TRIGGER_RANGE_SQ)
-        {
-            bb.ritual_id = i;
-            break;
-        }
-    }
+    UpdateRitualTarget();
 
     Vec3 cur{
         owner->cultist_state.PositionX,
@@ -875,6 +920,51 @@ void CultistAIController::Update(float dt)
 {
     UpdateBlackboard(dt);
     RunBehaviorTree(dt);
+}
+
+void CultistAIController::UpdateRitualTarget()
+{
+    const int room_id = owner->room_id;
+    if (room_id < 0 || room_id >= MAX_ROOM)
+    {
+        bb.ritual_id = -1;
+        return;
+    }
+
+    if (bb.ritual_id >= 0 && bb.ritual_id < ALTAR_PER_ROOM)
+    {
+        Altar& currentAltar = g_altars[room_id][bb.ritual_id];
+
+        if (currentAltar.gauge < 100)
+        {
+            return;
+        }
+
+        bb.ritual_id = -1;
+    }
+
+    for (int i = 0; i < ALTAR_PER_ROOM; ++i)
+    {
+        Altar& altar = g_altars[room_id][i];
+
+        if (altar.gauge >= 100)
+            continue;
+
+        if (altar.isActivated)
+            continue;
+
+        const float dx = owner->cultist_state.PositionX - static_cast<float>(altar.loc.x);
+        const float dy = owner->cultist_state.PositionY - static_cast<float>(altar.loc.y);
+        const float dist2 = dx * dx + dy * dy;
+
+        if (dist2 <= ALTAR_TRIGGER_RANGE_SQ)
+        {
+            bb.ritual_id = i;
+            return;
+        }
+    }
+
+    bb.ritual_id = -1;
 }
 
 // Movement
@@ -982,33 +1072,42 @@ void CultistAIController::MoveAlongPath(const Vec3& targetPos, float deltaTime)
             return;
         }
 
-        std::vector<std::pair<Vec3, Vec3>> portals;
-        nav->BuildPortals(triPath, portals);
-
-        if (portals.empty())
+        if (triPath.size() <= 1)
         {
-            StopMovement();
-            return;
-        }
-
-        std::vector<Vec3> smoothPath;
-        if (!nav->SmoothPath(cur, targetPos, portals, smoothPath) || smoothPath.size() < 2)
-        {
-            StopMovement();
-            return;
-        }
-
-        CompactPath(smoothPath, 20.f);
-        NormalizeCultistPathHeight(*nav, smoothPath);
-
-        if (smoothPath.size() < 2)
-        {
-            StopMovement();
             bb.path.clear();
-            return;
+            bb.path.push_back(cur);
+            bb.path.push_back(targetPos);
         }
+        else {
 
-        bb.path = std::move(smoothPath);
+            std::vector<std::pair<Vec3, Vec3>> portals;
+            nav->BuildPortals(triPath, portals);
+
+            if (portals.empty())
+            {
+                StopMovement();
+                return;
+            }
+
+            std::vector<Vec3> smoothPath;
+            if (!nav->SmoothPath(cur, targetPos, portals, smoothPath) || smoothPath.size() < 2)
+            {
+                StopMovement();
+                return;
+            }
+
+            CompactPath(smoothPath, 20.f);
+            NormalizeCultistPathHeight(*nav, smoothPath);
+
+            if (smoothPath.size() < 2)
+            {
+                StopMovement();
+                bb.path.clear();
+                return;
+            }
+
+            bb.path = std::move(smoothPath);
+        }
     }
 
     if (bb.path.empty())
