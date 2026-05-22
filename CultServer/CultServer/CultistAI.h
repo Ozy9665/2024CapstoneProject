@@ -2,6 +2,8 @@
 
 #include "Protocol.h"
 
+class NAVMESH;
+
 void AddCutltistAi(int, uint8_t, int);
 
 void KillCultistAi(int ai_id);
@@ -73,19 +75,16 @@ class CultistAIController : public AIController {
 public:
     CultistBlackboard bb;
     std::unique_ptr<BTNode> root;
+    NAVMESH* nav;
 
     explicit CultistAIController(SESSION*);
-
-    void Update(float) override;
-
-    void UpdateBlackboard(float);
-    void RunBehaviorTree(float);
 
     // Condition
     bool CanChase();
     bool CanRunaway();
     bool CanHeal();
     bool CanRitual();
+    bool CanMove() const;
 
     // Action
     void Patrol(float);
@@ -94,10 +93,19 @@ public:
     void Heal(float);
     void Ritual(float);
 
-    bool CanMove() const;
+    void Update(float) override;
     void ApplyBatonHit(const Vec3&);
 
 private:
-    void MoveToNearestTriangle(const Vec3& cur);
+    void UpdateBlackboard(float);
+    void RunBehaviorTree(float);
+
+    void MoveToNearestTriangle(const Vec3&);
+    void StopMovement();
+    bool SnapPositionByCurrentTri(NAVMESH&, Vec3&);
+    void MoveAlongPath(const Vec3&, float);
+    int FindNearbyPolice();
+    int FindNearbyCultist();
+    std::optional<std::pair<FVector, FRotator>> GetHealMovePoint(int);
 
 };

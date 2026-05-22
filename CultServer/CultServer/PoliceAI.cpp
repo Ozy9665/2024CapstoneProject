@@ -184,6 +184,8 @@ void PoliceAIWorkerLoop()
 PoliceAIController::PoliceAIController(SESSION* o)
     : AIController(o)
 {
+    nav = GetNavMesh(owner->room_id);
+
     auto rootSelector = std::make_unique<Selector>();
 
     // Baton
@@ -693,6 +695,7 @@ void PoliceAIController::UpdateBlackboard(float dt)
         bb.path.clear();
         bb.has_patrol_target = false;
         bb.target_id = -1;
+        bb.currentTri = -1;
         MoveToNearestTriangle(cur);
         bb.stuck_ticks = 0;
     }
@@ -748,8 +751,47 @@ void PoliceAIController::StopMovement()
     owner->police_state.Speed = 0.f;
 }
 
+bool PoliceAIController::SnapPositionByCurrentTri(NAVMESH& nav, Vec3& inOutPos)
+{
+    Vec3 feetPos = inOutPos;
+    feetPos.z -= CHARACTER_HALF_HEIGHT;
+
+    if (bb.currentTri < 0)
+    {
+        bb.currentTri = nav.FindContainingTriangle(feetPos);
+    }
+
+    int newTri = -1;
+    float groundZ = feetPos.z;
+
+    if (!nav.ResolveMovedTriangleFromCurrent(
+        bb.currentTri,
+        feetPos,
+        SNAP_MAX_Z_DIFF,
+        newTri,
+        groundZ))
+    {
+        return false;
+    }
+
+    inOutPos.z = groundZ + CHARACTER_HALF_HEIGHT;
+    bb.currentTri = newTri;
+    bb.lastValidPos = inOutPos;
+
+    return true;
+}
+
 void PoliceAIController::MoveAlongPath(const Vec3& targetPos, float deltaTime)
 {
+    if (!owner)
+        return;
+
+    if (deltaTime <= 0.f)
+        return;
+
+    if (!nav)
+        return;
+
     Vec3 cur{
         owner->police_state.PositionX,
         owner->police_state.PositionY,
@@ -794,10 +836,6 @@ void PoliceAIController::MoveAlongPath(const Vec3& targetPos, float deltaTime)
 
     if (bb.path.empty())
     {
-        NAVMESH* nav = GetNavMesh(owner->room_id);
-        if (!nav)
-            return;
-
         std::vector<int> triPath;
         if (!nav->FindTriPath(cur, targetPos, triPath))
         {
@@ -885,25 +923,57 @@ void PoliceAIController::MoveAlongPath(const Vec3& targetPos, float deltaTime)
     dir.y /= len;
     dir.z /= len;
 
-    // 위치 갱신
-    owner->police_state.PositionX += dir.x * POLICE_SPEED * deltaTime;
-    owner->police_state.PositionY += dir.y * POLICE_SPEED * deltaTime;
-    owner->police_state.PositionZ += dir.z * POLICE_SPEED * deltaTime;
-    
-    owner->police_state.VelocityX = dir.x * POLICE_SPEED;
-    owner->police_state.VelocityY = dir.y * POLICE_SPEED;
-    owner->police_state.VelocityZ = dir.z * POLICE_SPEED;
+    Vec3 candidatePos = cur;
+
+    const float moveDist = POLICE_SPEED * deltaTime;
+    const float stepDist = std::min(moveDist, len);
+
+    candidatePos.x += dir.x * stepDist;
+    candidatePos.y += dir.y * stepDist;
+    candidatePos.z += dir.z * stepDist;
+
+    if (!SnapPositionByCurrentTri(*nav, candidatePos))
+    {
+        Vec3 retryPos = cur;
+
+        const float halfMoveDist = moveDist * 0.5f;
+
+        retryPos.x += dir.x * halfMoveDist;
+        retryPos.y += dir.y * halfMoveDist;
+        retryPos.z += dir.z * halfMoveDist;
+
+        if (!SnapPositionByCurrentTri(*nav, retryPos))
+        {
+            StopMovement();
+            return;
+        }
+
+        candidatePos = retryPos;
+    }
+
+    owner->police_state.PositionX = candidatePos.x;
+    owner->police_state.PositionY = candidatePos.y;
+    owner->police_state.PositionZ = candidatePos.z;
+
+    const float invDt = 1.f / deltaTime;
+
+    owner->police_state.VelocityX = (candidatePos.x - cur.x) * invDt;
+    owner->police_state.VelocityY = (candidatePos.y - cur.y) * invDt;
+    owner->police_state.VelocityZ = (candidatePos.z - cur.z) * invDt;
+
     owner->police_state.Speed = std::sqrt(
         owner->police_state.VelocityX * owner->police_state.VelocityX +
-        owner->police_state.VelocityY * owner->police_state.VelocityY + 
+        owner->police_state.VelocityY * owner->police_state.VelocityY +
         owner->police_state.VelocityZ * owner->police_state.VelocityZ
     );
 
-    // state 회전 갱신
-    if (len > 1e-3f)
+    const float yawDx = candidatePos.x - cur.x;
+    const float yawDy = candidatePos.y - cur.y;
+
+    if (std::abs(yawDx) > 1e-3f || std::abs(yawDy) > 1e-3f)
     {
         owner->police_state.RotationYaw =
-            std::atan2(dir.y, dir.x) * RAD_TO_DEG;
+            std::atan2(yawDy, yawDx) * RAD_TO_DEG;
     }
 }
 

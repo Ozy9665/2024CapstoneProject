@@ -120,6 +120,7 @@ public:
 	int GetObjectIDByActor(AActor* Actor) const;
 	void RequestObjectOwnerClaim(int);
 	void ProcessObjectClaim(const char*);
+	bool SendAll(const uint8*, int32);
 	void ProcessObjectUpdate(const char*);
 	void ProcessObjectEnd(const char*);
 };

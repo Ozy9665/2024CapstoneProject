@@ -1969,13 +1969,20 @@ void mainLoop(HANDLE h_iocp) {
 				uint16_t packet_size{};
 				memcpy(&packet_size, p + 1, sizeof(uint16_t));
 
-				if (packet_size <= remain_data) {
-					process_packet(static_cast<int>(key), p);
-					p = p + packet_size;
-					remain_data = remain_data - packet_size;
-				}
-				else 
+				if (packet_size < 3 || packet_size > MAX_SEND_BUFFER_SIZE)
+				{
+					std::cout << "Invalid packet size: " << packet_size << "\n";
+					disconnect(static_cast<int>(key));
 					break;
+				}
+
+				if (packet_size > remain_data)
+					break;
+
+				process_packet(static_cast<int>(key), p);
+
+				p += packet_size;
+				remain_data -= packet_size;
 			}
 			user->prev_remain = remain_data;
 			if (remain_data > 0) {

@@ -3,6 +3,8 @@
 #include "Protocol.h"
 #include "map.h"
 
+class NAVMESH;
+
 void AddPoliceAi(int, uint8_t, int);
 
 void KillPoliceAi(int ai_id);
@@ -54,9 +56,6 @@ public:
     void Init();
     void Update(float);
 
-    void UpdateBlackboard(float);
-    void RunBehaviorTree(float);
-
     bool HasTargetId();
     bool NeedFollowOwner();
     bool ShouldStopChase();
@@ -67,6 +66,9 @@ public:
     void Explore(float);
     
 private:
+    void UpdateBlackboard(float);
+    void RunBehaviorTree(float);
+
     void MoveAlongPathDog(const Vec3&, float);
     int FindNearbyCultistForDog();
     void MoveToNearestTriangle(const Vec3&);
@@ -136,6 +138,7 @@ public:
     PoliceBlackboard bb;
     std::unique_ptr<BTNode> root;
     std::unique_ptr<DogAIController> dogAI;
+    NAVMESH* nav;
 
     explicit PoliceAIController(SESSION* o);
 
@@ -161,6 +164,7 @@ public:
     bool HasLineOfSight(int);
 private:
     void StopMovement();
+    bool SnapPositionByCurrentTri(NAVMESH& nav, Vec3& inOutPos);
     void MoveAlongPath(const Vec3&, float);
     void SnapToNavMesh();
     void MoveToNearestTriangle(const Vec3&);

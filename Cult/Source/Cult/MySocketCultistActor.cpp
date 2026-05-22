@@ -2168,6 +2168,37 @@ void AMySocketCultistActor::SendObjectOwnerClaim(int ObjectID)
     }
 }
 
+bool AMySocketCultistActor::SendAll(const uint8* Data, int32 Size)
+{
+    if (ClientSocket == INVALID_SOCKET)
+        return false;
+
+    int32 TotalSent = 0;
+
+    while (TotalSent < Size)
+    {
+        const int32 Sent = send(
+            ClientSocket,
+            reinterpret_cast<const char*>(Data + TotalSent),
+            Size - TotalSent,
+            0
+        );
+
+        if (Sent == SOCKET_ERROR)
+        {
+            UE_LOG(LogTemp, Error, TEXT("SendAll failed. Error=%ld"), WSAGetLastError());
+            return false;
+        }
+
+        if (Sent == 0)
+            return false;
+
+        TotalSent += Sent;
+    }
+
+    return true;
+}
+
 void AMySocketCultistActor::SendObjectUpdatePacket(const TArray<ObjectUpdateData>& Updates)
 {
     if (ClientSocket == INVALID_SOCKET)
@@ -2197,11 +2228,7 @@ void AMySocketCultistActor::SendObjectUpdatePacket(const TArray<ObjectUpdateData
         sizeof(ObjectUpdateData) * Updates.Num()
     );
 
-    int32 BytesSent = send(ClientSocket, reinterpret_cast<const char*>(Buffer.GetData()), Buffer.Num(), 0);
-    if (BytesSent == SOCKET_ERROR)
-    {
-        UE_LOG(LogTemp, Error, TEXT("SendObjectUpdatePacket failed. Error=%ld"), WSAGetLastError());
-    }
+    SendAll(Buffer.GetData(), Buffer.Num());
 }
 
 void AMySocketCultistActor::SendObjectMoveEnd(int ObjectID, const FVector& Loc, const FRotator& Rot)
