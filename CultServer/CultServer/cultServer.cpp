@@ -1415,13 +1415,6 @@ void process_packet(int c_id, char* packet) {
 			altar.time = now;
 		}
 		// reason: 1 -> 성공 / 2 -> 실패
-		RitualNoticePacket packet{};
-		packet.header = ritualStartHeader;
-		packet.size = sizeof(RitualNoticePacket);
-		packet.ritual_id = ritual_id;
-		packet.reason = p->reason;
-		broadcast_in_room(*user, &packet, VIEW_RANGE);
-
 		if (p->reason == 1) 
 		{
 			altar.gauge = std::min(100, altar.gauge + 10);
@@ -1431,13 +1424,14 @@ void process_packet(int c_id, char* packet) {
 			altar.gauge = std::max(0, altar.gauge - 10);		
 		}
 
-		RitualGagePacket gauge{};
+		RitualGaugePacket gauge{};
 		gauge.header = ritualDataHeader;
-		gauge.size = sizeof(RitualGagePacket);
+		gauge.size = sizeof(RitualGaugePacket);
 		gauge.ritual_id = ritual_id;
+		gauge.reason = p->reason;
 		gauge.gauge = altar.gauge;
 		user->do_send_packet(&gauge);
-		broadcast_in_room(*user, p, VIEW_RANGE);
+		broadcast_in_room(*user, &gauge, VIEW_RANGE);
 		std::cout << "[RitualData] altar=" << (int)ritual_id << " gauge=" << altar.gauge << "\n";
 		break;
 	}
@@ -1463,6 +1457,26 @@ void process_packet(int c_id, char* packet) {
 		uint8_t ritual_id = p->ritual_id;
 		if (ritual_id >= 5) 
 			break;
+		if (p->reason == 4) {
+			auto& altar = g_altars[room_id][ritual_id];
+			auto now = std::chrono::system_clock::now();
+			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - altar.time).count();
+			if (elapsed > 0) {
+				int add = static_cast<int>(elapsed) * 10;
+				altar.gauge = std::min(100, altar.gauge + add);
+				altar.time = now;
+			}
+			RitualNoticePacket packet;
+			packet.header = ritualEndHeader;
+			packet.size = sizeof(RitualNoticePacket);
+			packet.ritual_id = ritual_id;
+			packet.reason = 4;
+			user->do_send_packet(&packet);
+			broadcast_in_room(*user, &packet, VIEW_RANGE);
+			
+			altar.isActivated = false;
+			std::cout << "[RitualEnd] cultist=" << c_id << " altar=" << (int)ritual_id << " gauge: " << altar.gauge << "\n";
+		}
 		if (p->reason == 3) {
 			auto& altar = g_altars[room_id][ritual_id];
 			auto now = std::chrono::system_clock::now();
@@ -1479,35 +1493,17 @@ void process_packet(int c_id, char* packet) {
 				packet.ritual_id = ritual_id;
 				packet.reason = 4;
 				user->do_send_packet(&packet);
-			}
-			altar.isActivated = false;
-			std::cout << "[RitualEnd] cultist=" << c_id << " altar=" << (int)ritual_id << " gauge: " << altar.gauge << "\n";
-		}
-		if (p->reason == 4) {
-			auto& altar = g_altars[room_id][ritual_id];
-			auto now = std::chrono::system_clock::now();
-			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - altar.time).count();
-			if (elapsed > 0) {
-				int add = static_cast<int>(elapsed) * 10;
-				altar.gauge = std::min(100, altar.gauge + add);
-				altar.time = now;
-			}
-			if (altar.gauge >= 98) {
-				RitualNoticePacket packet;
-				packet.header = ritualEndHeader;
-				packet.size = sizeof(RitualNoticePacket);
-				packet.ritual_id = ritual_id;
-				packet.reason = 4;
-				user->do_send_packet(&packet);
 				broadcast_in_room(*user, &packet, VIEW_RANGE);
 			}
 			else {
-				RitualNoticePacket packet;
-				packet.header = ritualEndHeader;
-				packet.size = sizeof(RitualNoticePacket);
-				packet.ritual_id = ritual_id;
-				packet.reason = altar.gauge;
-				user->do_send_packet(&packet);
+				RitualGaugePacket gauge{};
+				gauge.header = ritualDataHeader;
+				gauge.size = sizeof(RitualGaugePacket);
+				gauge.ritual_id = ritual_id;
+				gauge.reason = p->reason;
+				gauge.gauge = altar.gauge;
+				user->do_send_packet(&gauge);
+				broadcast_in_room(*user, &gauge, VIEW_RANGE);
 			}
 			altar.isActivated = false;
 			std::cout << "[RitualEnd] cultist=" << c_id << " altar=" << (int)ritual_id << " gauge: " << altar.gauge << "\n";

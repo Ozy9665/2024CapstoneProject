@@ -378,7 +378,7 @@ void ACultistCharacter::CancelRitual()
 		if (MySocketCultistActor)
 		{
 			uint8 RitualID = (uint8)CurrentAltar->AltarID;
-			MySocketCultistActor->SendEndRitual(RitualID, 3);
+			MySocketCultistActor->SendEndRitual(RitualID, RitualProgress);
 		}
 	}
 	

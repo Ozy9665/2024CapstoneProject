@@ -338,6 +338,7 @@ struct RitualGagePacket {
 	uint8_t header;
 	uint16_t size;
 	uint8_t ritual_id;
+	uint8_t reason;
 	int gauge;
 };
 

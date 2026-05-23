@@ -1726,8 +1726,6 @@ void AMySocketCultistActor::ProcessRitualStart(const char* Buffer)
             );
 
             AAltar* TargetAltar = nullptr;
-            int32 MatchCount = 0;
-
             TArray<AActor*> FoundAltars;
             UGameplayStatics::GetAllActorsOfClass(World, AAltar::StaticClass(), FoundAltars);
 
@@ -1737,31 +1735,10 @@ void AMySocketCultistActor::ProcessRitualStart(const char* Buffer)
                 if (!Altar)
                     continue;
 
-                UE_LOG(LogTemp, Warning,
-                    TEXT("[AltarList] Name=%s AltarID=%d Location=%s"),
-                    *Altar->GetName(),
-                    Altar->AltarID,
-                    *Altar->GetActorLocation().ToString()
-                );
-
                 if (Altar->AltarID == static_cast<int32>(ritual_id))
                 {
-                    ++MatchCount;
-
-                    if (!TargetAltar)
-                    {
-                        TargetAltar = Altar;
-                    }
+                    TargetAltar = Altar;
                 }
-            }
-
-            if (MatchCount > 1)
-            {
-                UE_LOG(LogTemp, Error,
-                    TEXT("[ProcessRitualStart] Duplicate AltarID detected. ritual_id=%d MatchCount=%d"),
-                    static_cast<int32>(ritual_id),
-                    MatchCount
-                );
             }
 
             if (!TargetAltar)
@@ -1784,49 +1761,67 @@ void AMySocketCultistActor::ProcessRitualStart(const char* Buffer)
             {
                 TargetAltar->StartRitualProgressFXFromServer();
             }
-            else if (reason == 1)
+            else 
             {
-                TargetAltar->PlayQTESuccessFXFromServer();
-            }
-            else if (reason == 2)
-            {
-                TargetAltar->PlayQTEFailFXFromServer();
+                UE_LOG(LogTemp, Warning, TEXT("[ProcessRitualStart] Unknown reason=%d"), static_cast<int32>(reason));
             }
         });
 }
-
+      
 void AMySocketCultistActor::ProcessRitualData(const char* Buffer) 
 {
     const RitualGagePacket* Received = reinterpret_cast<const RitualGagePacket*>(Buffer);
     const uint8_t ritual_id = Received->ritual_id;
+    const uint8_t reason = Received->reason;
     const int gauge = Received->gauge;
 
-    AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
+    AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge, reason]() {
         // gauge으로 ritual gauge 수정
+        AAltar* TargetAltar = nullptr;
         TArray<AActor*> FoundAltars;
         UGameplayStatics::GetAllActorsOfClass(GetWorld(), AAltar::StaticClass(), FoundAltars);
 
         for (AActor* Actor : FoundAltars)
         {
-            AAltar* TargetAltar = Cast<AAltar>(Actor);
+            AAltar* Altar = Cast<AAltar>(Actor);
+            if (!Altar)
+                continue;
 
-            if (TargetAltar && TargetAltar->AltarID == (int32)ritual_id)
+            if (Altar->AltarID == static_cast<int32>(ritual_id))
             {
-                TargetAltar->AddToRitualGauge((float)gauge);
-                break;
+                TargetAltar = Altar;
             }
+        }
+
+        if (!TargetAltar)
+        {
+            UE_LOG(LogTemp, Error,
+                TEXT("[ProcessRitualStart] TargetAltar not found. ritual_id=%d"),
+                static_cast<int32>(ritual_id)
+            );
+            return;
+        }
+
+        if (reason == 1)
+        {
+            TargetAltar->PlayQTESuccessFXFromServer();
+        }
+        else if (reason == 2)
+        {
+            TargetAltar->PlayQTEFailFXFromServer();
+        }
+        else if (reason == 3) 
+        {
+            TargetAltar->AddToRitualGauge((float)gauge);
         }
         });
 }
 
 void AMySocketCultistActor::ProcessRitualEnd(const char* Buffer) {
     const RitualNoticePacket* Received = reinterpret_cast<const RitualNoticePacket*>(Buffer);
+    const uint8_t ritual_id = Received->ritual_id;
+    const int reason = Received->reason;
     if (Received->reason == 4) {
-        // 제단 100퍼센트 완료
-        const uint8_t ritual_id = Received->ritual_id;
-        const int reason = Received->reason;
-        // 캐릭터 손 떼게 하고, 제단 100퍼센트로 수정
-
         TWeakObjectPtr<AMySocketCultistActor> WeakThis(this);
         AsyncTask(ENamedThreads::GameThread, [WeakThis, ritual_id, reason]()
             {
@@ -1838,7 +1833,6 @@ void AMySocketCultistActor::ProcessRitualEnd(const char* Buffer) {
                 if (!World)
                     return;
 
-                // 추가부분
                 TArray<AActor*> FoundAltars;
                 UGameplayStatics::GetAllActorsOfClass(World, AAltar::StaticClass(), FoundAltars);
 
@@ -1872,25 +1866,9 @@ void AMySocketCultistActor::ProcessRitualEnd(const char* Buffer) {
                 StructGraphManager->TriggerStage3();
             });
     }
-    else {
-        const uint8_t ritual_id = Received->ritual_id;
-        const int gauge = Received->reason;
-        AsyncTask(ENamedThreads::GameThread, [this, ritual_id, gauge]() {
-            // gauge로 ritual gauge
-            TArray<AActor*> FoundAltars;
-            UGameplayStatics::GetAllActorsOfClass(GetWorld(), AAltar::StaticClass(), FoundAltars);
-
-            for (AActor* Actor : FoundAltars)
-            {
-                AAltar* TargetAltar = Cast<AAltar>(Actor);
-
-                if (TargetAltar && TargetAltar->AltarID == (int32)ritual_id)
-                {
-                    TargetAltar->AddToRitualGauge((float)gauge);
-                    break;
-                }
-            }
-            });
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[RitualEnd] reason %d "), reason);
     }
 }
 

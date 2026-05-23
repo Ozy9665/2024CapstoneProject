@@ -449,10 +449,11 @@ struct RitualNoticePacket {
 	// reason 4 -> ritial 100%
 };
 
-struct RitualGagePacket {
+struct RitualGaugePacket {
 	uint8_t header;
 	uint16_t size;
 	uint8_t ritual_id;
+	uint8_t reason;
 	int gauge;
 };
 

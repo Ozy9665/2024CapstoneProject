@@ -495,12 +495,12 @@ void CultistAIController::Runaway(float dt)
 
         altar.isActivated = false;
 
-        RitualNoticePacket packet{};
-        packet.header = ritualStartHeader;
-        packet.size = sizeof(RitualNoticePacket);
+        RitualGaugePacket packet{};
+        packet.header = ritualDataHeader;
+        packet.size = sizeof(RitualGaugePacket);
         packet.ritual_id = bb.ritual_id;
-        packet.reason = altar.gauge;
-
+        packet.reason = 3;
+        packet.gauge = altar.gauge;
         broadcast_in_room(*owner, &packet, VIEW_RANGE);
     }
 
@@ -661,7 +661,7 @@ void CultistAIController::Ritual(float dt)
 
     if (altar.gauge >= 100)
     {
-        altar.isActivated = false;
+        altar.isActivated = true;
         bb.ritual_id = -1;
         return;
     }
@@ -728,11 +728,11 @@ void CultistAIController::Ritual(float dt)
 
     if (altar.gauge >= 100)
     {
-        altar.isActivated = false;
+        altar.isActivated = true;
         bb.ritual_id = -1;
 
         RitualNoticePacket packet{};
-        packet.header = ritualStartHeader;
+        packet.header = ritualEndHeader;
         packet.size = sizeof(RitualNoticePacket);
         packet.ritual_id = bb.ritual_id;
         packet.reason = 4;
