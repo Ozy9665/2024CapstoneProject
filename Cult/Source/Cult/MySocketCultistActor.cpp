@@ -1813,6 +1813,7 @@ void AMySocketCultistActor::ProcessRitualData(const char* Buffer)
         else if (reason == 3) 
         {
             TargetAltar->AddToRitualGauge((float)gauge);
+            TargetAltar->StopRitualQTE(MyCharacter);
         }
         });
 }
