@@ -46,6 +46,8 @@ void AStructGraphManager::BeginPlay()
 	ApplySettleDampingThenRestore();
 
 	//UE_LOG(LogTemp, Warning, TEXT("[Gravity] WorldGravityZ=%.1f"), GetWorld()->GetGravityZ());
+	if (!ReuseFalloff) ReuseFalloff = NewObject<URadialFalloff>(this);
+	if (!ReuseIter)    ReuseIter = NewObject<UFieldSystemMetaDataIteration>(this);
 }
 
 void AStructGraphManager::InitializeFromBP(
@@ -1096,7 +1098,7 @@ void AStructGraphManager::TriggerPulse2()
 
 				const float CrackMag = 4500.f; 
 
-				ApplyStrainToGC(WallGC, P, CrackRadius, CrackMag, 1);
+				ApplyStrainToGC_Fast(WallGC, P, CrackRadius, CrackMag, 1);
 			}
 		}
 	}
@@ -1134,7 +1136,7 @@ void AStructGraphManager::TriggerPulse2()
 				const float CrackRadius = 70.f;
 				const float CrackMag = 6000.f;
 
-				ApplyStrainToGC(ColGC, P, CrackRadius, CrackMag, 1);
+				ApplyStrainToGC_Fast(ColGC, P, CrackRadius, CrackMag, 1);
 			}
 		}
 	}
@@ -1171,7 +1173,7 @@ void AStructGraphManager::TriggerPulse2()
 
 					const float SpallRadius = 30.f;
 					const float SpallMag = 18000.f; 
-					ApplyStrainToGC(Target, P, SpallRadius, SpallMag, 1);
+					ApplyStrainToGC_Fast(Target, P, SpallRadius, SpallMag, 1);
 
 					// 타겟조각
 					Target->AddImpulseAtLocation(FVector(0, 0, -1) * 8000.f, P, NAME_None);
@@ -1252,7 +1254,7 @@ void AStructGraphManager::Debug_ApplyStrainOnce()
 	UE_LOG(LogTemp, Warning, TEXT("[Debug] ApplyStrainOnce -> %s Radius=%.1f Mag=%.1f"),
 		*WallActor->GetName(), Radius, Mag);
 
-	ApplyStrainToGC(GCComp, Origin, Radius, Mag, 10);
+	ApplyStrainToGC_Fast(GCComp, Origin, Radius, Mag, 10);
 
 	GCComp->SetSimulatePhysics(true);
 	UE_LOG(LogTemp, Warning, TEXT("[GCPhys] Sim=%d Mobility=%d Collision=%d"),
@@ -1883,43 +1885,63 @@ void AStructGraphManager::StopStage3Continuous()
 
 	GetWorldTimerManager().ClearTimer(Stage3ContinuousHandle);
 
-	if (bStage3_UseManualGravity)
-	{
-		StartStage3ManualGravity(Stage3_ManualGravityPostDuration);
-	}
+	// 1 붕괴 후 안정화
+	ForEachValidGC(GCWalls, [](UGeometryCollectionComponent* GC) { if (IsValid(GC)) { GC->SetLinearDamping(8.f);  GC->SetAngularDamping(25.f); } });
+	ForEachValidGC(GCColumns, [](UGeometryCollectionComponent* GC) { if (IsValid(GC)) { GC->SetLinearDamping(8.f);  GC->SetAngularDamping(25.f); } });
+	ForEachValidGC(GCSlabs, [](UGeometryCollectionComponent* GC) { if (IsValid(GC)) { GC->SetLinearDamping(12.f); GC->SetAngularDamping(35.f); } });
 
-	UE_LOG(LogTemp, Warning, TEXT("[Stage3] Continuous End"));
+	// 2 강제 Sleep
+	FTimerHandle SleepHandle;
+	GetWorldTimerManager().SetTimer(SleepHandle, [this]()
+		{
+			ForEachValidGC(GCWalls, [](UGeometryCollectionComponent* GC) { if (IsValid(GC)) GC->PutAllRigidBodiesToSleep(); });
+			ForEachValidGC(GCColumns, [](UGeometryCollectionComponent* GC) { if (IsValid(GC)) GC->PutAllRigidBodiesToSleep(); });
+			ForEachValidGC(GCSlabs, [](UGeometryCollectionComponent* GC) { if (IsValid(GC)) GC->PutAllRigidBodiesToSleep(); });
+		}, 1.5f, false);
 }
 
 void AStructGraphManager::Stage3_ContinuousTick()
 {
-
 	Stage3TickCounter++;
 
-	if (bStage3_UseManualGravity)
-	{
-		ApplyManualGravityToGCArray(GCWalls, Stage3_ManualGravityScale);
-		ApplyManualGravityToGCArray(GCColumns, Stage3_ManualGravityScale);
-	}
+	UWorld* W = GetWorld();
+	if (!W) return;
 
-	const float Now = GetWorld()->GetTimeSeconds();
-	const float T = Now - Stage3StartTimeSec;
+	const float T = W->GetTimeSeconds() - Stage3StartTimeSec;
 
-	// 종료
 	if (T >= Stage3_TotalDuration)
 	{
 		StopStage3Continuous();
 		return;
 	}
 
-	// 0) 슬래브 하부부터
+	const int32 ShakeEveryN = FMath::Max(1, Stage3_ShakeEveryNTicks);
+	const int32 DampEveryN = FMath::Max(1, Stage3_DampingEveryNTicks);
+	const int32 StrainEveryN = FMath::Max(1, Stage3_StrainEveryNTicks);
+	const int32 ManualGravEveryN = 2;
+
+
+	const bool bDoShake = (Stage3TickCounter % ShakeEveryN) == 0;
+	const bool bDoDamp = (Stage3TickCounter % DampEveryN) == 0;
+	const bool bDoStrain = (Stage3TickCounter % StrainEveryN) == 0;
+	const bool bDoManualGrav = bStage3_UseManualGravity && ((Stage3TickCounter % ManualGravEveryN) == 0);
+
+
+	// 0) 슬래브 램프
 	ApplySlabRampForce_BottomUp(T);
 
-	if (bStage3_UseManualGravity && T >= Stage3_SlabRampEndTime)
+	if (bDoManualGrav)
 	{
-		ApplyManualGravityToGCArray(GCSlabs, Stage3_ManualGravityScale);
+		ApplyManualGravityToGCArray(GCWalls, Stage3_ManualGravityScale);
+		ApplyManualGravityToGCArray(GCColumns, Stage3_ManualGravityScale);
+
+		if (T >= Stage3_SlabRampEndTime)
+		{
+			ApplyManualGravityToGCArray(GCSlabs, Stage3_ManualGravityScale);
+		}
 	}
 
+	// 1) 슬래브 중력
 	if (!bStage3GravityCommitted && T >= Stage3_SlabRampEndTime)
 	{
 		bStage3GravityCommitted = true;
@@ -1927,8 +1949,14 @@ void AStructGraphManager::Stage3_ContinuousTick()
 		ForEachValidGC(GCSlabs, [](UGeometryCollectionComponent* GC)
 			{
 				if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
-				GC->SetSimulatePhysics(true);
+
+				if (!GC->IsSimulatingPhysics())
+				{
+					GC->SetSimulatePhysics(true);
+				}
+
 				GC->SetEnableGravity(true);
+
 				if (FBodyInstance* BI = GC->GetBodyInstance())
 				{
 					BI->SetEnableGravity(true);
@@ -1936,11 +1964,10 @@ void AStructGraphManager::Stage3_ContinuousTick()
 				}
 				GC->WakeAllRigidBodies();
 			});
-
-		UE_LOG(LogTemp, Warning, TEXT("[Stage3] Slab Gravity ON"));
 	}
 
-	// 1) 슬래브 홀드(댐핑) 점진 해제
+	// 2) 슬래브 홀드(댐핑)
+	if (bDoDamp)
 	{
 		const float Alpha = FMath::Clamp(T / FMath::Max(0.01f, Stage3_HoldEndTime), 0.f, 1.f);
 		const float Lin = FMath::Lerp(Stage3_SlabHoldLinStart, Stage3_SlabHoldLinEnd, Alpha);
@@ -1954,273 +1981,146 @@ void AStructGraphManager::Stage3_ContinuousTick()
 			});
 	}
 
-	// 2) 연속 흔들림(지진 외력)
-	if (bStage3_UseManualGravity)
+	// 3) 흔들림 일정틱마다
+
+	static int32 WallCursor = 0;
+	static int32 ColCursor = 0;
+	static int32 SlabCursor = 0;
+
+	if (bStage3GravityCommitted && bDoShake)
 	{
-		ApplyManualGravityToGCArray(GCWalls, Stage3_ManualGravityScale);
-		ApplyManualGravityToGCArray(GCColumns, Stage3_ManualGravityScale);
-	}
-	if (bStage3GravityCommitted)
-	{
-		ApplyContinuousShakeToGC(GCWalls, Stage3_ShakeImpulse * 0.8f);
-		ApplyContinuousShakeToGC(GCColumns, Stage3_ShakeImpulse * 1.0f);
-		ApplyContinuousShakeToGC(GCSlabs, Stage3_ShakeImpulse * 0.25f);
-	}
-
-	TickGravityAssist();
-
-	//3
-	const int32 EveryN = FMath::Max(1, Stage3_StrainEveryNTicks);
-	const bool bDoStrain = (Stage3TickCounter % EveryN) == 0;
-	if (!bDoStrain) return;
-
-	const bool bPhaseA = (T < 2.0f);                // 전단 준비
-	const bool bPhaseB = (T >= 2.0f && T < 4.0f);   // 펀치 누적
-	const bool bPhaseC = (T >= 4.0f);               // 마무리(과한 분해 금지)
 
 
-	const int32 NSlabs = GCSlabs.Num();
-	const float RampAlpha = (T < Stage3_SlabRampStartTime) ? 0.f :
-		FMath::Clamp((T - Stage3_SlabRampStartTime) / FMath::Max(0.01f, (Stage3_SlabRampEndTime - Stage3_SlabRampStartTime)), 0.f, 1.f);
-	const int32 ActiveSlabCount = (NSlabs <= 0) ? 0 : FMath::Clamp(1 + FMath::FloorToInt(RampAlpha * float(NSlabs - 1)), 1, NSlabs);
-
-	const int32 WallTargetsPerStrain =
-		FMath::Clamp(
-			FMath::CeilToInt(GCWalls.Num() * Stage3_WallTargetRatio),
-			Stage3_WallTargetMin,
-			Stage3_WallTargetMax
-		);
-
-	const int32 ColTargetsPerStrain =
-		FMath::Clamp(
-			FMath::CeilToInt(GCColumns.Num() * Stage3_ColTargetRatio),
-			Stage3_ColTargetMin,
-			Stage3_ColTargetMax
-		);
-
-	const int32 SlabTargetsPerStrain =
-		bPhaseB
-		? FMath::Clamp(
-			FMath::CeilToInt(ActiveSlabCount * Stage3_SlabTargetRatio),
-			Stage3_SlabTargetMin,
-			Stage3_SlabTargetMax
-		)
-		: 0;
-
-	// 4) WALL: 여러 벽 하부에 균열 분산
-	{
-		TSet<TWeakObjectPtr<UGeometryCollectionComponent>> Picked;
-		for (int32 n = 0; n < WallTargetsPerStrain; ++n)
-		{
-			UGeometryCollectionComponent* WallGC = PickRandomValidGC(GCWalls, Stage3Stream);
-			if (!IsValid(WallGC) || !WallGC->IsRegistered() || WallGC->IsBeingDestroyed()) continue;
-
-			const TWeakObjectPtr<UGeometryCollectionComponent> Key(WallGC);
-			if (Picked.Contains(Key)) continue;
-			Picked.Add(Key);
-
-			AActor* A = WallGC->GetOwner();
-			if (!IsValid(A) || A->IsActorBeingDestroyed()) continue;
-
-			FVector Origin, Extent;
-			A->GetActorBounds(true, Origin, Extent);
-			const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.70f);
-
-			for (int32 k = 0; k < Stage3_WallPointsPerTarget; ++k)
+		auto ShakeSubset = [&](const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr,
+			float Strength, int32 BatchSize, int32& Cursor)
 			{
-				const FVector P = Base + FVector(
-					Stage3Stream.FRandRange(-Extent.X * 0.25f, Extent.X * 0.25f),
-					Stage3Stream.FRandRange(-Extent.Y * 0.20f, Extent.Y * 0.20f),
-					Stage3Stream.FRandRange(-10.f, 10.f)
-				);
+				const int32 N = Arr.Num();
+				if (N <= 0) return;
 
-				ApplyStrainToGC(WallGC, P, Stage3_BaseStrainRadius, Stage3_BaseStrainMag, 1);
-			}
-		}
-	}
+				BatchSize = FMath::Clamp(BatchSize, 1, N);
 
-	// 5) COLUMN: 약점 1개 + 전단
-	{
-		if (UGeometryCollectionComponent* ColGC = Stage3_WeakColumnGC.Get())
-		{
-			if (ColGC->IsRegistered() && !ColGC->IsBeingDestroyed())
-			{
-				if (AActor* ColA = ColGC->GetOwner())
+				for (int32 k = 0; k < BatchSize; ++k)
 				{
-					FVector Origin, Extent;
-					ColA->GetActorBounds(true, Origin, Extent);
-					const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.70f);
+					const int32 Idx = (Cursor + k) % N;
+					UGeometryCollectionComponent* GC = Arr[Idx].Get();
+					if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) continue;
 
-					static int32 ShearIdx = 0;
-					ShearIdx = (ShearIdx + 1) % 4;
+					const FVector Dir = FVector(
+						Stage3Stream.FRandRange(-1.f, 1.f),
+						Stage3Stream.FRandRange(-1.f, 1.f),
+						0.f
+					).GetSafeNormal();
 
-					FVector Offset =
-						(ShearIdx == 0) ? FVector(12.f, 0.f, 0.f) :
-						(ShearIdx == 1) ? FVector(-12.f, 0.f, 0.f) :
-						(ShearIdx == 2) ? FVector(0.f, 12.f, 0.f) :
-						FVector(0.f, -12.f, 0.f);
-
-					const float Mag =
-						bPhaseA ? Stage3_WeakStrainMag :
-						bPhaseB ? Stage3_WeakStrainMag * 0.75f :
-						Stage3_WeakStrainMag * 0.55f;
-
-					ApplyStrainToGC(ColGC, Base + Offset, Stage3_WeakStrainRadius, Mag, 1);
+					GC->AddImpulse(Dir * Strength, NAME_None, true);
 				}
-			}
+
+				Cursor = (Cursor + BatchSize) % N;
+			};
+
+		ShakeSubset(GCWalls, Stage3_ShakeImpulse * 0.8f, 3, WallCursor);
+		ShakeSubset(GCColumns, Stage3_ShakeImpulse * 1.0f, 3, ColCursor);
+		ShakeSubset(GCSlabs, Stage3_ShakeImpulse * 0.6f, 2, SlabCursor);
+	}
+
+
+
+
+
+	// 4 Strain
+	if (!bDoStrain)
+	{
+		return; 
+	}
+
+	int32 StrainBudget = 10;
+
+	auto ApplyStrainBudgeted = [&](UGeometryCollectionComponent* GC, const FVector& P, float R, float Mag, int32 Iter)
+		{
+			if (StrainBudget <= 0) return;
+			if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) return;
+
+			ApplyStrainToGC_Fast(GC, P, R, Mag, Iter);
+			--StrainBudget;
+		};
+
+	const bool bPhaseA = (T < 2.0f);
+	const bool bPhaseB = (T >= 2.0f && T < 4.0f);
+	const bool bPhaseC = (T >= 4.0f);
+
+	// 벽 1개만 약하게
+	if (GCWalls.Num() > 0)
+	{
+		UGeometryCollectionComponent* WallGC = GCWalls[WallCursor % GCWalls.Num()].Get();
+		if (IsValid(WallGC) && StrainBudget > 0)
+		{
+			const FVector Base = WallGC->Bounds.Origin + FVector(0, 0, -WallGC->Bounds.BoxExtent.Z * 0.7f);
+			const FVector P = Base + FVector(
+				Stage3Stream.FRandRange(-40.f, 40.f),
+				Stage3Stream.FRandRange(-40.f, 40.f),
+				Stage3Stream.FRandRange(-10.f, 10.f)
+			);
+			ApplyStrainBudgeted(WallGC, P, Stage3_BaseStrainRadius, Stage3_BaseStrainMag, 1);
+		}
+	}
+
+	// 약점 기둥 전단
+	if (UGeometryCollectionComponent* ColGC = Stage3_WeakColumnGC.Get())
+	{
+		const FVector Base = ColGC->Bounds.Origin + FVector(0, 0, -ColGC->Bounds.BoxExtent.Z * 0.7f);
+		const float Mag =
+			bPhaseA ? Stage3_WeakStrainMag :
+			bPhaseB ? Stage3_WeakStrainMag * 0.75f :
+			Stage3_WeakStrainMag * 0.55f;
+
+		static int32 ShearIdx = 0;
+		ShearIdx = (ShearIdx + 1) % 4;
+
+		FVector Offset = FVector::ZeroVector;
+		if (ShearIdx == 0) Offset = FVector(12.f, 0.f, 0.f);
+		else if (ShearIdx == 1) Offset = FVector(-12.f, 0.f, 0.f);
+		else if (ShearIdx == 2) Offset = FVector(0.f, 12.f, 0.f);
+		else                    Offset = FVector(0.f, -12.f, 0.f);
+
+		ApplyStrainBudgeted(ColGC, Base + Offset, Stage3_WeakStrainRadius, Mag, 1);
+	}
+
+	// 슬래브 펀치: PhaseB 추가 슬래브 2개
+	if (bPhaseB)
+	{
+		if (UGeometryCollectionComponent* SlabGC = Stage3_TargetSlabGC.Get())
+		{
+			const FVector P = Stage3_TargetSlabPunchPoint + FVector(
+				Stage3Stream.FRandRange(-25.f, 25.f),
+				Stage3Stream.FRandRange(-25.f, 25.f),
+				Stage3Stream.FRandRange(-15.f, 15.f)
+			);
+			ApplyStrainBudgeted(SlabGC, P, Stage3_PunchRadius, Stage3_PunchMag, 1);
 		}
 
-		const int32 LowCand = FMath::Min(Stage3_LowColumnCandidateCount, GCColumns.Num());
-		for (int32 n = 0; n < ColTargetsPerStrain; ++n)
+		// 추가 슬래브
+		for (int32 i = 0; i < 2 && StrainBudget > 0; ++i)
 		{
-			if (LowCand <= 0) break;
+			UGeometryCollectionComponent* Extra = PickRandomValidGC(GCSlabs, Stage3Stream);
+			if (!IsValid(Extra)) continue;
 
-			const int32 PickIdx = Stage3Stream.RandRange(0, LowCand - 1);
-			UGeometryCollectionComponent* ColGC2 = GCColumns[PickIdx].Get();
-			if (!IsValid(ColGC2) || !ColGC2->IsRegistered() || ColGC2->IsBeingDestroyed()) continue;
-
-			AActor* A = ColGC2->GetOwner();
-			if (!IsValid(A) || A->IsActorBeingDestroyed()) continue;
-
-			FVector Origin, Extent;
-			A->GetActorBounds(true, Origin, Extent);
-			const FVector Base = Origin - FVector(0, 0, Extent.Z * 0.75f);
-
-			// 약점보다 약하게(연쇄 유도용)
-			const float SoftMag = Stage3_WeakStrainMag * 0.35f;
-
-			const FVector P = Base + FVector(
-				Stage3Stream.FRandRange(-10.f, 10.f),
-				Stage3Stream.FRandRange(-10.f, 10.f),
-				Stage3Stream.FRandRange(-8.f, 8.f)
+			const FVector C = Extra->Bounds.Origin;
+			const FVector P = C + FVector(
+				Stage3Stream.FRandRange(-80.f, 80.f),
+				Stage3Stream.FRandRange(-80.f, 80.f),
+				Stage3Stream.FRandRange(-20.f, 20.f)
 			);
 
-			ApplyStrainToGC(ColGC2, P, Stage3_WeakStrainRadius, SoftMag, 1);
+			ApplyStrainBudgeted(Extra, P, Stage3_PunchRadius * 0.8f, Stage3_PunchMag * 0.7f, 1);
 		}
 	}
 
-	// 6) SLAB: PhaseB에서 "타겟 1개 + 추가 하부 슬래브들" 펀치 분산
+	// PhaseC는 필요하면 1회
+	if (bPhaseC && StrainBudget > 0 && GCSlabs.Num() > 0)
 	{
-		const int32 SlabN = GCSlabs.Num();
-		if (SlabN <= 0) return;
-
-		// 아래 슬래브부터 범위 확장(기존 로직 유지)
-		const float SlabRampAlpha = FMath::Clamp(
-			(T - Stage3_SlabRampStartTime) / FMath::Max(0.01f, (Stage3_SlabRampEndTime - Stage3_SlabRampStartTime)),
-			0.f, 1.f);
-
-		const int32 ActiveCount = FMath::Clamp(
-			1 + FMath::FloorToInt(SlabRampAlpha * float(SlabN - 1)),
-			1, SlabN);
-
-		auto PickLowerSlab = [&]() -> UGeometryCollectionComponent*
-			{
-				for (int32 Try = 0; Try < 12; ++Try)
-				{
-					const int32 Idx = Stage3Stream.RandRange(0, ActiveCount - 1);
-					UGeometryCollectionComponent* G = GCSlabs[Idx].Get();
-					if (IsValid(G) && G->IsRegistered() && !G->IsBeingDestroyed()) return G;
-				}
-				return nullptr;
-			};
-
-		auto GetBounds = [&](UGeometryCollectionComponent* G, FVector& Origin, FVector& Extent) -> bool
-			{
-				AActor* A = G ? G->GetOwner() : nullptr;
-				if (!IsValid(A) || A->IsActorBeingDestroyed()) return false;
-				A->GetActorBounds(true, Origin, Extent);
-				return true;
-			};
-
-		// --- 핵심 1) 슬래브용 "실제 펀치Mag" 보정 ---
-		// Stage3_PunchMag가 90 같은 작은 값이면(현재 헤더 기본) 1000배 해서 테스트맵 스케일로 맞춘다.
-		// 이미 큰 값을 넣어뒀으면 그대로 사용.
-		const float PunchMagHard =
-			(Stage3_PunchMag < 2000.f) ? (Stage3_PunchMag * 1000.f) : Stage3_PunchMag;
-
-		const float PunchMagSoft = PunchMagHard * 0.35f;
-
-		// --- 핵심 2) 크랙/펀치 반경/Iterations 튜닝 ---
-		const float CrackRadius = FMath::Clamp(Stage3_PunchRadius * 0.65f, 70.f, 180.f);
-		const float CrackMag = FMath::Clamp(Stage3_BaseStrainMag * 1.25f, 4000.f, 30000.f); // 600~2500 너무 약했음
-
-		const float PunchRadius = FMath::Clamp(Stage3_PunchRadius * 0.55f, 60.f, 160.f);
-		const int32 PunchIterMain = 5;
-		const int32 PunchIterSoft = 3;
-
-		// A) PhaseB/PhaseC: 슬래브 균열을 여러 군데에 "약하게" 깔아준다 (무너질 준비)
-		if (bPhaseB || bPhaseC)
+		UGeometryCollectionComponent* G = GCSlabs[SlabCursor % GCSlabs.Num()].Get();
+		if (IsValid(G))
 		{
-			const int32 CrackCount = FMath::Clamp(ActiveCount / 3, 3, 10);
-
-			for (int32 c = 0; c < CrackCount; ++c)
-			{
-				UGeometryCollectionComponent* SlabGC = PickLowerSlab();
-				if (!IsValid(SlabGC)) continue;
-
-				FVector Origin, Extent;
-				if (!GetBounds(SlabGC, Origin, Extent)) continue;
-
-				const FVector P = Origin + FVector(
-					Stage3Stream.FRandRange(-Extent.X * 0.25f, Extent.X * 0.25f),
-					Stage3Stream.FRandRange(-Extent.Y * 0.25f, Extent.Y * 0.25f),
-					Stage3Stream.FRandRange(-Extent.Z * 0.05f, Extent.Z * 0.05f)
-				);
-
-				ApplyStrainToGC(SlabGC, P, CrackRadius, CrackMag, 1);
-			}
-		}
-
-		// B) PhaseB: 2~6개 슬래브에 강한 펀치(실제 붕괴 트리거)
-		if (bPhaseB)
-		{
-			const int32 PunchCount = FMath::Clamp(1 + ActiveCount / 6, 2, 6);
-
-			for (int32 p = 0; p < PunchCount; ++p)
-			{
-				UGeometryCollectionComponent* SlabGC =
-					(p == 0 && Stage3_TargetSlabGC.IsValid()) ? Stage3_TargetSlabGC.Get() : PickLowerSlab();
-				if (!IsValid(SlabGC) || !SlabGC->IsRegistered() || SlabGC->IsBeingDestroyed()) continue;
-
-				FVector Origin, Extent;
-				if (!GetBounds(SlabGC, Origin, Extent)) continue;
-
-				const FVector BaseP =
-					(SlabGC == Stage3_TargetSlabGC.Get() && !Stage3_TargetSlabPunchPoint.IsNearlyZero())
-					? Stage3_TargetSlabPunchPoint
-					: Origin;
-
-				const FVector P = BaseP + FVector(
-					Stage3Stream.FRandRange(-Extent.X * 0.20f, Extent.X * 0.20f),
-					Stage3Stream.FRandRange(-Extent.Y * 0.20f, Extent.Y * 0.20f),
-					Stage3Stream.FRandRange(-Extent.Z * 0.10f, Extent.Z * 0.10f)
-				);
-
-				const float UseMag = (p == 0) ? PunchMagHard : PunchMagSoft;
-				const int32 UseIter = (p == 0) ? PunchIterMain : PunchIterSoft;
-
-				ApplyStrainToGC(SlabGC, P, PunchRadius, UseMag, UseIter);
-
-				// "깨질 때 아래로 꺼지는 느낌"을 살짝 보조 (너무 크면 와르르)
-				SlabGC->AddImpulseAtLocation(FVector(0, 0, -1) * 25000.f, P, NAME_None);
-				SlabGC->WakeAllRigidBodies();
-			}
-		}
-
-		// C) PhaseC: 마무리로 1~2개만 약하게 추가 분해(슬래브가 너무 멀쩡하면 여기만 살짝 올려도 됨)
-		if (bPhaseC)
-		{
-			const int32 Extra = FMath::Min(2, ActiveCount);
-			const float ExtraMag = FMath::Clamp(PunchMagHard * 0.12f, 8000.f, 60000.f);
-
-			for (int32 i = 0; i < Extra; ++i)
-			{
-				UGeometryCollectionComponent* G = GCSlabs[i].Get();
-				if (!IsValid(G) || !G->IsRegistered() || G->IsBeingDestroyed()) continue;
-
-				const FVector Center = G->Bounds.Origin;
-				ApplyStrainToGC(G, Center + FVector(0, 0, -40.f), 160.f, ExtraMag, 2);
-			}
+			ApplyStrainBudgeted(G, G->Bounds.Origin + FVector(0, 0, -40.f), 160.f, 60.f, 1);
 		}
 	}
 }
@@ -2749,4 +2649,29 @@ void AStructGraphManager::DebugDumpGCCollision(const TCHAR* Reason)
 	DumpArr(TEXT("Walls"), GCWalls);
 	DumpArr(TEXT("Columns"), GCColumns);
 	DumpArr(TEXT("Slabs"), GCSlabs);
+}
+
+void AStructGraphManager::ApplyStrainToGC_Fast(
+	UGeometryCollectionComponent* GCComp,
+	const FVector& HitPoint,
+	float Radius,
+	float StrainMagnitude,
+	int32 Iterations)
+{
+	if (!IsValid(GCComp) || !IsValid(ReuseFalloff) || !IsValid(ReuseIter)) return;
+
+	ReuseFalloff->SetRadialFalloff(
+		StrainMagnitude, 0.0f, 1.0f, 0.0f,
+		Radius, HitPoint,
+		EFieldFalloffType::Field_FallOff_None
+	);
+
+	ReuseIter->Iterations = FMath::Clamp(Iterations, 1, 10);
+
+	GCComp->ApplyPhysicsField(
+		true,
+		EGeometryCollectionPhysicsTypeEnum::Chaos_ExternalClusterStrain,
+		ReuseIter,
+		ReuseFalloff
+	);
 }

@@ -8,6 +8,10 @@
 #include "NiagaraSystem.h"
 #include "StructGraphManager.generated.h"
 
+class URadialFalloff;
+class UFieldSystemMetaDataIteration;
+
+
 UENUM(BlueprintType)
 enum class EQuakeStage : uint8
 {
@@ -393,6 +397,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Quake")
 	float Phase3_Duration = 6.0f;
 
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Quake")
 	EQuakePhase QuakePhase = EQuakePhase::Idle;
 
@@ -480,6 +485,13 @@ public:
 	// GC 찾기 + 데미지 적용
 	UGeometryCollectionComponent* FindNearestGC(const FVector& WorldPoint) const;
 	static void ApplyStrainToGC(
+		UGeometryCollectionComponent* GCComp,
+		const FVector& HitPoint,
+		float Radius,
+		float StrainMagnitude,
+		int32 Iterations);
+
+	void ApplyStrainToGC_Fast(
 		UGeometryCollectionComponent* GCComp,
 		const FVector& HitPoint,
 		float Radius,
@@ -762,8 +774,21 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|Scale")
 	int32 Stage3_SlabTargetMax = 8;
 
+	// 틱 조절
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|Scale")
+	int32 Stage3_ShakeEveryNTicks = 2;
+
+	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|Scale")
+	int32 Stage3_DampingEveryNTicks = 6;
+
 	UPROPERTY(EditAnywhere, Category = "Quake|Stage3|Scale")
 	int32 Stage3_StrainEveryNTicks = 12;   
+
+	UPROPERTY(Transient)
+	TObjectPtr<URadialFalloff> ReuseFalloff = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UFieldSystemMetaDataIteration> ReuseIter = nullptr;
 
 private:
 	void BuildNodes();
