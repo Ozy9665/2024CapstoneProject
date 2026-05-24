@@ -2566,54 +2566,39 @@ void AStructGraphManager::DumpGCCache(const FString& Why)
 }
 void AStructGraphManager::DisableAllProxies()
 {
-	static const FName ProxyTag(TEXT("GC_PROXY"));
-
-	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
-	{
-		AActor* OwnerActor = *It;
-		if (!IsValid(OwnerActor)) continue;
-
-		TArray<UStaticMeshComponent*> SMs;
-		OwnerActor->GetComponents<UStaticMeshComponent>(SMs);
-
-		for (UStaticMeshComponent* SM : SMs)
+	auto DisableOn = [&](const TArray<TWeakObjectPtr<UGeometryCollectionComponent>>& Arr)
 		{
-			if (!IsValid(SM)) continue;
-			if (!SM->ComponentHasTag(ProxyTag)) continue;
+			for (const auto& W : Arr)
+			{
+				UGeometryCollectionComponent* GC = W.Get();
+				if (!IsValid(GC) || !GC->IsRegistered() || GC->IsBeingDestroyed()) continue;
+				SetProxyCollisionForOwner(GC->GetOwner(), false, TEXT("Stage3Disable"));
+			}
+		};
 
-			SM->SetSimulatePhysics(false);
-			SM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-			SM->SetGenerateOverlapEvents(false);
-		}
-	}
+	DisableOn(GCWalls);
+	DisableOn(GCColumns);
+	DisableOn(GCSlabs);
 
 }
 
 void AStructGraphManager::SetProxyCollisionForOwner(AActor* InOwnerActor, bool bEnable, FName Why)
 {
-	if (!IsValid(InOwnerActor)) return;
+	if (!IsValid(InOwnerActor) || InOwnerActor->IsActorBeingDestroyed()) return;
 
-	static const FName ProxyTag(TEXT("GC_PROXY"));
+	const ECollisionEnabled::Type Target =
+		bEnable ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision;
 
-	TArray<UStaticMeshComponent*> SMs;
-	InOwnerActor->GetComponents<UStaticMeshComponent>(SMs);
+	TInlineComponentArray<UStaticMeshComponent*, 8> SMs;
+	InOwnerActor->GetComponents(SMs);
 
 	for (UStaticMeshComponent* SM : SMs)
 	{
 		if (!IsValid(SM)) continue;
-		if (!SM->ComponentHasTag(ProxyTag)) continue;
+		if (!SM->ComponentHasTag(TEXT("GC_PROXY"))) continue;
 
-		SM->SetSimulatePhysics(false);
-		SM->SetGenerateOverlapEvents(false);
-		SM->SetCollisionEnabled(bEnable ? ECollisionEnabled::QueryAndPhysics
-			: ECollisionEnabled::NoCollision);
-
-		// 꺼진 프록시 체크
-		UE_LOG(LogTemp, Warning, TEXT("[Proxy][%s] Owner=%s Comp=%s -> Coll=%d"),
-			*Why.ToString(),
-			*GetNameSafe(InOwnerActor),
-			*GetNameSafe(SM),
-			(int32)SM->GetCollisionEnabled());
+		if (SM->GetCollisionEnabled() == Target) continue; 
+		SM->SetCollisionEnabled(Target);
 	}
 }
 
