@@ -407,6 +407,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Quake")
 	void StopEarthquake3Phase();
 
+	// Cinematic
+	UFUNCTION(BlueprintImplementableEvent, Category = "Quake|Cinematic")
+	void BP_OnStage3Started();
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Quake|Cinematic")
+	void BP_OnStage3Ended();
+
 	// Field
 	UPROPERTY(EditAnywhere, Category = "Stage3|GravityAssist")
 	bool bStage3_GravityAssist = true;

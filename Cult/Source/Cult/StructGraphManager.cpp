@@ -1006,6 +1006,7 @@ void AStructGraphManager::TriggerStage3()
 	// SetGCPawnResponse(GCSlabs, ECR_Ignore);
 
 	StartStage3Continuous();
+	BP_OnStage3Started();
 }
 
 UGeometryCollectionComponent* AStructGraphManager::FindNearestGC(const FVector& WorldPoint) const
@@ -1898,6 +1899,8 @@ void AStructGraphManager::StopStage3Continuous()
 			ForEachValidGC(GCColumns, [](UGeometryCollectionComponent* GC) { if (IsValid(GC)) GC->PutAllRigidBodiesToSleep(); });
 			ForEachValidGC(GCSlabs, [](UGeometryCollectionComponent* GC) { if (IsValid(GC)) GC->PutAllRigidBodiesToSleep(); });
 		}, 1.5f, false);
+
+	BP_OnStage3Ended();
 }
 
 void AStructGraphManager::Stage3_ContinuousTick()
