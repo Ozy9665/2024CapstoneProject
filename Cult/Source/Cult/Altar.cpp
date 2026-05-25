@@ -222,7 +222,7 @@ void AAltar::IncreaseRitualGauge()
 	}
 }
 
-void AAltar::AddToRitualGauge(float Amount, bool bCheckComplete = true)
+void AAltar::AddToRitualGauge(float Amount, bool bCheckComplete)
 {
 	RitualGauge = Amount;
 	RitualGauge = FMath::Clamp(RitualGauge, 0.0f, 100.f);
@@ -282,11 +282,9 @@ void AAltar::CheckRitualComplete()
 
 void AAltar::StartRitualQTE(ACultistCharacter* PerformingCultist)
 {
-	// 이미 QTE중이면 return
-	if (CurrentPerformingCultist != nullptr)return;
 
 	CurrentPerformingCultist = PerformingCultist;
-
+	bRitualProgressActive = true;
 
 	if (QTEParticleComponent)
 	{
@@ -299,10 +297,9 @@ void AAltar::StartRitualQTE(ACultistCharacter* PerformingCultist)
 
 void AAltar::StopRitualQTE(ACultistCharacter* PerformingCultist)
 {
-	// 의식 중단 시 QTE수행중이던 신도인지
-	if (PerformingCultist != CurrentPerformingCultist) return;
 
 	CurrentPerformingCultist = nullptr;
+	bRitualProgressActive = false;
 
 	if (QTEParticleComponent)
 	{
@@ -392,7 +389,7 @@ void AAltar::ForceCompleteRitual()
 void AAltar::StartRitualProgressFXFromServer()
 {
 	bServerRitualFXActive = true;
-
+	bRitualProgressActive = true;
 	const float ProgressNormalized = RitualGauge / 100.0f;
 
 	if (QTEParticleComponent)
@@ -415,6 +412,7 @@ void AAltar::StartRitualProgressFXFromServer()
 void AAltar::StopRitualProgressFXFromServer()
 {
 	bServerRitualFXActive = false;
+	bRitualProgressActive = false;
 
 	// 로컬에서 직접 의식 중인 사람이 없을 때만 끈다.
 	if (CurrentPerformingCultist == nullptr)
