@@ -67,6 +67,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Ritual|FX")
 	void PlayQTEFailFXFromServer();
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Ritual")
+	bool bRitualProgressActive = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ritual")
+	float AutoGainPerSecond = 10.0f;
+
+
+
 	// 영역 안 체크
 	bool bPlayerInRange;
 	
@@ -135,7 +143,7 @@ public:
 	float RitualGauge = 0.0f;
 
 	UFUNCTION(BlueprintCallable, Category = "Ritual")
-	void AddToRitualGauge(float Amount);
+	void AddToRitualGauge(float Amount, bool bCheckComplete = true);
 
 	void CheckRitualComplete();
 

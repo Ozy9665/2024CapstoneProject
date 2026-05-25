@@ -151,10 +151,9 @@ void AAltar::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	// 1. 게이지 자동 충전은 "내 클라이언트에서 실제 의식 수행 중"일 때만
-	if (CurrentPerformingCultist != nullptr)
+	// 프롬서버로 변수 조절
+	if (bRitualProgressActive && RitualGauge < 100.0f)
 	{
-		const float AutoGainPerSecond = 10.0f; // 10초 동안 100%
 		AddToRitualGauge(RitualGauge + AutoGainPerSecond * DeltaTime);
 	}
 
@@ -223,7 +222,7 @@ void AAltar::IncreaseRitualGauge()
 	}
 }
 
-void AAltar::AddToRitualGauge(float Amount)
+void AAltar::AddToRitualGauge(float Amount, bool bCheckComplete = true)
 {
 	RitualGauge = Amount;
 	RitualGauge = FMath::Clamp(RitualGauge, 0.0f, 100.f);
