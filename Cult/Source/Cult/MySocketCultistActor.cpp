@@ -1953,42 +1953,59 @@ void AMySocketCultistActor::SendDisconnection() {
     UE_LOG(LogTemp, Log, TEXT("Client socket closed and cleaned up."));
 }
 
-void AMySocketCultistActor::CloseConnection() {
-    closesocket(ClientSocket);
-    ClientSocket = INVALID_SOCKET;
-    WSACleanup();
+void AMySocketCultistActor::CloseConnection()
+{
+    if (ClientSocket != INVALID_SOCKET)
+    {
+        closesocket(ClientSocket);
+        ClientSocket = INVALID_SOCKET;
+    }
 
-    AsyncTask(ENamedThreads::GameThread, [this]()
+    TWeakObjectPtr<AMySocketCultistActor> WeakThis(this);
+
+    AsyncTask(ENamedThreads::GameThread, [WeakThis]()
         {
-            APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+            AMySocketCultistActor* Self = WeakThis.Get();
+            if (!IsValid(Self))
+                return;
 
-            // 게임 종료
-            if (PC)
+            UWorld* World = Self->GetWorld();
+            if (!World)
+                return;
+
+            APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0);
+            if (!PC)
+                return;
+
+            PC->bShowMouseCursor = true;
+            PC->SetInputMode(FInputModeUIOnly());
+
+            TSubclassOf<UUserWidget> GameResultWidgetClass =
+                LoadClass<UUserWidget>(
+                    nullptr,
+                    TEXT("/Game/Cult_Custom/WBP_GameResult.WBP_GameResult_C")
+                );
+
+            if (GameResultWidgetClass)
             {
-                PC->bShowMouseCursor = true;
-                PC->SetInputMode(FInputModeUIOnly());
-
-                TSubclassOf<UUserWidget> GameResultWidgetClass = LoadClass<UUserWidget>(nullptr, TEXT("/Game/Cult_Custom/WBP_GameResult.WBP_GameResult_C"));
-                if (GameResultWidgetClass)
+                UUserWidget* GameResultWidget = CreateWidget<UUserWidget>(PC, GameResultWidgetClass);
+                if (GameResultWidget)
                 {
-                    UUserWidget* GameResultWidget = CreateWidget<UUserWidget>(PC, GameResultWidgetClass);
-                    if (GameResultWidget)
-                    {
-                        GameResultWidget->AddToViewport();
+                    GameResultWidget->AddToViewport();
 
-                        UTextBlock* ResultTextBlock = Cast<UTextBlock>(GameResultWidget->GetWidgetFromName(TEXT("TextBlock_ResultText")));
-                        if (ResultTextBlock)
-                        {
-                            ResultTextBlock->SetText(FText::FromString(TEXT("GameOver"))); // 또는 Cultist Win
-                        }
+                    UTextBlock* ResultTextBlock =
+                        Cast<UTextBlock>(GameResultWidget->GetWidgetFromName(TEXT("TextBlock_ResultText")));
+
+                    if (ResultTextBlock)
+                    {
+                        ResultTextBlock->SetText(FText::FromString(TEXT("GameOver")));
                     }
                 }
             }
-            this->Destroy();
-        }
-    );
-}
 
+            Self->Destroy();
+        });
+}
 void AMySocketCultistActor::SafeDestroyCharacter(int PlayerID)
 {
     // 복사해서 쓰는 방식
