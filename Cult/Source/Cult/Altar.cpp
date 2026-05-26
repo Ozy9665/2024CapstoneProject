@@ -415,18 +415,17 @@ void AAltar::StopRitualProgressFXFromServer()
 	bRitualProgressActive = false;
 
 	// 로컬에서 직접 의식 중인 사람이 없을 때만 끈다.
-	if (CurrentPerformingCultist == nullptr)
+	// -> 호출 시 끄기
+	if (QTEParticleComponent)
 	{
-		if (QTEParticleComponent)
-		{
-			QTEParticleComponent->Deactivate();
-		}
-
-		if (AltarMID)
-		{
-			AltarMID->SetScalarParameterValue(FName("GaugeGlow"), 0.0f);
-		}
+		QTEParticleComponent->Deactivate();
 	}
+
+	if (AltarMID)
+	{
+		AltarMID->SetScalarParameterValue(FName("GaugeGlow"), 0.0f);
+	}
+
 
 }
 
