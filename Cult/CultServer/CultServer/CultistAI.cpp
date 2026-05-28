@@ -1,0 +1,1344 @@
+#define NOMINMAX
+#include "CultistAI.h"
+#include <chrono>
+#include <thread>
+#include <array>
+#include <cmath>
+#include <concurrent_priority_queue.h>
+#include <concurrent_unordered_set.h>
+#include <concurrent_unordered_map.h>
+#include <random>
+#include <mutex>
+#include <queue>
+#include "map.h"
+#include "MapManager.h"
+
+using namespace std;
+extern concurrency::concurrent_unordered_map<int, std::shared_ptr<SESSION>> g_users;
+extern concurrency::concurrent_unordered_set<int> g_cultist_ai_ids;
+extern std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
+extern concurrency::concurrent_priority_queue<TIMER_EVENT> timer_queue;
+extern std::array<std::array<Altar, ALTAR_PER_ROOM>, MAX_ROOM> g_altars;
+extern std::mutex g_room_mtx;
+extern std::queue<RoomTask> g_room_q;
+extern std::condition_variable g_room_cv;
+extern std::vector<int> free_session_ids;
+extern std::mutex free_id_mtx;
+
+void AddCutltistAi(int ai_id, uint8_t ai_role, int room_id)
+{
+    auto session = std::make_shared<SESSION>(ai_id, ai_role, room_id);
+    auto it = g_users.find(ai_id);
+    if (it != g_users.end())
+    {
+        it->second = session;
+    }
+    else
+    {
+        g_users.insert({ ai_id, session });
+    }
+
+    auto [it_ai, inserted] = g_cultist_ai_ids.insert(ai_id);
+
+    auto& room = g_rooms[room_id];
+    for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
+    {
+        if (room.first.player_ids[i] == -1)
+        {
+            room.first.player_ids[i] = ai_id;
+            room.first.cultist += 1;
+            break;
+        }
+    }
+
+    std::cout << "[Command] AI added. ID=" << ai_id
+        << " role=" << static_cast<int>(ai_role)
+        << " room=" << room_id << "\n";
+    IdRolePacket pkt{};
+    pkt.header = connectionHeader;
+    pkt.size = sizeof(IdRolePacket);
+    pkt.id = ai_id;
+    pkt.role = ai_role;
+
+    broadcast_in_room(*session, &pkt, VIEW_RANGE);
+}
+
+void KillCultistAi(int ai_id)
+{
+    auto it = g_users.find(ai_id);
+    if (it == g_users.end())
+        return;
+
+    auto session = it->second;
+
+    if (session->role != 100)
+        return;
+
+    IdOnlyPacket pkt;
+    pkt.header = DisconnectionHeader;
+    pkt.size = sizeof(IdOnlyPacket);
+    pkt.id = ai_id;
+    broadcast_in_room(*session, &pkt, VIEW_RANGE);
+    
+    {
+        std::lock_guard<std::mutex> lk(g_room_mtx);
+        g_room_q.push(RoomTask{
+            ai_id,
+            RM_DISCONNECT,
+            session->role,
+            session->room_id
+            });
+        g_room_cv.notify_one();
+    }
+
+    std::cout << "[Command] AI removed. ID=" << ai_id << "\n";
+}
+
+// Movements
+static float Dist(const Vec3& a, const Vec3& b)
+{
+    float dx = a.x - b.x;
+    float dy = a.y - b.y;
+    float dz = a.z - b.z;
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+static float DistSq3D(const Vec3& a, const Vec3& b)
+{
+    const float dx = a.x - b.x;
+    const float dy = a.y - b.y;
+    const float dz = a.z - b.z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
+static void CompactPath(std::vector<Vec3>& path, float minGap)
+{
+    if (path.empty())
+        return;
+
+    const float minGapSq = minGap * minGap;
+
+    std::vector<Vec3> compact;
+    compact.reserve(path.size());
+
+    compact.push_back(path.front());
+
+    for (int i = 1; i < static_cast<int>(path.size()); ++i)
+    {
+        if (DistSq3D(compact.back(), path[i]) >= minGapSq)
+        {
+            compact.push_back(path[i]);
+        }
+    }
+
+    path.swap(compact);
+}
+
+static void NormalizeCultistPathHeight(NAVMESH& nav, std::vector<Vec3>& path)
+{
+    for (Vec3& p : path)
+    {
+        Vec3 feetPos = p;
+        feetPos.z -= CHARACTER_HALF_HEIGHT;
+
+        int tri = nav.FindContainingTriangle(feetPos);
+        if (tri < 0)
+            continue;
+
+        const float groundZ = nav.TriHeightAtXY(tri, p.x, p.y);
+        p.z = groundZ + CHARACTER_HALF_HEIGHT;
+    }
+}
+
+std::optional<std::pair<FVector, FRotator>> GetMovePoint(int c_id, int targetId) {
+    auto itHealer = g_users.find(c_id);
+    auto itTarget = g_users.find(targetId);
+    if (itHealer == g_users.end() || itTarget == g_users.end()) {
+        return std::nullopt;
+    }
+
+    const auto healer = itHealer->second;
+    const auto target = itTarget->second;
+
+    FVector mid{
+         static_cast<double>((healer->cultist_state.PositionX + target->cultist_state.PositionX) * 0.5),
+         static_cast<double>((healer->cultist_state.PositionY + target->cultist_state.PositionY) * 0.5),
+         static_cast<double>((healer->cultist_state.PositionZ + target->cultist_state.PositionZ) * 0.5)
+    };
+
+    const double dx = static_cast<double>(target->cultist_state.PositionX - healer->cultist_state.PositionX);
+    const double dy = static_cast<double>(target->cultist_state.PositionY - healer->cultist_state.PositionY);
+
+    double yawHealer = std::atan2(dy, dx) * 180.0 / PI;
+    if (yawHealer < 0.0) {
+        yawHealer += 360.0;
+    }
+    FRotator rot{ 0.0, yawHealer, 0.0 };
+
+    return std::make_pair(mid, rot);
+}
+
+void CultistAIWorkerLoop()
+{
+    using clock = std::chrono::steady_clock;
+    auto nextTick = clock::now();
+
+    while (true)
+    {
+        auto now = clock::now();
+
+        std::chrono::duration<float> delta = now - nextTick + std::chrono::duration<float>(fixed_dt);
+        float dt = delta.count();
+
+        if (dt < 0.f) dt = 0.f;
+        if (dt > 0.05f) dt = 0.05f;
+
+        for (int ai_id : g_cultist_ai_ids)
+        {
+            auto it = g_users.find(ai_id);
+            if (it == g_users.end())
+                continue;
+
+            auto session = it->second;
+            if (session->role != 100)
+                continue;
+
+            auto aiPtr = session->ai;
+            if (!aiPtr)
+                continue;
+
+            auto* cultistAI = dynamic_cast<CultistAIController*>(aiPtr.get());
+            if (!cultistAI)
+                continue;
+
+            if (cultistAI->bb.ai_state == AIState::Free)
+                continue;
+
+            bool canMove = true;
+            auto& st = session->cultist_state;
+            if (!cultistAI->CanMove())
+            {
+                canMove = false;
+            }
+
+            if (canMove)
+            {
+                session->ai->Update(dt);
+            }
+
+            CultistPacket packet{};
+            packet.header = cultistHeader;
+            packet.size = sizeof(CultistPacket);
+            packet.state = session->cultist_state;
+            broadcast_in_room(*session, &packet, VIEW_RANGE);
+        }
+
+        nextTick += std::chrono::duration_cast<clock::duration>(
+            std::chrono::duration<float>(fixed_dt));
+
+        std::this_thread::sleep_until(nextTick);
+    }
+}
+
+// CultistAIController
+CultistAIController::CultistAIController(SESSION* o)
+    : AIController(o)
+{
+    nav = GetNavMesh(owner->room_id);
+
+    auto rootSelector = std::make_unique<Selector>();
+
+    // Runaway
+    {
+        auto seq = std::make_unique<Sequence>();
+        seq->children.push_back(std::make_unique<CultistCanRunawayNode>());
+        seq->children.push_back(std::make_unique<CultistRunawayNode>());
+        rootSelector->children.push_back(std::move(seq));
+    }
+
+    // Ritual
+    {
+        auto seq = std::make_unique<Sequence>();
+        seq->children.push_back(std::make_unique<CultistCanRitualNode>());
+        seq->children.push_back(std::make_unique<CultistRitualNode>());
+        rootSelector->children.push_back(std::move(seq));
+    }
+
+    // Chase + Heal
+    {
+        auto seq = std::make_unique<Sequence>();
+        seq->children.push_back(std::make_unique<CultistCanChaseNode>());
+
+        auto chaseSelector = std::make_unique<Selector>();
+
+        // Heal
+        {
+            auto healSeq = std::make_unique<Sequence>();
+            healSeq->children.push_back(std::make_unique<CultistCanHealNode>());
+            healSeq->children.push_back(std::make_unique<CultistHealNode>());
+            chaseSelector->children.push_back(std::move(healSeq));
+        }
+
+        // 기본 Chase
+        chaseSelector->children.push_back(std::make_unique<CultistChaseNode>());
+
+        seq->children.push_back(std::move(chaseSelector));
+        rootSelector->children.push_back(std::move(seq));
+    }
+
+    // Patrol
+    rootSelector->children.push_back(std::make_unique<CultistPatrolNode>());
+
+    root = std::move(rootSelector);
+}
+
+// Condition Node
+bool CultistCanRunawayNode::Run(AIController& ai, float)
+{
+    return static_cast<CultistAIController&>(ai).CanRunaway();
+}
+
+bool CultistCanChaseNode::Run(AIController& ai, float)
+{
+    return static_cast<CultistAIController&>(ai).CanChase();
+}
+
+bool CultistCanHealNode::Run(AIController& ai, float)
+{
+    return static_cast<CultistAIController&>(ai).CanHeal();
+}
+
+bool CultistCanRitualNode::Run(AIController& ai, float)
+{
+    return static_cast<CultistAIController&>(ai).CanRitual();
+}
+
+// Action Node
+bool CultistRunawayNode::Run(AIController& ai, float dt)
+{
+    static_cast<CultistAIController&>(ai).Runaway(dt);
+    return true;
+}
+
+bool CultistChaseNode::Run(AIController& ai, float dt)
+{
+    static_cast<CultistAIController&>(ai).Chase(dt);
+    return true;
+}
+
+bool CultistHealNode::Run(AIController& ai, float dt)
+{
+    static_cast<CultistAIController&>(ai).Heal(dt);
+    return true;
+}
+
+bool CultistRitualNode::Run(AIController& ai, float dt)
+{
+    static_cast<CultistAIController&>(ai).Ritual(dt);
+    return true;
+}
+
+bool CultistPatrolNode::Run(AIController& ai, float dt)
+{
+    static_cast<CultistAIController&>(ai).Patrol(dt);
+    return true;
+}
+
+// Condition
+bool CultistAIController::CanRunaway()
+{
+    return bb.runaway_id != -1;
+}
+
+bool CultistAIController::CanChase()
+{
+    return bb.target_id != -1;
+}
+
+bool CultistAIController::CanHeal()
+{
+    if (bb.target_id == -1)
+        return false;
+
+    if (bb.last_dist_to_target > HEAL_DIST)
+        return false;
+
+    auto it = g_users.find(bb.target_id);
+    if (it == g_users.end() || !it->second)
+        return false;
+
+    auto target = it->second;
+    if (target->cultist_state.CurrentHealth > 50.f)
+        return false;
+
+    if (owner->cultist_state.ABP_DoHeal ||
+        target->cultist_state.ABP_GetHeal)
+        return false;
+
+    return true;
+}
+
+bool CultistAIController::CanRitual()
+{
+    return bb.ritual_id != -1;
+}
+
+// Action
+void CultistAIController::Patrol(float dt)
+{
+    NAVMESH* nav = GetNavMesh(owner->room_id);
+    if (!nav)
+        return;
+
+    Vec3 cur{
+        owner->cultist_state.PositionX,
+        owner->cultist_state.PositionY,
+        owner->cultist_state.PositionZ
+    };
+
+    if (!bb.has_patrol_target)
+    {
+        int curTri = nav->FindContainingTriangle(cur);
+        if (curTri < 0)
+            return;
+
+        int randomTri = nav->GetRandomTriangle(curTri, 10);
+        if (randomTri < 0)
+            return;
+
+        bb.patrol_target = nav->GetTriCenter(randomTri);
+        bb.has_patrol_target = true;
+        bb.stuck_ticks = 0;
+        bb.last_dist_to_target = FLT_MAX;
+        bb.path.clear();
+    }
+
+    float dist = Dist(cur, bb.patrol_target);
+
+    if (dist < CHASE_STOP_RANGE)
+    {
+        bb.has_patrol_target = false;
+        bb.path.clear();
+        return;
+    }
+
+    if (dist > bb.last_dist_to_target - STUCK_RANGE)
+        bb.stuck_ticks++;
+    else
+        bb.stuck_ticks = 0;
+
+    bb.last_dist_to_target = dist;
+
+    if (bb.stuck_ticks > MAX_STUCK_TICK)
+    {
+        bb.path.clear();
+        bb.has_patrol_target = false;
+        bb.target_id = -1;
+        bb.currentTri = -1;
+        bb.stuck_ticks = 0;
+        return;
+    }
+
+    MoveAlongPath(bb.patrol_target, dt);
+}
+
+void CultistAIController::Chase(float dt)
+{
+    if (bb.target_id < 0)
+    {
+        bb.path.clear();
+        StopMovement();
+        return;
+    }
+
+    auto it = g_users.find(bb.target_id);
+    if (it == g_users.end())
+    {
+        bb.target_id = -1;
+        bb.path.clear();
+        return;
+    }
+
+    auto target = it->second;
+
+    Vec3 selfPos{
+        owner->cultist_state.PositionX,
+        owner->cultist_state.PositionY,
+        owner->cultist_state.PositionZ
+    };
+
+    Vec3 targetPos{
+        target->cultist_state.PositionX,
+        target->cultist_state.PositionY,
+        target->cultist_state.PositionZ
+    };
+
+    float dist = Dist(selfPos, targetPos);
+
+    if (dist <= CHASE_STOP_RANGE)
+    {
+        bb.path.clear();
+        StopMovement();
+        return;
+    }
+
+    MoveAlongPath(targetPos, dt);
+}
+
+void CultistAIController::Runaway(float dt)
+{
+    if (bb.ritual_id != -1) 
+    {
+        Altar& altar = g_altars[owner->room_id][bb.ritual_id];
+        if (!altar.isActivated)
+            return;
+
+        altar.isActivated = false;
+
+        RitualGaugePacket packet{};
+        packet.header = ritualDataHeader;
+        packet.size = sizeof(RitualGaugePacket);
+        packet.ritual_id = bb.ritual_id;
+        packet.reason = 3;
+        packet.gauge = altar.gauge;
+        broadcast_in_room(*owner, &packet, VIEW_RANGE);
+    }
+
+    MAP* map = GetMap(owner->room_id);
+    NAVMESH* nav = GetNavMesh(owner->room_id);
+    if (!map || !nav)
+        return;
+
+    Vec3 selfPos{
+        owner->cultist_state.PositionX,
+        owner->cultist_state.PositionY,
+        owner->cultist_state.PositionZ
+    };
+
+    if (bb.has_runaway_target && bb.runaway_ticks < 30 &&
+        Dist(selfPos, bb.runaway_pos) > ARRIVE_RANGE)
+    {
+        bb.runaway_ticks++;
+        MoveAlongPath(bb.runaway_pos, dt);
+        return;
+    }
+
+    int police_id = bb.runaway_id;
+    if (police_id < 0)
+        return;
+
+    auto it = g_users.find(police_id);
+    if (it == g_users.end())
+        return;
+
+    Vec3 policePos{
+        it->second->police_state.PositionX,
+        it->second->police_state.PositionY,
+        it->second->police_state.PositionZ
+    };
+
+    // 후보 계산
+    Vec3 bestPos = selfPos;
+    float bestScore = -FLT_MAX;
+
+    int selfTri = nav->FindContainingTriangle(selfPos);
+    if (selfTri < 0)
+        return;
+
+    std::vector<RunawayCandidate> candidates;
+    candidates.reserve(sampleCount);
+
+    static std::default_random_engine dre{ std::random_device()() };
+    std::uniform_real_distribution<float> angleDist(0.f, 2.f * PI);
+
+    for (int i = 0; i < sampleCount; ++i)
+    {
+        float angle = angleDist(dre);
+
+        Vec3 candidate{
+            selfPos.x + std::cos(angle) * sampleRadius,
+            selfPos.y + std::sin(angle) * sampleRadius,
+            selfPos.z
+        };
+
+        int tri = nav->FindContainingTriangle(candidate);
+        if (tri < 0)
+            continue;
+
+        float score = 0.f;
+
+        float distPolice = Dist(candidate, policePos);
+        float distScore = std::min(distPolice / (sampleRadius * 2.f), 1.f);
+        score += distScore * 1000.f * 0.30f;
+
+        candidates.push_back({ candidate, score, tri });
+    }
+
+    std::sort(candidates.begin(), candidates.end());
+
+    for (int i = 0; i < std::min(3, (int)candidates.size()); ++i)
+    {
+        std::vector<int> triPath;
+        if (!nav->FindTriPath(selfPos, candidates[i].pos, triPath))
+            continue;
+
+        float pathScore = std::min((float)triPath.size() / 50.f, 1.f);
+        float finalScore = candidates[i].score + pathScore * 1000.f * 0.35f;
+
+        if (finalScore > bestScore)
+        {
+            bestScore = finalScore;
+            bestPos = candidates[i].pos;
+        }
+    }
+
+    if (!bb.has_runaway_target)
+    {
+        bb.runaway_pos = bestPos;
+        bb.has_runaway_target = true;
+        bb.runaway_ticks = 0;
+        bb.path.clear();
+    }
+
+    MoveAlongPath(bb.runaway_pos, dt);
+}
+
+void CultistAIController::Heal(float dt)
+{
+    if (bb.target_id < 0)
+        return;
+
+    auto it = g_users.find(bb.target_id);
+    if (it == g_users.end())
+        return;
+
+    auto target = it->second;
+
+    if (owner->cultist_state.ABP_DoHeal || target->cultist_state.ABP_GetHeal)
+    {
+        StopMovement();
+        return;
+    }
+
+    auto moveOpt = GetMovePoint(owner->id, bb.target_id);
+    if (!moveOpt)
+        return;
+
+    auto [moveLoc, moveRot] = *moveOpt;
+
+    Vec3 selfPos{
+        owner->cultist_state.PositionX,
+        owner->cultist_state.PositionY,
+        owner->cultist_state.PositionZ
+    };
+
+    Vec3 healMovePos{
+        (float)moveLoc.x,
+        (float)moveLoc.y,
+        (float)moveLoc.z
+    };
+
+    float dist = Dist(selfPos, healMovePos);
+
+    if (dist > HEAL_DIST)
+    {
+        MoveAlongPath(healMovePos, dt);
+        return;
+    }
+
+    // Heal 시작
+    owner->cultist_state.ABP_DoHeal = 1;
+    owner->heal_partner = bb.target_id;
+    bb.path.clear();
+}
+
+void CultistAIController::Ritual(float dt)
+{
+    if (bb.ritual_id < 0 || bb.ritual_id >= ALTAR_PER_ROOM)
+        return;
+
+    Altar& altar = g_altars[owner->room_id][bb.ritual_id];
+
+    if (altar.gauge >= 100)
+    {
+        altar.isActivated = true;
+        bb.ritual_id = -1;
+        return;
+    }
+
+    Vec3 selfPos{
+        owner->cultist_state.PositionX,
+        owner->cultist_state.PositionY,
+        owner->cultist_state.PositionZ
+    };
+
+    Vec3 altarPos{
+        static_cast<float>(altar.loc.x),
+        static_cast<float>(altar.loc.y),
+        static_cast<float>(altar.loc.z)
+    };
+
+    Vec3 selfFeetPos = selfPos;
+    selfFeetPos.z -= CHARACTER_HALF_HEIGHT;
+
+    const float dist = Dist(selfFeetPos, altarPos);
+
+    if (dist > ARRIVE_RANGE)
+    {
+        MoveAlongPath(altarPos, dt);
+        return;
+    }
+
+    StopMovement();
+
+    if (!altar.isActivated)
+    {
+        altar.isActivated = true;
+        altar.time = std::chrono::system_clock::now();
+
+        RitualNoticePacket packet{};
+        packet.header = ritualStartHeader;
+        packet.size = sizeof(RitualNoticePacket);
+        packet.ritual_id = bb.ritual_id;
+        packet.reason = 0;
+
+        broadcast_in_room(*owner, &packet, VIEW_RANGE);
+        return;
+    }
+
+    auto now = std::chrono::system_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - altar.time).count();
+
+    if (elapsed > 0)
+    {
+        int add = static_cast<int>(elapsed / 100);
+        if (add > 0)
+        {
+            altar.gauge = std::min(100, altar.gauge + add);
+            altar.time = now;
+            std::cout << "[Ritual Gauge]"
+                << " ai=" << owner->id
+                << " ritual_id=" << bb.ritual_id
+                << " add=" << add
+                << " new=" << altar.gauge
+                << " elapsed_ms=" << elapsed
+                << "\n";
+        }
+    }
+
+    if (altar.gauge >= 100)
+    {
+        altar.isActivated = true;
+        bb.ritual_id = -1;
+
+        RitualNoticePacket packet{};
+        packet.header = ritualEndHeader;
+        packet.size = sizeof(RitualNoticePacket);
+        packet.ritual_id = bb.ritual_id;
+        packet.reason = 4;
+
+        broadcast_in_room(*owner, &packet, VIEW_RANGE);
+        std::cout << "[Ritual Complete]"
+            << " ai=" << owner->id
+            << " ritual_id=" << bb.ritual_id
+            << "\n";
+    }
+}
+
+bool CultistAIController::CanMove() const
+{
+    const auto& st = owner->cultist_state;
+
+    if (owner->state == ST_STUN || owner->state == ST_DEAD)
+        return false;
+
+    if (st.ABP_IsDead || st.ABP_IsStunned || st.ABP_IsHitByAnAttack)
+        return false;
+
+    return true;
+}
+
+void CultistAIController::ApplyBatonHit(const Vec3& attackerPos)
+{
+    auto& st = owner->cultist_state;
+
+    if (!CanMove())
+        return;
+
+    st.ABP_IsHitByAnAttack = 1;
+    st.ABP_IsPerforming = 0;
+    st.ABP_DoHeal = 0;
+    st.ABP_GetHeal = 0;
+
+    bb.path.clear();
+    bb.target_id = -1;
+    bb.has_patrol_target = false;
+    bb.has_runaway_target = false;
+    bb.ritual_id = -1;
+
+    Vec3 cur{
+        owner->cultist_state.PositionX,
+        owner->cultist_state.PositionY,
+        owner->cultist_state.PositionZ
+    };
+
+    Vec3 dir{
+        cur.x - attackerPos.x,
+        cur.y - attackerPos.y,
+        0.f
+    };
+
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+    if (len < 1e-3f)
+        return;
+
+    dir.x /= len;
+    dir.y /= len;
+
+    owner->cultist_state.PositionX += dir.x * pushDist;
+    owner->cultist_state.PositionY += dir.y * pushDist;
+    owner->cultist_state.RotationYaw =
+        std::atan2(dir.y, dir.x) * RAD_TO_DEG;
+
+    StopMovement();
+
+    st.CurrentHealth -= 100.f;
+
+    if (st.CurrentHealth <= 0.f)
+    {
+        if (st.ABP_IsStunned)
+        {
+            st.ABP_IsDead = 1;
+            owner->state = ST_DEAD;
+            bb.ai_state = AIState::Die;
+        }
+        else
+        {
+            st.ABP_IsStunned = 1;
+            st.ABP_TTStun = 1;
+            owner->state = ST_STUN;
+            bb.ai_state = AIState::Stun;
+
+            TIMER_EVENT ev;
+            ev.c_id = owner->id;
+            ev.target_id = owner->id;
+            ev.event_id = EV_STUN;
+            ev.wakeup_time = std::chrono::system_clock::now() + 10s;
+
+            timer_queue.push(ev);
+        }
+    }
+}
+
+// BT
+void CultistAIController::UpdateBlackboard(float dt)
+{
+    int police_id = FindNearbyPolice();
+    bb.runaway_id = police_id;
+
+    int target = FindNearbyCultist();
+    bb.target_id = target;
+
+    if (bb.target_id != -1)
+    {
+        auto it = g_users.find(bb.target_id);
+        if (it == g_users.end() || !it->second)
+        {
+            bb.target_id = -1;
+            bb.last_dist_to_target = FLT_MAX;
+        }
+        else
+        {
+            auto target = it->second;
+
+            Vec3 self{
+                owner->cultist_state.PositionX,
+                owner->cultist_state.PositionY,
+                owner->cultist_state.PositionZ
+            };
+
+            Vec3 targetPos{
+                target->cultist_state.PositionX,
+                target->cultist_state.PositionY,
+                target->cultist_state.PositionZ
+            };
+
+            bb.last_dist_to_target = Dist(self, targetPos);
+        }
+    }
+    else
+    {
+        bb.last_dist_to_target = FLT_MAX;
+    }
+
+    UpdateRitualTarget();
+
+    Vec3 cur{
+        owner->cultist_state.PositionX,
+        owner->cultist_state.PositionY,
+        owner->cultist_state.PositionZ
+    };
+
+    NAVMESH* nav = GetNavMesh(owner->room_id);
+    if (nav)
+    {
+        if (bb.currentTri < 0)
+        {
+            bb.currentTri = nav->FindContainingTriangle(cur);
+            if (bb.currentTri >= 0)
+            {
+                bb.lastValidPos = cur;
+            }
+        }
+    }
+
+    float moveDist = Dist(cur, bb.lastSnapPos);
+
+    if (moveDist < 1.0f)
+        bb.stuck_ticks++;
+    else
+        bb.stuck_ticks = 0;
+
+    bb.lastSnapPos = cur;
+
+    if (bb.stuck_ticks > 30)
+    {
+        bb.path.clear();
+        bb.has_patrol_target = false;
+        bb.has_runaway_target = false;
+        bb.target_id = -1;
+        bb.runaway_id = -1;
+        bb.stuck_ticks = 0;
+        bb.currentTri = -1;
+    }
+}
+
+void CultistAIController::RunBehaviorTree(float dt)
+{
+    if (root)
+        root->Run(*this, dt);
+}
+
+void CultistAIController::Update(float dt)
+{
+    UpdateBlackboard(dt);
+    RunBehaviorTree(dt);
+}
+
+void CultistAIController::UpdateRitualTarget()
+{
+    const int room_id = owner->room_id;
+    if (room_id < 0 || room_id >= MAX_ROOM)
+    {
+        bb.ritual_id = -1;
+        return;
+    }
+
+    if (bb.ritual_id >= 0 && bb.ritual_id < ALTAR_PER_ROOM)
+    {
+        Altar& currentAltar = g_altars[room_id][bb.ritual_id];
+
+        if (currentAltar.gauge < 100)
+        {
+            return;
+        }
+
+        bb.ritual_id = -1;
+    }
+
+    for (int i = 0; i < ALTAR_PER_ROOM; ++i)
+    {
+        Altar& altar = g_altars[room_id][i];
+
+        if (altar.gauge >= 100)
+            continue;
+
+        if (altar.isActivated)
+            continue;
+
+        const float dx = owner->cultist_state.PositionX - static_cast<float>(altar.loc.x);
+        const float dy = owner->cultist_state.PositionY - static_cast<float>(altar.loc.y);
+        const float dist2 = dx * dx + dy * dy;
+
+        if (dist2 <= ALTAR_TRIGGER_RANGE_SQ)
+        {
+            bb.ritual_id = i;
+            return;
+        }
+    }
+
+    bb.ritual_id = -1;
+}
+
+// Movement
+void CultistAIController::MoveToNearestTriangle(const Vec3& cur)
+{
+    NAVMESH* nav = GetNavMesh(owner->room_id);
+    if (nav)
+    {
+        int tri = nav->FindContainingTriangle(cur);
+        if (tri >= 0)
+        {
+            Vec3 safe = nav->GetTriCenter(tri);
+
+            owner->cultist_state.PositionX = safe.x;
+            owner->cultist_state.PositionY = safe.y;
+            owner->cultist_state.PositionZ = safe.z;
+        }
+        else
+        {
+            // fallback
+            return;
+        }
+    }
+}
+
+void CultistAIController::StopMovement()
+{
+    owner->cultist_state.VelocityX = 0.f;
+    owner->cultist_state.VelocityY = 0.f;
+    owner->cultist_state.VelocityZ = 0.f;
+    owner->cultist_state.Speed = 0.f;
+}
+
+bool CultistAIController::SnapPositionByCurrentTri(NAVMESH& nav, Vec3& inOutPos)
+{
+    Vec3 feetPos = inOutPos;
+    feetPos.z -= CHARACTER_HALF_HEIGHT;
+
+    if (bb.currentTri < 0)
+    {
+        bb.currentTri = nav.FindContainingTriangle(feetPos);
+    }
+
+    int newTri = -1;
+    float groundZ = feetPos.z;
+
+    if (!nav.ResolveMovedTriangleFromCurrent(
+        bb.currentTri,
+        feetPos,
+        SNAP_MAX_Z_DIFF,
+        newTri,
+        groundZ))
+    {
+        return false;
+    }
+
+    inOutPos.z = groundZ + CHARACTER_HALF_HEIGHT;
+    bb.currentTri = newTri;
+    bb.lastValidPos = inOutPos;
+
+    return true;
+}
+
+void CultistAIController::MoveAlongPath(const Vec3& targetPos, float deltaTime)
+{
+    if (!owner)
+        return;
+
+    if (deltaTime <= 0.f)
+        return;
+
+    if (!nav)
+        return;
+
+    Vec3 cur{
+        owner->cultist_state.PositionX,
+        owner->cultist_state.PositionY,
+        owner->cultist_state.PositionZ
+    };
+
+    if (Dist(cur, targetPos) <= ARRIVE_RANGE)
+    {
+        StopMovement();
+        return;
+    }
+
+    float dx = targetPos.x - bb.lastTargetPos.x;
+    float dy = targetPos.y - bb.lastTargetPos.y;
+    float dz = targetPos.z - bb.lastTargetPos.z;
+    float dist2 = dx * dx + dy * dy + dz * dz;
+
+    if (dist2 > REPATH_DIST * REPATH_DIST)
+    {
+        bb.lastTargetPos = targetPos;
+        bb.path.clear();
+    }
+
+    if (bb.path.empty())
+    {
+        std::vector<int> triPath;
+        if (!nav->FindTriPath(cur, targetPos, triPath))
+        {
+            StopMovement();
+            bb.path.clear();
+            return;
+        }
+
+        if (triPath.size() <= 1)
+        {
+            bb.path.clear();
+            bb.path.push_back(cur);
+            bb.path.push_back(targetPos);
+        }
+        else {
+
+            std::vector<std::pair<Vec3, Vec3>> portals;
+            nav->BuildPortals(triPath, portals);
+
+            if (portals.empty())
+            {
+                StopMovement();
+                return;
+            }
+
+            std::vector<Vec3> smoothPath;
+            if (!nav->SmoothPath(cur, targetPos, portals, smoothPath) || smoothPath.size() < 2)
+            {
+                StopMovement();
+                return;
+            }
+
+            CompactPath(smoothPath, 20.f);
+            NormalizeCultistPathHeight(*nav, smoothPath);
+
+            if (smoothPath.size() < 2)
+            {
+                StopMovement();
+                bb.path.clear();
+                return;
+            }
+
+            bb.path = std::move(smoothPath);
+        }
+    }
+
+    if (bb.path.empty())
+    {
+        StopMovement();
+        return;
+    }
+
+    Vec3 next = (bb.path.size() >= 2) ? bb.path[1] : bb.path[0];
+
+    Vec3 dir{
+        next.x - cur.x,
+        next.y - cur.y,
+        next.z - cur.z
+    };
+
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+
+    if (len < 1e-3f)
+    {
+        bb.path.erase(bb.path.begin());
+
+        if (bb.path.size() <= 1)
+        {
+            bb.path.clear();
+            StopMovement();
+        }
+
+        return;
+    }
+
+    dir.x /= len;
+    dir.y /= len;
+    dir.z /= len;
+
+    Vec3 candidatePos = cur;
+
+    const float moveDist = CULTIST_SPEED * deltaTime;
+    const float stepDist = std::min(moveDist, len);
+
+    candidatePos.x += dir.x * stepDist;
+    candidatePos.y += dir.y * stepDist;
+    candidatePos.z += dir.z * stepDist;
+
+    if (!SnapPositionByCurrentTri(*nav, candidatePos))
+    {
+        Vec3 retryPos = cur;
+
+        const float halfMoveDist = moveDist * 0.5f;
+
+        retryPos.x += dir.x * halfMoveDist;
+        retryPos.y += dir.y * halfMoveDist;
+        retryPos.z += dir.z * halfMoveDist;
+
+        if (!SnapPositionByCurrentTri(*nav, retryPos))
+        {
+            StopMovement();
+            return;
+        }
+
+        candidatePos = retryPos;
+    }
+
+    owner->cultist_state.PositionX = candidatePos.x;
+    owner->cultist_state.PositionY = candidatePos.y;
+    owner->cultist_state.PositionZ = candidatePos.z;
+
+    const float invDt = 1.f / deltaTime;
+
+    owner->cultist_state.VelocityX = (candidatePos.x - cur.x) * invDt;
+    owner->cultist_state.VelocityY = (candidatePos.y - cur.y) * invDt;
+    owner->cultist_state.VelocityZ = (candidatePos.z - cur.z) * invDt;
+
+    owner->cultist_state.Speed = std::sqrt(
+        owner->cultist_state.VelocityX * owner->cultist_state.VelocityX +
+        owner->cultist_state.VelocityY * owner->cultist_state.VelocityY +
+        owner->cultist_state.VelocityZ * owner->cultist_state.VelocityZ
+    );
+
+    const float yawDx = candidatePos.x - cur.x;
+    const float yawDy = candidatePos.y - cur.y;
+
+    if (std::abs(yawDx) > 1e-3f || std::abs(yawDy) > 1e-3f)
+    {
+        owner->cultist_state.RotationYaw =
+            std::atan2(yawDy, yawDx) * RAD_TO_DEG;
+    }
+
+    if (len <= moveDist)
+    {
+        bb.path.erase(bb.path.begin());
+
+        if (bb.path.size() <= 1)
+        {
+            bb.path.clear();
+            StopMovement();
+        }
+    }
+}
+
+int CultistAIController::FindNearbyPolice()
+{
+    int room_id = owner->room_id;
+    int self_id = owner->id;
+
+    if (room_id < 0 || room_id >= MAX_ROOM)
+        return -1;
+
+    Vec3 selfPos{
+        owner->cultist_state.PositionX,
+        owner->cultist_state.PositionY,
+        owner->cultist_state.PositionZ
+    };
+
+    const auto& room = g_rooms[room_id].first;
+
+    int best_id = -1;
+    float best_dist_sq = VIEW_RANGE_SQ;
+
+    for (int pid : room.player_ids)
+    {
+        if (pid == -1 || pid == self_id)
+            continue;
+
+        auto it = g_users.find(pid);
+        if (it == g_users.end() || !it->second)
+            continue;
+
+        auto target = it->second;
+
+        if (target->state == ST_FREE)
+            continue;
+
+        if (target->room_id != room_id)
+            continue;
+
+        if (!((target->role == 1 && target->isValidSocket()) || target->role == 101))
+            continue;
+
+        float dx = target->police_state.PositionX - selfPos.x;
+        float dy = target->police_state.PositionY - selfPos.y;
+        float dist_sq = dx * dx + dy * dy;
+
+        if (dist_sq < best_dist_sq)
+        {
+            best_dist_sq = dist_sq;
+            best_id = pid;
+        }
+    }
+
+    return best_id;
+}
+
+int CultistAIController::FindNearbyCultist()
+{
+    int room_id = owner->room_id;
+    int self_id = owner->id;
+
+    if (room_id < 0 || room_id >= MAX_ROOM)
+        return -1;
+
+    Vec3 selfPos{
+        owner->cultist_state.PositionX,
+        owner->cultist_state.PositionY,
+        owner->cultist_state.PositionZ
+    };
+
+    const auto& room = g_rooms[room_id].first;
+
+    int best_id = -1;
+    float best_dist_sq = VIEW_RANGE_SQ;
+
+    for (int pid : room.player_ids)
+    {
+        if (pid == -1 || pid == self_id)
+            continue;
+
+        auto it = g_users.find(pid);
+        if (it == g_users.end() || !it->second)
+            continue;
+
+        auto target = it->second;
+
+        if (target->role != 0)
+            continue;
+
+        if (target->state == ST_FREE)
+            continue;
+
+        if (!target->isValidSocket())
+            continue;
+
+        float dx = target->cultist_state.PositionX - selfPos.x;
+        float dy = target->cultist_state.PositionY - selfPos.y;
+        float dist_sq = dx * dx + dy * dy;
+
+        if (dist_sq < best_dist_sq)
+        {
+            best_dist_sq = dist_sq;
+            best_id = pid;
+        }
+    }
+
+    return best_id;
+}
+
+std::optional<std::pair<FVector, FRotator>> CultistAIController::GetHealMovePoint(int targetId)
+{
+    auto itTarget = g_users.find(targetId);
+    if (itTarget == g_users.end() || !itTarget->second)
+        return std::nullopt;
+
+    const auto target = itTarget->second;
+
+    FVector mid{
+        static_cast<double>((owner->cultist_state.PositionX + target->cultist_state.PositionX) * 0.5f),
+        static_cast<double>((owner->cultist_state.PositionY + target->cultist_state.PositionY) * 0.5f),
+        static_cast<double>((owner->cultist_state.PositionZ + target->cultist_state.PositionZ) * 0.5f)
+    };
+
+    const double dx = static_cast<double>(target->cultist_state.PositionX - owner->cultist_state.PositionX);
+    const double dy = static_cast<double>(target->cultist_state.PositionY - owner->cultist_state.PositionY);
+
+    double yawHealer = std::atan2(dy, dx) * 180.0 / PI;
+    if (yawHealer < 0.0)
+        yawHealer += 360.0;
+
+    FRotator rot{ 0.0, yawHealer, 0.0 };
+
+    return std::make_pair(mid, rot);
+}

@@ -1,0 +1,1717 @@
+#define NOMINMAX
+
+#include "PoliceAI.h"
+#include <thread>
+#include <array>
+#include <cmath>
+#include <concurrent_priority_queue.h>
+#include <concurrent_unordered_set.h>
+#include <concurrent_unordered_map.h>
+#include <mutex>
+#include <queue>
+#include "map.h"
+#include "MapManager.h"
+#include "Combat.h"
+
+using namespace std;
+extern concurrency::concurrent_unordered_map<int, std::shared_ptr<SESSION>> g_users;
+extern concurrency::concurrent_unordered_set<int> g_police_ai_ids;
+extern std::array<std::pair<Room, MAPTYPE>, MAX_ROOM> g_rooms;
+extern concurrency::concurrent_priority_queue<TIMER_EVENT> timer_queue;
+extern std::array<std::array<Altar, ALTAR_PER_ROOM>, MAX_ROOM> g_altars;
+extern std::mutex g_room_mtx;
+extern std::queue<RoomTask> g_room_q;
+extern std::condition_variable g_room_cv;
+extern std::vector<int> free_session_ids;
+extern std::mutex free_id_mtx;
+
+void AddPoliceAi(int ai_id, uint8_t ai_role, int room_id)
+{
+    auto session = std::make_shared<SESSION>(ai_id, ai_role, room_id);
+
+    auto it = g_users.find(ai_id);
+    if (it != g_users.end())
+    {
+        it->second = session;
+    }
+    else
+    {
+        g_users.insert({ ai_id, session });
+    }
+
+    auto [it_ai, inserted] = g_police_ai_ids.insert(ai_id);
+
+    auto& room = g_rooms[room_id];
+    for (int i = 0; i < MAX_PLAYERS_PER_ROOM; ++i)
+    {
+        if (room.first.player_ids[i] == -1)
+        {
+            room.first.player_ids[i] = ai_id;
+            room.first.police += 1;
+            break;
+        }
+    }
+
+    std::cout << "[Command] AI added. ID=" << ai_id
+        << " role=" << static_cast<int>(ai_role)
+        << " room=" << room_id << "\n";
+    IdRolePacket pkt{};
+    pkt.header = connectionHeader;
+    pkt.size = sizeof(IdRolePacket);
+    pkt.id = ai_id;
+    pkt.role = ai_role;
+
+    broadcast_in_room(*session, &pkt, VIEW_RANGE);
+}
+
+void KillPoliceAi(int ai_id)
+{
+    auto it = g_users.find(ai_id);
+    if (it == g_users.end())
+        return;
+
+    auto session = it->second;
+
+    if (session->role != 101)
+        return;
+
+    IdOnlyPacket pkt;
+    pkt.header = DisconnectionHeader;
+    pkt.size = sizeof(IdOnlyPacket);
+    pkt.id = ai_id;
+    broadcast_in_room(*session, &pkt, VIEW_RANGE);
+
+    {
+        std::lock_guard<std::mutex> lk(g_room_mtx);
+        g_room_q.push(RoomTask{
+            ai_id,
+            RM_DISCONNECT,
+            session->role,
+            session->room_id
+            });
+        g_room_cv.notify_one();
+    }
+
+    std::cout << "[Command] AI removed. ID=" << ai_id << "\n";
+}
+
+static bool IsCultistTargetAttackable(const SESSION& target)
+{
+    if (target.role != 0 && target.role != 100)
+        return false;
+
+    if (target.state != ST_INGAME)
+        return false;
+
+    if (target.cultist_state.ABP_IsDead || target.cultist_state.ABP_IsStunned)
+        return false;
+
+    if (target.role != 100 && !target.isValidSocket())
+        return false;
+
+    return true;
+}
+
+static inline float Dist(const Vec3& a, const Vec3& b)
+{
+    float dx = a.x - b.x;
+    float dy = a.y - b.y;
+    float dz = a.z - b.z;
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+static float DistSq3D(const Vec3& a, const Vec3& b)
+{
+    const float dx = a.x - b.x;
+    const float dy = a.y - b.y;
+    const float dz = a.z - b.z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
+static void CompactPath(std::vector<Vec3>& path, float minGap)
+{
+    if (path.empty())
+        return;
+
+    const float minGapSq = minGap * minGap;
+
+    std::vector<Vec3> compact;
+    compact.reserve(path.size());
+
+    compact.push_back(path.front());
+
+    for (int i = 1; i < static_cast<int>(path.size()); ++i)
+    {
+        if (DistSq3D(compact.back(), path[i]) >= minGapSq)
+        {
+            compact.push_back(path[i]);
+        }
+    }
+
+    path.swap(compact);
+}
+
+static void NormalizePolicePathHeight(NAVMESH& nav, std::vector<Vec3>& path)
+{
+    for (Vec3& p : path)
+    {
+        Vec3 feetPos = p;
+        feetPos.z -= CHARACTER_HALF_HEIGHT;
+
+        int tri = nav.FindContainingTriangle(feetPos);
+        if (tri < 0)
+            continue;
+
+        const float groundZ = nav.TriHeightAtXY(tri, p.x, p.y);
+        p.z = groundZ + CHARACTER_HALF_HEIGHT;
+    }
+}
+
+void PoliceAIWorkerLoop()
+{
+    using clock = std::chrono::steady_clock;
+    auto nextTick = clock::now();
+
+    while (true)
+    {
+        auto now = clock::now();
+
+        std::chrono::duration<float> delta = now - nextTick + std::chrono::duration<float>(fixed_dt);
+        float dt = delta.count();
+
+        if (dt < 0.f) dt = 0.f;
+        if (dt > 0.05f) dt = 0.05f;
+
+        for (int ai_id : g_police_ai_ids)
+        {
+            auto it = g_users.find(ai_id);
+            if (it == g_users.end())
+                continue;
+
+            auto session = it->second;
+            if (session->role != 101)
+                continue;
+
+            auto aiPtr = session->ai;
+            if (!aiPtr)
+                continue;
+
+            auto* policeAI = dynamic_cast<PoliceAIController*>(aiPtr.get());
+            if (!policeAI)
+                continue;
+
+            if (policeAI->bb.ai_state == AIState::Free)
+                continue;
+
+            auto& st = session->police_state;
+
+            session->ai->Update(dt);
+
+            PolicePacket packet{};
+            packet.header = policeHeader;
+            packet.size = sizeof(PolicePacket);
+            packet.state = session->police_state;
+            broadcast_in_room(*session, &packet, VIEW_RANGE);
+
+            DogPacket d{};
+            d.header = dogHeader;
+            d.size = sizeof(DogPacket);
+            d.dog = session->dog;
+            broadcast_in_room(*session, &d, VIEW_RANGE);
+        }
+
+        nextTick += std::chrono::duration_cast<clock::duration>(
+            std::chrono::duration<float>(fixed_dt));
+
+        std::this_thread::sleep_until(nextTick);
+    }
+}
+
+// PoliceAIController
+PoliceAIController::PoliceAIController(SESSION* o)
+    : AIController(o)
+{
+    nav = GetNavMesh(owner->room_id);
+
+    auto rootSelector = std::make_unique<Selector>();
+
+    // Baton
+    {
+        auto seq = std::make_unique<Sequence>();
+        seq->children.push_back(std::make_unique<CanBatonAttackNode>());
+        seq->children.push_back(std::make_unique<BatonAttackNode>());
+        rootSelector->children.push_back(std::move(seq));
+    }
+
+    // Shoot
+    {
+        auto seq = std::make_unique<Sequence>();
+        seq->children.push_back(std::make_unique<CanShootNode>());
+        seq->children.push_back(std::make_unique<AimNode>());
+        auto weaponSelector = std::make_unique<Selector>();
+           
+        // Taser
+        {
+            auto taserSeq = std::make_unique<Sequence>();
+            taserSeq->children.push_back(std::make_unique<CanTaserNode>());
+            taserSeq->children.push_back(std::make_unique<TaserShootNode>());
+            weaponSelector->children.push_back(std::move(taserSeq));
+        }
+
+        // Pistol
+        {
+            auto pistolSeq = std::make_unique<Sequence>();
+            pistolSeq->children.push_back(std::make_unique<CanPistolNode>());
+            pistolSeq->children.push_back(std::make_unique<PistolShootNode>());
+            weaponSelector->children.push_back(std::move(pistolSeq));
+        }
+
+        seq->children.push_back(std::move(weaponSelector));
+        rootSelector->children.push_back(std::move(seq));
+    }
+
+    // Chase
+    {
+        auto seq = std::make_unique<Sequence>();
+        seq->children.push_back(std::make_unique<CanChaseNode>());
+        seq->children.push_back(std::make_unique<ChaseNode>());
+        rootSelector->children.push_back(std::move(seq));
+    }
+
+    // Patrol (fallback)
+    rootSelector->children.push_back(std::make_unique<PatrolNode>());
+    root = std::move(rootSelector);
+}
+
+// Condition Node
+bool CanChaseNode::Run(AIController& ai, float)
+{
+    return static_cast<PoliceAIController&>(ai).CanChase();
+}
+
+bool CanBatonAttackNode::Run(AIController& ai, float)
+{
+    return static_cast<PoliceAIController&>(ai).CanBatonAttack();
+}
+
+bool CanShootNode::Run(AIController& ai, float)
+{
+    return static_cast<PoliceAIController&>(ai).CanShoot();
+}
+
+bool CanTaserNode::Run(AIController& ai, float)
+{
+    return static_cast<PoliceAIController&>(ai).CanTaser();
+}
+
+bool CanPistolNode::Run(AIController& ai, float)
+{
+   return static_cast<PoliceAIController&>(ai).CanPistol();
+}
+
+// Action Node
+bool PatrolNode::Run(AIController& ai, float dt)
+{
+    static_cast<PoliceAIController&>(ai).Patrol(dt);
+    return true;
+}
+
+bool ChaseNode::Run(AIController& ai, float dt)
+{
+    static_cast<PoliceAIController&>(ai).Chase(dt);
+    return true;
+}
+
+bool BatonAttackNode::Run(AIController& ai, float dt)
+{
+    static_cast<PoliceAIController&>(ai).BatonAttack(dt);
+    return true;
+}
+
+bool AimNode::Run(AIController& ai, float dt)
+{
+    auto& ctrl = static_cast<PoliceAIController&>(ai);
+
+    if (ctrl.bb.aim_target == -1)
+    {
+        ctrl.bb.aim_target = ctrl.bb.target_id;
+        ctrl.bb.aim_time = 0.f;
+    }
+
+    if (!ctrl.HasLineOfSight(ctrl.bb.aim_target))
+    {
+        ctrl.bb.aim_target = -1;
+        ctrl.bb.aim_time = 0.f;
+        ctrl.owner->police_state.bIsAiming = false;
+        return false;
+    }
+
+    ctrl.bb.aim_time += dt;
+    ctrl.owner->police_state.bIsAiming = true;
+    if (ctrl.CanTaser())
+        ctrl.owner->police_state.CurrentWeapon = EWeaponType::Taser;
+    else if (ctrl.CanPistol())
+        ctrl.owner->police_state.CurrentWeapon = EWeaponType::Pistol;
+
+    if (ctrl.bb.aim_time < 1.0f)
+        return false;
+
+    return true;
+}
+
+bool TaserShootNode::Run(AIController& ai, float dt)
+{
+    auto& ctrl = static_cast<PoliceAIController&>(ai);
+
+    ctrl.TaserShoot(dt);
+
+    ctrl.bb.aim_time = 0.f;
+    ctrl.owner->police_state.bIsAiming = false;
+
+    return true;
+}
+
+bool PistolShootNode::Run(AIController& ai, float dt)
+{
+    auto& ctrl = static_cast<PoliceAIController&>(ai);
+
+    ctrl.PistolShoot(dt);
+
+    ctrl.bb.aim_time = 0.f;
+    ctrl.owner->police_state.bIsAiming = false;
+
+    return true;
+}
+
+// Condition
+bool PoliceAIController::CanChase()
+{
+    return bb.target_id != -1;
+}
+
+static bool IsSimilarHeight(float selfZ, float targetZ)
+{
+    return std::abs(selfZ - targetZ) <= ATTACK_MAX_Z_DIFF;
+}
+
+bool PoliceAIController::CanBatonAttack()
+{
+    auto it = g_users.find(bb.target_id);
+    if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
+        return false;
+
+    auto target = it->second;
+    if (!IsSimilarHeight(owner->police_state.PositionZ, target->cultist_state.PositionZ))
+        return false;
+
+    return bb.target_id != -1 &&
+        bb.last_dist_to_target < BATON_RANGE;
+}
+
+bool PoliceAIController::CanShoot()
+{
+    if (bb.aim_target != -1)
+    {
+        auto it = g_users.find(bb.aim_target);
+        return it != g_users.end() && it->second && IsCultistTargetAttackable(*it->second);
+    }
+
+    auto it = g_users.find(bb.target_id);
+    if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
+        return false;
+
+    auto target = it->second;
+    if (!IsSimilarHeight(owner->police_state.PositionZ, target->cultist_state.PositionZ))
+        return false;
+
+    return bb.target_id != -1 &&
+        bb.last_dist_to_target < TASER_RANGE;
+}
+
+bool PoliceAIController::CanTaser()
+{
+    auto it = g_users.find(bb.target_id);
+    if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
+        return false;
+
+    auto target = it->second;
+    if (!IsSimilarHeight(owner->police_state.PositionZ, target->cultist_state.PositionZ))
+        return false;
+
+    return bb.target_id != -1 &&
+        bb.last_dist_to_target < TASER_RANGE;
+}
+
+bool PoliceAIController::CanPistol()
+{
+    auto it = g_users.find(bb.target_id);
+    if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
+        return false;
+
+    auto target = it->second;
+    if (!IsSimilarHeight(owner->police_state.PositionZ, target->cultist_state.PositionZ))
+        return false;
+
+    return bb.target_id != -1 &&
+        bb.last_dist_to_target < PISTOL_RANGE;
+}
+
+// Action
+void PoliceAIController::Patrol(float dt)
+{
+    NAVMESH* nav = GetNavMesh(owner->room_id);
+    if (!nav)
+        return;
+
+    Vec3 cur{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    // 목표 없으면 생성
+    if (!bb.has_patrol_target)
+    {
+        int curTri = nav->FindContainingTriangle(cur);
+        if (curTri < 0)
+            return;
+
+        int randomTri = nav->GetRandomTriangle(curTri, 10);
+        if (randomTri < 0)
+            return;
+
+        bb.patrol_target = nav->GetTriCenter(randomTri);
+        bb.has_patrol_target = true;
+
+        bb.last_dist_to_target = FLT_MAX;
+        bb.path.clear();
+    }
+
+    float dist = Dist(cur, bb.patrol_target);
+
+    // 도착
+    if (dist < CHASE_STOP_RANGE)
+    {
+        bb.has_patrol_target = false;
+        bb.path.clear();
+        return;
+    }
+
+    MoveAlongPath(bb.patrol_target, dt);
+}
+
+void PoliceAIController::Chase(float dt)
+{
+    if (bb.target_id < 0)
+    {
+        bb.path.clear();
+        StopMovement();
+        return;
+    }
+
+    auto it = g_users.find(bb.target_id);
+    if (it == g_users.end())
+    {
+        bb.target_id = -1;
+        bb.path.clear();
+        return;
+    }
+
+    auto target = it->second;
+    if (!target || !IsCultistTargetAttackable(*target))
+    {
+        bb.target_id = -1;
+        bb.path.clear();
+        return;
+    }
+
+    Vec3 selfPos{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    Vec3 targetPos{
+        target->cultist_state.PositionX,
+        target->cultist_state.PositionY,
+        target->cultist_state.PositionZ
+    };
+
+    float dist = Dist(selfPos, targetPos);
+
+    if (dist <= CHASE_STOP_RANGE)
+    {
+        bb.path.clear();
+        StopMovement();
+        return;
+    }
+
+    MoveAlongPath(targetPos, dt);
+}
+
+void PoliceAIController::BatonAttack(float dt)
+{
+    owner->police_state.CurrentWeapon = EWeaponType::Baton;
+    owner->police_state.bIsAttacking = true;
+    StopMovement();
+
+    HitPacket p{};
+    p.TraceStart = {
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    float yawRad = owner->police_state.RotationYaw * DEG_TO_RAD;
+
+    p.TraceDir = {
+        std::cos(yawRad),
+        std::sin(yawRad),
+        0.f
+    };
+
+    baton_sweep(owner->id, &p);
+    BeginBehaviorLock(ATTACK_COOL_DOWN);
+}
+
+void PoliceAIController::TaserShoot(float dt)
+{
+    // 공격 함수 추가
+    owner->police_state.CurrentWeapon = EWeaponType::Taser;
+    owner->police_state.bIsAiming = false;
+    owner->police_state.bIsShooting = true;
+
+    HitPacket p{};
+    p.Weapon = EWeaponType::Taser;
+
+    p.TraceStart = {
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    float yawRad = owner->police_state.RotationYaw * DEG_TO_RAD;
+
+    p.TraceDir = {
+        std::cos(yawRad),
+        std::sin(yawRad),
+        0.f
+    };
+
+    shoot_attack(owner->id, &p);
+    BeginBehaviorLock(ATTACK_COOL_DOWN);
+}
+
+void PoliceAIController::PistolShoot(float dt)
+{
+    // 공격 함수 추가
+    owner->police_state.CurrentWeapon = EWeaponType::Pistol;
+    owner->police_state.bIsAiming = false;
+    owner->police_state.bIsShooting = true;
+
+    HitPacket p{};
+    p.Weapon = EWeaponType::Pistol;
+
+    p.TraceStart = {
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    float yawRad = owner->police_state.RotationYaw * DEG_TO_RAD;
+
+    p.TraceDir = {
+        std::cos(yawRad),
+        std::sin(yawRad),
+        0.f
+    };
+
+    shoot_attack(owner->id, &p);
+    BeginBehaviorLock(ATTACK_COOL_DOWN);
+}
+
+// BT
+void PoliceAIController::UpdateBlackboard(float dt)
+{
+    if (dogAI && owner->dog.is_barking)
+    {
+        if (dogAI->db.target_id != -1)
+        {
+            bb.target_id = dogAI->db.target_id;
+        }
+    }
+    else
+    {
+        if (dogAI && bb.target_id == dogAI->db.target_id)
+        {
+            bb.target_id = -1;
+        }
+    }
+
+    if (bb.target_id == -1 && !owner->dog.is_barking)
+    {
+        int found = FindNearbyCultist();
+        if (found != -1)
+        {
+            bb.target_id = found;
+        }
+    }
+    // target 유효성 체크
+    if (bb.target_id != -1)
+    {
+        auto it = g_users.find(bb.target_id);
+        if (it == g_users.end())
+        {
+            bb.target_id = -1;
+        }
+    }
+
+    // 거리 업데이트
+    if (bb.target_id != -1)
+    {
+        auto it = g_users.find(bb.target_id);
+        if (it == g_users.end())
+        {
+            bb.target_id = -1;
+            bb.last_dist_to_target = FLT_MAX;
+            return;
+        }
+        auto target = it->second;
+        if (!target || !IsCultistTargetAttackable(*target))
+        {
+            bb.target_id = -1;
+            bb.aim_target = -1;
+            bb.aim_time = 0.f;
+            bb.last_dist_to_target = FLT_MAX;
+            owner->police_state.bIsAiming = false;
+            return;
+        }
+
+        Vec3 self{
+            owner->police_state.PositionX,
+            owner->police_state.PositionY,
+            owner->police_state.PositionZ
+        };
+
+        Vec3 targetPos{
+            target->cultist_state.PositionX,
+            target->cultist_state.PositionY,
+            target->cultist_state.PositionZ
+        };
+
+        bb.last_dist_to_target = Dist(self, targetPos);
+
+        if (!owner->dog.is_barking)
+        {
+            if (bb.last_dist_to_target > CHASE_START_RANGE)
+            {
+                bb.target_id = -1;
+                bb.aim_target = -1;
+                bb.aim_time = 0.f;
+                owner->police_state.bIsAiming = false;
+            }
+        }
+    }
+    else
+    {
+        bb.last_dist_to_target = FLT_MAX;
+    }
+
+    // aim_target 유지 검증
+    if (bb.aim_target != -1)
+    {
+        auto it = g_users.find(bb.aim_target);
+        if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
+        {
+            bb.aim_target = -1;
+            bb.aim_time = 0.f;
+            owner->police_state.bIsAiming = false;
+        }
+    }
+
+    if (bb.attack_lock_time <= 0.f)
+    {
+        owner->police_state.bIsAttacking = false;
+        owner->police_state.bIsShooting = false;
+    }
+
+    // stuck 판단
+    Vec3 cur{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    float moveDist = Dist(cur, bb.lastSnapPos);
+
+    if (moveDist < 1.0f)
+    {
+        bb.stuck_ticks++;
+    }
+    else
+    {
+        bb.stuck_ticks = 0;
+    }
+
+    bb.lastSnapPos = cur;
+
+    // stuck 발생 시 처리
+    if (bb.stuck_ticks > MAX_STUCK_TICK)
+    {
+        bb.path.clear();
+        bb.has_patrol_target = false;
+        bb.target_id = -1;
+        bb.currentTri = -1;
+        bb.stuck_ticks = 0;
+
+        StopMovement();
+    }
+}
+
+void PoliceAIController::RunBehaviorTree(float dt)
+{
+    if (root)
+        root->Run(*this, dt);
+}
+
+void PoliceAIController::Update(float dt)
+{
+    if (bb.attack_lock_time > 0.f)
+    {
+        bb.attack_lock_time -= dt;
+        if (bb.attack_lock_time < 0.f)
+            bb.attack_lock_time = 0.f;
+
+        StopMovement();
+
+        if (dogAI)
+            dogAI->Update(dt);
+
+        return;
+    }
+
+    UpdateBlackboard(dt);
+    RunBehaviorTree(dt);
+
+    if (dogAI)
+        dogAI->Update(dt);
+}
+
+void PoliceAIController::BeginBehaviorLock(float lockTime)
+{
+    bb.attack_lock_time = lockTime;
+
+    bb.path.clear();
+    bb.has_patrol_target = false;
+
+    bb.aim_target = -1;
+    bb.aim_time = 0.f;
+    StopMovement();
+}
+
+// Police Movement
+void PoliceAIController::StopMovement()
+{
+    owner->police_state.VelocityX = 0.f;
+    owner->police_state.VelocityY = 0.f;
+    owner->police_state.VelocityZ = 0.f;
+    owner->police_state.Speed = 0.f;
+}
+
+bool PoliceAIController::SnapPositionByCurrentTri(NAVMESH& nav, Vec3& inOutPos)
+{
+    Vec3 feetPos = inOutPos;
+    feetPos.z -= CHARACTER_HALF_HEIGHT;
+
+    if (bb.currentTri < 0)
+    {
+        bb.currentTri = nav.FindContainingTriangle(feetPos);
+    }
+
+    int newTri = -1;
+    float groundZ = feetPos.z;
+
+    if (!nav.ResolveMovedTriangleFromCurrent(
+        bb.currentTri,
+        feetPos,
+        SNAP_MAX_Z_DIFF,
+        newTri,
+        groundZ))
+    {
+        return false;
+    }
+
+    inOutPos.z = groundZ + CHARACTER_HALF_HEIGHT;
+    bb.currentTri = newTri;
+    bb.lastValidPos = inOutPos;
+
+    return true;
+}
+
+void PoliceAIController::MoveAlongPath(const Vec3& targetPos, float deltaTime)
+{
+    if (!owner)
+        return;
+
+    if (deltaTime <= 0.f)
+        return;
+
+    if (!nav)
+        return;
+
+    Vec3 cur{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    if (!std::isfinite(cur.x) || !std::isfinite(cur.y) || !std::isfinite(cur.z))
+    {
+        std::cout << "[FIX] NaN detected -> reset path\n";
+
+        bb.path.clear();
+        bb.has_patrol_target = false;
+
+        Vec3 safe{
+            owner->police_state.PositionX,
+            owner->police_state.PositionY,
+            owner->police_state.PositionZ
+        };
+
+        MoveToNearestTriangle(safe);
+
+        return;
+    }
+
+    if (Dist(cur, targetPos) <= ARRIVE_RANGE)
+    {
+        StopMovement();
+        return;
+    }
+
+    float dx = targetPos.x - bb.lastTargetPos.x;
+    float dy = targetPos.y - bb.lastTargetPos.y;
+    float dz = targetPos.z - bb.lastTargetPos.z;
+    float dist2 = dx * dx + dy * dy + dz * dz;
+
+    if (dist2 > REPATH_DIST * REPATH_DIST)
+    {
+        // 타겟이 충분히 이동, 경로 무효화
+        bb.lastTargetPos = targetPos;
+        bb.path.clear();
+    }
+
+    if (bb.path.empty())
+    {
+        std::vector<int> triPath;
+        if (!nav->FindTriPath(cur, targetPos, triPath))
+        {
+            StopMovement();
+            bb.path.clear();
+            return;
+        }
+
+        if (triPath.size() <= 1)
+        {
+            bb.path.clear();
+            bb.path.push_back(cur);
+            bb.path.push_back(targetPos);
+        }
+        else
+        {
+            std::vector<std::pair<Vec3, Vec3>> portals;
+            nav->BuildPortals(triPath, portals);
+
+            if (portals.empty())
+            {
+                StopMovement();
+                return;
+            }
+
+            std::vector<Vec3> smoothPath;
+            if (!nav->SmoothPath(cur, targetPos, portals, smoothPath) || smoothPath.size() < 2)
+            {
+                StopMovement();
+                return;
+            }
+
+            CompactPath(smoothPath, 20.f);
+            NormalizePolicePathHeight(*nav, smoothPath);
+
+            if (smoothPath.size() < 2)
+            {
+                StopMovement();
+                bb.path.clear();
+                return;
+            }
+
+            bb.path = std::move(smoothPath);
+        }
+    }
+
+    if (bb.path.empty())
+    {
+        StopMovement();
+        return;
+    }
+
+    if (bb.path.size() < 1)
+    {
+        std::cout << "[FATAL] path empty before next selection\n";
+        StopMovement();
+        return;
+    }
+
+    // 다음 목표 노드
+    Vec3 next;
+    if (bb.path.size() >= 2) {
+        next = bb.path[1];
+    }
+    else {
+        next = bb.path[0];
+    }
+
+    Vec3 dir{
+        next.x - cur.x,
+        next.y - cur.y,
+        next.z - cur.z
+    };
+
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+    if (len <= POLICE_SPEED * deltaTime)
+    {
+        bb.path.erase(bb.path.begin());
+
+        if (bb.path.empty())
+        {
+            StopMovement();
+            return;
+        }
+
+        next = bb.path[0];
+
+        dir.x = next.x - cur.x;
+        dir.y = next.y - cur.y;
+        dir.z = next.z - cur.z;
+        len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+        if (len < 1e-6f)
+        {
+            StopMovement();
+            return;
+        }
+    }
+
+    if (len < 1e-6f)
+    {
+        StopMovement();
+        return;
+    }
+
+    dir.x /= len;
+    dir.y /= len;
+    dir.z /= len;
+
+    Vec3 candidatePos = cur;
+
+    const float moveDist = POLICE_SPEED * deltaTime;
+    const float stepDist = std::min(moveDist, len);
+
+    candidatePos.x += dir.x * stepDist;
+    candidatePos.y += dir.y * stepDist;
+    candidatePos.z += dir.z * stepDist;
+
+    if (!SnapPositionByCurrentTri(*nav, candidatePos))
+    {
+        Vec3 retryPos = cur;
+
+        const float halfMoveDist = moveDist * 0.5f;
+
+        retryPos.x += dir.x * halfMoveDist;
+        retryPos.y += dir.y * halfMoveDist;
+        retryPos.z += dir.z * halfMoveDist;
+
+        if (!SnapPositionByCurrentTri(*nav, retryPos))
+        {
+            StopMovement();
+            return;
+        }
+
+        candidatePos = retryPos;
+    }
+
+    owner->police_state.PositionX = candidatePos.x;
+    owner->police_state.PositionY = candidatePos.y;
+    owner->police_state.PositionZ = candidatePos.z;
+
+    const float invDt = 1.f / deltaTime;
+
+    owner->police_state.VelocityX = (candidatePos.x - cur.x) * invDt;
+    owner->police_state.VelocityY = (candidatePos.y - cur.y) * invDt;
+    owner->police_state.VelocityZ = (candidatePos.z - cur.z) * invDt;
+
+    owner->police_state.Speed = std::sqrt(
+        owner->police_state.VelocityX * owner->police_state.VelocityX +
+        owner->police_state.VelocityY * owner->police_state.VelocityY +
+        owner->police_state.VelocityZ * owner->police_state.VelocityZ
+    );
+
+    const float yawDx = candidatePos.x - cur.x;
+    const float yawDy = candidatePos.y - cur.y;
+
+    if (std::abs(yawDx) > 1e-3f || std::abs(yawDy) > 1e-3f)
+    {
+        owner->police_state.RotationYaw =
+            std::atan2(yawDy, yawDx) * RAD_TO_DEG;
+    }
+}
+
+void PoliceAIController::SnapToNavMesh()
+{
+    NAVMESH* nav = GetNavMesh(owner->room_id);
+    if (!nav)
+        return;
+
+    Vec3 pos{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    if (!nav->SnapPositionToNavMesh(pos))
+        return;
+
+    owner->police_state.PositionZ = pos.z;
+}
+
+void PoliceAIController::MoveToNearestTriangle(const Vec3& cur)
+{
+    NAVMESH* nav = GetNavMesh(owner->room_id);
+    if (nav)
+    {
+        int tri = nav->FindContainingTriangle(cur);
+        if (tri >= 0)
+        {
+            Vec3 safe = nav->GetTriCenter(tri);
+
+            owner->police_state.PositionX = safe.x;
+            owner->police_state.PositionY = safe.y;
+            owner->police_state.PositionZ = safe.z;
+        }
+        else
+        {
+            // fallback
+            return;
+        }
+    }
+}
+
+bool PoliceAIController::HasLineOfSight(int target_id)
+{
+    auto it = g_users.find(target_id);
+    if (it == g_users.end())
+        return false;
+
+    auto target = it->second;
+    if (!target || !IsCultistTargetAttackable(*target))
+        return false;
+
+    Vec3 start{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    Vec3 end{
+        target->cultist_state.PositionX,
+        target->cultist_state.PositionY,
+        target->cultist_state.PositionZ
+    };
+
+    Vec3 dir{
+        end.x - start.x,
+        end.y - start.y,
+        end.z - start.z
+    };
+
+    float dist = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+    if (dist < 1e-3f)
+        return true;
+
+    dir.x /= dist;
+    dir.y /= dist;
+    dir.z /= dist;
+
+    Ray ray;
+    ray.start = start;
+    ray.dir = dir;
+
+    float hitDist;
+    int hitTri;
+
+    MAP* map = GetMap(owner->room_id);
+
+    // 장애물에 먼저 맞으면 시야 차단
+    if (map && map->LineTrace(ray, dist, hitDist, hitTri))
+    {
+        return false;
+    }
+
+    return true;
+}
+
+int PoliceAIController::FindNearbyCultist()
+{
+    int room_id = owner->room_id;
+    int self_id = owner->id;
+
+    if (room_id < 0 || room_id >= MAX_ROOM)
+        return -1;
+
+    Vec3 selfPos{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    const auto& room = g_rooms[room_id].first;
+
+    int best_id = -1;
+    float best_dist_sq = VIEW_RANGE_SQ;
+
+    for (int pid : room.player_ids)
+    {
+        if (pid == -1 || pid == self_id)
+            continue;
+
+        auto it = g_users.find(pid);
+        if (it == g_users.end() || !it->second)
+            continue;
+
+        auto target = it->second;
+        if (!IsCultistTargetAttackable(*target))
+            continue;
+
+        float dx = target->cultist_state.PositionX - selfPos.x;
+        float dy = target->cultist_state.PositionY - selfPos.y;
+        float dz = target->cultist_state.PositionZ - selfPos.z;
+        float dist_sq = dx * dx + dy * dy + dz * dz;
+
+        if (dist_sq < best_dist_sq)
+        {
+            best_dist_sq = dist_sq;
+            best_id = pid;
+        }
+    }
+
+    return best_id;
+}
+
+// Dog
+DogAIController::DogAIController(SESSION* o)
+    : AIController{ o }
+{
+    /*
+    Selector
+     ├─ Sequence (CanAttack)
+     │    └─ Attack
+     │
+     ├─ Sequence (HasTargetId)
+     │    ├─ Selector
+     │    │    ├─ Sequence (ShouldStopChaseNode)
+     │    │    │    └─ Stop
+     │    │    └─ Chase
+     │
+     ├─ Sequence (NeedFollowOwnerNode)
+     │    └─ Follow
+     │
+     └─ Explore
+    */
+    auto rootSelector = std::make_unique<Selector>();
+
+    // Chase
+    {
+        auto seq = std::make_unique<Sequence>();
+        seq->children.push_back(std::make_unique<HasTargetIdNode>());
+
+        auto sel = std::make_unique<Selector>();
+
+        // Stop
+        {
+            auto stopSeq = std::make_unique<Sequence>();
+            stopSeq->children.push_back(std::make_unique<ShouldStopChaseNode>());
+            stopSeq->children.push_back(std::make_unique<DogStopNode>());
+            sel->children.push_back(std::move(stopSeq));
+        }
+
+        // Chase
+        {
+            sel->children.push_back(std::make_unique<DogChaseNode>());
+        }
+
+        seq->children.push_back(std::move(sel));
+        rootSelector->children.push_back(std::move(seq));
+    }
+
+    // Follow
+    {
+        auto seq = std::make_unique<Sequence>();
+        seq->children.push_back(std::make_unique<NeedFollowOwnerNode>());
+        seq->children.push_back(std::make_unique<DogFollowNode>());
+        rootSelector->children.push_back(std::move(seq));
+    }
+
+    // Explore
+    {
+        rootSelector->children.push_back(std::make_unique<DogExploreNode>());
+    }
+
+    root = std::move(rootSelector);
+}
+
+void DogAIController::Init()
+{
+    if (!owner)
+        return;
+
+    owner->dog.loc.x = owner->police_state.PositionX + 500.f;
+    owner->dog.loc.y = owner->police_state.PositionY;
+    owner->dog.loc.z = owner->police_state.PositionZ;
+    owner->dog.owner = owner->id;
+    owner->dog.is_barking = false;
+
+    db.lastTargetPos = {
+        static_cast<float>(owner->dog.loc.x),
+        static_cast<float>(owner->dog.loc.y),
+        static_cast<float>(owner->dog.loc.z)
+    };
+    db.repath_timer = 0.f;
+    db.path.clear();
+
+    bInitialized = true;
+}
+
+// Condition Node
+bool HasTargetIdNode::Run(AIController& ai, float)
+{
+    return static_cast<DogAIController&>(ai).HasTargetId();
+}
+
+bool NeedFollowOwnerNode::Run(AIController& ai, float)
+{
+    return static_cast<DogAIController&>(ai).NeedFollowOwner();
+}
+
+bool ShouldStopChaseNode::Run(AIController& ai, float)
+{
+    return static_cast<DogAIController&>(ai).ShouldStopChase();
+}
+
+// Action Node
+bool DogChaseNode::Run(AIController& ai, float dt)
+{
+    static_cast<DogAIController&>(ai).Chase(dt);
+    return true;
+}
+
+bool DogStopNode::Run(AIController& ai, float dt)
+{
+    static_cast<DogAIController&>(ai).Stop(dt);
+    return true;
+}
+
+bool DogFollowNode::Run(AIController& ai, float dt)
+{
+    static_cast<DogAIController&>(ai).Follow(dt);
+    return true;
+}
+
+bool DogExploreNode::Run(AIController& ai, float dt)
+{
+    static_cast<DogAIController&>(ai).Explore(dt);
+    return true;
+}
+
+// Condition
+bool DogAIController::NeedFollowOwner()
+{
+    return db.bNeedFollowOwner;
+}
+
+bool DogAIController::ShouldStopChase()
+{
+    return db.bStopChaseForOwnerDist;
+}
+
+bool DogAIController::HasTargetId()
+{
+    if (db.target_id == -1)
+        return false;
+
+    auto it = g_users.find(db.target_id);
+    if (it == g_users.end() || !it->second)
+        return false;
+
+    if (!IsCultistTargetAttackable(*it->second))
+        return false;
+
+    return true;
+}
+
+// Action
+void DogAIController::Chase(float dt)
+{
+    if (db.target_id == -1)
+        return;
+
+    owner->dog.is_barking = true;
+    MoveAlongPathDog(db.targetPos, dt);
+}
+
+void DogAIController::Stop(float dt)
+{
+    if (db.target_id == -1)
+        return;
+
+    Vec3 dogPos{
+        static_cast<float>(owner->dog.loc.x),
+        static_cast<float>(owner->dog.loc.y),
+        static_cast<float>(owner->dog.loc.z)
+    };
+
+    Vec3 dir{
+        db.targetPos.x - dogPos.x,
+        db.targetPos.y - dogPos.y,
+        db.targetPos.z - dogPos.z,
+    };
+
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+
+    if (len > 1e-3f)
+    {
+        owner->dog.rot.yaw = std::atan2(dir.y, dir.x) * RAD_TO_DEG;
+    }
+    // 이동 없음
+}
+
+void DogAIController::Follow(float dt)
+{
+    Vec3 policePos{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    owner->dog.is_barking = false;
+    MoveAlongPathDog(policePos, dt);
+}
+
+void DogAIController::Explore(float dt)
+{
+    if (db.path.empty())
+    {
+        Vec3 policePos{
+            owner->police_state.PositionX,
+            owner->police_state.PositionY,
+            owner->police_state.PositionZ
+        };
+
+        db.targetPos = {
+            policePos.x + (rand() % 1601 - 800),
+            policePos.y + (rand() % 1601 - 800),
+            policePos.z
+        };
+    }
+
+    owner->dog.is_barking = false;
+    MoveAlongPathDog(db.targetPos, dt);
+}
+
+void DogAIController::UpdateBlackboard(float dt)
+{
+    Vec3 dogPos{
+        static_cast<float>(owner->dog.loc.x),
+        static_cast<float>(owner->dog.loc.y),
+        static_cast<float>(owner->dog.loc.z)
+    };
+
+    Vec3 policePos{
+        owner->police_state.PositionX,
+        owner->police_state.PositionY,
+        owner->police_state.PositionZ
+    };
+
+    // 경찰 거리
+    db.dist_to_owner = Dist(dogPos, policePos);
+
+    if (db.target_id == -1)
+    {
+        int found = FindNearbyCultistForDog();
+        if (found != -1)
+        {
+            db.target_id = found;
+        }
+    }
+    // target 유효성 체크
+    if (db.target_id != -1)
+    {
+        auto it = g_users.find(db.target_id);
+        if (it == g_users.end() || !it->second || !IsCultistTargetAttackable(*it->second))
+        {
+            db.target_id = -1;
+            db.dist_to_target = FLT_MAX;
+
+            db.path.clear();
+            owner->dog.is_barking = false;
+        }
+        else
+        {
+            auto target = it->second;
+
+            Vec3 targetPos{
+                target->cultist_state.PositionX,
+                target->cultist_state.PositionY,
+                target->cultist_state.PositionZ
+            };
+
+            // target 위치 저장
+            db.targetPos = targetPos;
+            // target 거리
+            db.dist_to_target = Dist(dogPos, targetPos);
+        }
+    }
+    else
+    {
+        db.dist_to_target = FLT_MAX;
+    }
+
+    // 타겟 없을 때 follow
+    if (db.target_id == -1)
+    {
+        if (db.dist_to_owner >= DOG_MAX_DIST)
+            db.bNeedFollowOwner = true;
+        else if (db.dist_to_owner <= FOLLOW_MAX_DIST)
+            db.bNeedFollowOwner = false;
+    }
+    else
+    {
+        db.bNeedFollowOwner = false;
+    }
+
+    // 타겟 있을 때 chase, stop
+    if (db.target_id != -1)
+    {
+        if (db.dist_to_owner >= DOG_MAX_DIST)
+            db.bStopChaseForOwnerDist = true;
+        else if (db.dist_to_owner <= FOLLOW_MAX_DIST)
+            db.bStopChaseForOwnerDist = false;
+    }
+    else
+    {
+        db.bStopChaseForOwnerDist = false;
+    }
+
+    // repath 타이머
+    db.repath_timer += dt;
+}
+
+void DogAIController::RunBehaviorTree(float dt)
+{
+    if (root)
+        root->Run(*this, dt);
+}
+
+void DogAIController::Update(float dt)
+{
+    if (!owner)
+        return;
+    if (!bInitialized)
+        Init();
+
+    UpdateBlackboard(dt);
+    RunBehaviorTree(dt);
+}
+
+// Dog Movement
+void DogAIController::MoveAlongPathDog(const Vec3& targetPos, float dt)
+{
+    Vec3 cur{
+        static_cast<float>(owner->dog.loc.x),
+        static_cast<float>(owner->dog.loc.y),
+        static_cast<float>(owner->dog.loc.z)
+    };
+
+    if (!std::isfinite(cur.x) || !std::isfinite(cur.y) || !std::isfinite(cur.z))
+    {
+        std::cout << "[FIX] NaN detected -> reset path\n";
+
+        db.path.clear();
+        owner->dog.is_barking = false;
+
+        Vec3 safe{
+            static_cast<float>(owner->dog.loc.x),
+            static_cast<float>(owner->dog.loc.y),
+            static_cast<float>(owner->dog.loc.z)
+        };
+
+        MoveToNearestTriangle(safe);
+
+        return;
+    }
+
+    if (Dist(cur, targetPos) <= ARRIVE_RANGE)
+    {
+        return;
+    }
+
+    float dx = targetPos.x - db.lastTargetPos.x;
+    float dy = targetPos.y - db.lastTargetPos.y;
+    float dz = targetPos.z - db.lastTargetPos.z;
+    float dist2 = dx * dx + dy * dy + dz * dz;
+
+    if (dist2 > REPATH_DIST * REPATH_DIST)
+    {
+        db.lastTargetPos = targetPos;
+        db.path.clear();
+    }
+
+    if (db.path.empty() && db.repath_timer > 0.3f)
+    {
+        NAVMESH* nav = GetNavMesh(owner->room_id);
+        if (!nav)
+            return;
+
+        std::vector<int> triPath;
+        if (!nav->FindTriPath(cur, targetPos, triPath))
+        {
+            db.path.clear();
+            return;
+        }
+
+        std::vector<std::pair<Vec3, Vec3>> portals;
+        nav->BuildPortals(triPath, portals);
+
+        if (portals.empty())
+            return;
+
+        std::vector<Vec3> smoothPath;
+        if (!nav->SmoothPath(cur, targetPos, portals, smoothPath) || smoothPath.size() < 2)
+            return;
+
+        db.path = smoothPath;
+        db.repath_timer = 0.f;
+    }
+
+    if (db.path.empty())
+        return;
+
+    Vec3 next = (db.path.size() >= 2) ? db.path[1] : db.path[0];
+
+    Vec3 dir{
+        next.x - cur.x,
+        next.y - cur.y,
+        next.z - cur.z
+    };
+
+    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+
+    if (len <= DOG_SPEED * dt)
+    {
+        db.path.erase(db.path.begin());
+
+        if (db.path.empty())
+            return;
+
+        next = db.path[0];
+
+        dir.x = next.x - cur.x;
+        dir.y = next.y - cur.y;
+        dir.z = next.z - cur.z;
+        len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+    }
+
+    if (len < 1e-3f)
+        return;
+
+    dir.x /= len;
+    dir.y /= len;
+    dir.z /= len;
+
+    owner->dog.loc.x += dir.x * DOG_SPEED * dt;
+    owner->dog.loc.y += dir.y * DOG_SPEED * dt;
+    owner->dog.loc.z += dir.z * DOG_SPEED * dt;
+
+    //owner->dog.Speed = std::sqrt(
+    //    owner->dog.vel.x * owner->dog.vel.x +
+    //    owner->dog.vel.y * owner->dog.vel.y +
+    //    owner->dog.vel.z * owner->dog.vel.z
+    //);
+
+    owner->dog.rot.yaw = std::atan2(dir.y, dir.x) * RAD_TO_DEG;
+}
+
+int DogAIController::FindNearbyCultistForDog()
+{
+    int room_id = owner->room_id;
+    if (room_id < 0 || room_id >= MAX_ROOM)
+        return -1;
+
+    Vec3 dogPos{
+        static_cast<float>(owner->dog.loc.x),
+        static_cast<float>(owner->dog.loc.y),
+        static_cast<float>(owner->dog.loc.z)
+    };
+
+    const auto& room = g_rooms[room_id].first;
+
+    int best_id = -1;
+    float best_dist_sq = VIEW_RANGE_SQ;
+
+    for (int pid : room.player_ids)
+    {
+        if (pid == -1)
+            continue;
+
+        auto it = g_users.find(pid);
+        if (it == g_users.end() || !it->second)
+            continue;
+
+        auto target = it->second;
+        if (!IsCultistTargetAttackable(*target))
+            continue;
+
+        float dx = target->cultist_state.PositionX - dogPos.x;
+        float dy = target->cultist_state.PositionY - dogPos.y;
+        float dz = target->cultist_state.PositionZ - dogPos.z;
+        float dist_sq = dx * dx + dy * dy + dz * dz;
+
+        if (dist_sq < best_dist_sq)
+        {
+            best_dist_sq = dist_sq;
+            best_id = pid;
+        }
+    }
+
+    return best_id;
+}
+
+void DogAIController::MoveToNearestTriangle(const Vec3& cur)
+{
+    NAVMESH* nav = GetNavMesh(owner->room_id);
+    if (nav)
+    {
+        int tri = nav->FindContainingTriangle(cur);
+        if (tri >= 0)
+        {
+            Vec3 safe = nav->GetTriCenter(tri);
+
+            owner->dog.loc.x = safe.x;
+            owner->dog.loc.y = safe.y;
+            owner->dog.loc.z = safe.z;
+        }
+        else
+        {
+            // fallback
+            return;
+        }
+    }
+}
